@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -59,8 +60,10 @@ def load_projects() -> dict[str, dict[str, Any]]:
         value = json.loads(CONFIG.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"Cannot read {CONFIG}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise SystemExit(f"{CONFIG} must contain a JSON object")
     projects = value.get("projects")
-    if not isinstance(projects, dict):
+    if not isinstance(projects, dict) or not all(isinstance(name, str) for name in projects):
         raise SystemExit(f"{CONFIG} must contain a 'projects' object")
     return projects
 
@@ -77,22 +80,29 @@ def project_path(name: str, projects: dict[str, dict[str, Any]]) -> Path:
     return path
 
 
-def git_root() -> Path | None:
-    result = subprocess.run(
-        ["git", "-C", str(WORKSPACE), "rev-parse", "--show-toplevel"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+def jj_root() -> Path | None:
+    try:
+        result = subprocess.run(
+            ["jj", "-R", str(WORKSPACE), "root"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return None
     if result.returncode:
         return None
     return Path(result.stdout.strip()).resolve()
 
 
+def jj_command(root: Path, *args: str) -> list[str]:
+    return ["jj", "-R", str(root), *args]
+
+
 def run_list(projects: dict[str, dict[str, Any]]) -> int:
     print(f"Workspace: {WORKSPACE}")
-    root = git_root()
-    print(f"Git root:  {root if root else '(not initialized)'}\n")
+    root = jj_root()
+    print(f"JJ root:   {root if root else '(not initialized)'}\n")
     width = max((len(name) for name in projects), default=7)
     print(f"{'PROJECT':<{width}}  {'STATE':<9}  {'LANGUAGE':<14}  PATH")
     for name, spec in projects.items():
@@ -121,52 +131,168 @@ def run_task(name: str, task: str, projects: dict[str, dict[str, Any]]) -> int:
         return 127
 
 
-def git_changed_projects(projects: dict[str, dict[str, Any]], base: str | None) -> int:
-    root = git_root()
+def changed_paths(base: str | None) -> tuple[set[str] | None, int]:
+    root = jj_root()
     if root is None:
-        print("meingrad: no Git repository found; initialize one before using changed-project selection", file=sys.stderr)
-        return 2
-    command = ["git", "-C", str(root), "status", "--short", "--untracked-files=all"]
+        print("meingrad: no Jujutsu repository found; initialize one before using changed-project selection", file=sys.stderr)
+        return None, 2
+    command = jj_command(root, "diff", "--name-only", "--color", "never")
     if base:
-        command = ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMR", f"{base}...HEAD"]
+        command.extend(["--from", base, "--to", "@"])
+    else:
+        command.extend(["-r", "@"])
     result = subprocess.run(command, text=True, capture_output=True, check=False)
     if result.returncode:
         print(result.stderr, file=sys.stderr, end="")
-        return result.returncode
-    paths: set[str] = set()
-    for line in result.stdout.splitlines():
-        # git status --short has a two-column status prefix; diff --name-only does not.
-        path = line[3:] if not base and len(line) >= 4 else line
-        path = path.strip().strip('"').replace("\\", "/")
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        paths.add(path)
-    changed = []
+        return None, result.returncode
+    return {line.replace("\\", "/") for line in result.stdout.splitlines() if line}, 0
+
+
+def affected_projects(direct: set[str], projects: dict[str, dict[str, Any]]) -> list[str]:
+    affected = set(direct)
+    changed = True
+    while changed:
+        changed = False
+        for name, spec in projects.items():
+            dependencies = spec.get("depends_on", [])
+            if not isinstance(dependencies, list):
+                continue
+            if name not in affected and any(dependency in affected for dependency in dependencies):
+                affected.add(name)
+                changed = True
+    return [name for name in projects if name in affected]
+
+
+def changed_project_names(projects: dict[str, dict[str, Any]], base: str | None) -> tuple[list[str] | None, int]:
+    paths, code = changed_paths(base)
+    if paths is None:
+        return None, code
+    direct = set()
     for name, spec in projects.items():
         prefix = str(spec["path"]).replace("\\", "/").rstrip("/") + "/"
-        if any(path.startswith(prefix) for path in paths):
-            changed.append(name)
+        if any(path.startswith(prefix) or path == prefix[:-1] for path in paths):
+            direct.add(name)
+    return affected_projects(direct, projects), 0
+
+
+def run_changed(projects: dict[str, dict[str, Any]], base: str | None) -> int:
+    changed, code = changed_project_names(projects, base)
+    if changed is None:
+        return code
     if changed:
         print("\n".join(changed))
     else:
-        print("(no project changes detected)")
+        print("(no affected projects detected)")
+    return 0
+
+
+def run_doctor(projects: dict[str, dict[str, Any]]) -> int:
+    print(f"Workspace: {WORKSPACE}")
+    root = jj_root()
+    errors: list[str] = []
+    if root is None:
+        errors.append("Jujutsu repository not found")
+    else:
+        print(f"Jujutsu:  {root}")
+
+    known = set(projects)
+    normalized_paths: dict[str, str] = {}
+    dependency_graph: dict[str, list[str]] = {}
+    for name, spec in projects.items():
+        if not isinstance(spec, dict):
+            errors.append(f"{name}: project entry must be an object")
+            continue
+        rel = spec.get("path")
+        if not isinstance(rel, str) or not rel:
+            errors.append(f"{name}: path must be a non-empty string")
+        else:
+            path = (WORKSPACE / rel).resolve()
+            if path != WORKSPACE.resolve() and WORKSPACE.resolve() not in path.parents:
+                errors.append(f"{name}: project path escapes workspace ({rel})")
+            elif not path.is_dir():
+                errors.append(f"{name}: project directory is missing ({rel})")
+            key = rel.replace("\\", "/").rstrip("/").casefold()
+            if key in normalized_paths:
+                errors.append(f"{name}: path duplicates project {normalized_paths[key]} ({rel})")
+            normalized_paths[key] = name
+
+        dependencies = spec.get("depends_on", [])
+        if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
+            errors.append(f"{name}: depends_on must be an array of project names")
+            dependencies = []
+        dependency_graph[name] = dependencies
+        for dependency in dependencies:
+            if dependency not in known:
+                errors.append(f"{name}: unknown dependency '{dependency}'")
+            elif dependency == name:
+                errors.append(f"{name}: project cannot depend on itself")
+
+        tasks = spec.get("tasks", {})
+        if not isinstance(tasks, dict):
+            errors.append(f"{name}: tasks must be an object")
+            tasks = {}
+        commands: list[tuple[str, Any]] = [(f"task '{task}'", command) for task, command in tasks.items()]
+        ci = spec.get("ci", [])
+        if not isinstance(ci, list):
+            errors.append(f"{name}: ci must be an array")
+            ci = []
+        for index, entry in enumerate(ci):
+            if not isinstance(entry, dict):
+                errors.append(f"{name}: ci entry {index + 1} must be an object")
+                continue
+            if not isinstance(entry.get("name"), str) or not entry["name"]:
+                errors.append(f"{name}: ci entry {index + 1} needs a non-empty name")
+            commands.append((f"ci command {index + 1}", entry.get("command")))
+        for label, command in commands:
+            if not isinstance(command, list) or not command or not all(isinstance(part, str) and part for part in command):
+                errors.append(f"{name}: {label} must be a non-empty string argument array")
+            elif shutil.which(command[0]) is None:
+                errors.append(f"{name}: executable '{command[0]}' for {label} was not found on PATH")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in visiting:
+            errors.append(f"dependency cycle includes '{name}'")
+            return
+        if name in visited:
+            return
+        visiting.add(name)
+        for dependency in dependency_graph.get(name, []):
+            if dependency in known:
+                visit(dependency)
+        visiting.remove(name)
+        visited.add(name)
+
+    for name in dependency_graph:
+        visit(name)
+
+    configured = 0
+    for spec in projects.values():
+        if isinstance(spec, dict):
+            tasks = spec.get("tasks", {})
+            ci = spec.get("ci", [])
+            configured += len(tasks) if isinstance(tasks, dict) else 0
+            configured += len(ci) if isinstance(ci, list) else 0
+    print(f"Projects:  {len(projects)} registered, {configured} task/CI commands")
+    if errors:
+        print("\nDoctor found issues:")
+        for error in errors:
+            print(f"  - {error}")
+        return 1
+    print("Doctor passed: project paths, dependencies, commands, and tool availability look valid.")
     return 0
 
 
 def check_safety(projects: dict[str, dict[str, Any]]) -> int:
-    root = git_root()
+    root = jj_root()
     if root is None:
-        print("meingrad: no Git repository found; safety check cannot inspect tracked or staged files", file=sys.stderr)
+        print("meingrad: no Jujutsu repository found; safety check cannot inspect repository files", file=sys.stderr)
         return 2
-    result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode:
-        print("meingrad: git ls-files failed", file=sys.stderr)
-        return result.returncode
-    paths = [item.decode("utf-8", errors="replace") for item in result.stdout.split(b"\0") if item]
+    paths, code = jj_visible_paths(root)
+    if paths is None:
+        return code
     unsafe: list[tuple[str, str]] = []
     exact_names = {".env", ".env.local", ".env.production", "id_rsa", "id_ed25519"}
     forbidden_parts = {"node_modules", "target", "dist", "build", ".zig-cache", "zig-cache", "zig-out", "zig-pkg", "__pycache__", ".pytest_cache", "playwright-report", "test-results"}
@@ -186,26 +312,27 @@ def check_safety(projects: dict[str, dict[str, Any]]) -> int:
             print(f"  {path} ({reason})")
         print(f"\n{len(unsafe)} finding(s). Review before committing; remove or ignore files as appropriate.")
         return 1
-    print(f"Safety check passed ({len(paths)} Git-visible paths checked).")
+    print(f"Safety check passed ({len(paths)} Jujutsu-visible paths checked).")
     return 0
 
 
-def git_visible_paths(root: Path) -> tuple[list[str] | None, int]:
+def jj_visible_paths(root: Path) -> tuple[list[str] | None, int]:
     result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        jj_command(root, "file", "list", "-r", "@"),
+        text=True,
         capture_output=True,
         check=False,
     )
     if result.returncode:
-        print("meingrad: git ls-files failed", file=sys.stderr)
+        print("meingrad: jj file list failed", file=sys.stderr)
         if result.stderr:
-            print(result.stderr.decode("utf-8", errors="replace"), file=sys.stderr, end="")
+            print(result.stderr, file=sys.stderr, end="")
         return None, result.returncode
-    return [item.decode("utf-8", errors="replace") for item in result.stdout.split(b"\0") if item], 0
+    return [item for item in result.stdout.splitlines() if item], 0
 
 
 def scan_secrets(root: Path) -> int:
-    paths, code = git_visible_paths(root)
+    paths, code = jj_visible_paths(root)
     if paths is None:
         return code
     findings: list[tuple[str, str]] = []
@@ -261,10 +388,16 @@ def scan_secrets(root: Path) -> int:
     return 0
 
 
-def run_ci(projects: dict[str, dict[str, Any]], selected: str | None, security_only: bool) -> int:
-    root = git_root()
+def run_ci(
+    projects: dict[str, dict[str, Any]],
+    selected: str | None,
+    changed_only: bool,
+    base: str | None,
+    security_only: bool,
+) -> int:
+    root = jj_root()
     if root is None:
-        print("meingrad CI: no Git-backed workspace found", file=sys.stderr)
+        print("meingrad CI: no Jujutsu workspace found", file=sys.stderr)
         return 2
     print("[1/3] Repository safety", flush=True)
     result = check_safety(projects)
@@ -280,7 +413,16 @@ def run_ci(projects: dict[str, dict[str, Any]], selected: str | None, security_o
 
     if selected and selected not in projects:
         raise SystemExit(f"Unknown project '{selected}'. Run: python meingrad.py list")
-    targets = [selected] if selected else list(projects)
+    if selected:
+        targets = [selected]
+    elif changed_only:
+        changed, code = changed_project_names(projects, base)
+        if changed is None:
+            return code
+        targets = changed
+        print(f"\nAffected projects: {', '.join(targets) if targets else '(none)'}")
+    else:
+        targets = list(projects)
     checks: list[tuple[str, str, list[str]]] = []
     for name in targets:
         spec = projects[name]
@@ -323,23 +465,31 @@ def main(argv: list[str] | None = None) -> int:
     task_parser.add_argument("project")
     task_parser.add_argument("task")
     changed_parser = sub.add_parser("changed", help="list projects with local changes")
-    changed_parser.add_argument("--base", help="compare committed changes against BASE...HEAD")
-    sub.add_parser("check", help="check Git-visible files for likely secrets and generated data")
+    changed_parser.add_argument("--base", help="compare the working copy with a Jujutsu revision, e.g. master@origin")
+    sub.add_parser("check", help="check Jujutsu-visible files for likely secrets and generated data")
+    sub.add_parser("doctor", help="validate the project catalog, dependency graph, and required tools")
     ci_parser = sub.add_parser("ci", help="run local safety, secret, and configured project checks")
-    ci_parser.add_argument("--project", help="run configured project checks for one project only")
+    selection = ci_parser.add_mutually_exclusive_group()
+    selection.add_argument("--project", help="run configured project checks for one project only")
+    selection.add_argument("--changed", action="store_true", help="run checks for changed projects and their dependents")
+    ci_parser.add_argument("--base", help="compare the working copy with a Jujutsu revision; requires --changed")
     ci_parser.add_argument("--security-only", action="store_true", help="run repository safety and secret scan only")
     args = parser.parse_args(argv)
+    if args.action == "ci" and args.base and not args.changed:
+        parser.error("ci --base requires --changed")
     projects = load_projects()
     if args.action == "list":
         return run_list(projects)
     if args.action == "run":
         return run_task(args.project, args.task, projects)
     if args.action == "changed":
-        return git_changed_projects(projects, args.base)
+        return run_changed(projects, args.base)
     if args.action == "check":
         return check_safety(projects)
+    if args.action == "doctor":
+        return run_doctor(projects)
     if args.action == "ci":
-        return run_ci(projects, args.project, args.security_only)
+        return run_ci(projects, args.project, args.changed, args.base, args.security_only)
     return 2
 
 
