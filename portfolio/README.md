@@ -1,8 +1,8 @@
 # steven3zx.com
 
-An embedded-asset Go portfolio served on `127.0.0.1:8090`, ready to sit behind
-the existing Caddy reverse proxy. The page uses an industrial, Factorio-inspired
-command-center layout to present Steven's engineering profile and selected work.
+An embedded-asset Go portfolio served with Gin on `127.0.0.1:8090`, ready to sit
+behind the existing Caddy reverse proxy. The page uses an industrial,
+Factorio-inspired command-center layout and a live origin metrics station.
 
 ## Run
 
@@ -11,7 +11,10 @@ go run .
 ```
 
 Set `PORTFOLIO_ADDR` to override the default listener. `/healthz` provides a
-plain-text health check. The Go binary embeds the HTML, CSS, and JavaScript.
+plain-text health check. `/api/metrics` serves one-second samples of CPU load,
+memory, the portfolio process, Go routines, host process count, server uptime,
+and aggregate network throughput. The Go binary embeds the HTML, CSS, and
+JavaScript.
 
 ## Publish through Caddy
 
