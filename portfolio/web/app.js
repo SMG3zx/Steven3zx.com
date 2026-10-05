@@ -4,6 +4,7 @@ const sampleLimit = 900;
 const samples = [];
 let chartWindow = 60;
 let lastSampleAt = 0;
+let reconnectDelay = 1000;
 
 function updateClock() {
   clock.textContent = new Intl.DateTimeFormat(undefined, {
@@ -95,11 +96,16 @@ function updateReadouts(sample) {
   document.querySelector("#metrics-state").classList.add("is-online");
 }
 
-async function pollMetrics() {
-  try {
-    const response = await fetch("/api/metrics", { cache: "no-store" });
-    if (!response.ok) throw new Error(`Metrics returned ${response.status}`);
-    const sample = await response.json();
+function connectMetrics() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(`${protocol}//${window.location.host}/ws/metrics`);
+  socket.addEventListener("open", () => {
+    reconnectDelay = 1000;
+    document.querySelector("#metrics-state").textContent = "STREAM CONNECTED";
+  });
+  socket.addEventListener("message", (event) => {
+    let sample;
+    try { sample = JSON.parse(event.data); } catch { return; }
     const timestamp = Date.parse(sample.at);
     if (timestamp > lastSampleAt) {
       samples.push({ ...sample, timestamp });
@@ -108,11 +114,15 @@ async function pollMetrics() {
     }
     updateReadouts(sample);
     drawCharts();
-  } catch {
+  });
+  socket.addEventListener("close", () => {
     document.querySelector("#metrics-state").textContent = "ORIGIN UNAVAILABLE";
     document.querySelector("#metrics-state").classList.remove("is-online");
-    document.querySelector("#metrics-updated").textContent = "Retrying connection";
-  }
+    document.querySelector("#metrics-updated").textContent = `Reconnecting in ${reconnectDelay / 1000}s`;
+    window.setTimeout(connectMetrics, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+  });
+  socket.addEventListener("error", () => socket.close());
 }
 
 document.querySelectorAll("[data-window]").forEach((button) => button.addEventListener("click", () => {
@@ -128,5 +138,4 @@ document.querySelectorAll(".nav-item").forEach((link) => link.addEventListener("
 updateClock();
 year.textContent = new Date().getFullYear();
 window.setInterval(updateClock, 1000);
-pollMetrics();
-window.setInterval(pollMetrics, 1000);
+connectMetrics();

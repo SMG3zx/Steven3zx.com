@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
@@ -47,6 +49,19 @@ type metricsSampler struct {
 	ready    bool
 }
 
+var metricsUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(request *http.Request) bool {
+		origin := request.Header.Get("Origin")
+		if origin == "" {
+			return false
+		}
+		parsed, err := http.NewRequest(http.MethodGet, origin, nil)
+		return err == nil && parsed.URL.Host != "" && strings.EqualFold(parsed.URL.Host, request.Host)
+	},
+}
+
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	assets, err := fs.Sub(web, "web")
@@ -59,14 +74,7 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery(), securityHeaders())
 	router.GET("/healthz", func(c *gin.Context) { c.String(http.StatusOK, "ok\n") })
-	router.GET("/api/metrics", func(c *gin.Context) {
-		point, ready := sampler.current()
-		if !ready {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "origin metrics unavailable"})
-			return
-		}
-		c.JSON(http.StatusOK, point)
-	})
+	router.GET("/ws/metrics", func(c *gin.Context) { serveMetricsSocket(c, sampler) })
 	router.GET("/", func(c *gin.Context) { static.ServeHTTP(c.Writer, c.Request) })
 	router.GET("/styles.css", func(c *gin.Context) { static.ServeHTTP(c.Writer, c.Request) })
 	router.GET("/app.js", func(c *gin.Context) { static.ServeHTTP(c.Writer, c.Request) })
@@ -77,6 +85,49 @@ func main() {
 	log.Printf("portfolio listening on %s", addr)
 	if err := router.Run(addr); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func serveMetricsSocket(c *gin.Context, sampler *metricsSampler) {
+	connection, err := metricsUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	defer connection.Close()
+	connection.SetReadLimit(512)
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		for {
+			if _, _, err := connection.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	metricsTicker := time.NewTicker(time.Second)
+	defer metricsTicker.Stop()
+	pingTicker := time.NewTicker(25 * time.Second)
+	defer pingTicker.Stop()
+	for {
+		select {
+		case <-readDone:
+			return
+		case <-metricsTicker.C:
+			point, ready := sampler.current()
+			if !ready {
+				continue
+			}
+			if err := connection.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				return
+			}
+			if err := connection.WriteJSON(point); err != nil {
+				return
+			}
+		case <-pingTicker.C:
+			if err := connection.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+				return
+			}
+		}
 	}
 }
 

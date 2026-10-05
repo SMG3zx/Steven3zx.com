@@ -11,10 +11,11 @@ go run .
 ```
 
 Set `PORTFOLIO_ADDR` to override the default listener. `/healthz` provides a
-plain-text health check. `/api/metrics` serves one-second samples of CPU load,
-memory, the portfolio process, Go routines, host process count, server uptime,
-and aggregate network throughput. The Go binary embeds the HTML, CSS, and
-JavaScript.
+plain-text health check. `/ws/metrics` accepts same-origin WebSocket connections
+and streams one-second samples of CPU load, memory, the portfolio process, Go
+routines, host process count, server uptime, and aggregate network throughput.
+The browser reconnects with a capped backoff if the stream drops. The Go binary
+embeds the HTML, CSS, and JavaScript.
 
 ## Publish through Caddy
 
