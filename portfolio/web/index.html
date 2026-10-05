@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#171914">
+    <meta name="description" content="Steven's engineering portfolio: systems, tools, and things built to keep moving.">
+    <title>Steven3zx — Engineering Portfolio</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to operations board</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#top" aria-label="Steven3zx home"><span class="brand-mark">S<span>3</span></span><span>STEVEN<span class="brand-muted">3ZX</span></span></a>
+        <div class="side-label">OPERATIONS</div>
+        <nav class="nav-list">
+          <a class="nav-item active" href="#top"><span class="nav-icon">▦</span>Overview</a>
+          <a class="nav-item" href="#projects"><span class="nav-icon">⚙</span>Production lines</a>
+          <a class="nav-item" href="#about"><span class="nav-icon">◈</span>Engineer profile</a>
+          <a class="nav-item" href="#contact"><span class="nav-icon">⌁</span>Open a channel</a>
+        </nav>
+        <div class="side-spacer"></div>
+        <div class="sidebar-status"><span class="status-light"></span><span><b>ALL SYSTEMS</b><small>Operational · Earth</small></span></div>
+        <a class="side-link" href="https://github.com/SMG3zx" target="_blank" rel="noreferrer">↗ GitHub profile</a>
+        <div class="sidebar-foot">PERSONAL FACTORY · EST. 1998</div>
+      </aside>
+
+      <main id="main">
+        <header class="topbar" id="top"><div class="breadcrumb"><span>HOME</span><i>/</i><b>COMMAND CENTER</b></div><div class="top-meta"><span class="clock-label">LOCAL TIME</span><time id="clock">--:--:--</time><span class="avatar">S</span></div></header>
+        <section class="welcome" aria-labelledby="welcome-title">
+          <div class="welcome-copy"><div class="eyebrow"><span class="eyebrow-line"></span>INDEPENDENT ENGINEER · SYSTEMS BUILDER</div><h1 id="welcome-title">I make complex<br><em>systems work.</em></h1><p>Hey, I’m Steven. I build dependable software, explore hard engineering problems, and keep the factory running.</p><div class="hero-actions"><a class="button primary" href="#projects">Explore the factory <span>↘</span></a><a class="button quiet" href="#contact">Get in touch <span>↗</span></a></div></div>
+          <div class="factory-art" role="img" aria-label="Abstract top-down factory floor with connected production lines"><div class="art-grid"></div><div class="belt belt-a"></div><div class="belt belt-b"></div><div class="belt belt-c"></div><div class="machine machine-a"><span>CPU</span><b>01</b><i></i></div><div class="machine machine-b"><span>RUNTIME</span><b>02</b><i></i></div><div class="machine machine-c"><span>NETWORK</span><b>03</b><i></i></div><div class="item item-a"></div><div class="item item-b"></div><div class="item item-c"></div><div class="art-caption"><span>FACTORY FLOOR / 001</span><span>FIG. A</span></div></div>
+        </section>
+
+        <section class="metrics" aria-label="Portfolio overview">
+          <article class="metric"><span class="metric-icon amber">⌘</span><div><span class="metric-label">ACTIVE PROJECTS</span><strong>06<span class="metric-unit">+</span></strong><small>Always iterating</small></div><span class="metric-corner">↗</span></article>
+          <article class="metric"><span class="metric-icon green">⌬</span><div><span class="metric-label">CORE DISCIPLINE</span><strong class="metric-word">SYSTEMS</strong><small>From wire to interface</small></div><span class="metric-corner">↗</span></article>
+          <article class="metric"><span class="metric-icon blue">◷</span><div><span class="metric-label">BUILD STATUS</span><strong class="metric-word"><span class="live-dot"></span>IN PROGRESS</strong><small>Next idea loading</small></div><span class="metric-corner">↗</span></article>
+          <article class="metric"><span class="metric-icon rust">⌖</span><div><span class="metric-label">BASE COORDINATES</span><strong class="metric-word">EARTH, TX</strong><small>Working everywhere</small></div><span class="metric-corner">↗</span></article>
+        </section>
+
+        <section class="section-heading" id="projects"><div><div class="eyebrow"><span class="eyebrow-line"></span>THE PRODUCTION FLOOR</div><h2>Current build queue</h2></div><a class="text-link" href="https://github.com/SMG3zx" target="_blank" rel="noreferrer">VIEW ALL BUILDS <span>↗</span></a></section>
+        <section class="project-grid" aria-label="Selected projects">
+          <a class="project-card project-feature" href="https://github.com/SMG3zx" target="_blank" rel="noreferrer"><div class="project-top"><span class="project-id">01 / INFRASTRUCTURE</span><span class="project-arrow">↗</span></div><div class="project-visual visual-network"><div class="node n1">API</div><div class="node n2">CORE</div><div class="node n3">EDGE</div><div class="wire w1"></div><div class="wire w2"></div><div class="pulse"></div></div><div class="project-info"><div><h3>Janus</h3><p>A control plane for building and operating applications.</p></div><span class="tag">PLATFORM</span></div></a>
+          <a class="project-card" href="https://github.com/SMG3zx" target="_blank" rel="noreferrer"><div class="project-top"><span class="project-id">02 / GAME SERVER</span><span class="project-arrow">↗</span></div><div class="project-visual visual-mines"><div class="ore ore-a">Fe</div><div class="ore ore-b">Cu</div><div class="ore ore-c">●</div><div class="mine-grid"></div></div><div class="project-info"><div><h3>Rusty Mines</h3><p>Protocol research and a Minecraft server in Rust.</p></div><span class="tag">RUST</span></div></a>
+          <a class="project-card" href="https://github.com/SMG3zx" target="_blank" rel="noreferrer"><div class="project-top"><span class="project-id">03 / DEVELOPER TOOLS</span><span class="project-arrow">↗</span></div><div class="project-visual visual-tool"><div class="terminal"><div class="terminal-head"><i></i><i></i><i></i><span>meingrad://catalog</span></div><code><b>$</b> meingrad run janus build<br><span>✓</span> project found<br><span>✓</span> build complete</code></div></div><div class="project-info"><div><h3>Meingrad</h3><p>A command center for a growing monorepo.</p></div><span class="tag">GO / PY</span></div></a>
+        </section>
+
+        <section class="about-panel" id="about"><div class="about-mark">S<span>3</span></div><div class="about-copy"><div class="eyebrow"><span class="eyebrow-line"></span>ENGINEER PROFILE</div><h2>Curiosity is the<br>best production input.</h2><p>I’m a solo developer exploring the whole stack: reliable backends, thoughtful tools, game systems, and the infrastructure that connects them. I like understanding how the machine works, then making it work a little better.</p><div class="chips"><span>Go</span><span>Rust</span><span>TypeScript</span><span>Systems design</span><span>Self-hosting</span></div></div><div class="about-stamp"><span>BUILT WITH</span><b>INTENTION</b><i>★ &nbsp; ★ &nbsp; ★</i></div></section>
+
+        <section class="contact-panel" id="contact"><div><div class="eyebrow"><span class="eyebrow-line"></span>TRANSMISSION OPEN</div><h2>Have a good problem?</h2><p>I’m always interested in interesting systems and thoughtful collaboration.</p></div><a class="button primary" href="mailto:hello@steven3zx.com">Start a conversation <span>↗</span></a></section>
+        <footer><a class="brand footer-brand" href="#top"><span class="brand-mark">S<span>3</span></span><span>STEVEN<span class="brand-muted">3ZX</span></span></a><span>DESIGNED & BUILT BY STEVEN · © <span id="year"></span></span><a href="#top">BACK TO TOP ↑</a></footer>
+      </main>
+    </div>
+  </body>
+</html>

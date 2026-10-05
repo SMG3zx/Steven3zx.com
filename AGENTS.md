@@ -13,6 +13,12 @@ Some of the main project directories are:
 
 Top-level folders can also contain local infrastructure, archived material, or generated data. Follow `.gitignore` and the relevant project documentation; do not assume every folder is a buildable application.
 
+## Frontend design workflow
+
+- For any frontend design or user-facing UI work in this monorepo, read and apply `tools/frontend-design/modern-frontend-design/SKILL.md` before designing or editing the interface.
+- Treat that vendored skill as the shared design process for new frontends and substantial UI changes. Follow its product/audience, design-token, layout, accessibility, responsive, motion, and quality-review steps; adapt its recommendations to the project's stack and visual brief.
+- Keep the vendored skill updated intentionally from its upstream source and review changes before replacing the local copy.
+
 ## Version control: Jujutsu and `origin`
 
 - Use **Jujutsu (`jj`)** for repository operations. This checkout is colocated with Git for interoperability; use `jj` commands instead of Git commands to inspect history, describe changes, manage bookmarks, fetch, and push.
