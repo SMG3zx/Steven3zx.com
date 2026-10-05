@@ -1,0 +1,39 @@
+{
+  "featureId": "fix-e2e-project-repo",
+  "reviewedAt": "2026-03-15T08:15:31.325522Z",
+  "commitId": "c2801c07b264660415c9977cfc646c7d36b610f4",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix correctly propagates project write errors through the repository/grain path and updates the handler tests to poll 202 envelopes, but it does not fully close the original repo-import validation hole. The new host check still accepts lookalike non-GitHub domains such as `evilgithub.com`, so non-GitHub HTTPS URLs can still reach the build pipeline.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/builds_deployments.go",
+        "line": 215,
+        "severity": "blocking",
+        "description": "`RepoImport` now checks `strings.HasSuffix(strings.ToLower(parsedURL.Host), \"github.com\")`, but that predicate also returns true for non-GitHub hosts like `evilgithub.com`. As a result, the original blocking validation issue is only partially fixed: malformed-but-HTTPS lookalike domains can still be imported instead of returning 400. The check needs to validate the canonical hostname (`parsedURL.Hostname()`) against `github.com` or a `.github.com` boundary, not a raw string suffix."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/project_repo_e2e_test.go",
+        "line": 557,
+        "severity": "non_blocking",
+        "description": "The repo-import tests now poll the operation to completion, but `TestRepoImport_ValidURL_Returns202` seeds a succeeded operation whose `result.buildJob.status` is still `pending` and never asserts the required pending → cloning → building → built progression from VAL-E2E-006. So the new coverage proves polling mechanics, not the full repo-import completion contract."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill still requires red-phase tests plus recorded `curl.exe` checks for API changes, but this fix session ran the full backend suite before editing, never recorded focused failing tests, and the handoff still marked `followedProcedure` true without any `interactiveChecks`.",
+      "evidence": "`E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md:27-30,44-49` requires `go test -count=1 -run ...` and recorded `interactiveChecks`; the transcript entry for worker session `ef1ebf8e-1b90-4ed6-a4dd-628a12d1e76a` contains `go test -count=1 -parallel 4 ./...` before implementation, contains no `go test -count=1 -run` or `curl.exe`, and `C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-15T07-50-02-273Z__fix-e2e-project-repo__ef1ebf8e-1b90-4ed6-a4dd-628a12d1e76a.json:75-78` still records `followedProcedure: true`."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared e2e-pipeline note documents repo import as a GitHub HTTPS flow, but it does not spell out host-boundary validation (`github.com` / `*.github.com` via `Hostname()`), which leaves room for naive suffix checks that accept lookalike domains.",
+      "evidence": "`E:\\Janus\\.factory\\library\\e2e-pipeline.md:14` says repo import is a GitHub HTTPS URL flow; `backend/janus-api/internal/api/handler/builds_deployments.go:215` implements that with `HasSuffix(..., \"github.com\")`, which also matches `evilgithub.com`."
+    }
+  ],
+  "addressesFailureFrom": "E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\e2e-project-repo.json",
+  "summary": "Reviewed original commit `7baf31d` and fix commit `c2801c07b264660415c9977cfc646c7d36b610f4`, plus the prior review, handoffs, transcript skeleton, skill, and shared-state files. The fix resolves the project DB-write propagation issue and improves polling coverage, but it still fails scrutiny because repo-import host validation can be bypassed by lookalike domains such as `evilgithub.com`, so the original non-GitHub URL acceptance bug is not fully closed."
+}

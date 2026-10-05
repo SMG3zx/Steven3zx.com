@@ -1,0 +1,333 @@
+{
+    "groupId":  "deploy-sse-round2",
+    "testedAt":  "2026-03-15T10:43:54.7989025Z",
+    "isolation":  {
+                      "baseUrl":  "http://localhost:8080",
+                      "emailPrefix":  "e2e-pipeline-ut+deploy-r2-",
+                      "projectSlugPrefix":  "e2e-pipeline-ut-deploy-r2-",
+                      "email":  "e2e-pipeline-ut+deploy-r2-20260315104254492@example.com",
+                      "projectSlug":  "e2e-pipeline-ut-deploy-r2-20260315104254492",
+                      "projectId":  "proj_7983",
+                      "artifactBuildId":  "bld_ea29dfc4211884d2f825438c",
+                      "deploymentId":  "dep_2b977e0075977b135a1dfe0b",
+                      "failedBuildId":  "bld_6002522482106fa5534b3996",
+                      "healthz":  "HTTP 200",
+                      "readyz":  "HTTP 200"
+                  },
+    "toolsUsed":  [
+                      "curl.exe",
+                      "PowerShell"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-E2E-012",
+                           "title":  "Build logs SSE stream emits snapshot/log/status/heartbeat while build is active",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Trigger source-bundle build and open /logs/stream",
+                                             "expected":  "SSE stream opens while build is active",
+                                             "observed":  "buildId=bld_748fa58859541d07fb688ecc http=500 events="
+                                         },
+                                         {
+                                             "action":  "Capture SSE event sequence",
+                                             "expected":  "snapshot, log, status, heartbeat",
+                                             "observed":  ""
+                                         },
+                                         {
+                                             "action":  "Observe terminal status event",
+                                             "expected":  "final status event is built/failed",
+                                             "observed":  "none observed in stream"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\source-upload.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\source-upload.poll-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\VAL-E2E-012-source-upload.headers.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\VAL-E2E-012-source-upload.raw.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\VAL-E2E-012-source-upload.stderr.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\VAL-E2E-012-source-upload.events.json"
+                                                      ],
+                                            "network":  [
+                                                            "POST /api/v1/uploads/source-bundles -\u003e 202",
+                                                            "GET /api/v1/builds/bld_748fa58859541d07fb688ecc/logs/stream -\u003e 500",
+                                                            "GET /api/v1/builds?projectId=proj_7983 -\u003e 200 finalStatus=built"
+                                                        ],
+                                            "eventSequence":  [
+
+                                                              ],
+                                            "terminalStatus":  null,
+                                            "buildId":  "bld_748fa58859541d07fb688ecc",
+                                            "streamStatus":  500
+                                        },
+                           "issues":  "The live SSE endpoint did not provide the required snapshot/log/status/heartbeat stream shape; see captured HTTP status/body for the attempted stream connection."
+                       },
+                       {
+                           "id":  "VAL-E2E-013",
+                           "title":  "Deployment creation reaches running with runtimeEndpoint and domain binding",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "POST /api/v1/deployments using a valid built build",
+                                             "expected":  "202 with async operation",
+                                             "observed":  "buildSource=source-upload fallback buildId=bld_748fa58859541d07fb688ecc http=202"
+                                         },
+                                         {
+                                             "action":  "Poll deployment create operation",
+                                             "expected":  "operation succeeds with running deployment result",
+                                             "observed":  "initialStatus=succeeded finalSelectedStatus=succeeded failure=\u0027\u0027"
+                                         },
+                                         {
+                                             "action":  "GET /api/v1/deployments/{id} until stable",
+                                             "expected":  "deployment reaches running with runtimeEndpoint",
+                                             "observed":  "deploymentStatus=running runtimeEndpoint=\u0027http://janus-runner:38373\u0027 domain=\u0027e2e-pipeline-ut-deploy-r2-20260315104254492-1.janus.run\u0027"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\artifact-upload.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\artifact-upload.poll-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-source-fallback.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-source-fallback.poll-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-running.deployment-01.body.txt"
+                                                      ],
+                                            "network":  [
+                                                            "POST /api/v1/uploads/artifacts -\u003e 202",
+                                                            "POST /api/v1/deployments (source-upload fallback) -\u003e 202",
+                                                            "GET /api/v1/operations/op_771d1b2c06fd57e2112e909b -\u003e 200 status=succeeded",
+                                                            "POST /api/v1/deployments selected-final (source-upload fallback) -\u003e 202",
+                                                            "GET /api/v1/deployments/dep_2b977e0075977b135a1dfe0b -\u003e 200 status=running"
+                                                        ],
+                                            "deploymentId":  "dep_2b977e0075977b135a1dfe0b",
+                                            "buildId":  "bld_748fa58859541d07fb688ecc",
+                                            "runtimeEndpoint":  "http://janus-runner:38373",
+                                            "domainBinding":  {
+                                                                  "createdAt":  1773571415.186913,
+                                                                  "deploymentId":  "dep_2b977e0075977b135a1dfe0b",
+                                                                  "domain":  "e2e-pipeline-ut-deploy-r2-20260315104254492-1.janus.run",
+                                                                  "id":  "dom_56660a16811a39186ba47f66",
+                                                                  "type":  "temporary",
+                                                                  "verifiedAt":  1773571415.186913
+                                                              }
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-E2E-014",
+                           "title":  "Running deployment endpoint is reachable",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Resolve runtime access target",
+                                             "expected":  "runtimeEndpoint or platform subdomain available",
+                                             "observed":  "platform-domain =\u003e http://localhost:8080/"
+                                         },
+                                         {
+                                             "action":  "GET running deployment endpoint",
+                                             "expected":  "2xx response from deployed service",
+                                             "observed":  "HTTP 200"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-running.deployment-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\runtime-before-delete-host.headers.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\runtime-before-delete-host.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\runtime-before-delete-host.stderr.txt"
+                                                      ],
+                                            "network":  [
+                                                            "GET platform-domain http://localhost:8080/ -\u003e 200"
+                                                        ],
+                                            "probeMode":  "platform-domain",
+                                            "probeHeaders":  {
+                                                                 "Host":  "e2e-pipeline-ut-deploy-r2-20260315104254492-1.janus.run"
+                                                             },
+                                            "runtimeEndpoint":  "http://janus-runner:38373"
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-E2E-023",
+                           "title":  "Deployment listing supports projectId filtering",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "GET /api/v1/deployments",
+                                             "expected":  "200 with deployments array",
+                                             "observed":  "HTTP 200 count=799"
+                                         },
+                                         {
+                                             "action":  "GET /api/v1/deployments?projectId={id}",
+                                             "expected":  "200 narrowed to the project",
+                                             "observed":  "HTTP 200 count=1 containsDeployment=True allMatchProject=True"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployments-list-all.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployments-list-filtered.body.txt"
+                                                      ],
+                                            "network":  [
+                                                            "GET /api/v1/deployments -\u003e 200",
+                                                            "GET /api/v1/deployments?projectId=proj_7983 -\u003e 200"
+                                                        ],
+                                            "counts":  {
+                                                           "all":  799,
+                                                           "filtered":  1
+                                                       },
+                                            "deploymentId":  "dep_2b977e0075977b135a1dfe0b"
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-E2E-024",
+                           "title":  "Deployment deletion stops the runtime and updates deployment state",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "DELETE /api/v1/deployments/{id}",
+                                             "expected":  "202 with async operation",
+                                             "observed":  "HTTP 202"
+                                         },
+                                         {
+                                             "action":  "Poll delete operation",
+                                             "expected":  "succeeded",
+                                             "observed":  "succeeded"
+                                         },
+                                         {
+                                             "action":  "GET /api/v1/deployments/{id} after delete",
+                                             "expected":  "status stopped/terminated",
+                                             "observed":  "status=stopped runtimeEndpoint=\u0027\u0027 runtimeStatus=\u0027stopped\u0027"
+                                         },
+                                         {
+                                             "action":  "Probe previous runtime target after delete",
+                                             "expected":  "endpoint no longer serves 2xx",
+                                             "observed":  "HTTP 404"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-delete.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-delete.poll-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-stopped.deployment-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\runtime-after-delete.headers.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\runtime-after-delete.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\runtime-after-delete.stderr.txt"
+                                                      ],
+                                            "network":  [
+                                                            "DELETE /api/v1/deployments/dep_2b977e0075977b135a1dfe0b -\u003e 202",
+                                                            "GET /api/v1/operations/op_3d12fed592218d3391ea93d6 -\u003e 200 status=succeeded",
+                                                            "GET /api/v1/deployments/dep_2b977e0075977b135a1dfe0b -\u003e 200 status=stopped",
+                                                            "GET deleted runtime target -\u003e 404"
+                                                        ]
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-E2E-026",
+                           "title":  "Deploy from non-built build is rejected",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Create unsupported repo-import build",
+                                             "expected":  "build reaches failed",
+                                             "observed":  "buildId=bld_6002522482106fa5534b3996 status=failed strategy=unknown"
+                                         },
+                                         {
+                                             "action":  "POST /api/v1/deployments with failed buildJobId",
+                                             "expected":  "HTTP 400 reject non-built build",
+                                             "observed":  "HTTP 400 error=\u0027@{code=bad_request; message=build must be in built status before deployment; requestId=2cce26c2d8141165238fa085}\u0027"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\repo-import-failed-build.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\repo-import-failed-build.poll-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\repo-import-failed-build.build-02.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\deployment-from-failed-build.body.txt"
+                                                      ],
+                                            "network":  [
+                                                            "POST /api/v1/repos/import -\u003e 202",
+                                                            "GET /api/v1/builds?projectId=proj_7983 -\u003e 200 finalStatus=failed",
+                                                            "POST /api/v1/deployments (failed build) -\u003e 400"
+                                                        ],
+                                            "buildId":  "bld_6002522482106fa5534b3996",
+                                            "buildStatus":  "failed",
+                                            "error":  "@{code=bad_request; message=build must be in built status before deployment; requestId=2cce26c2d8141165238fa085}"
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-E2E-025",
+                           "title":  "Build timeout enforcement",
+                           "status":  "blocked",
+                           "steps":  [
+                                         {
+                                             "action":  "Assess live build surfaces under JANUS_BUILD_TIMEOUT_SEC=300",
+                                             "expected":  "deterministic timeout demonstration or concrete blocker",
+                                             "observed":  "Blocked: the live API surface does not expose a deterministic way to hold a build open past JANUS_BUILD_TIMEOUT_SEC=300 without monopolising the shared build slot for \u003e5 minutes; the exercised source upload and repo-import builds reached terminal states quickly, and no request parameter allows injecting an intentional sleep/stall."
+                                         },
+                                         {
+                                             "action":  "Review observed live builds",
+                                             "expected":  "identify timeout-capable candidate if practical",
+                                             "observed":  "[{\"label\":\"source-upload-sse\",\"buildId\":\"bld_748fa58859541d07fb688ecc\",\"finalStatus\":\"built\",\"terminalStatusEvent\":null},{\"label\":\"artifact-upload\",\"buildId\":\"bld_ea29dfc4211884d2f825438c\",\"finalStatus\":\"built\",\"buildStrategy\":\"prebuilt_wasm\"},{\"label\":\"unsupported-repo-import\",\"buildId\":\"bld_6002522482106fa5534b3996\",\"finalStatus\":\"failed\",\"buildStrategy\":\"unknown\",\"errorSnippet\":\"no recognised WASM-compilable language detected; expected one of: go.mod (Go), Cargo.toml (Rust), .c/.cpp with Makefile/CMakeLists.txt (C/C++), .csproj/.fsproj referencing BytecodeAlliance.ComponentizeSharp (.NET), requirements.txt/pyproject.toml listing componentize-py with .py (Python), package.js\"}]"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "files":  [
+                                                          "e2e-pipeline\\builds-runtime-round2\\source-upload.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\source-upload-build.build-01.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\repo-import-failed-build.body.txt",
+                                                          "e2e-pipeline\\builds-runtime-round2\\repo-import-failed-build.build-02.body.txt"
+                                                      ],
+                                            "observedBuilds":  [
+                                                                   {
+                                                                       "label":  "source-upload-sse",
+                                                                       "buildId":  "bld_748fa58859541d07fb688ecc",
+                                                                       "finalStatus":  "built",
+                                                                       "terminalStatusEvent":  null
+                                                                   },
+                                                                   {
+                                                                       "label":  "artifact-upload",
+                                                                       "buildId":  "bld_ea29dfc4211884d2f825438c",
+                                                                       "finalStatus":  "built",
+                                                                       "buildStrategy":  "prebuilt_wasm"
+                                                                   },
+                                                                   {
+                                                                       "label":  "unsupported-repo-import",
+                                                                       "buildId":  "bld_6002522482106fa5534b3996",
+                                                                       "finalStatus":  "failed",
+                                                                       "buildStrategy":  "unknown",
+                                                                       "errorSnippet":  "no recognised WASM-compilable language detected; expected one of: go.mod (Go), Cargo.toml (Rust), .c/.cpp with Makefile/CMakeLists.txt (C/C++), .csproj/.fsproj referencing BytecodeAlliance.ComponentizeSharp (.NET), requirements.txt/pyproject.toml listing componentize-py with .py (Python), package.js"
+                                                                   }
+                                                               ],
+                                            "timeoutSetting":  "JANUS_BUILD_TIMEOUT_SEC=300 (task context)"
+                                        },
+                           "issues":  "Blocked: the live API surface does not expose a deterministic way to hold a build open past JANUS_BUILD_TIMEOUT_SEC=300 without monopolising the shared build slot for \u003e5 minutes; the exercised source upload and repo-import builds reached terminal states quickly, and no request parameter allows injecting an intentional sleep/stall."
+                       }
+                   ],
+    "frictions":  [
+                      {
+                          "description":  "The preferred prebuilt artifact build was reported as built, but repeated deployment attempts failed because the live API reported the resource profile was not ready yet.",
+                          "resolved":  true,
+                          "resolution":  "Fell back to the already-built source-upload build for deployment/runtime validation so the assigned assertions could still be exercised end-to-end.",
+                          "affectedAssertions":  [
+                                                     "VAL-E2E-013",
+                                                     "VAL-E2E-014",
+                                                     "VAL-E2E-023",
+                                                     "VAL-E2E-024"
+                                                 ]
+                      }
+                  ],
+    "blockers":  [
+                     {
+                         "description":  "Blocked: the live API surface does not expose a deterministic way to hold a build open past JANUS_BUILD_TIMEOUT_SEC=300 without monopolising the shared build slot for \u003e5 minutes; the exercised source upload and repo-import builds reached terminal states quickly, and no request parameter allows injecting an intentional sleep/stall.",
+                         "affectedAssertions":  [
+                                                    "VAL-E2E-025"
+                                                ],
+                         "quickFixAttempted":  "Exercised both source-bundle and repo-import build surfaces and reviewed the observed build behavior; no realistic live-surface timeout trigger was attributable within this shared rerun batch."
+                     }
+                 ],
+    "summary":  "Tested 7 assertions: 5 passed, 1 failed, 1 blocked."
+}

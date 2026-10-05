@@ -1,0 +1,271 @@
+﻿{
+    "groupId":  "auth-surface-round3",
+    "testedAt":  "2026-03-14T21:02:19.2173263-05:00",
+    "isolation":  {
+                      "appUrl":  "http://localhost:3000",
+                      "apiUrl":  "http://localhost:8080",
+                      "email":  "frontend-hardening-ut+auth-round3-7d36@example.com",
+                      "password":  "[redacted test password]",
+                      "desktopViewport":  "1280x800",
+                      "browserSession":  "7d36c99fcfde__u1",
+                      "evidenceDir":  "frontend-hardening/auth-surface-round3"
+                  },
+    "toolsUsed":  [
+                      "agent-browser",
+                      "curl.exe"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-FH-006",
+                           "title":  "Landing page renders and adapts to auth state",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Open / while signed out in a clean session.",
+                                             "expected":  "The landing page shows the hero, capability cards, How It Works flow, footer, and a signed-out primary CTA to /sign-up.",
+                                             "observed":  "The signed-out landing page rendered the hero copy, capability sections, How It Works content, footer, and a primary CTA labelled \"Sign Up \u0026 Start Building\"."
+                                         },
+                                         {
+                                             "action":  "Authenticate with the isolated account and revisit /.",
+                                             "expected":  "The primary CTA changes to Open Dashboard and the auth chip resolves to the signed-in user email.",
+                                             "observed":  "After authenticating the isolated account, / rendered an \"Open Dashboard\" CTA and the auth chip resolved to \"Signed in: frontend-hardening-ut+auth-round3-7d36@example.com\"."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-006-landing-signed-out.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-006-landing-signed-in.png"
+                                                            ],
+                                            "consoleErrors":  "none observed on the landing page during signed-out and signed-in checks",
+                                            "network":  "Landing CTA hrefs resolved to /sign-up (signed out) and Open Dashboard (signed in). Corroborating curl.exe replay: POST /api/v1/auth/signin/password -\u003e 202, GET /api/v1/operations/op_fdcbeb4864f58af418e4fb6e -\u003e succeeded, POST /api/v1/auth/session/exchange -\u003e 200, GET /api/v1/auth/me -\u003e 200 for frontend-hardening-ut+auth-round3-7d36@example.com."
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-FH-007",
+                           "title":  "Sign-in flow completes successfully",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /sign-in and enter the isolated test email.",
+                                             "expected":  "Continue enables for a valid email and reveals the password step.",
+                                             "observed":  "Continue enabled for the valid email and revealed the password field."
+                                         },
+                                         {
+                                             "action":  "Inspect the second-step links.",
+                                             "expected":  "Forgot your password? points to /reset-password?email=... and Email sign-in code points to /magic-code?email=....",
+                                             "observed":  "Forgot your password? resolved to /reset-password?email=frontend-hardening-ut%2Bauth-round3-7d36%40example.com and Email sign-in code resolved to /magic-code?email=frontend-hardening-ut%2Bauth-round3-7d36%40example.com."
+                                         },
+                                         {
+                                             "action":  "Submit an invalid password and then the valid password.",
+                                             "expected":  "Invalid credentials show an inline error; valid credentials redirect to /get-started.",
+                                             "observed":  "The invalid attempt stayed on /sign-in and rendered the inline error \"invalid credentials\". Re-entering the correct password redirected to /get-started."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-007-sign-in-form.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-007-sign-in-password-step.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-007-sign-in-invalid-inline-error.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-013-dashboard-signed-in-topbar.png"
+                                                            ],
+                                            "consoleErrors":  "none observed during the sign-in page checks",
+                                            "network":  "curl.exe corroboration: POST /api/v1/auth/signin/password -\u003e 202, GET /api/v1/operations/op_fdcbeb4864f58af418e4fb6e -\u003e succeeded, POST /api/v1/auth/session/exchange -\u003e 200 user payload, GET /api/v1/auth/me -\u003e 200 for frontend-hardening-ut+auth-round3-7d36@example.com."
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-FH-008",
+                           "title":  "Sign-up flow completes successfully",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /sign-up and enter the isolated test email.",
+                                             "expected":  "Continue enables and reveals the password step.",
+                                             "observed":  "The valid email enabled Continue and revealed the password field."
+                                         },
+                                         {
+                                             "action":  "Try a short password and then a valid password.",
+                                             "expected":  "A short password keeps Create account disabled, while a 10+ character password enables submission.",
+                                             "observed":  "The Create account button stayed disabled for \"short\" and became enabled for the assigned 12-character test password."
+                                         },
+                                         {
+                                             "action":  "Submit the form and inspect the alternate auth link.",
+                                             "expected":  "Successful sign-up redirects to /get-started, and the Sign in link navigates to /sign-in.",
+                                             "observed":  "Submitting the new-account form redirected the browser to /get-started for the isolated account, and the alternate Sign in link resolved to /sign-in."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-008-sign-up-form.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-008-sign-up-password-step.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-013-dashboard-signed-in-topbar.png"
+                                                            ],
+                                            "consoleErrors":  "none observed during the sign-up flow",
+                                            "network":  "The browser URL changed to /get-started immediately after Create account. A later curl.exe password sign-in replay for the same account succeeded, confirming the account was created and usable."
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-FH-009",
+                           "title":  "Magic-code (passwordless) flow works end-to-end",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /magic-code?email=\u003cisolated-email\u003e.",
+                                             "expected":  "The email is prefilled, the request auto-sends, and six OTP inputs appear.",
+                                             "observed":  "The page prefilled frontend-hardening-ut+auth-round3-7d36@example.com, rendered six OTP inputs immediately, showed a disabled Resend now button, and displayed an inline email preview containing the literal placeholder \u003cone_time_code\u003e."
+                                         },
+                                         {
+                                             "action":  "Exercise OTP keyboard navigation.",
+                                             "expected":  "Typing advances focus, ArrowLeft moves back, and Backspace from an empty next field moves back and clears the previous digit.",
+                                             "observed":  "Typing 1 advanced focus from digit 1 to digit 2, ArrowLeft moved focus back to digit 1, and Backspace from the empty second field returned focus to digit 1 and cleared the entered digit."
+                                         },
+                                         {
+                                             "action":  "Enter an invalid 6-digit code.",
+                                             "expected":  "Entering all 6 digits auto-submits, shows an inline invalid-code error, and resets the digit inputs.",
+                                             "observed":  "Typing 123456 auto-submitted and reset all six inputs back to blank, but the page never rendered an inline \"Invalid one-time code\" message in visible body text."
+                                         },
+                                         {
+                                             "action":  "Wait for resend availability and attempt the happy path if reachable.",
+                                             "expected":  "Resend now becomes available and a valid code can complete the redirect to /get-started.",
+                                             "observed":  "Resend now remained disabled after the cooldown window, and a corroborating curl.exe replay showed POST /api/v1/auth/magic-code/request failing with internal_error \"actor not found\", so the happy path was not reachable."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-009-magic-code-form.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-009-magic-code-invalid-code.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-009-magic-code-resend-enabled.png"
+                                                            ],
+                                            "consoleErrors":  "none observed on the magic-code page itself",
+                                            "network":  "curl.exe corroboration: POST /api/v1/auth/magic-code/request -\u003e 202 then GET /api/v1/operations/op_a6484a0bf38a273b71ba909e -\u003e failed internal_error \"actor not found\". POST /api/v1/auth/magic-code/verify with 123456 -\u003e 202 then GET /api/v1/operations/op_4a49a430b228bc7896098a90 -\u003e failed unauthorized \"invalid one-time code\"."
+                                        },
+                           "issues":  "The passwordless flow did not meet the contract: the request operation failed upstream, the happy path could not be reached, Resend now never enabled, and the browser reset invalid OTP entry without surfacing the required inline invalid-code error."
+                       },
+                       {
+                           "id":  "VAL-FH-010",
+                           "title":  "Reset-password flow works",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /reset-password?email=\u003cisolated-email\u003e.",
+                                             "expected":  "The email is prefilled.",
+                                             "observed":  "The email field was prefilled with frontend-hardening-ut+auth-round3-7d36@example.com."
+                                         },
+                                         {
+                                             "action":  "Use the Back to sign-in link.",
+                                             "expected":  "The link navigates back to /sign-in.",
+                                             "observed":  "The back link resolved to /sign-in and clicking it returned the browser to /sign-in."
+                                         },
+                                         {
+                                             "action":  "Submit the reset-password form.",
+                                             "expected":  "The page shows the reset-instructions success flash or a normal user-facing error state.",
+                                             "observed":  "The page stayed on /reset-password and rendered the exact inline error text \"actor not found\" instead of the expected reset-instructions outcome."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-010-reset-password-form.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-010-reset-password-outcome.png"
+                                                            ],
+                                            "consoleErrors":  "none observed on the reset-password page",
+                                            "network":  "curl.exe corroboration: POST /api/v1/auth/reset-password/request -\u003e 202 then GET /api/v1/operations/op_6325d3fa5ea2043a46458c00 -\u003e failed internal_error \"actor not found\"."
+                                        },
+                           "issues":  "Reset-password did not provide the expected success flash or a normal user-facing recovery path; it exposed an internal actor error instead."
+                       },
+                       {
+                           "id":  "VAL-FH-013",
+                           "title":  "Topbar displays correct contextual information",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /get-started while signed out.",
+                                             "expected":  "The topbar shows the active workspace label, signed-out state, and the no-project hint.",
+                                             "observed":  "The signed-out dashboard showed \"Current view: Pipeline\", \"Signed out\", and \"Create a project in Projects view\"."
+                                         },
+                                         {
+                                             "action":  "Open /get-started while signed in with the isolated account.",
+                                             "expected":  "The topbar shows the signed-in email branch and the workspace context.",
+                                             "observed":  "The signed-in dashboard showed \"Current view: Pipeline\", the API context label, the email frontend-hardening-ut+auth-round3-7d36@example.com, and a visible Sign Out control."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-013-dashboard-signed-out-topbar.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-013-dashboard-signed-in-topbar.png"
+                                                            ],
+                                            "consoleErrors":  "Signed-in dashboard: none observed. Signed-out dashboard: one expected browser error, \"Failed to load resource: the server responded with a status of 401 (Unauthorized)\", while anonymous dashboard requests hit auth-gated APIs.",
+                                            "network":  "Signed-in state was corroborated with curl.exe via POST /api/v1/auth/signin/password -\u003e succeeded operation, POST /api/v1/auth/session/exchange -\u003e 200, and GET /api/v1/auth/me -\u003e 200 for the same email."
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-FH-023",
+                           "title":  "Frontend signout flow",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "Reach the authenticated dashboard state for the isolated account.",
+                                             "expected":  "A Sign Out control is visible in the dashboard topbar.",
+                                             "observed":  "The signed-in dashboard rendered a visible Sign Out control beside the isolated account email."
+                                         },
+                                         {
+                                             "action":  "Click Sign Out.",
+                                             "expected":  "The app clears auth state and redirects to landing or sign-in.",
+                                             "observed":  "Clicking Sign Out redirected the browser to /sign-in, and subsequent signed-out checks showed unauthenticated dashboard/landing UI."
+                                         },
+                                         {
+                                             "action":  "Corroborate the cleared auth state against the backend.",
+                                             "expected":  "The signout API succeeds and /api/v1/auth/me rejects the cleared session.",
+                                             "observed":  "A curl.exe replay returned POST /api/v1/auth/signout -\u003e {\"ok\":true}, and a follow-up GET /api/v1/auth/me with the same cookie jar returned 401."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-013-dashboard-signed-in-topbar.png",
+                                                                "frontend-hardening/auth-surface-round3/VAL-FH-023-signout-redirect.png"
+                                                            ],
+                                            "consoleErrors":  "none observed during the signout click and redirect",
+                                            "network":  "Browser click redirected to /sign-in. Corroborating curl.exe replay: POST /api/v1/auth/signout -\u003e {\"ok\":true}; GET /api/v1/auth/me with the same cookie jar -\u003e 401."
+                                        },
+                           "issues":  null
+                       }
+                   ],
+    "frictions":  [
+                      {
+                          "description":  "The initial agent-browser instance for session 7d36c99fcfde__u1 hung after the first successful sign-up redirect, so later snapshots/navigation calls timed out until the validator restarted only that assigned daemon/browser process tree.",
+                          "resolved":  true,
+                          "resolution":  "Restarted only the hung u1 agent-browser daemon and its child chrome-headless-shell processes, then continued in the same assigned session name without touching other validators.",
+                          "affectedAssertions":  [
+                                                     "VAL-FH-007",
+                                                     "VAL-FH-008",
+                                                     "VAL-FH-013",
+                                                     "VAL-FH-023"
+                                                 ]
+                      },
+                      {
+                          "description":  "agent-browser get text body on these Next.js routes includes the streamed __next_f payload after the visible page text, which made direct text inspection noisy.",
+                          "resolved":  true,
+                          "resolution":  "Filtered the page text with Select-String so only the visible auth/topbar copy relevant to each assertion was captured in notes.",
+                          "affectedAssertions":  [
+                                                     "VAL-FH-006",
+                                                     "VAL-FH-007",
+                                                     "VAL-FH-009",
+                                                     "VAL-FH-010",
+                                                     "VAL-FH-013",
+                                                     "VAL-FH-023"
+                                                 ]
+                      }
+                  ],
+    "blockers":  [
+                     {
+                         "description":  "The magic-code request operation for the isolated account still fails immediately with internal_error \"actor not found\", which prevented any real happy-path verification and kept the Resend now button unavailable.",
+                         "affectedAssertions":  [
+                                                    "VAL-FH-009"
+                                                ],
+                         "quickFixAttempted":  "Retried the browser flow multiple times, waited through the resend cooldown, and replayed POST /api/v1/auth/magic-code/request plus POST /api/v1/auth/magic-code/verify via curl.exe. The request operation consistently failed with actor not found."
+                     }
+                 ],
+    "summary":  "Tested 7 assigned auth-surface assertions against the round-3 source-built frontend/backend stack. 5 passed (landing, sign-in, sign-up, topbar, signout) and 2 failed: magic-code still breaks end-to-end because the request operation fails with actor not found and the UI does not show the required invalid-code error, while reset-password surfaces the internal actor error instead of the expected reset outcome."
+}

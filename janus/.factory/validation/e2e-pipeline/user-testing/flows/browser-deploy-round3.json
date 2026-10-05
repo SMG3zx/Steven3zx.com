@@ -1,0 +1,69 @@
+{
+  "groupId": "browser-deploy-round3",
+  "testedAt": "2026-03-15T12:59:38.765Z",
+  "isolation": {
+    "browserBaseUrl": "http://localhost:3000",
+    "apiBaseUrl": "http://localhost:8080",
+    "email": "e2e-pipeline-ut+browser-r3-20260315t125913@example.com",
+    "projectSlug": "e2e-pipeline-ut-browser-r3-20260315t125913",
+    "projectId": "proj_7990",
+    "buildId": "bld_ed2fde36b9ace15b14216c33",
+    "deploymentId": ""
+  },
+  "toolsUsed": [
+    "Playwright",
+    "fetch"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing works",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Open /get-started with an isolated authenticated browser session and load the pre-created project/build.",
+          "expected": "Deployment form can select the isolated project and built artifact.",
+          "observed": "Signed-in dashboard loaded for e2e-pipeline-ut+browser-r3-20260315t125913@example.com; deployment form selected project proj_7990 and build bld_ed2fde36b9ace15b14216c33."
+        },
+        {
+          "action": "Submit a preview deployment with target ref browser-deploy-r3-1773579553424.",
+          "expected": "Deployment Created result card shows deployment ID, status, domain, reachable endpoint link, and resource profile.",
+          "observed": ""
+        },
+        {
+          "action": "Wait for automatic post-submit updates without clicking Refresh Deployments or Refresh Domains, then open View Logs from the deployment card.",
+          "expected": "Result card gains an endpoint link; deployment and domain cards refresh to running with endpoint; View Logs opens the modal.",
+          "observed": "resultLink=<missing>; deploymentAutoRefresh=false; domainAutoRefresh=false; logModalObserved=false"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "e2e-pipeline/browser-deploy-round3/06-dashboard-overview.png",
+          "e2e-pipeline/browser-deploy-round3/07-deployment-form-filled.png",
+          "e2e-pipeline/browser-deploy-round3/08-deployment-error.png"
+        ],
+        "files": [
+          "e2e-pipeline/browser-deploy-round3/setup-state.json",
+          "e2e-pipeline/browser-deploy-round3/playwright-observation.json",
+          "e2e-pipeline/browser-deploy-round3/network-log.json",
+          "e2e-pipeline/browser-deploy-round3/console-errors.json"
+        ],
+        "network": [
+          "GET http://localhost:3000/api/v1/auth/me -> 200",
+          "GET http://localhost:3000/api/v1/projects -> 200",
+          "GET http://localhost:3000/api/v1/domains -> 200",
+          "GET http://localhost:3000/api/v1/deployments -> 200",
+          "GET http://localhost:3000/api/v1/builds -> 200",
+          "POST http://localhost:3000/api/v1/deployments -> 202",
+          "GET http://localhost:3000/api/v1/operations/op_b083774766365dc76b07e520 -> 200"
+        ],
+        "consoleErrors": [],
+        "runtimeCheck": null
+      },
+      "issues": "POST /api/v1/deployments ended failed {\"code\":\"conflict\",\"message\":\"resource profile not ready yet\",\"requestId\":\"\",\"retryable\":true}; UI error banner: resource profile not ready yet The immediate Deployment Created result card never rendered a reachable endpoint link without manual refresh. The deployments list did not auto-refresh to a running card with endpoint for the isolated project. The domains list did not auto-refresh to a running card with endpoint for the isolated project. View Logs did not open the expected deployment log modal from the deployment card."
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "VAL-FH-018 failed: POST /api/v1/deployments ended failed {\"code\":\"conflict\",\"message\":\"resource profile not ready yet\",\"requestId\":\"\",\"retryable\":true}; UI error banner: resource profile not ready yet The immediate Deployment Created result card never rendered a reachable endpoint link without manual refresh. The deployments list did not auto-refresh to a running card with endpoint for the isolated project. The domains list did not auto-refresh to a running card with endpoint for the isolated project. View Logs did not open the expected deployment log modal from the deployment card."
+}

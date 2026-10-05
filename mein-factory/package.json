@@ -1,0 +1,52 @@
+{
+  "name": "meinfactory",
+  "description": "Local-first software factory with Qwik and Mastra",
+  "engines": {
+    "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
+  },
+  "engines-annotation": "Mostly required by sharp which needs a Node-API v9 compatible runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "qwik build",
+    "build.client": "vite build",
+    "build.preview": "vite build --ssr src/entry.preview.tsx",
+    "build.types": "tsc --incremental --noEmit",
+    "test": "vitest run",
+    "test:ollama": "bun run scripts/test-ollama.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "deploy": "echo 'Run \"npm run qwik add\" to install a server adapter'",
+    "dev": "bun run scripts/dev.ts",
+    "dev:ui": "vite --mode ssr",
+    "dev:mastra": "cd mastra && bun run dev",
+    "dev.debug": "node --inspect-brk ./node_modules/vite/bin/vite.js --mode ssr --force",
+    "fmt": "prettier --write .",
+    "fmt.check": "prettier --check .",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "preview": "qwik build preview && vite preview --open",
+    "start": "vite --open --mode ssr",
+    "qwik": "qwik"
+  },
+  "devDependencies": {
+    "@builder.io/qwik": "^1.20.0",
+    "@builder.io/qwik-city": "^1.20.0",
+    "@eslint/js": "^9",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
+    "eslint": "9.32.0",
+    "eslint-plugin-qwik": "^1.20.0",
+    "globals": "16.4.0",
+    "prettier": "3.6.2",
+    "typescript": "5.4.5",
+    "typescript-eslint": "8.38.0",
+    "typescript-plugin-css-modules": "latest",
+    "undici": "*",
+    "vite": "7.3.1",
+    "vite-tsconfig-paths": "^4.2.1",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "@types/bun": "^1.4.2"
+  }
+}

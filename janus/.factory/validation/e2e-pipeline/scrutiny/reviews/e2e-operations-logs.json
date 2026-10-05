@@ -1,0 +1,33 @@
+{
+  "featureId": "e2e-operations-logs",
+  "reviewedAt": "2026-03-15T07:20:19.120732Z",
+  "commitId": "f61a33a9f0bf7065dd4cad50afa711c35621a43b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The new test file adds substantial coverage for operation polling, build logs, SSE events, and structured error envelopes, but it does not fully satisfy the feature's core promise. The claimed 'all mutating endpoints' verification still misses at least one async mutation entrypoint, so the suite does not yet prove the 202 operation-envelope invariant across every relevant mutation route.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/operations_logs_e2e_test.go",
+        "line": 337,
+        "severity": "blocking",
+        "description": "`TestOperationEnvelope_AllMutatingEndpoints_ConsistentShape` claims to verify EVERY mutating endpoint, but the table at lines 359-370 only enumerates 12 routes and omits `POST /api/v1/uploads/source-bundles`. That upload handler is another authenticated mutation that calls `submitOperation(\"build.enqueue\", ...)` in `backend/janus-api/internal/api/handler/builds_deployments.go:568-622`, so this feature still leaves one async mutation entrypoint unverified. Existing upload tests in `backend/janus-api/internal/api/handler/deployment_e2e_test.go:623-644` only cover 401/405, not the required 202 operation envelope."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill still requires manual `curl.exe` verification with `interactiveChecks`, but this feature's handoff records only automated `go test`/`go vet` commands while still marking `followedProcedure` true. That makes the procedure signal unreliable for API-focused backend work.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:44-48 and 69-71 require manual verification plus `interactiveChecks`; C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-15T07-13-13-176Z__e2e-operations-logs__dad7f871-4b3f-46c3-b839-cfef34d440a1.json:13-18 records only `commandsRun`, while lines 171-174 set `followedProcedure` to true."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared architecture notes describe the async operation-envelope pattern only at a high level, but they do not enumerate the concrete operation-submitting routes. That makes it easy to undercount endpoints such as source-bundle uploads when a feature asks for coverage across ALL mutating async entrypoints.",
+      "evidence": "E:/Janus/.factory/library/architecture.md:34-36 documents the pattern generically; actual `submitOperation` call sites are spread across `backend/janus-api/internal/api/handler/auth.go:108,142,173,207,238,276`, `projects.go:47,95,114`, and `builds_deployments.go:227,486,548,619`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the feature metadata, handoff, worker transcript skeleton, backend-worker skill, and commit `f61a33a9f0bf7065dd4cad50afa711c35621a43b`. Result: fail, because the added suite does not actually cover every async mutating endpoint promised by the feature; `POST /api/v1/uploads/source-bundles` remains outside the new operation-envelope verification."
+}

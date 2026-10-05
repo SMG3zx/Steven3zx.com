@@ -1,0 +1,51 @@
+{
+  "featureId": "as-actor-tests",
+  "reviewedAt": "2026-03-14T20:31:54.107348+00:00",
+  "commitId": "726852d",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The suite is materially stronger after this worker pass, but it still does not fully validate several behaviors from the assertions it claims to fulfill. The remaining gaps are concentrated in heartbeat semantics, ReadyChecks discovery coverage, runner-list response-contract checks, and operation invalid-transition coverage.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/actors/testkit_test.go",
+        "line": 1460,
+        "severity": "blocking",
+        "description": "`TestRunnerNodeActor_Heartbeat` only proves that `ReportRunnerHeartbeat` was called. The stub implementation it relies on (`ReportRunnerHeartbeat` at lines 431-439) drops the heartbeat status, runtime endpoint, and timestamp fields entirely, so the test cannot catch regressions against VAL-AS-013 such as failing to mark the runner healthy or failing to update recency/`last_seen_at`."
+      },
+      {
+        "file": "backend/janus-api/internal/actors/testkit_test.go",
+        "line": 1780,
+        "severity": "blocking",
+        "description": "`TestReadyChecks_RunningSystem_AllOk` never asserts `checks[\"discovery\"]`, even though `Node.ReadyChecks()` always reports discovery via `InCluster()` (`backend/janus-api/internal/actors/node.go:291-294`) and VAL-AS-014 requires all applicable checks to be `ok` on the healthy path. As written, this test would still pass if discovery stayed down, so the feature does not actually verify the full ReadyChecks contract it claims."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/runners_test.go",
+        "line": 186,
+        "severity": "blocking",
+        "description": "`TestRunnerList_Success` only checks HTTP 200 and array length. It never verifies the required response fields/semantics for VAL-AS-019 (`id`, `status`, `lastSeenAt`; see `backend/janus-api/internal/core/runners.go:31-44`), so a regression that drops or renames those fields would still leave this feature green."
+      },
+      {
+        "file": "backend/janus-api/internal/actors/testkit_test.go",
+        "line": 1117,
+        "severity": "blocking",
+        "description": "The lifecycle coverage only exercises legal `pending -> running -> succeeded|failed|dead_lettered` flows (`TestOperationLifecycle_PendingToRunningToSucceeded`, `...Failed`, `...DeadLettered`). It never tests the 'invalid transitions are rejected' part of VAL-AS-010, and the production persistence methods currently perform unconditional terminal-state updates (`backend/janus-api/internal/core/operations.go:139-181`). That means the feature does not substantiate the full state-machine assertion it says it fulfills."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The `backend-worker` skill still frames step 3 as strict TDD, but this feature was primarily an extension of an already-large checked-in test suite. The worker had to adapt the procedure into coverage analysis plus targeted additions, and the handoff explicitly requested that the skill be updated to reflect this case.",
+      "evidence": "`E:/Janus/.factory/skills/backend-worker/SKILL.md` step 3 says to write failing tests first; the `as-actor-tests` handoff records `skillFeedback.suggestedChanges` saying the process had to be adapted because most tests already existed."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared docs do not currently spell out the limitation that pure GoAkt TestKit systems are non-clustered, while `Node.ReadyChecks()` always reports discovery health from `ActorSystem.InCluster()`. That gap makes it easy for workers to believe they covered the 'all healthy checks are ok' path even when discovery was never actually exercised.",
+      "evidence": "`E:/Janus/.factory/library/architecture.md` recommends GoAkt TestKit for actor testing, but `backend/janus-api/internal/actors/node.go:291-294` derives `checks.discovery` from cluster membership. The new ReadyChecks happy-path test in `backend/janus-api/internal/actors/testkit_test.go:1780` omits any discovery assertion."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed. The worker added meaningful actor-test coverage, but the feature still leaves VAL-AS-013, VAL-AS-014, VAL-AS-019, and part of VAL-AS-010 insufficiently verified because key contract behaviors are either smoke-tested or not asserted at all."
+}

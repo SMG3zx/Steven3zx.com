@@ -1,0 +1,37 @@
+.component-legend {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  display: grid;
+  gap: 7px;
+  background: rgba(10, 20, 27, 0.78);
+  border: 1px solid #2a4148;
+  border-radius: 7px;
+  padding: 10px 11px;
+  color: #a9bcbd;
+  font: 10px 'DM Mono';
+  backdrop-filter: blur(6px);
+}
+.component-legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+.swatch.compute {
+  background: #24515a;
+}
+.swatch.nvlink {
+  background: #8560a8;
+}
+.swatch.power {
+  background: #b98247;
+}
+.swatch.liquid {
+  background: #4ed0c1;
+}

@@ -1,0 +1,252 @@
+{
+  "groupId": "dashboard-shells",
+  "testedAt": "2026-03-15T00:52:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "browserSession": "fh-shells-rerun",
+    "accountEmail": "frontend-hardening-ut+shells-rerun-20260315004235@example.com",
+    "password": "[redacted test password]",
+    "evidenceDir": "frontend-hardening/dashboard-shells-rerun"
+  },
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-011",
+      "title": "Sidebar workspace view switching works",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /janus in an isolated browser session and inspect the sidebar/topbar state",
+          "expected": "Workspace view buttons and stats chips render, with the active view highlighted and contextual topbar text visible",
+          "observed": "The sidebar rendered Pipeline, Projects, Auth, API, and All; the topbar showed 'Current view: Pipeline', 'Signed out', and the project-creation hint; stats chips displayed Projects 0 / Builds 0 / Deployments 0 / Domains 0 in the signed-out empty state."
+        },
+        {
+          "action": "Click Projects, Auth, API, and All in sequence",
+          "expected": "Each click updates the active view, filters the visible dashboard panels, and visually highlights the selected view",
+          "observed": "The URL changed to ?view=projects / auth / reference / all, the topbar label changed to Projects / Auth / API / All, panel headings filtered accordingly, and the active button background changed from rgb(248, 250, 252) to rgb(239, 246, 255)."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/dashboard-sidebar-topbar.png"
+        ],
+        "consoleErrors": "none observed via agent-browser errors during the sidebar/topbar checks",
+        "network": "Dashboard load triggered GET /api/v1/auth/me while the signed-out shell rendered; the view switching itself was client-side and updated /janus?view=..."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-012",
+      "title": "Quick Actions navigate to correct panels",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Exercise all seven Quick Action buttons from /janus?view=all and inspect the resulting URL plus target panel viewport position",
+          "expected": "Each action switches to the correct workspace view if needed and leaves the target panel visible in the viewport",
+          "observed": "Create Project -> /janus?view=projects with new-project-panel visible; Import Repo -> /janus?view=pipeline but repo-import-panel ended above the viewport (top -820); Upload Bundle -> /janus?view=pipeline but artifact-uploads-panel ended above the viewport (top -820); Review Builds -> /janus?view=pipeline but builds-panel ended above the viewport (top -336); Create Deployment -> /janus?view=pipeline with deployments-panel still visible; Open Endpoint -> /janus?view=pipeline with domains-panel visible; API Routes -> /janus?view=reference with api-panel visible."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/quick-action-create-project-result.png",
+          "frontend-hardening/dashboard-shells-rerun/quick-action-import-repo-overscroll.png"
+        ],
+        "consoleErrors": "none observed during the quick-action rerun",
+        "network": "Quick Actions changed the client-side view query parameter (/janus?view=projects|pipeline|reference); no backend API call was required for the navigation itself."
+      },
+      "issues": "Three of the seven actions (Import Repo, Upload Bundle, Review Builds) overscrolled past their intended target after switching from All to Pipeline, so the destination panel was not left in the viewport."
+    },
+    {
+      "id": "VAL-FH-013",
+      "title": "Topbar displays correct contextual information",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Inspect the topbar while signed out and switch workspace views",
+          "expected": "The topbar shows the active workspace label, user context, and project-creation hint when no projects exist",
+          "observed": "The topbar showed 'Current view: Pipeline/Projects/Auth/API/All' as views changed, displayed 'Signed out', and showed 'Create a project in Projects view' with zero projects."
+        },
+        {
+          "action": "Create an isolated account so the signed-in email branch and post-project hint reactivity can be validated",
+          "expected": "Signup succeeds, the user email appears in the topbar, and the no-project hint can be rechecked after authenticated changes",
+          "observed": "The sign-up flow stayed on /sign-up and surfaced the inline failure 'auth grain activate: node runtime dependency \"janus-node-runtime\" not found in injected dependencies', so the signed-in topbar state could not be exercised."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/dashboard-sidebar-topbar.png",
+          "frontend-hardening/dashboard-shells-rerun/auth-signup-blocker.png"
+        ],
+        "consoleErrors": "none observed while validating the signed-out topbar branch",
+        "network": "POST /api/v1/auth/signup was issued from /sign-up and then polled via GET /api/v1/operations/<id> until the UI surfaced the auth grain activation failure."
+      },
+      "issues": "Only the signed-out/no-project branch was validated; the auth blocker prevented checking the signed-in email chip and post-project hint updates."
+    },
+    {
+      "id": "VAL-FH-021",
+      "title": "Error boundaries catch and display errors gracefully",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Exercise the real dashboard/auth browser surface looking for a user-triggerable bounded crash path",
+          "expected": "A component-level failure can be triggered from the real UI so the error-boundary fallback is shown",
+          "observed": "The real browser surface exposed normal dashboard states plus inline auth errors, but no user-triggerable render crash or test hook that would surface an error-boundary fallback."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/dashboard-sidebar-topbar.png",
+          "frontend-hardening/dashboard-shells-rerun/auth-signup-blocker.png"
+        ],
+        "consoleErrors": "none observed; no boundary fallback or React crash was triggered from the browser surface",
+        "network": "No user-surface action exposed a section-crash path; the only reproduced failure was the inline auth.signup operation failure."
+      },
+      "issues": "Blocked because the running app did not expose a real-browser path to intentionally trip an error boundary without modifying or mocking the app."
+    },
+    {
+      "id": "VAL-FH-022",
+      "title": "Loading states show during data fetches",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Probe initial dashboard loads and trigger Refresh Builds in the signed-out pipeline view",
+          "expected": "Panels and buttons visibly show Loading... / Refreshing... states while requests are in flight",
+          "observed": "Opening /janus?view=projects after a short delay already showed 'No projects yet.' rather than a stable loading indicator, and an immediate Refresh Builds attempt resolved straight to the inline unauthorized message without a captureable Refreshing... state."
+        },
+        {
+          "action": "Unlock authenticated create/import/upload/deploy/log flows to validate the richer loading indicators",
+          "expected": "Authenticated flows make Creating... / Importing... / Uploading... / Deploying... / Loading logs... states observable",
+          "observed": "The same isolated sign-up attempt failed with the janus-node-runtime dependency error, so the authenticated loading-state paths remained unreachable."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/loading-state-refresh-builds-attempt.png",
+          "frontend-hardening/dashboard-shells-rerun/auth-signup-blocker.png"
+        ],
+        "consoleErrors": "none observed during the loading-state probes",
+        "network": "Dashboard shell requests reached the signed-out unauthorized branch, and the attempted authenticated prerequisite (POST /api/v1/auth/signup plus operation polling) failed before any create/import/upload/deploy/log loading states became testable."
+      },
+      "issues": "Blocked by the auth prerequisite; only the signed-out unauthorized path was reachable, and it did not yield a stable capture of the intended loading indicators."
+    },
+    {
+      "id": "VAL-FH-023",
+      "title": "Frontend signout flow",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Create/sign in with an isolated account in the same browser session",
+          "expected": "A signed-in dashboard session exists so the Sign Out control is visible",
+          "observed": "The only attempted isolated account signup failed with the janus-node-runtime dependency error, so no authenticated dashboard session was established."
+        },
+        {
+          "action": "Look for the Sign Out button and the resulting redirect/network behavior",
+          "expected": "Clicking Sign Out calls the signout API endpoint and redirects to landing or sign-in with auth cleared",
+          "observed": "Because the session stayed signed out, the Sign Out button never rendered in the dashboard topbar/auth panel and no POST /api/v1/auth/signout request was emitted."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/auth-signup-blocker.png",
+          "frontend-hardening/dashboard-shells-rerun/dashboard-sidebar-topbar.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "POST /api/v1/auth/signout was not reachable because the browser session never became authenticated."
+      },
+      "issues": "Blocked by the failed isolated signup prerequisite."
+    },
+    {
+      "id": "VAL-FH-025",
+      "title": "Billing page renders with proper states",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Navigate directly to /billing on the current source-built frontend",
+          "expected": "The billing page shows loading, empty, and error states around billing data",
+          "observed": "The route now exists, but it renders a static 'Billing' / 'Coming Soon' placeholder with back-to-dashboard links only."
+        },
+        {
+          "action": "Inspect the page for billing-specific data shells or error handling",
+          "expected": "At minimum, loading, empty, or error states are present for Stripe-backed data",
+          "observed": "No loading indicator, invoice empty state, or billing error state was present, and no billing-specific data shell was rendered."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/billing-page-placeholder.png"
+        ],
+        "consoleErrors": "none observed while opening /billing",
+        "network": "No billing-specific page fetches or Stripe-related UI requests were observed from the rendered route; the page behaved as a static placeholder."
+      },
+      "issues": "The corrected local source build serves /billing, but only as a Coming Soon placeholder rather than the required loading/empty/error shells."
+    },
+    {
+      "id": "VAL-FH-026",
+      "title": "Monitoring page renders with proper states",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Navigate directly to /monitoring on the current source-built frontend",
+          "expected": "The monitoring page shows loading, empty, and user-friendly error states for deployment metrics",
+          "observed": "The route now exists, but it renders a static 'Monitoring' / 'Coming Soon' placeholder with back-to-dashboard links only."
+        },
+        {
+          "action": "Inspect the page for monitoring-specific data shells or backend error handling",
+          "expected": "At minimum, loading, empty, or error states are present for metrics data",
+          "observed": "No loading indicator, no empty metrics state, and no user-friendly monitoring error state were present; the page stayed on the static placeholder copy."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-rerun/monitoring-page-placeholder.png"
+        ],
+        "consoleErrors": "none observed while opening /monitoring",
+        "network": "No monitoring/metrics UI requests were observed from the rendered route; the page behaved as a static placeholder."
+      },
+      "issues": "The corrected local source build serves /monitoring, but only as a Coming Soon placeholder rather than the required loading/empty/error shells."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Validating the quick-action destinations required DOM bounding-box checks because switching from All to another workspace view can change layout after scroll, leaving the final viewport different from the intended target.",
+      "resolved": true,
+      "resolution": "Captured getBoundingClientRect() results for each target section after every quick-action click and paired them with screenshots.",
+      "affectedAssertions": [
+        "VAL-FH-012"
+      ]
+    },
+    {
+      "description": "The agent-browser request log retained older requests during this rerun, so per-route API inspection was noisier than expected.",
+      "resolved": true,
+      "resolution": "Reproduced each browser flow in isolation and relied on page text, URL changes, and targeted screenshots/DOM checks instead of the accumulated request log alone.",
+      "affectedAssertions": [
+        "VAL-FH-013",
+        "VAL-FH-022",
+        "VAL-FH-025",
+        "VAL-FH-026"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Isolated account creation is still broken: the sign-up flow fails with 'auth grain activate: node runtime dependency \"janus-node-runtime\" not found in injected dependencies'.",
+      "affectedAssertions": [
+        "VAL-FH-013",
+        "VAL-FH-022",
+        "VAL-FH-023"
+      ],
+      "quickFixAttempted": "Tried to create the task-scoped account frontend-hardening-ut+shells-rerun-20260315004235@example.com through /sign-up and waited for operation polling, but the UI consistently returned the same inline auth grain activation error."
+    },
+    {
+      "description": "The running browser surface did not expose any real-user action that intentionally trips an error boundary fallback.",
+      "affectedAssertions": [
+        "VAL-FH-021"
+      ],
+      "quickFixAttempted": "Exercised the dashboard/auth flows and reproduced the available auth failure path, but only inline API/auth errors were exposed and no section-level crash state became reachable."
+    }
+  ],
+  "summary": "Tested 8 assigned dashboard-shell assertions against the current source-built frontend: 1 passed (VAL-FH-011), 3 failed (VAL-FH-012, VAL-FH-025, VAL-FH-026), and 4 were blocked (VAL-FH-013, VAL-FH-021, VAL-FH-022, VAL-FH-023). The biggest blocker remains broken isolated signup, while the corrected /billing and /monitoring routes now exist but only render static Coming Soon placeholders."
+}

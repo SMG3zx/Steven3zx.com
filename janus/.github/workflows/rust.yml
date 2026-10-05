@@ -1,0 +1,73 @@
+name: Rust core
+
+on:
+  push:
+    paths:
+      - "janus-rust/**"
+      - "janus-spacetimedb/**"
+      - "antithesis/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    paths:
+      - "janus-rust/**"
+      - "janus-spacetimedb/**"
+      - "antithesis/**"
+      - ".github/workflows/rust.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: janus-rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Run Rust-first local gate
+        working-directory: .
+        run: python antithesis/AntiThesisLocal.py check
+      - run: cargo test --doc
+      - run: cargo run --bin janus-sim
+      - name: Verify SpacetimeDB module
+        working-directory: .
+        run: cargo check --manifest-path janus-spacetimedb/Cargo.toml
+      - name: Verify SpacetimeDB module lint
+        working-directory: .
+        run: cargo clippy --manifest-path janus-spacetimedb/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Check SpacetimeDB binding generator prerequisite
+        working-directory: .
+        run: python janus-spacetimedb/tools/generate_bindings.py --check-only
+
+  verify-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: janus-rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo test --all-features
+      - run: cargo test --doc
+      - run: cargo run --bin janus-sim
+      - run: cargo run --bin antithesis-local -- --output artifacts/rust-assertion-events.jsonl
+
+  spacetimedb-production-gate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Require SpacetimeDB CLI and committed generated bindings
+        run: python janus-spacetimedb/tools/generate_bindings.py --check-only --require-installed --verify-output
+      - name: Verify deployable SpacetimeDB module
+        run: cargo check --manifest-path janus-spacetimedb/Cargo.toml
+      - name: Verify SpacetimeDB module lint
+        run: cargo clippy --manifest-path janus-spacetimedb/Cargo.toml --all-targets --all-features -- -D warnings

@@ -1,0 +1,84 @@
+{
+  "groupId": "deploy-api-runtime",
+  "overallStatus": "fail",
+  "assertions": [
+    {
+      "id": "VAL-E2E-021",
+      "status": "fail",
+      "reason": "Valid source upload returned 202 and completed succeeded; invalid file type returned 202.",
+      "evidence": [
+        "source-upload-valid.json",
+        "source-upload-valid.poll.01.json",
+        "source-upload-invalid.json"
+      ]
+    },
+    {
+      "id": "VAL-E2E-022",
+      "status": "fail",
+      "reason": "Artifact upload returned 201 with an immediate build payload, and the stored build later appeared as buildStrategy='uploaded_artifact' instead of the expected prebuilt_wasm operation result.",
+      "evidence": [
+        "artifact-upload.json",
+        "builds-project-7971.json"
+      ]
+    },
+    {
+      "id": "VAL-E2E-013",
+      "status": "fail",
+      "reason": "Deployment create returned 202 and final status succeeded with deployment.status='starting', runtimeEndpoint='', domainBindingPresent=True.",
+      "evidence": [
+        "deployment-create.json",
+        "deployment-create.poll.01.json"
+      ]
+    },
+    {
+      "id": "VAL-E2E-014",
+      "status": "fail",
+      "reason": "Runtime endpoint '' returned status None.",
+      "evidence": []
+    },
+    {
+      "id": "VAL-E2E-023",
+      "status": "fail",
+      "reason": "Deployment listing statuses were all=200 filtered=200; filtered match present=True.",
+      "evidence": [
+        "deployments-list-all.json",
+        "deployments-list-filtered.json"
+      ]
+    },
+    {
+      "id": "VAL-E2E-026",
+      "status": "fail",
+      "reason": "Failed build status='failed'; deployment attempt returned 202.",
+      "evidence": [
+        "source-upload-unsupported.json",
+        "source-upload-unsupported.poll.01.json",
+        "deployment-from-failed-build.json"
+      ]
+    },
+    {
+      "id": "VAL-E2E-024",
+      "status": "fail",
+      "reason": "Delete returned 404 then None; runtime after delete returned None.",
+      "evidence": [
+        "deployment-delete.json",
+        "deployment-delete.poll.01.json",
+        "runtime-after-delete.txt"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "python3 stdlib",
+    "urllib"
+  ],
+  "frictions": [],
+  "blockers": [],
+  "appliedUpdates": [],
+  "isolation": {
+    "email": "e2e-pipeline-ut+deployapi-aac6fcf982@example.com",
+    "projectSlug": "e2e-pipeline-ut-deployapi-aac6fcf982",
+    "projectId": "proj_7971",
+    "sourceBuildId": "bld_d549a02dd312a1e5d33cd4a2",
+    "artifactBuildId": "bld_48916bfe62f507e567763bf0",
+    "deploymentId": "dep_eff3a4c228dc0294e69b4c1c"
+  }
+}

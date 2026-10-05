@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "goal": "Close M1–M7 acceptance gaps with the smallest evidence-driven change set; do not expand packet or gameplay scope.",
+  "actions": [
+    {
+      "id": "A00",
+      "milestone": "Evidence freshness",
+      "priority": "P0",
+      "status": "needs_validation",
+      "files": [
+        "src/connection.rs"
+      ],
+      "next_step": "Freeze the current worker source snapshot, rerun local gates and review changed worker/player functions before treating this scan as current.",
+      "acceptance_criteria": [
+        "Source hashes remain unchanged from validation start through review completion."
+      ],
+      "dependencies": [],
+      "blocker": null,
+      "evidence": [
+        "manifest.json",
+        "validation.json"
+      ]
+    },
+    {
+      "id": "A01",
+      "milestone": "M2/M3/M6/M7",
+      "priority": "P0",
+      "status": "blocked_external",
+      "files": [
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Provision an explicitly authorized disposable DB and administrator token; run the existing three ignored live tests against it.",
+      "acceptance_criteria": [
+        "Record exact source hashes, DB identity, commands and reducer outcomes.",
+        "No production DB or saved gateway credential used."
+      ],
+      "dependencies": [],
+      "blocker": "Disposable database/admin authorization not supplied",
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    },
+    {
+      "id": "A02",
+      "milestone": "M6/M7",
+      "priority": "P0",
+      "status": "needs_live_validation",
+      "files": [
+        "src/foundation_live_tests.rs",
+        "spacetimedb/src/world.rs"
+      ],
+      "next_step": "Extend disposable-host tests for rollback, conflicting edits, lease expiry/revocation, reconnect vitals and restart persistence.",
+      "acceptance_criteria": [
+        "Failed edits leave inventory and block state unchanged.",
+        "Old owners cannot mutate; restart/reload retains committed edits and vitals."
+      ],
+      "dependencies": [
+        "A01"
+      ],
+      "blocker": null,
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    },
+    {
+      "id": "A03",
+      "milestone": "M3",
+      "priority": "P1",
+      "status": "needs_validation",
+      "files": [
+        "inventory-core/src/lib.rs",
+        "src/inventory_registry.rs"
+      ],
+      "next_step": "Perform independent official 26.3 component-field/hash review and add differential fixtures for the selected item paths.",
+      "acceptance_criteria": [
+        "Document official codec reference and field/hash checks independently of generated roundtrips."
+      ],
+      "dependencies": [],
+      "blocker": null,
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    },
+    {
+      "id": "A04",
+      "milestone": "M4",
+      "priority": "P1",
+      "status": "needs_validation",
+      "files": [
+        "src/gateway.rs",
+        "src/players.rs"
+      ],
+      "next_step": "Run deterministic slow-client/input-flood tests with recorded queue limits and fail-closed outcomes.",
+      "acceptance_criteria": [
+        "Queue and pending work remain bounded; other client continues progressing."
+      ],
+      "dependencies": [],
+      "blocker": null,
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    },
+    {
+      "id": "A05",
+      "milestone": "M1–M7",
+      "priority": "P0",
+      "status": "blocked_external",
+      "files": [
+        "docs/play-implementation-plan.md"
+      ],
+      "next_step": "Run the selected two-client graphical demo after live authority gates pass.",
+      "acceptance_criteria": [
+        "Record loading, movement/entity lifecycle, inventory/storage/crafting, unsigned chat, bounded chunks, edits, four modes, death/respawn and reconnect."
+      ],
+      "dependencies": [
+        "A02",
+        "A03",
+        "A04"
+      ],
+      "blocker": "Renewed graphical access authorization required; prior javaw denial must be respected",
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    },
+    {
+      "id": "A06",
+      "milestone": "Review tooling",
+      "priority": "P1",
+      "status": "needs_validation",
+      "files": [
+        "tools/jev/granular_review.py"
+      ],
+      "next_step": "Investigate the failed worker typed response in a separate explicit review; include the three reconciliation/loading test bodies.",
+      "acceptance_criteria": [
+        "A valid bounded response is stored, or service failure is recorded without inferred verdicts."
+      ],
+      "dependencies": [],
+      "blocker": null,
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    },
+    {
+      "id": "A07",
+      "milestone": "M7",
+      "priority": "P2",
+      "status": "out_of_scope",
+      "files": [
+        "src/connection.rs"
+      ],
+      "next_step": "Keep arbitrary edited-terrain collision out of this demo; scope it separately if requested.",
+      "acceptance_criteria": [
+        "No claim of arbitrary terrain collision or full vanilla physics."
+      ],
+      "dependencies": [],
+      "blocker": null,
+      "evidence": [
+        "docs\\progress-review-20261004T230800Z/results.json",
+        "docs\\progress-review-20261004T230800Z/validation.json"
+      ]
+    }
+  ],
+  "source_freshness": "src/connection.rs changed during review; judgments and tests describe captured snapshots, not latest file"
+}

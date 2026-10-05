@@ -1,0 +1,44 @@
+{
+  "featureId": "e2e-github-oauth",
+  "reviewedAt": "2026-03-15T07:22:39.676789Z",
+  "commitId": "91a9c1e86c30e3244fe8d70a266bdaf23e610ef0",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds the migration, repository methods, handlers, and tests needed for GitHub OAuth, but the OAuth flow is not safe to ship because it never uses a session-bound `state` parameter. I also found one non-blocking repository contract bug where `GetGitCredential` masks real database errors as not-found results.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/github_oauth.go",
+        "line": 70,
+        "severity": "blocking",
+        "description": "The authorize redirect is built without a per-session `state` parameter, and the callback later accepts any `code` without validating `state` (see lines 69-75 and 101-129). That leaves the flow open to OAuth CSRF/account-linking attacks: an attacker can authorize Janus against their own GitHub account, then cause a logged-in victim to hit the callback URL and store the attacker's credential on the victim account. The added tests also never cover state generation or validation."
+      },
+      {
+        "file": "backend/janus-api/internal/core/git_credentials.go",
+        "line": 63,
+        "severity": "non_blocking",
+        "description": "`GetGitCredential` returns `(GitCredential{}, false, nil)` for every error from `getGitCredentialRow`, so real database failures are silently treated as a simple miss. That violates the repository contract's `(credential, found, error)` semantics and is not covered by the added repository tests."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The mission guidance documents do not spell out OAuth-specific CSRF/state requirements, which likely contributed to the callback being implemented without `state` generation/validation.",
+      "evidence": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\AGENTS.md:49 only gives a general security rule; `E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth.go:69-75` builds the authorize URL without `state`, and lines 101-129 accept the callback with only `code`."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill requires manual API verification with `curl.exe` and an `interactiveChecks` entry for API changes, but this feature's handoff only recorded `go test` and `go vet` with no interactive verification.",
+      "evidence": "`E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md` step 6 requires manual verification; `C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-15T06-40-57-393Z__e2e-github-oauth__aa4f9b96-8279-4066-b36c-e9c3ce028b67.json:13-25` lists only `verification.commandsRun` for `go test` and `go vet`, with no `interactiveChecks` block."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared environment library notes GitHub API usage but does not document the required `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` variables that this feature depends on.",
+      "evidence": "`E:\\Janus\\.factory\\library\\environment.md:46` mentions GitHub API generically, while `E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth.go:37-40` loads `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed feature `e2e-github-oauth` from commit `91a9c1e86c30e3244fe8d70a266bdaf23e610ef0`. The persistence layer, routing, and test scaffolding are mostly in place, but the OAuth implementation is missing `state` protection, so the feature fails review on a blocking security/correctness issue. I also noted one non-blocking repository error-handling bug and shared-state gaps around OAuth guidance, manual verification expectations, and environment variable documentation."
+}

@@ -1,0 +1,19 @@
+{
+  "milestone": "actor-system",
+  "round": 2,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-AS-003",
+    "VAL-AS-019"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": "git:d48fc79:.factory/validation/actor-system/user-testing/synthesis.json"
+}

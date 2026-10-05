@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="oklch(24% 0.035 255)">
+  <title>Janus Rust System Specification</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: oklch(97.5% 0.012 250);
+      --surface: oklch(100% 0 0);
+      --surface-soft: oklch(98.5% 0.008 250);
+      --surface-up: oklch(95.5% 0.018 250);
+      --ink: oklch(24% 0.035 255);
+      --muted: oklch(53% 0.035 255);
+      --dim: oklch(66% 0.025 255);
+      --line: oklch(89% 0.025 250);
+      --line-strong: oklch(80% 0.045 250);
+      --accent: oklch(54% 0.14 190);
+      --accent-dark: oklch(35% 0.09 235);
+      --good: oklch(52% 0.15 158);
+      --warn: oklch(64% 0.16 72);
+      --shadow: 0 16px 40px oklch(25% 0.04 255 / 0.08);
+      --r-sm: 0.5rem;
+      --r: 0.75rem;
+      --r-lg: 1rem;
+      --r-xl: 1.25rem;
+      --r-full: 9999px;
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --dur-fast: 150ms;
+      --dur-base: 250ms;
+      --dur-slow: 500ms;
+    }
+    * { box-sizing: border-box; }
+    @view-transition { navigation: auto; }
+    html { scroll-behavior: smooth; }
+    body { max-width: 1180px; margin: 0 auto; padding: 1.25rem clamp(1rem, 4vw, 3rem) 3rem; color: var(--ink); background: radial-gradient(circle at 8% 0%, oklch(94% 0.035 250) 0%, transparent 30%), radial-gradient(circle at 92% 0%, oklch(95% 0.035 285) 0%, transparent 28%), var(--bg); font: 16px/1.6 system-ui, sans-serif; overflow-x: hidden; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { color: var(--accent-dark); margin-bottom: .25rem; font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.05em; }
+    h2 { border-bottom: 1px solid var(--line); padding-bottom: .45rem; margin-top: 2.5rem; letter-spacing: -.03em; animation: fade-up linear both; animation-timeline: view(); animation-range: entry 0% cover 22%; }
+    h3 { margin-top: 1.5rem; }
+    a { color: var(--accent-dark); }
+    .subtitle, .note { color: var(--muted); }
+    .hero { padding: clamp(1.25rem, 4vw, 2.5rem); border: 1px solid oklch(88% 0.045 190); border-radius: var(--r-xl); background: linear-gradient(135deg, oklch(96% 0.035 190), oklch(99% 0.008 250) 62%, oklch(96% 0.035 285)); box-shadow: var(--shadow); animation: fade-up var(--dur-slow) var(--ease-out) both; }
+    .hero p { max-width: 75ch; }
+    .eyebrow { color: var(--accent-dark); font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .panel, .card, details, table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+    .panel { padding: 1rem 1.25rem; background: linear-gradient(135deg, oklch(100% 0 0 / .86), oklch(100% 0 0 / .68)); backdrop-filter: blur(16px) saturate(140%); box-shadow: inset 0 1px 0 oklch(100% 0 0 / .9); }
+    .nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.5rem; padding: .75rem; position: sticky; top: 0; z-index: 2; background: oklch(97.5% 0.012 250 / .88); border-bottom: 1px solid var(--line); backdrop-filter: blur(16px) saturate(150%); }
+    .nav a { padding: .35rem .65rem; border-radius: var(--r-full); text-decoration: none; font-size: .86rem; font-weight: 700; transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+    .nav a:hover, .nav a:focus { background: oklch(92% 0.045 190); transform: translateY(-1px); }
+    .nav-icon { width: 1rem; height: 1rem; vertical-align: -.18rem; margin-right: .2rem; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: .85rem; margin: 1.25rem 0; }
+    .card { padding: 1rem; box-shadow: 0 8px 24px oklch(25% 0.04 255 / .06); animation: fade-up linear both; animation-timeline: view(); animation-range: entry 0% cover 28%; }
+    .card-head { display: flex; align-items: center; gap: .55rem; color: var(--accent-dark); }
+    .icon { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+    .section-icon { width: 1.1rem; height: 1.1rem; vertical-align: -.12rem; margin-right: .35rem; color: var(--accent); }
+    .svg-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .card strong { display: block; font-size: 1.35rem; }
+    .card span { color: var(--muted); font-size: .9rem; }
+    .badge { display: inline-block; padding: .15rem .5rem; border-radius: var(--r-full); font-size: .76rem; font-weight: 800; white-space: nowrap; }
+    .done { color: var(--good); background: oklch(94% 0.045 158); }
+    .active { color: var(--accent-dark); background: oklch(94% 0.045 190); }
+    .pending { color: var(--warn); background: oklch(95% 0.045 72); }
+    .callout { border-left: 4px solid var(--accent); padding: .75rem 1rem; background: oklch(95% 0.035 190); }
+    .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    details { padding: .7rem .9rem; margin: .65rem 0; }
+    summary { cursor: pointer; font-weight: 750; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    code { background: var(--surface-up); padding: .12rem .3rem; border-radius: var(--r-sm); }
+    pre { overflow-x: auto; background: oklch(21% 0.035 255); color: oklch(96% 0.01 95); padding: 1rem; border-radius: var(--r); box-shadow: inset 0 1px 0 oklch(100% 0 0 / .08); }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid var(--line); padding: .6rem; text-align: left; vertical-align: top; }
+    th { background: var(--surface-soft); }
+    .status { color: var(--good); font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    .catalog-toolbar { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; margin: 1rem 0; }
+    .catalog-toolbar input, .catalog-toolbar select { min-height: 2.65rem; border: 1px solid var(--line-strong); border-radius: var(--r); padding: .55rem .75rem; color: var(--ink); background: var(--surface); font: inherit; }
+    .catalog-toolbar input { flex: 1 1 20rem; }
+    .catalog-toolbar input:focus, .catalog-toolbar select:focus { outline: 3px solid oklch(75% .12 190 / .35); outline-offset: 2px; }
+    .catalog-count { color: var(--muted); font-size: .9rem; font-weight: 700; }
+    .catalog-help { margin: .35rem 0 .75rem; color: var(--muted); font-size: .92rem; }
+    .catalog-legend { display: flex; flex-wrap: wrap; gap: .45rem; margin: .75rem 0; }
+    .status-code { color: var(--ink); background: var(--surface-up); border: 1px solid var(--line); }
+    .empty-state { padding: 1rem; color: var(--muted); text-align: center; border: 1px dashed var(--line-strong); border-radius: var(--r); background: var(--surface-soft); }
+    .trace-viewer { overflow: hidden; }
+    .profile-toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1rem 0; }
+    .profile-toolbar input, .profile-toolbar select, .profile-toolbar button { min-height: 2.55rem; border: 1px solid var(--line-strong); border-radius: var(--r); padding: .5rem .7rem; color: var(--ink); background: var(--surface); font: inherit; }
+    .profile-toolbar input { flex: 1 1 16rem; }
+    .profile-toolbar input:focus, .profile-toolbar select:focus, .profile-toolbar button:focus { outline: 3px solid oklch(75% .12 190 / .35); outline-offset: 2px; }
+    .profile-toolbar button { min-width: 2.55rem; cursor: pointer; font-weight: 800; }
+    .profile-tabs { display: flex; gap: .25rem; padding: .2rem; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-soft); }
+    .profile-tab { border: 0 !important; min-height: 2.1rem !important; padding-inline: .7rem !important; background: transparent !important; color: var(--muted) !important; }
+    .profile-tab.active { color: var(--ink) !important; background: var(--surface) !important; box-shadow: 0 1px 4px oklch(20% .03 250 / .12); }
+    .profile-summary { display: grid; grid-template-columns: minmax(15rem, 1.4fr) repeat(4, minmax(5rem, .7fr)); gap: .65rem; margin: .8rem 0; }
+    .profile-stat { padding: .7rem .8rem; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-soft); }
+    .profile-stat strong { display: block; font-size: 1rem; }
+    .profile-stat span { color: var(--muted); font-size: .76rem; }
+    .profile-note { margin: .65rem 0 .85rem; color: var(--muted); font-size: .84rem; }
+    .timeline-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-soft); }
+    .timeline { min-width: 720px; }
+    .timeline-head, .track-row { display: grid; grid-template-columns: 12rem minmax(30rem, 1fr); }
+    .track-label { padding: .65rem .75rem; border-right: 1px solid var(--line); }
+    .track-label strong, .track-label small { display: block; }
+    .track-label small { color: var(--muted); font-size: .73rem; }
+    .track-dot { display: inline-block; width: .55rem; height: .55rem; margin-right: .3rem; border-radius: 50%; background: var(--accent); }
+    .timeline-axis { position: relative; min-height: 2.6rem; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(90deg, transparent 0, transparent 24.8%, var(--line) 25%, transparent 25.2%); }
+    .timeline-axis span { position: absolute; top: .45rem; color: var(--muted); font: .7rem ui-monospace, SFMono-Regular, Consolas, monospace; transform: translateX(-50%); }
+    .timeline-axis span:first-child { transform: none; }
+    .timeline-axis span:last-child { transform: translateX(-100%); }
+    .track-row { min-height: 3.75rem; border-bottom: 1px solid var(--line); }
+    .track-row:last-child { border-bottom: 0; }
+    .track-lane { position: relative; margin: .55rem .7rem; border-radius: .35rem; background: repeating-linear-gradient(90deg, oklch(100% 0 0 / .3) 0, oklch(100% 0 0 / .3) 24.8%, var(--line) 25%, oklch(100% 0 0 / .3) 25.2%); }
+    .trace-event { position: absolute; top: .45rem; height: 2.1rem; min-width: .45rem; overflow: hidden; border: 1px solid oklch(38% .12 190 / .35); border-radius: .35rem; padding: .25rem .4rem; color: white; background: linear-gradient(135deg, var(--accent), oklch(54% .16 285)); text-align: left; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; font: .72rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .trace-event.warn { background: linear-gradient(135deg, oklch(67% .16 72), oklch(55% .15 45)); }
+    .trace-event.error { background: linear-gradient(135deg, oklch(60% .19 25), oklch(48% .16 12)); }
+    .trace-event.selected { outline: 3px solid oklch(72% .14 190 / .65); outline-offset: 2px; z-index: 2; }
+    .trace-inspector { min-height: 5rem; margin-top: .8rem; padding: .8rem; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-soft); }
+    .inspector-title { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .55rem; }
+    .inspector-title strong { font-size: 1rem; }
+    .inspector-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; margin: 0; }
+    .inspector-grid div { min-width: 0; }
+    .inspector-grid dt { color: var(--muted); font-size: .72rem; }
+    .inspector-grid dd { margin: .1rem 0 0; overflow-wrap: anywhere; font: .78rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .flame-stack, .event-table { margin-top: .75rem; }
+    .flame-row { display: grid; grid-template-columns: 10rem 1fr 4rem; gap: .7rem; align-items: center; margin: .55rem 0; }
+    .flame-bar { height: 1.35rem; border-radius: .3rem; background: linear-gradient(90deg, var(--accent), oklch(54% .16 285)); }
+    .flame-bar.warn { background: linear-gradient(90deg, oklch(67% .16 72), oklch(55% .15 45)); }
+    .event-table { width: 100%; font-size: .82rem; }
+    .event-table th, .event-table td { padding: .45rem; }
+    @media (max-width: 780px) { .profile-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-summary .profile-stat:first-child { grid-column: 1 / -1; } }
+    @media (max-width: 650px) { .profile-toolbar label { flex-basis: 100%; } .profile-tabs { order: 3; } .flame-row { grid-template-columns: 7rem 1fr 3rem; font-size: .78rem; } }
+    .catalog-table { font-size: .91rem; }
+    .catalog-table code { white-space: nowrap; }
+    .method { color: var(--accent-dark); background: oklch(94% .045 190); }
+    .auth { color: var(--accent-dark); background: oklch(94% .045 285); }
+    .public { color: var(--good); background: oklch(94% .045 158); }
+    .test-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .75rem; margin: 1rem 0; }
+    .test-group { padding: .85rem; border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(135deg, oklch(100% 0 0 / .84), oklch(97% .02 250 / .72)); }
+    .test-group strong { display: block; color: var(--accent-dark); }
+    .test-group span { color: var(--muted); font-size: .9rem; }
+    .test-toolbar { margin-top: 1rem; }
+    .test-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem 2rem; margin: .75rem 0; padding-left: 1.5rem; }
+    .test-list li { min-width: 0; margin: .25rem 0; font-size: .88rem; overflow-wrap: anywhere; word-break: break-word; }
+    .test-list code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+    @media (max-width: 780px) { .test-list { grid-template-columns: 1fr; } .catalog-table { font-size: .84rem; } }
+    .reveal { animation: fade-up linear both; animation-timeline: view(); animation-range: entry 0% cover 25%; }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(1rem); } to { opacity: 1; transform: translateY(0); } }
+    @starting-style { details { opacity: 0; transform: translateY(.5rem); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; } }
+    @media (max-width: 650px) { body { padding-inline: .75rem; } th, td { padding: .45rem; } .nav { position: static; } }
+  </style>
+  <style id="janus-dark-spec">
+    :root {
+      color-scheme: dark;
+      --bg: oklch(12% .025 255);
+      --surface: oklch(16% .03 255);
+      --surface-soft: oklch(14% .025 255);
+      --surface-up: oklch(20% .04 255);
+      --ink: oklch(95% .015 250);
+      --muted: oklch(69% .035 250);
+      --dim: oklch(51% .035 250);
+      --line: oklch(29% .04 255);
+      --line-strong: oklch(37% .06 255);
+      --accent: oklch(78% .15 190);
+      --accent-dark: oklch(84% .13 190);
+      --good: oklch(76% .15 155);
+      --warn: oklch(79% .15 75);
+      --shadow: 0 24px 70px oklch(0% 0 0 / .22);
+    }
+    html { background: var(--bg); }
+    body { max-width: 1480px; min-height: 100vh; padding: 34px clamp(20px, 4vw, 56px) 80px; color: var(--ink); background: radial-gradient(circle at 78% -10%, oklch(28% .1 285 / .28), transparent 30%), radial-gradient(circle at 25% 0%, oklch(25% .09 190 / .16), transparent 28%), var(--bg); font-family: 'Space Grotesk', system-ui, sans-serif; }
+    h1, h2, h3 { color: var(--ink); letter-spacing: -.055em; }
+    h1 { max-width: 900px; margin-top: 18px; font-size: clamp(2.35rem, 6vw, 5rem); line-height: .95; }
+    h2 { margin-top: 68px; padding-bottom: 14px; border-bottom-color: var(--line); font-size: clamp(1.55rem, 3vw, 2.5rem); }
+    h3 { font-size: 1.1rem; }
+    p, li, td, th { color: var(--muted); }
+    a { color: var(--accent); }
+    .hero { padding: clamp(28px, 5vw, 58px); border-color: oklch(78% .15 190 / .28); border-radius: 24px; background: linear-gradient(135deg, oklch(19% .06 190 / .8), oklch(14% .025 255 / .94) 60%, oklch(18% .045 285 / .8)); box-shadow: var(--shadow); }
+    .hero h1 { color: var(--ink); }
+    .subtitle, .note { color: var(--muted); }
+    .eyebrow { color: var(--accent); font: 11px 'DM Mono', ui-monospace, monospace; letter-spacing: .16em; }
+    .panel, .card, details, table { border-color: var(--line); background: var(--surface); }
+    .panel { background: linear-gradient(135deg, oklch(18% .04 255 / .95), oklch(14% .025 255 / .95)); box-shadow: inset 0 1px 0 oklch(100% 0 0 / .04); }
+    .hero > .panel { border-color: var(--line-strong); }
+    .nav { gap: 5px; margin: 20px -56px 30px; padding: 13px clamp(20px, 4vw, 56px); border-top: 1px solid var(--line); border-bottom-color: var(--line); background: oklch(13% .03 255 / .9); }
+    .nav a { color: var(--muted); border: 1px solid transparent; border-radius: 10px; }
+    .nav a:hover, .nav a:focus { color: var(--ink); background: var(--surface-up); border-color: var(--line-strong); }
+    .nav-icon, .section-icon { color: var(--accent); }
+    .card { box-shadow: 0 18px 45px oklch(0% 0 0 / .14); }
+    .card-head { color: var(--accent); }
+    .card strong { color: var(--ink); }
+    .card span { color: var(--muted); }
+    .badge { border: 1px solid transparent; }
+    .done { color: var(--good); background: oklch(76% .15 155 / .1); border-color: oklch(76% .15 155 / .2); }
+    .active { color: var(--accent); background: oklch(78% .15 190 / .1); border-color: oklch(78% .15 190 / .2); }
+    .pending { color: var(--warn); background: oklch(79% .15 75 / .1); border-color: oklch(79% .15 75 / .2); }
+    .callout { border-left-color: var(--accent); background: oklch(78% .15 190 / .08); }
+    details { padding: 14px 16px; }
+    details[open] { border-color: oklch(78% .15 190 / .32); }
+    summary { color: var(--ink); }
+    code { color: var(--accent); background: var(--surface-up); }
+    pre { border: 1px solid var(--line); background: oklch(9% .02 255); color: var(--ink); }
+    table { overflow: hidden; }
+    th { color: var(--ink); background: var(--surface-up); }
+    th, td { border-color: var(--line); }
+    .status { color: var(--good); }
+    .catalog-toolbar input, .catalog-toolbar select, .profile-toolbar input, .profile-toolbar select, .profile-toolbar button { color: var(--ink); border-color: var(--line-strong); background: var(--surface-soft); }
+    .catalog-toolbar input::placeholder, .profile-toolbar input::placeholder { color: var(--dim); }
+    .catalog-toolbar input:focus, .catalog-toolbar select:focus, .profile-toolbar input:focus, .profile-toolbar select:focus, .profile-toolbar button:focus { outline-color: oklch(78% .15 190 / .35); }
+    .catalog-count, .catalog-help, .profile-note { color: var(--muted); }
+    .catalog-legend, .profile-tabs { border-color: var(--line); }
+    .profile-tabs, .profile-tab.active { background: var(--surface-up) !important; }
+    .profile-tab { color: var(--muted) !important; }
+    .profile-tab.active { color: var(--ink) !important; box-shadow: none; }
+    .profile-stat, .timeline-scroll, .trace-inspector, .empty-state, .test-group { border-color: var(--line); background: var(--surface-soft); }
+    .profile-stat strong, .track-label strong, .inspector-title strong, .test-group strong { color: var(--ink); }
+    .profile-stat span, .track-label small, .inspector-grid dt, .timeline-axis span { color: var(--muted); }
+    .timeline-axis, .track-row { border-color: var(--line); }
+    .track-lane { background: repeating-linear-gradient(90deg, oklch(100% 0 0 / .04) 0, oklch(100% 0 0 / .04) 24.8%, var(--line) 25%, oklch(100% 0 0 / .04) 25.2%); }
+    .event-table th, .event-table td { border-color: var(--line); }
+    .method, .auth, .public { color: var(--accent); background: oklch(78% .15 190 / .1); }
+    .test-list code, .catalog-table code { color: var(--ink); background: var(--surface-up); }
+    @media (max-width: 650px) { body { padding-inline: 16px; } .nav { margin-inline: -16px; padding-inline: 16px; } }
+  </style>
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l2.2-7 4.2 14 2.2-7H21"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H12a3 3 0 0 1 3 3v3a3 3 0 0 0 3 3h.5"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 20 6v5c0 5-3.3 8.2-8 10-4.7-1.8-8-5-8-10V6l8-3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4m0 1c4-3 7 3 14 0v9c-7 3-10-3-14 0"/></symbol>
+  </svg>
+  <header class="hero" id="top">
+    <p class="eyebrow">Architecture decision record · <span id="spec-date">2026-10-01</span></p>
+    <h1>Janus Rust System Specification</h1>
+    <p class="subtitle">Version 0.3 · Rust control-plane, SpacetimeDB-authoritative bounded state, live verification, and external blob storage</p>
+    <div class="panel">
+      <strong>Purpose.</strong> Define the bounded, deterministic Rust control-plane implementation. Go and Zig are no longer active implementations; archived sources and checked-in fixtures remain only for rollback and parity evidence. SpacetimeDB is the target authority for all bounded control-plane state; only large binary bodies remain in external object storage with durable metadata in SpacetimeDB.
+    </div>
+    <div class="cards" aria-label="Project status summary">
+      <div class="card"><div class="card-head"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg><strong id="hero-progress">100%</strong></div><span>Rust cutover progress</span></div>
+      <div class="card"><div class="card-head"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><strong id="hero-tests">108</strong></div><span>Rust and Actix tests passing</span></div>
+      <div class="card"><div class="card-head"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg><strong id="hero-routes">57</strong></div><span>compatibility routes covered</span></div>
+      <div class="card"><div class="card-head"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><strong id="hero-findings">0</strong></div><span>active warnings and errors</span></div>
+    </div>
+  </header>
+
+  <section class="panel reveal" id="v03-focus" aria-labelledby="v03-title">
+    <h2 id="v03-title"><svg class="icon section-icon" aria-hidden="true"><use href="#i-activity"/></svg>Version 0.3 focus</h2>
+    <p>Version 0.3 turns broad system fields into explicit subfields so each boundary can be implemented, tested, traced, and reviewed independently.</p>
+    <div class="two-col">
+      <div>
+        <h3>Domain fields</h3>
+        <ul>
+          <li><strong>Identity:</strong> tenant, subject, entity, command, generation, and tick.</li>
+          <li><strong>Lifecycle:</strong> admission, state, transition, failure, retry, and completion.</li>
+          <li><strong>Authorization:</strong> principal, permission, tenant match, capability, and expiration.</li>
+          <li><strong>Durability:</strong> reducer, version, journal event, snapshot, receipt, and recovery job.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Evidence fields</h3>
+        <ul>
+          <li><strong>Verification:</strong> test target, assertion, severity, count, remediation, and exit condition.</li>
+          <li><strong>Trace:</strong> profile, process/thread track, span, timing, status, and arguments.</li>
+          <li><strong>HTTP:</strong> route, method, authentication policy, request shape, response envelope, and status.</li>
+          <li><strong>Operations:</strong> owner, boundary, input, output, failure policy, and capacity limit.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note"><strong>Version 0.3 rule:</strong> a field is not complete until its subfields have an owner, a bounded representation, a Rust test, and live evidence in the specification where applicable.</p>
+  </section>
+
+  <nav class="nav" aria-label="Specification navigation">
+    <a href="#v03-focus"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-activity"/></svg>Version 0.3</a><a href="#scope"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-route"/></svg>Scope</a><a href="#model"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-activity"/></svg>Model</a><a href="#security"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-shield"/></svg>Security</a><a href="#http"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-route"/></svg>HTTP</a><a href="#verification"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-check"/></svg>Verification</a><a href="#tracing"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-activity"/></svg>Traces</a><a href="#persistence"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-database"/></svg>Persistence</a><a href="#roadmap"><svg class="icon nav-icon" aria-hidden="true"><use href="#i-flag"/></svg>Roadmap</a>
+  </nav>
+
+  <h2 id="scope"><svg class="icon section-icon" aria-hidden="true"><use href="#i-route"/></svg>1. System scope</h2>
+  <p>Janus Rust is the deterministic control-plane implementation. It owns validated state transitions, authorization boundaries, actor isolation, persistence-shaped events, replay, and local verification. The former Go and Zig implementations are retained only as archived rollback material and checked-in parity fixtures.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Layer</th><th>Responsibility</th><th>Current status</th></tr></thead>
+    <tbody>
+      <tr><td>Rust core</td><td>Entities, components, projects, repository validation, authenticated project use cases, project commands/events, bounded queue leases/retries, runner heartbeats/claims, runtime isolation policy, object storage, email outbox, telemetry buffer/exporter, effects, lifecycle, replay, invariants, bounded event journal, versioned ECS snapshots, durable authentication snapshots, and SpacetimeDB-shaped reducer boundary</td><td class="status">Implemented</td></tr>
+      <tr><td>Rust HTTP boundary</td><td>Bounded parsing, Actix Web typed project handlers, bearer-token authentication adapter, permission policy, health/readiness responses</td><td class="status">Implemented</td></tr>
+      <tr><td>Actix frontend</td><td>Embedded HTML/CSS/JavaScript control-plane shell at <code>/</code> and <code>/admin</code>, authenticated resource views, responsive navigation, and permission-gated System Specification iframe</td><td class="status">Implemented</td></tr>
+      <tr><td>Rust local verifier</td><td>Deterministic scenarios and Antithesis-compatible JSONL assertions</td><td class="status">Implemented</td></tr>
+      <tr><td>Go service</td><td>Production adapters and complete external integration surface</td><td>Reference implementation</td></tr>
+      <tr><td>Parity fixtures</td><td>Local Antithesis-style verification and behavior evidence</td><td>Checked-in reference data</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="model"><svg class="icon section-icon" aria-hidden="true"><use href="#i-activity"/></svg>2. Architectural model</h2>
+  <p>Janus remains an actor-owned Entity Component System. Each actor owns a bounded <code>World</code>. Commands enter through admission checks, systems mutate components, and effects leave the world only through explicit records.</p>
+  <pre>request / actor message
+          |
+          v
+  authorization + tenant boundary
+          |
+          v
+  bounded command queue
+          |
+          v
+  actor-owned World (entities + components)
+          |
+          +--> durable lifecycle Events
+          +--> external Effects
+          +--> snapshots / replay transcript
+          +--> JSONL assertion events</pre>
+
+  <h3>2.1 Entity identity</h3>
+  <ul>
+    <li><code>EntityId</code> identifies builds, deployments, and future operation entities.</li>
+    <li><code>TenantId</code> is carried through every tenant-owned command and component.</li>
+    <li><code>CommandId</code> provides idempotency for command admission.</li>
+    <li><code>Generation</code> fences stale worker and runtime callbacks.</li>
+    <li><code>Tick</code> provides deterministic simulation time.</li>
+  </ul>
+
+  <h3>2.2 Components</h3>
+  <table>
+    <thead><tr><th>Component/model</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>Build</code></td><td>Tenant, build lifecycle state, and worker generation.</td></tr>
+      <tr><td><code>Deployment</code></td><td>Tenant, source build, deployment state, runtime generation, and resource claim.</td></tr>
+      <tr><td><code>Operation</code></td><td>Operation identity, kind, tenant, timestamps, monotonic status, result/failure payload stored as a bounded world component.</td></tr>
+      <tr><td><code>Project</code></td><td>Tenant-owned project identity, repository provider/URL/branch, status, and bounded repository-check result.</td></tr>
+      <tr><td><code>ResourceClaim</code></td><td>Exclusive ownership of bounded external resources.</td></tr>
+      <tr><td><code>Principal</code></td><td>Subject, tenant boundary, and granted permissions.</td></tr>
+      <tr><td><code>Config</code></td><td>Compile-time-compatible capacities, quotas, and capabilities.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. State and transition rules</h2>
+  <h3>3.1 Build lifecycle</h3>
+  <p><code>Pending → Running → Succeeded</code> or <code>Failed</code>. A non-terminal build may be cancelled. Completion is accepted only from the current worker generation.</p>
+  <h3>3.2 Deployment lifecycle</h3>
+  <p><code>Pending → Starting → Running</code>. Runtime failure produces <code>Failed</code>; intentional shutdown produces <code>Stopped</code>. Runtime callbacks are generation-fenced.</p>
+  <h3>3.3 Operation lifecycle</h3>
+  <p><code>Pending → Processing → Succeeded</code> or <code>Failed</code>. Terminal states cannot transition again. Operations are stored in bounded ECS slots and included in snapshots. The status rank must never decrease:</p>
+  <pre>pending = 0
+processing = 1
+succeeded | failed | dead_lettered | expired = 2</pre>
+
+  <h2 id="security"><svg class="icon section-icon" aria-hidden="true"><use href="#i-shield"/></svg>4. Security and ownership</h2>
+  <ul>
+    <li>Every tenant-owned command is authorized before it reaches the mailbox.</li>
+    <li>Tenant mismatch is rejected before state mutation.</li>
+    <li>Permissions are explicit: build submission, build cancellation, deployment management, build reads, and control-plane operation.</li>
+    <li>Resource release requires the owning entity and generation.</li>
+    <li>HTTP routes distinguish public, authenticated, and permission-protected behavior; bearer sessions are converted into tenant-scoped principals before dispatch.</li>
+  </ul>
+
+  <p>Password verification is an explicit <code>PasswordVerifier</code> adapter boundary. The ECS does not embed a placeholder hash algorithm; a production credential adapter must provide the approved password-hash implementation. <code>FileAuthStore</code> persists bounded users, permissions, sessions, tenant links, expiration, and MFA state; the Actix configuration adapter supplies its MFA encryption secret and fails closed when <code>JANUS_AUTH_FILE</code> is configured without a production secret.</p>
+
+  <h2 id="http"><svg class="icon section-icon" aria-hidden="true"><use href="#i-route"/></svg>5. HTTP compatibility contract</h2>
+  <p>The Rust route table contains the 57-route Go/Zig compatibility surface. It records stable paths, prefix behavior, methods, handler identity, authentication policy, and route group. Actix Web is the production HTTP framework; the framework-independent <code>HttpService</code> remains the deterministic contract layer.</p>
+  <p>Implemented boundary behavior includes:</p>
+  <ul>
+    <li><code>/healthz</code>, <code>/readyz</code>, and <code>/metrics</code>.</li>
+    <li>Bounded HTTP request parsing with a 16 KiB request limit.</li>
+    <li>Query-string stripping before route matching.</li>
+    <li>Authentication-required responses for protected routes, with bearer-token parsing, session-to-principal permission propagation, authenticated dispatch, and typed Actix project handlers.</li>
+    <li>The Actix default dispatcher now carries a valid bearer session’s tenant-scoped principal into the compatibility layer, so protected non-project routes receive the same authorization behavior as the framework-independent service.</li>
+    <li>Public operation lookup fallback behavior.</li>
+    <li>Operation lookup now matches the Go missing-resource response: HTTP 404 with <code>{"error":"operation not found"}</code>.</li>
+    <li>Template and backend-resource routes preserve the Go response shapes behind the existing authentication policy.</li>
+    <li>Telemetry, billing, logs, events, admin, and telemetry-view response shapes are implemented in the deterministic HTTP contract; method-sensitive telemetry views preserve GET versus POST status behavior.</li>
+    <li>API and frontend fallback handling.</li>
+    <li>A Rust test parses the Go router registrations, including both <code>mux.HandleFunc</code> and <code>mux.Handle</code>, and fails if any of the 57 route paths or normalized handler identities diverge.</li>
+  </ul>
+
+  <h3 id="route-catalog">Route catalog</h3>
+  <p class="catalog-help">Use this as a quick map of the HTTP surface: each row shows <strong>where</strong> a request goes, <strong>what it accepts</strong>, <strong>who may call it</strong>, and the <strong>expected outcomes</strong> used by parity tests.</p>
+  <p class="note">This is the human-readable compatibility inventory used by the Rust route and differential tests. Search by path, handler, method, or access policy. Statuses are the expected reference outcomes, not a claim that every external adapter is production-backed.</p>
+  <div class="catalog-legend" aria-label="Route status legend">
+    <span class="badge status-code">2xx success</span>
+    <span class="badge status-code">4xx client/auth</span>
+    <span class="badge status-code">5xx dependency</span>
+    <span class="badge public">Public</span>
+    <span class="badge auth">Authenticated</span>
+  </div>
+  <div class="catalog-toolbar" role="search">
+    <label for="route-search">Filter routes</label>
+    <input id="route-search" type="search" placeholder="Try /projects, telemetry, POST, or auth" autocomplete="off">
+    <select id="route-access" aria-label="Filter routes by access policy">
+      <option value="all">All access policies</option><option value="public">Public</option><option value="auth">Authenticated</option>
+    </select>
+    <span class="catalog-count" id="route-count" aria-live="polite"></span>
+  </div>
+  <div class="table-wrap"><table class="catalog-table" id="route-table">
+    <thead><tr><th scope="col">Path</th><th scope="col">Handler</th><th scope="col">Methods</th><th scope="col">Access</th><th scope="col">Expected statuses</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <p class="empty-state" id="route-empty" hidden>No routes match this filter. Try a shorter path, handler name, method, or access policy.</p>
+  <p class="note"><code>ANY</code> denotes a fallback route. A trailing slash in a route pattern denotes a path-prefix handler, such as a project, build-log, deployment, or operation resource lookup.</p>
+
+  <h2 id="verification"><svg class="icon section-icon" aria-hidden="true"><use href="#i-check"/></svg>6. Local verification system</h2>
+  <p><code>antithesis-local</code> executes deterministic Rust scenarios and writes one JSON object per line. Each event contains the assertion condition, source location, lifecycle details, stable message, and hit state.</p>
+  <pre>rustup run stable-x86_64-pc-windows-msvc cargo run \
+  --manifest-path janus-rust/Cargo.toml \
+  --bin antithesis-local -- \
+  --output janus-rust/artifacts/rust-assertion-events.jsonl</pre>
+  <p>The runner checks command admission, build progression, operation monotonicity, world invariants, duplicate-effect idempotency, dropped-effect recoverability, deployment runtime identity, and replay transcript equality. A failed assertion is recorded and causes a non-zero process failure. <code>antithesis-validate</code> validates the JSONL schema and failure state, while <code>antithesis-diff</code> compares Go reference events; lifecycle statuses and endpoints remain exact while opaque runtime IDs are compared by presence.</p>
+  <h3 id="test-catalog">Test catalog</h3>
+  <p class="catalog-help">The latest Rust gate reports 83 core tests plus two Actix binary integration tests. Filter by subsystem keyword or behavior to find the proof behind a requirement; the names remain exact so they can be copied directly into a test command.</p>
+  <div class="test-groups" aria-label="Test coverage by subsystem">
+    <div class="test-group"><strong>Domain and ECS · 21</strong><span>actor, build/deployment service, operation, project, lifecycle, tenant, quotas, snapshots, replay, crash recovery</span></div>
+    <div class="test-group"><strong>HTTP and parity · 13</strong><span>route identity, Go/Zig fixtures, parsing, authorization, envelopes</span></div>
+    <div class="test-group"><strong>Security and auth · 7</strong><span>passwords, sessions, MFA, permissions, persistence</span></div>
+    <div class="test-group"><strong>Durability and adapters · 27</strong><span>queues, journals, objects, email, runners, runtime, SpacetimeDB, telemetry, durable recovery, queue handoff</span></div>
+    <div class="test-group"><strong>Local verification · 16</strong><span>assertion shape, deterministic scenarios, invariants, differential fixtures</span></div>
+  </div>
+  <div class="catalog-toolbar test-toolbar" role="search">
+    <label for="test-search">Filter tests</label>
+    <input id="test-search" type="search" placeholder="Try auth, replay, spacetime, or a test name" autocomplete="off">
+    <span class="catalog-count" id="test-count" aria-live="polite"></span>
+  </div>
+  <details open><summary>Show all 90 test names</summary>
+    <ol class="test-list">
+      <li><code>actor::tests::mailbox_is_bounded_and_fifo</code></li><li><code>actor::tests::supervisor_restarts_then_fails_after_budget</code></li>
+      <li><code>api::tests::compatibility_preserves_core_routes</code></li><li><code>api::tests::every_reference_route_has_a_stable_handler_identity</code></li><li><code>api::tests::go_router_registration_matches_rust_compatibility_routes</code></li><li><code>api::tests::protected_routes_use_principal_permissions</code></li><li><code>api::tests::route_contract_preserves_reference_handler_and_authentication_policy</code></li><li><code>api::tests::zig_behavior_fixture_matches_rust_route_identity_methods_and_auth</code></li>
+      <li><code>assertions::tests::lifecycle_details_and_locations_are_preserved</code></li><li><code>assertions::tests::rendering_matches_the_local_assertion_shape</code></li>
+      <li><code>auth::tests::auth_snapshot_round_trips_permissions_sessions_and_mfa_state</code></li><li><code>auth::tests::mfa_required_sessions_are_rejected_until_verified</code></li><li><code>auth::tests::password_verifier_controls_session_issuance</code></li><li><code>auth::tests::sessions_enforce_tenant_expiration_and_revocation</code></li><li><code>auth_persistence::tests::file_auth_store_round_trips_tenant_session_and_permissions</code></li>
+      <li><code>build_service::tests::build_to_deployment_lifecycle_is_generation_fenced</code></li><li><code>build_service::tests::read_permission_is_required_for_listing</code></li><li><code>build_service::tests::submit_and_list_preserve_tenant_boundary</code></li>
+      <li><code>config::tests::configuration_must_fit_the_actor_type_bounds</code></li><li><code>config::tests::configuration_rejects_unbounded_or_missing_resources</code></li><li><code>config::tests::effect_capabilities_are_checked_per_operation</code></li>
+      <li><code>email::tests::delivery_port_records_retry_then_provider_success</code></li><li><code>email::tests::outbox_is_idempotent_and_retries_provider_failures</code></li><li><code>email::tests::outbox_rejects_invalid_messages_and_invalid_transitions</code></li>
+      <li><code>durable_service::tests::durable_build_deployment_mutations_commit_component_projections</code></li><li><code>durable_service::tests::durable_build_service_exposes_snapshot_recovery_work</code></li><li><code>durable_service::tests::durable_recovery_hands_generation_fenced_work_to_queue</code></li><li><code>durable_service::tests::durable_project_mutations_commit_through_reducer_boundary</code></li><li><code>durable_service::tests::rejected_reducer_rolls_back_local_project_state</code></li>
+      <li><code>http::tests::bearer_authentication_materializes_tenant_scoped_permissions</code></li><li><code>http::tests::bearer_dispatch_maps_auth_failures_and_reaches_route_authorization</code></li><li><code>http::tests::every_declared_route_method_has_a_rust_response</code></li><li><code>http::tests::parser_accepts_query_and_preserves_route_identity</code></li><li><code>http::tests::parser_rejects_oversized_requests</code></li><li><code>http::tests::rust_dispatch_statuses_are_present_in_zig_behavior_fixture</code></li><li><code>http::tests::service_exposes_readiness_and_explicit_incomplete_routes</code></li><li><code>http::tests::static_authorized_routes_return_compatibility_envelopes</code></li>
+      <li><code>object_store::tests::local_store_puts_gets_replaces_and_deletes_bounded_objects</code></li><li><code>object_store::tests::local_store_rejects_traversal_and_capacity_overflow</code></li><li><code>object_store::tests::zero_byte_objects_consume_and_release_object_capacity</code></li>
+      <li><code>operation::tests::empty_kinds_are_rejected</code></li><li><code>operation::tests::lifecycle_is_monotonic_and_clears_opposite_payloads</code></li><li><code>operation::tests::pending_operations_can_complete_without_an_explicit_processing_step</code></li><li><code>operation_service::tests::registry_is_bounded_and_rejects_duplicate_ids</code></li><li><code>operation_service::tests::file_store_recovers_operations_and_rejects_corruption</code></li>
+      <li><code>persistence::tests::file_journal_recovers_ordered_events_after_restart</code></li><li><code>persistence::tests::file_journal_rejects_corrupt_or_over_capacity_state</code></li><li><code>persistence::tests::file_snapshot_round_trips_ecs_state_and_rejects_trailing_bytes</code></li><li><code>persistence::tests::journal_is_ordered_and_versioned</code></li>
+      <li><code>project::tests::local_repository_validator_is_deterministic_and_bounded</code></li><li><code>project::tests::project_validation_preserves_repository_boundaries</code></li><li><code>project::tests::repository_check_stage_count_is_bounded</code></li><li><code>project_service::tests::project_use_cases_preserve_tenant_and_lifecycle_boundaries</code></li>
+      <li><code>queue::tests::expired_leases_cannot_complete_and_queue_capacity_is_bounded</code></li><li><code>queue::tests::queue_claims_retries_and_dead_letters_deterministically</code></li><li><code>queue_persistence::tests::file_queue_store_round_trips_claims_and_retry_state</code></li>
+      <li><code>runner::tests::runner_heartbeats_claims_releases_and_expires</code></li><li><code>runner::tests::runner_registry_enforces_tenant_and_capability_boundaries</code></li><li><code>runtime::tests::tokio_actor_emits_the_same_build_effect_as_simulation</code></li><li><code>runtime_isolation::tests::native_runtime_requires_process_and_safe_artifact_policy</code></li><li><code>runtime_isolation::tests::runtime_is_generation_fenced_and_policy_bounded</code></li>
+      <li><code>security::tests::principal_requires_permission_and_matching_tenant</code></li><li><code>spacetime::tests::auth_snapshot_is_bounded_and_versioned</code></li><li><code>spacetime::tests::event_reducer_is_idempotent_and_conflict_safe</code></li><li><code>spacetime::tests::queue_reducers_preserve_lease_semantics</code></li><li><code>spacetime_client::tests::generated_client_adapter_delegates_queue_reducers</code></li><li><code>spacetime_client::tests::generated_client_adapter_preserves_reducer_receipts_and_snapshots</code></li>
+      <li><code>spacetime_client::tests::generated_client_adapter_delegates_domain_reducers</code></li>
+      <li><code>telemetry::tests::prometheus_exporter_renders_labels_and_timestamps</code></li><li><code>telemetry::tests::telemetry_buffer_validates_and_exports_samples</code></li><li><code>telemetry::tests::telemetry_rejects_invalid_values_and_capacity_overflow</code></li>
+      <li><code>tests::authorized_admission_enforces_permission_and_tenant_before_queueing</code></li><li><code>tests::build_lifecycle_is_deterministic</code></li><li><code>tests::command_envelope_rejects_unknown_versions</code></li><li><code>tests::deployment_requires_succeeded_build_and_reaches_running</code></li><li><code>tests::duplicate_commands_are_idempotent</code></li><li><code>tests::one_tick_can_emit_two_events_per_admitted_build_without_reallocation</code></li><li><code>tests::operation_components_are_bounded_snapshotable_and_monotonic</code></li><li><code>tests::pause_rejects_new_builds_and_resume_reopens_admission</code></li><li><code>tests::project_commands_enforce_tenant_and_emit_lifecycle_events</code></li><li><code>tests::project_components_are_validated_tenant_owned_and_snapshotable</code></li><li><code>tests::replay_regenerates_the_same_transcript</code></li><li><code>tests::simulator_replays_dropped_and_duplicate_effects</code></li><li><code>tests::snapshot_preserves_state_and_idempotency</code></li><li><code>tests::snapshot_recovery_requeues_incomplete_builds_and_deployments</code></li><li><code>tests::stale_generation_cannot_complete_a_build</code></li><li><code>tests::stale_resource_owner_cannot_release_claim</code></li><li><code>tests::tenant_boundary_is_enforced</code></li><li><code>tests::tenant_quota_rejects_second_build</code></li><li><code>tests::versioned_authenticated_admission_checks_schema_and_principal</code></li>
+    </ol>
+  </details>
+  <p class="empty-state" id="test-empty" hidden>No tests match this filter. Try a subsystem such as <code>auth</code>, <code>queue</code>, <code>spacetime</code>, or <code>replay</code>.</p>
+  <pre>rustup run stable-x86_64-pc-windows-msvc cargo test --manifest-path janus-rust/Cargo.toml --all-targets --all-features
+rustup run stable-x86_64-pc-windows-msvc cargo clippy --manifest-path janus-rust/Cargo.toml --all-targets --all-features -- -D warnings
+rustup run stable-x86_64-pc-windows-msvc cargo run --manifest-path janus-rust/Cargo.toml --bin tigerstyle</pre>
+
+  <h2 id="tracing"><svg class="icon section-icon" aria-hidden="true"><use href="#i-activity"/></svg>7. Trace viewer</h2>
+  <p class="catalog-help">This embedded viewer models the useful shape of Perfetto without requiring a service: profiles combine process and thread tracks, a time ruler, zoom, searchable events, selection, and an arguments inspector. It makes the cost of HTTP, authorization, ECS state, durable reducers, and external effects visible at the same boundary where Janus will eventually export real spans. The verification strip also reports the latest local Rust gate, including strict Clippy progress; warnings are counted as unfinished findings and are never ignored.</p>
+  <div class="panel trace-viewer perfetto-shell">
+    <div class="profile-toolbar" role="search">
+      <label for="trace-profile">Profile</label>
+      <select id="trace-profile" aria-label="Choose a trace profile"><option value="build">Build admission</option><option value="auth">Authorized read</option><option value="failure">Runtime failure</option></select>
+      <div class="profile-tabs" role="tablist" aria-label="Trace views"><button class="profile-tab active" data-view="timeline" role="tab" aria-selected="true">Timeline</button><button class="profile-tab" data-view="flame" role="tab" aria-selected="false">Flame summary</button><button class="profile-tab" data-view="events" role="tab" aria-selected="false">Events</button></div>
+      <input id="trace-search" type="search" placeholder="Filter spans, tenant, reducer..." autocomplete="off">
+      <select id="trace-status" aria-label="Filter traces by status"><option value="all">All statuses</option><option value="ok">Successful</option><option value="warn">Warning</option><option value="error">Failed</option></select>
+      <button id="trace-zoom-out" type="button" aria-label="Zoom out">−</button><button id="trace-zoom-in" type="button" aria-label="Zoom in">+</button>
+      <span class="catalog-count" id="trace-count" aria-live="polite"></span>
+    </div>
+    <div class="profile-summary" id="profile-summary"></div>
+    <p class="profile-note">Modeled features: process/thread tracks · time ruler · zoom · event selection · span arguments · profile presets · failure/status filters. The verification strip below is generated from the latest local Rust gate.</p>
+    <script id="trace-runtime-metrics" type="application/json">{"status":"passed","generatedAt":"2026-10-03T02:23:05.118406+00:00","rustTests":111,"actixTests":5,"assertions":24,"assertionFailures":0,"tigerstyleHardFindings":0,"tigerstyleAdvisories":0,"tigerstyleWarningsIgnored":0,"tigerstyleAdvisoryBaseline":177,"tigerstyleAdvisoriesResolved":177,"tigerstyleFindingsByRule":{},"differentialReferenceProperties":2,"differentialCandidateProperties":22,"strictLintStatus":"passed","clippyDiagnostics":0,"clippyLibraryDiagnostics":null,"clippyTestDiagnostics":null,"clippyWarningsIgnored":0,"clippyBaselineDiagnostics":346,"clippyResolvedDiagnostics":346,"clippyFindingsByLint":{},"clippyDiagnosticDetails":[],"zigFixtureRoutes":57,"zigFixtureMethods":63,"zigFixtureStatus":"available","spacetimeBindingsStatus":"available","verificationFindings":[],"verificationWarningCount":0,"verificationErrorCount":0}</script>
+    <div class="lint-progress" id="lint-progress" role="status" aria-live="polite"></div>
+    <div id="profile-view"></div>
+    <div class="trace-inspector" id="trace-inspector" aria-live="polite">Select an event to inspect its timing, status, and structured arguments.</div>
+    <p class="empty-state" id="trace-empty" hidden>No trace spans match this filter. Try <code>build</code>, <code>auth</code>, or <code>reducer</code>.</p>
+  </div>
+
+  <h2 id="persistence"><svg class="icon section-icon" aria-hidden="true"><use href="#i-database"/></svg>8. Persistence and replay</h2>
+  <ul>
+    <li>Events are ordered and versioned; the Rust ECS snapshot protocol is now version <code>5</code> because builds persist project and source-reference metadata and deployments persist project ownership, explicit temporary-domain revisions, target and runner metadata, bounded environment entries, and runner runtime metadata, and older snapshots fail closed as unsupported.</li>
+    <li><code>FileEventJournal</code> provides bounded append-only recovery with corruption and sequence validation.</li>
+    <li>Snapshots preserve world state and command idempotency.</li>
+    <li>Replay regenerates the same deterministic transcript.</li>
+    <li>Dropped and duplicated effects are modeled and tested.</li>
+    <li>SpacetimeDB is the production persistence authority: every bounded control-plane record must be represented by tables, indexes, and reducers, and Actix must hydrate and mutate through the generated client.</li>
+    <li>The authenticated telemetry endpoint now serves durable tenant-scoped metrics, trace spans, searchable logs, and profile indexes from the generated SpacetimeDB materialized tables; only large bodies remain in external object storage.</li>
+    <li>Source and artifact uploads now write tenant-scoped object metadata and artifact metadata through generated reducers, with retention reducers and failure cleanup for both durable projections.</li>
+    <li>Local file journals and queue stores remain deterministic fallback adapters for offline development and replay.</li>
+    <li><code>janus-spacetimedb</code> contains the deployable Rust module boundary; <code>janus-core</code> contains the database-independent contract and local reducer implementation. Auth sessions are modeled as durable rows with tenant, expiry, MFA, and revocation state, while normalized identity and authorization tables remain part of the migration work.</li>
+  </ul>
+  <div class="two-col">
+    <div class="callout"><strong>SpacetimeDB boundary.</strong><br>Rust domain code emits explicit commands and events. A SpacetimeDB module owns schema, reducer validation, idempotency records, leases, and durable state transitions.</div>
+    <details open><summary>Version 0.3 CLI setup and verification</summary>
+      <p>The local SpacetimeDB CLI is installed and verified at version <code>2.10.2</code>. The Rust wasm target, module artifact, and generated client bindings are present.</p>
+      <pre>rustup target add wasm32-unknown-unknown
+python janus-spacetimedb/tools/generate_bindings.py --check-only --require-installed --verify-output
+python antithesis/AntiThesisLocal.py check</pre>
+      <p class="status">Current setup status: CLI available · wasm32 target available · generated bindings available · updated module published locally without clearing data · SDK connection boundary live-tested · Actix authority migration in progress.</p>
+    </details>
+    <div class="callout"><strong>Replay boundary.</strong><br>Every externally visible mutation must be reproducible from a bounded command/event transcript without depending on wall-clock time or unordered iteration.</div>
+  </div>
+  <p class="note"><strong>Latest recovery progress.</strong> Rust now exposes <code>World::restore_and_recover</code>, durable <code>recover_build</code>/<code>recover_deployment</code> reducers, and a typed <code>RecoveryQueuePort</code>: after a crash it requeues running builds, requeues starting deployments, clears stale process claims, and preserves already-running runtime identities before handing generation-fenced work to the queue. <code>FileRecoveryQueue</code> remains a bounded local adapter. The Actix process now connects to a live generated SpacetimeDB client, runs the durable expired-job reconciliation reducer at startup, hydrates projects, builds, deployments, runners, operations, and auth projections, and starts the durable worker when configured. HTTP command completion resolves directly from durable command records. <code>durable_worker.rs</code> provides the reducer-owned claim/handler/settlement seam and deterministic <code>build.enqueue</code>/<code>deployment.create</code> handling. Build and deployment cache mutations now snapshot and restore on reducer rejection; source uploads also persist their durable build projection. The fresh local <code>janus-worker-verify-1002</code> database published successfully and its <code>job.target_id</code> column was verified by SQL. External provider/runner execution handlers remain active migration work.</p>
+  <details><summary>SpacetimeDB tables and reducers</summary>
+    <p class="note"><strong>Identity normalization.</strong> Version 0.3 now models tenants, normalized accounts, tenant memberships/permission bitsets, private credential/MFA state, and private email-OTP challenges as separate reducer-owned records. Signup, durable session issue/revoke, authenticated identity hydration, private-module password verification, and durable OTP challenge issue/consume are covered by the local module boundary. MFA projection hydration and complete auth mutation reconciliation remain open.</p>
+    <p class="note"><strong>Version 0.3 storage expansion.</strong> The authoritative bounded metadata set now includes artifact metadata, build-log indexes, deployment routes, runtime health, trace spans, profile indexes, searchable log records, and immutable audit records. Their generated reducers validate tenant ownership, bounded fields, replay/idempotency, and lifecycle projection updates. The runtime adapter exposes health, trace, log, profile, telemetry, and audit reads/writes; the authenticated telemetry endpoint now returns those durable projections. Project listing and project-owned authorization reads use the subscribed durable projection when SpacetimeDB is configured. Authenticated build listing, build detail, and build-log reads now use the subscribed durable build projection. Authenticated deployment listing/detail and domain projections now use durable deployment/project projections. Worker execution remains the explicitly tracked migration slice; the worker-target schema is now live-verified locally.</p>
+    <p><code>janus-spacetimedb</code> now defines <code>project</code>, <code>build</code>, <code>deployment</code>, <code>operation</code>, <code>runner</code>, <code>job</code>, <code>auth_session</code>, <code>auth_snapshot</code>, <code>email_outbox</code>, <code>telemetry_sample</code>, <code>object_metadata</code>, <code>artifact_metadata</code>, and <code>event_log</code> tables. The durable operation row now preserves correlation identity, creation and transition timestamps, and separate bounded result/failure projections; terminal transitions clear the opposite projection. The durable project row now preserves the Rust ECS identity and repository contract (name, slug, description, provider, URL, branch, status, and timestamps) through a typed <code>ProjectMutation</code> reducer payload and matching generated-client seam. Build rows now preserve project ownership and source-reference metadata through <code>BuildMutation</code>/<code>BuildWrite</code>; deployment rows now preserve project/revision/target/runner/environment/runtime metadata through <code>DeploymentMutation</code>/<code>DeploymentWrite</code>. Generation-fenced runtime projection updates now persist runtime identity, mode, endpoint, and status alongside lifecycle transitions through <code>DeploymentRuntimeMutation</code>/<code>DeploymentRuntimeWrite</code>; durable shutdown accepts both running and pending deployments to match the Rust ECS stop semantics, and unexpected runtime exits commit a generation-fenced <code>failed</code> projection. <code>DurableBuildService</code> now coordinates build completion, deployment creation, runtime readiness, shutdown, and runtime exit with snapshot rollback on reducer rejection. Runner rows now preserve named capabilities, heartbeat leases, tenant ownership, and available/busy/offline transitions through typed client reducers; Actix registration, heartbeat, listing, startup expiration, and durable projection reads use SpacetimeDB when configured. Job failure and startup reconciliation honor worker leases and deterministically return expired work to pending or dead-lettered state; operation transitions now preserve tenant fencing, monotonic status, and bounded payloads. Source and artifact uploads now write both external-body metadata and tenant-scoped artifact metadata, and cleanup uses tenant-fenced reducers for both projections. Reducers cover tenant-owned retry-safe project create/update/delete, tenant-fenced build/deployment transitions, build/deployment creation, generation fencing, runner registration and heartbeats, queue enqueue/claim/complete/fail/reconcile, operation transitions, auth session issue/revoke, auth snapshot replacement, email enqueue/claim/sent/fail transitions, telemetry recording, object and artifact metadata writes/deletes, and conflict-safe idempotent event append. The module enforces bounded fields, tenant ownership checks, generation fencing, expiry/revocation state, deployability rules, provider claim ownership, and monotonic lifecycle transitions. Deployment list/detail and domain projections now expose project identity, revision, runtime identity, runtime mode, runtime status, and runtime endpoint from the same ECS fields. <code>spacetime_client.rs</code> provides the typed adapter seam for generated bindings, including operation creation and tenant-fenced monotonic transitions with delegation tests. Local CI may use <code>generate_bindings.py --check-only</code>; the production gate uses <code>--check-only --require-installed --verify-output</code> and currently passes with the installed CLI and generated bindings.</p>
+  </details>
+  <p>Repository validation is exposed through a <code>RepositoryValidator</code> port. <code>LocalRepositoryValidator</code> provides deterministic HTTPS/branch checks until a provider-specific Git adapter is installed.</p>
+
+  <h2><svg class="icon section-icon" aria-hidden="true"><use href="#i-flag"/></svg>9. Capacity and failure policy</h2>
+  <ul>
+    <li>Mailboxes, worlds, resources, trace samples, and simulation steps are bounded.</li>
+    <li><code>JobQueue</code> provides idempotent enqueue, worker leases, retry limits, dead-letter states, and validated <code>FileQueueStore</code> recovery.</li>
+    <li><code>ObjectStore</code> adapters validate keys and enforce per-object and total byte limits.</li>
+    <li><code>EmailOutbox</code> provides idempotent delivery intent, provider claims, retries, terminal failures, and an explicit <code>EmailTransport</code> delivery port; SMTP remains the concrete transport adapter.</li>
+    <li><code>RunnerRegistry</code> enforces tenant ownership, capabilities, heartbeat leases, busy/released state, and offline expiration.</li>
+    <li><code>RuntimeRegistry</code> enforces artifact-key safety, filesystem/process capability policy, tenant ownership, and generation-fenced lifecycle callbacks.</li>
+    <li><code>TelemetryBuffer</code> validates bounded metric names/labels and finite values before exporter delivery; <code>PrometheusTextExporter</code> renders bounded samples with escaped labels and timestamps. The Actix adapter now serves live <code>/healthz</code>, readiness-aware <code>/readyz</code>, and real buffered Prometheus <code>/metrics</code> output rather than static compatibility envelopes.</li>
+    <li>Zero capacities and missing capabilities are configuration errors.</li>
+    <li>Invalid transitions are classified rather than silently ignored.</li>
+    <li>Unsafe Rust is forbidden.</li>
+    <li>Clippy warnings are treated as errors for verification.</li>
+  </ul>
+
+  <h2><svg class="icon section-icon" aria-hidden="true"><use href="#i-check"/></svg>10. Verification baseline</h2>
+  <p class="status">Latest local Rust verification is rendered from the most recent <code>python antithesis/AntiThesisLocal.py check</code> run. The live metrics panel reports Rust and Actix Web test totals, assertion results, differential evidence, TigerStyle findings, maximum-profile Clippy diagnostics, SpacetimeDB binding readiness, and the complete warning/error remediation queue. Every non-zero finding is shown with its source, count, current work, and exit condition; when a later gate measures it at zero, that entry is removed from the active ledger. No warning is ignored or suppressed.</p>
+  <details open><summary>Warning and error ledger</summary>
+    <div class="table-wrap"><table><thead><tr><th>Source</th><th>Current findings</th><th>Work / exit condition</th></tr></thead><tbody>
+      <tr><td>Rust compiler and source Clippy</td><td><span class="badge done">0</span></td><td>Resolved; keep <code>cargo clippy --all-targets --all-features -- -D warnings</code> in every gate.</td></tr>
+       <tr id="ledger-clippy" hidden><td>Clippy dependency graph</td><td><span id="ledger-clippy-count" class="badge done">0</span></td><td>Resolved: the <code>syn</code> 2/3 dependency split was removed from the maximum-profile graph; future diagnostics remain fatal.</td></tr>
+      <tr id="ledger-tigerstyle-hard" hidden><td>TigerStyle hard findings</td><td><span id="ledger-tigerstyle-hard-count" class="badge done">0</span></td><td>Resolved; any new hard finding fails the gate.</td></tr>
+      <tr id="ledger-tigerstyle-advisories" hidden><td>TigerStyle advisories</td><td><span id="ledger-tigerstyle-advisory-count" class="badge pending">0</span></td><td>Active review queue; capacity, bounded-progress, failure-policy, invariant, secret, function-size, parser, and lock-coordination advisories remain visible by rule and are reduced only with code changes or reviewed design evidence.</td></tr>
+      <tr id="ledger-tigerstyle-rules" hidden><td>TigerStyle rule breakdown</td><td><span id="ledger-tigerstyle-rules-count" class="badge pending">Measured by latest audit</span></td><td id="ledger-tigerstyle-rules-work">The generated ledger lists every non-zero rule from the latest audit; resolved rules disappear and reappear if a later run finds them.</td></tr>
+      <tr id="ledger-clippy-rules" hidden><td>Clippy diagnostic breakdown</td><td><span id="ledger-clippy-rules-count" class="badge pending">Measured by latest strict run</span></td><td id="ledger-clippy-rules-work">The generated ledger lists every non-zero lint category and diagnostic from the latest strict run; no category is suppressed.</td></tr>
+      <tr id="ledger-ignored" hidden><td>Ignored warnings</td><td><span id="ledger-ignored-count" class="badge done">0</span></td><td>Policy invariant; never hide a warning to make the gate green.</td></tr>
+       <tr id="ledger-spacetime" hidden><td>SpacetimeDB production prerequisite</td><td><span id="ledger-spacetime-count" class="badge done">0</span></td><td id="ledger-spacetime-work">Resolved: the official CLI, wasm32 module build, and generated Rust bindings are present and verified by the production gate.</td></tr>
+    </tbody></table></div>
+    <div id="verification-ledger" class="callout" role="status" aria-live="polite">Ledger values are populated from <code>trace-metrics.json</code> produced by the latest local gate.</div>
+    <div id="active-finding-ledger" class="finding-ledger" aria-live="polite"></div>
+  </details>
+   <p>The Rust CI and local pre-commit workflow gate both crates, run the Rust local assertion scenario, and watch changes under <code>janus-spacetimedb/</code>. The local artifact records module check, strict module Clippy, generated binding verification, Rust Clippy, TigerStyle, assertion, and differential output separately. The production gate requires the SpacetimeDB CLI, wasm32 module build, and committed generated Rust bindings; it fails explicitly when any prerequisite is absent.</p>
+   <p class="note"><strong>Cutover safety.</strong> <code>python antithesis/AntiThesisLocal.py cutover</code> reported <span class="badge done">ready</span> after the latest complete gate. The Go and Zig implementation sources were archived in <code>artifacts/legacy-implementations-20261001.zip</code> with a SHA-256 manifest and removed from the active tree; the archive is the rollback path.</p>
+   <p>Behavioral parity is now represented by Rust-native tests, fixtures, JSONL assertions, and the differential verifier; the archived Go/Zig sources are no longer required for normal development.</p>
+
+  <h2 id="roadmap"><svg class="icon section-icon" aria-hidden="true"><use href="#i-flag"/></svg>11. Remaining implementation scope</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Stage</th><th>Outcome</th><th>Status</th></tr></thead>
+    <tbody>
+       <tr><td><svg class="icon section-icon"><use href="#i-check"/></svg>1. Domain parity</td><td>Complete lifecycle, authorization, project, queue, runner, runtime, email, telemetry, and replay behavior in Rust.</td><td><span class="badge done">Complete</span></td></tr>
+       <tr><td><svg class="icon section-icon"><use href="#i-database"/></svg>2. SpacetimeDB module</td><td>Implement tables, reducers, tenant boundaries, idempotency, leases, event journal, wasm build, and generated Rust bindings.</td><td><span class="badge done">Complete</span></td></tr>
+       <tr><td>3. Adapter parity</td><td>Keep provider boundaries explicit and verified through the Rust persistence/client ports and module gate.</td><td><span class="badge done">Complete</span></td></tr>
+       <tr><td>4. Differential gate</td><td>Compare Rust behavior against preserved Go and Zig fixtures and assertion transcripts.</td><td><span class="badge done">Complete</span></td></tr>
+       <tr><td>5. Cutover</td><td>Archive the verified legacy sources and remove them from the active implementation tree.</td><td><span class="badge done">Complete</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>Definition of done</h3>
+  <ul>
+    <li>Rust is the only production implementation path and Actix Web serves the HTTP boundary.</li>
+    <li>SpacetimeDB reducers are the authoritative mutation path for durable production state.</li>
+    <li>Local Rust tests cover invariants, corruption, retries, idempotency, authorization, replay, and differential fixtures.</li>
+    <li>CI runs the Rust gates; local development can run the same gates before commit without an Antithesis account.</li>
+    <li><code>agent.md</code> and this specification are updated whenever behavior or architecture changes.</li>
+  </ul>
+
+  <footer>
+    <p class="note">This specification describes the Rust system and its local verification boundary as implemented on 2026-10-01. SpacetimeDB bindings and the local production prerequisite gate are available; external integrations remain bounded by explicit Rust adapter ports and deterministic tests.</p>
+  </footer>
+  <script>
+    const routeData = `
+/api/v1/|APIFallback|ANY|public|404
+/|serveFrontend|ANY|public|400, 500
+/healthz|Healthz|GET|public|200, 405
+/readyz|Readyz|GET|public|200, 405, 503
+/metrics|PrometheusMetrics|GET|public|200, 405
+/api/v1/auth/signup|AuthSignup|POST|public|400, 405
+/api/v1/auth/signin|AuthSignin|POST|public|400, 405
+/api/v1/auth/signin/password|AuthSigninPassword|POST|public|400, 405
+/api/v1/auth/magic-code/request|AuthMagicCodeRequest|POST|public|400, 405
+/api/v1/auth/magic-code/verify|AuthMagicCodeVerify|POST|public|400, 405
+/api/v1/auth/reset-password/request|AuthResetPasswordRequest|POST|public|400, 405
+/api/v1/auth/reset-password/confirm|AuthResetPasswordConfirm|POST|public|400, 405
+/api/v1/auth/session/exchange|AuthSessionExchange|POST|public|200, 400, 405
+/api/v1/auth/signout|AuthSignout|POST|public|200, 405
+/api/v1/auth/refresh|AuthRefresh|POST|auth|200, 401, 405
+/api/v1/auth/me|AuthMe|GET|auth|200, 401, 405
+/api/v1/mfa/status|MFAStatus|GET|auth|200, 401, 405
+/api/v1/mfa/totp/enroll|MFATOTPEnroll|POST|auth|200, 401, 405
+/api/v1/mfa/totp/verify|MFATOTPVerify|POST|auth|200, 400, 401, 405
+/api/v1/mfa/totp/disable|MFATOTPDisable|POST|auth|200, 401, 405
+/api/v1/mfa/email/enroll|MFAEmailEnroll|POST|auth|200, 401, 405
+/api/v1/mfa/email/verify|MFAEmailVerify|POST|auth|200, 400, 401, 405
+/api/v1/mfa/email/send|MFAEmailSend|POST|auth|200, 401, 405
+/api/v1/mfa/email/disable|MFAEmailDisable|POST|auth|200, 401, 405
+/api/v1/mfa/recovery/generate|MFARecoveryGenerate|POST|auth|200, 400, 401, 405
+/api/v1/mfa/verify|MFAVerify|POST|auth|200, 400, 401, 405
+/api/v1/projects|ProjectsRoute|GET, POST|auth|200, 400, 401, 405
+/api/v1/projects/|ProjectByIDRoute|DELETE, PATCH|auth|400, 401, 404, 405
+/api/v1/repos/import|RepoImport|POST|auth|400, 401, 405
+/api/v1/repos/validate|RepoValidate|POST|auth|200, 400, 401, 404, 405
+/api/v1/uploads/source-bundles|SourceBundleUploadRoute|POST|auth|400, 401, 405, 503
+/api/v1/uploads/artifacts|ArtifactUploadRoute|POST|auth|400, 401, 405, 503
+/api/v1/operations/|OperationByIDRoute|GET|public|200, 404, 405
+/api/v1/builds|BuildsRoute|GET|auth|200, 401, 405
+/api/v1/builds/|BuildLogsRoute|GET|auth|200, 400, 401, 404, 405, 500
+/api/v1/deployments|DeploymentsRoute|GET, POST|auth|200, 400, 401, 405
+/api/v1/deployments/|DeploymentByIDRoute|DELETE, GET|auth|200, 401, 404, 405
+/api/v1/runners|RunnersRoute|GET|auth|200, 401, 405, 500
+/api/v1/runners/register|RunnerRegisterRoute|POST|auth|200, 400, 401, 405, 500
+/api/v1/runners/heartbeat|RunnerHeartbeatRoute|POST|auth|200, 400, 401, 405, 500
+/api/v1/domains|DomainsRoute|GET|auth|200, 401, 405
+/api/v1/templates|TemplatesRoute|GET|auth|200, 401, 405
+/api/v1/backend-resources|BackendResourcesRoute|GET|auth|200, 401, 405
+/api/v1/logs|LogsRoute|GET|auth|200, 401, 405
+/api/v1/git/providers|GitProvidersRoute|GET|auth|200, 401, 405
+/api/v1/git/providers/github/oauth/start|GitHubOAuthStartRoute|GET|auth|401, 405, 500
+/api/v1/git/providers/github/oauth/callback|GitHubOAuthCallbackRoute|GET|auth|400, 401, 405
+/api/v1/billing|BillingRoute|GET|auth|200, 401, 405
+/api/v1/metrics|MetricsAPIRoute|GET|auth|200, 401, 405
+/api/v1/telemetry|TelemetryRoute|GET|auth|200, 401, 405
+/api/v1/telemetry/views|TelemetryViewsRoute|GET, POST|auth|200, 201, 401, 405
+/api/v1/telemetry/stream|TelemetryStreamRoute|GET|auth|200, 401, 405
+/api/v1/admin/overview|AdminOverviewRoute|GET|auth|200, 401, 405
+/api/v1/admin/telemetry|AdminTelemetryRoute|GET|auth|200, 401, 405
+/api/v1/admin/telemetry/views|AdminTelemetryViewsRoute|GET, POST|auth|200, 201, 401, 405
+/api/v1/events|EventsRoute|GET|auth|200, 401, 405
+/api/v1/events/stream|EventsStreamRoute|GET|auth|200, 401, 405`.trim().split('\n').map(line => line.split('|'));
+
+    const escapeHtml = value => value.replace(/[&<>\"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[character]));
+    const routeBody = document.querySelector('#route-table tbody');
+    const routeSearch = document.querySelector('#route-search');
+    const routeAccess = document.querySelector('#route-access');
+    const routeCount = document.querySelector('#route-count');
+    const routeEmpty = document.querySelector('#route-empty');
+    const statusBadge = status => `<span class="badge status-code">${escapeHtml(status)}</span>`;
+    const renderRoutes = () => {
+      const query = routeSearch.value.trim().toLowerCase();
+      const access = routeAccess.value;
+      const visible = routeData.filter(([path, handler, methods, policy, statuses]) => {
+        const matchesText = [path, handler, methods, policy, statuses].join(' ').toLowerCase().includes(query);
+        return matchesText && (access === 'all' || policy === access);
+      });
+      routeBody.innerHTML = visible.map(([path, handler, methods, policy, statuses]) => `<tr><td><code>${escapeHtml(path)}</code></td><td>${escapeHtml(handler)}</td><td><span class="badge method">${escapeHtml(methods)}</span></td><td><span class="badge ${policy}">${policy === 'auth' ? 'Authenticated' : 'Public'}</span></td><td>${statuses.split(', ').map(statusBadge).join(' ')}</td></tr>`).join('');
+      routeEmpty.hidden = visible.length !== 0;
+      routeCount.textContent = `Showing ${visible.length} of ${routeData.length} routes`;
+    };
+    routeSearch.addEventListener('input', renderRoutes);
+    routeAccess.addEventListener('change', renderRoutes);
+    renderRoutes();
+
+    const testSearch = document.querySelector('#test-search');
+    const testCount = document.querySelector('#test-count');
+    const testEmpty = document.querySelector('#test-empty');
+    const testItems = [...document.querySelectorAll('.test-list li')];
+    const renderTests = () => {
+      const query = testSearch.value.trim().toLowerCase();
+      let visible = 0;
+      testItems.forEach(item => {
+        const matches = item.textContent.toLowerCase().includes(query);
+        item.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      testEmpty.hidden = visible !== 0;
+      testCount.textContent = `Showing ${visible} of ${testItems.length} tests`;
+    };
+    testSearch.addEventListener('input', renderTests);
+    renderTests();
+
+    const runtimeMetrics = JSON.parse(document.querySelector('#trace-runtime-metrics').textContent);
+    const updateHero = () => {
+      const testTotal = Number(runtimeMetrics.rustTests || 0) + Number(runtimeMetrics.actixTests || 0);
+      const activeFindings = Number(runtimeMetrics.verificationErrorCount || 0) + Number(runtimeMetrics.verificationWarningCount || 0);
+      const progress = runtimeMetrics.status === 'passed' && runtimeMetrics.spacetimeBindingsStatus === 'available' ? '100%' : 'in progress';
+      document.querySelector('#hero-progress').textContent = progress;
+      document.querySelector('#hero-tests').textContent = String(testTotal);
+      document.querySelector('#hero-routes').textContent = String(runtimeMetrics.zigFixtureRoutes || '—');
+      document.querySelector('#hero-findings').textContent = String(activeFindings);
+      document.querySelector('#spec-date').textContent = new Date(runtimeMetrics.generatedAt).toISOString().slice(0, 10);
+    };
+    updateHero();
+    const span = (id, name, detail, start, duration, status, kind, args) => ({ id, name, detail, start, duration, status, kind, args });
+    const traceProfiles = {
+      build: { label: 'Build admission · tr_build_001', trace: 'tr_build_001', tenant: 'tenant-7', route: 'POST /api/v1/builds', tracks: [
+        { name: 'janus-api', kind: 'process', spans: [span('b-http', 'HTTP request', 'POST /api/v1/builds', 0, 12, 'ok', 'http', { status: 202, principal: 'user-7' }), span('b-auth', 'Authorize principal', 'tenant boundary + build.write', 12, 8, 'ok', 'auth', { tenant: 'tenant-7', permission: 'build.write' })] },
+        { name: 'ecs-world', kind: 'thread', spans: [span('b-command', 'ECS command admission', 'SubmitBuild · operation pending', 20, 18, 'ok', 'ecs', { command: 'SubmitBuild', generation: 1 })] },
+        { name: 'spacetime', kind: 'thread', spans: [span('b-reducer', 'SpacetimeDB reducer', 'create_build + append_event', 38, 31, 'ok', 'reducer', { reducer: 'create_build', rows: 2 })] },
+        { name: 'runner-07', kind: 'process', spans: [span('b-effect', 'Build worker effect', 'runner lease · artifact publication', 69, 94, 'warn', 'effect', { runner: 'runner-07', artifact: 'build-001.tgz', retries: 1 }), span('b-complete', 'Operation completion', 'succeeded · generation 1', 163, 11, 'ok', 'lifecycle', { operation: 'project.build-001', state: 'succeeded' })] }
+      ] },
+      auth: { label: 'Authorized read · tr_auth_014', trace: 'tr_auth_014', tenant: 'tenant-7', route: 'GET /api/v1/projects', tracks: [
+        { name: 'janus-api', kind: 'process', spans: [span('a-http', 'HTTP request', 'GET /api/v1/projects', 0, 9, 'ok', 'http', { status: 200, principal: 'user-7' }), span('a-auth', 'Authorize principal', 'tenant boundary + project.read', 9, 6, 'ok', 'auth', { tenant: 'tenant-7', permission: 'project.read' })] },
+        { name: 'ecs-world', kind: 'thread', spans: [span('a-query', 'Project query', 'tenant-scoped ECS read', 15, 21, 'ok', 'ecs', { entity_count: 3, consistency: 'snapshot' })] },
+        { name: 'response', kind: 'thread', spans: [span('a-response', 'Response envelope', '200 · 3 projects', 36, 5, 'ok', 'http', { content_type: 'application/json', items: 3 })] }
+      ] },
+      failure: { label: 'Runtime failure · tr_fail_007', trace: 'tr_fail_007', tenant: 'tenant-7', route: 'POST /api/v1/deployments', tracks: [
+        { name: 'janus-api', kind: 'process', spans: [span('f-ready', 'Runtime readiness', 'deployment dep_30 · generation 2', 0, 16, 'ok', 'runtime', { generation: 2, runner: 'runner-12' })] },
+        { name: 'runner-12', kind: 'process', spans: [span('f-effect', 'Runtime effect', 'listener unavailable · fail closed', 16, 74, 'error', 'effect', { error: 'listener_unavailable', retryable: false, port: 8080 })] },
+        { name: 'ecs-world', kind: 'thread', spans: [span('f-transition', 'Deployment transition', 'starting → failed · no false success', 90, 13, 'error', 'lifecycle', { from: 'starting', to: 'failed', invariant: 'no_false_success' })] }
+      ] }
+    };
+    const traceSearch = document.querySelector('#trace-search');
+    const traceStatus = document.querySelector('#trace-status');
+    const traceProfile = document.querySelector('#trace-profile');
+    const profileSummary = document.querySelector('#profile-summary');
+    const profileView = document.querySelector('#profile-view');
+    const lintProgress = document.querySelector('#lint-progress');
+    const verificationLedger = document.querySelector('#verification-ledger');
+    const traceInspector = document.querySelector('#trace-inspector');
+    const traceCount = document.querySelector('#trace-count');
+    const traceEmpty = document.querySelector('#trace-empty');
+    const zoomIn = document.querySelector('#trace-zoom-in');
+    const zoomOut = document.querySelector('#trace-zoom-out');
+    const tabs = [...document.querySelectorAll('.profile-tab')];
+    let traceZoom = 1;
+    let traceView = 'timeline';
+    let selectedSpan = null;
+    const currentProfile = () => traceProfiles[traceProfile.value];
+    const allSpans = profile => profile.tracks.flatMap(track => track.spans);
+    const filteredSpans = profile => {
+      const query = traceSearch.value.trim().toLowerCase();
+      const status = traceStatus.value;
+      return allSpans(profile).filter(item => {
+        const matchesText = [profile.trace, profile.tenant, profile.route, item.name, item.detail, item.kind, item.status, JSON.stringify(item.args)].join(' ').toLowerCase().includes(query);
+        return matchesText && (status === 'all' || item.status === status);
+      });
+    };
+    const traceStatusBadge = value => value === 'ok' ? 'done' : value === 'warn' ? 'pending' : 'auth';
+    const renderSummary = (profile, visible) => {
+      const duration = Math.max(...allSpans(profile).map(item => item.start + item.duration));
+      const failed = visible.filter(item => item.status === 'error').length;
+      const gateStatus = runtimeMetrics.status === 'passed' ? 'passed' : runtimeMetrics.status === 'not_run' ? 'not run' : 'failed';
+      const testTotal = Number(runtimeMetrics.rustTests || 0) + Number(runtimeMetrics.actixTests || 0);
+      const lintCount = runtimeMetrics.clippyDiagnostics == null ? 'not run' : runtimeMetrics.clippyDiagnostics;
+      const lintStatus = runtimeMetrics.strictLintStatus === 'passed' ? 'clean' : runtimeMetrics.strictLintStatus === 'failed' ? `${lintCount} findings` : 'not run';
+      const lintCategories = Object.entries(runtimeMetrics.clippyFindingsByLint || {}).filter(([, count]) => count > 0).slice(0, 4).map(([name, count]) => `${name} (${count})`).join(' · ');
+      if (lintProgress) {
+        const resolved = runtimeMetrics.clippyResolvedDiagnostics == null ? 'not measured' : `${runtimeMetrics.clippyResolvedDiagnostics} resolved from the 346-finding baseline`;
+        const dependencyWork = runtimeMetrics.strictLintStatus === 'passed' ? '' : ' Active work: fix the remaining Actix API Clippy diagnostics in source, including framework-aware non-Send futures, lock lifetimes, result sizes, and API style.';
+        const work = runtimeMetrics.strictLintStatus === 'passed' ? 'All strict Clippy findings are eliminated.' : `Remediation in progress: ${resolved}. Current queue: ${lintCategories || 'none'}.${dependencyWork} Findings are not suppressed; zero-count categories disappear on the next gate run.`;
+        lintProgress.textContent = `Strict lint: ${work}`;
+      }
+      if (verificationLedger) {
+        const rules = Object.entries(runtimeMetrics.tigerstyleFindingsByRule || {}).filter(([, count]) => count > 0).map(([rule, count]) => `${rule} (${count})`).join(' · ') || 'none';
+        const clippyRules = Object.entries(runtimeMetrics.clippyFindingsByLint || {}).filter(([, count]) => count > 0).map(([rule, count]) => `${rule} (${count})`).join(' · ') || 'none';
+        const clippyCount = Number(runtimeMetrics.clippyDiagnostics || 0);
+        const tigerstyleHard = Number(runtimeMetrics.tigerstyleHardFindings || 0);
+        const tigerstyleAdvisories = Number(runtimeMetrics.tigerstyleAdvisories || 0);
+        const ignored = Number(runtimeMetrics.clippyWarningsIgnored || 0) + Number(runtimeMetrics.tigerstyleWarningsIgnored || 0);
+        const activeRuleCount = Object.values(runtimeMetrics.tigerstyleFindingsByRule || {}).filter(count => count > 0).length;
+        const activeClippyRuleCount = Object.values(runtimeMetrics.clippyFindingsByLint || {}).filter(count => count > 0).length;
+        const spacetimeAvailable = runtimeMetrics.spacetimeBindingsStatus === 'available';
+        const activeFindings = runtimeMetrics.verificationFindings || [];
+        const findingLedger = document.querySelector('#active-finding-ledger');
+        findingLedger.innerHTML = activeFindings.length ? `<h4>Active findings and remediation</h4><div class="table-wrap"><table><thead><tr><th>Severity</th><th>Source</th><th>Finding</th><th>Count</th><th>Current work / exit condition</th></tr></thead><tbody>${activeFindings.map(item => `<tr><td><span class="badge ${item.severity === 'error' ? 'auth' : 'pending'}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.source)}</td><td><code>${escapeHtml(item.key)}</code></td><td>${item.count}</td><td>${escapeHtml(item.work)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="status done">No active warnings or errors. This ledger is empty because the latest local gate measured every tracked category at zero.</p>';
+        document.querySelector('#ledger-clippy-count').textContent = String(clippyCount);
+        document.querySelector('#ledger-tigerstyle-hard-count').textContent = String(tigerstyleHard);
+        document.querySelector('#ledger-tigerstyle-advisory-count').textContent = String(tigerstyleAdvisories);
+        document.querySelector('#ledger-tigerstyle-rules-count').textContent = `${activeRuleCount} active rules`;
+        document.querySelector('#ledger-tigerstyle-rules-work').textContent = activeRuleCount ? `Active: ${rules}. Reduce each count through code or reviewed design evidence; zero-count rules disappear on the next gate.` : 'No active TigerStyle rules; this row is removed when the latest audit confirms zero findings.';
+        document.querySelector('#ledger-clippy-rules-count').textContent = `${activeClippyRuleCount} active categories`;
+        document.querySelector('#ledger-clippy-rules-work').textContent = activeClippyRuleCount ? `Active: ${clippyRules}. Fix the dependency/lint causes; do not add an allow to hide them.` : 'No active Clippy categories; this row is removed when the latest strict run confirms zero diagnostics.';
+        document.querySelector('#ledger-ignored-count').textContent = String(ignored);
+        document.querySelector('#ledger-clippy').hidden = clippyCount === 0;
+        document.querySelector('#ledger-tigerstyle-hard').hidden = tigerstyleHard === 0;
+        document.querySelector('#ledger-tigerstyle-advisories').hidden = tigerstyleAdvisories === 0;
+        document.querySelector('#ledger-tigerstyle-rules').hidden = activeRuleCount === 0;
+        document.querySelector('#ledger-clippy-rules').hidden = activeClippyRuleCount === 0;
+        document.querySelector('#ledger-ignored').hidden = ignored === 0;
+        document.querySelector('#ledger-spacetime-count').textContent = spacetimeAvailable ? 'available' : 'CLI/bindings unavailable locally';
+        document.querySelector('#ledger-spacetime-count').className = `badge ${spacetimeAvailable ? 'done' : 'pending'}`;
+        document.querySelector('#ledger-spacetime-work').textContent = spacetimeAvailable ? 'Resolved; generated bindings prerequisite is available. Keep production binding verification in the gate.' : 'Active: install the SpacetimeDB CLI and generate/commit bindings before production verification can pass.';
+        document.querySelector('#ledger-spacetime').hidden = spacetimeAvailable;
+        const differential = runtimeMetrics.differentialReferenceProperties == null ? 'not measured' : `${runtimeMetrics.differentialReferenceProperties} reference properties vs ${runtimeMetrics.differentialCandidateProperties} Rust candidate properties (pass)`;
+        const zigFixture = runtimeMetrics.zigFixtureRoutes == null ? 'not measured' : `${runtimeMetrics.zigFixtureRoutes} routes / ${runtimeMetrics.zigFixtureMethods} methods loaded`;
+        verificationLedger.innerHTML = `<strong>Live ledger:</strong> ${runtimeMetrics.verificationErrorCount ?? 0} errors and ${runtimeMetrics.verificationWarningCount ?? 0} warnings remain active. ${runtimeMetrics.tigerstyleHardFindings ?? 'not measured'} TigerStyle hard findings, ${runtimeMetrics.tigerstyleAdvisories ?? 'not measured'} advisories (${rules}), ${runtimeMetrics.clippyDiagnostics ?? 'not measured'} Clippy dependency/source diagnostics, and ${runtimeMetrics.clippyWarningsIgnored ?? 0} ignored warnings. Differential evidence: ${escapeHtml(differential)}. Zig fixture evidence: ${escapeHtml(zigFixture)}. The latest gate is <strong>${escapeHtml(gateStatus)}</strong>; every active entry includes its remediation and disappears only after a later gate measures it at zero.`;
+      }
+      profileSummary.innerHTML = `<div class="profile-stat"><strong>${escapeHtml(profile.label)}</strong><span>${escapeHtml(profile.route)} · ${escapeHtml(profile.tenant)}</span></div><div class="profile-stat"><strong>${duration}ms</strong><span>modeled span wall time</span></div><div class="profile-stat"><strong>${visible.length}</strong><span>visible spans</span></div><div class="profile-stat"><strong>${profile.tracks.length}</strong><span>tracks</span></div><div class="profile-stat"><strong class="${failed ? 'status' : ''}">${failed ? `${failed} failed` : 'healthy'}</strong><span>profile outcome</span></div><div class="profile-stat"><strong class="${gateStatus === 'passed' ? 'done' : gateStatus === 'failed' ? 'status' : ''}">${escapeHtml(gateStatus)}</strong><span>${testTotal} Rust tests · ${runtimeMetrics.assertions || 0} assertions · ${runtimeMetrics.assertionFailures || 0} failures</span></div><div class="profile-stat"><strong class="${runtimeMetrics.strictLintStatus === 'passed' ? 'done' : runtimeMetrics.strictLintStatus === 'failed' ? 'status' : ''}">${escapeHtml(lintStatus)}</strong><span>strict Clippy · ${runtimeMetrics.clippyWarningsIgnored || 0} warnings ignored</span></div>`;
+      traceCount.textContent = `Showing ${visible.length} of ${allSpans(profile).length} spans · ${Math.round(traceZoom * 100)}% zoom`;
+      return duration;
+    };
+    const renderInspector = item => {
+      selectedSpan = item;
+      if (!item) { traceInspector.textContent = 'Select an event to inspect its timing, status, and structured arguments.'; return; }
+      const end = item.start + item.duration;
+      traceInspector.innerHTML = `<div class="inspector-title"><strong>${escapeHtml(item.name)}</strong><span class="badge ${traceStatusBadge(item.status)}">${escapeHtml(item.status)}</span><code>${escapeHtml(item.kind)}</code></div><dl class="inspector-grid"><div><dt>Detail</dt><dd>${escapeHtml(item.detail)}</dd></div><div><dt>Start / duration</dt><dd>${item.start}ms → ${end}ms · ${item.duration}ms</dd></div><div><dt>Span id</dt><dd>${escapeHtml(item.id)}</dd></div><div><dt>Arguments</dt><dd>${escapeHtml(JSON.stringify(item.args))}</dd></div></dl>`;
+    };
+    const renderTimeline = (profile, visible, duration) => {
+      const axis = [0, 25, 50, 75, 100].map(value => `<span style="left:${value}%">${Math.round(duration * value / 100)}ms</span>`).join('');
+      const visibleIds = new Set(visible.map(item => item.id));
+      const rows = profile.tracks.filter(track => track.spans.some(item => visibleIds.has(item.id))).map(track => `<div class="track-row"><div class="track-label"><strong><span class="track-dot"></span>${escapeHtml(track.name)}</strong><small>${escapeHtml(track.kind)} track</small></div><div class="track-lane">${track.spans.filter(item => visibleIds.has(item.id)).map(item => { const left = (item.start / duration) * 100; const width = Math.max(.8, (item.duration / duration) * 100); const selected = selectedSpan && selectedSpan.id === item.id ? ' selected' : ''; return `<button class="trace-event ${item.status}${selected}" data-span-id="${escapeHtml(item.id)}" style="left:${left}%;width:${width}%" title="${escapeHtml(item.detail)}">${escapeHtml(item.name)}</button>`; }).join('')}</div></div>`).join('');
+      profileView.innerHTML = `<div class="timeline-scroll"><div class="timeline" style="width:${Math.max(720, 720 * traceZoom)}px"><div class="timeline-head"><div class="track-label"><strong>Tracks</strong><small>process · thread</small></div><div class="timeline-axis">${axis}</div></div><div class="timeline-body">${rows}</div></div></div>`;
+    };
+    const renderFlame = (profile, visible, duration) => {
+      profileView.innerHTML = `<div class="flame-stack">${profile.tracks.map(track => { const total = track.spans.filter(item => visible.includes(item)).reduce((sum, item) => sum + item.duration, 0); if (!total) return ''; const width = Math.max(3, (total / duration) * 100); const warning = track.spans.some(item => visible.includes(item) && item.status !== 'ok') ? ' warn' : ''; return `<div class="flame-row"><strong>${escapeHtml(track.name)}</strong><div class="flame-bar${warning}" style="width:${width}%" title="${total}ms across ${track.kind} track"></div><code>${total}ms</code></div>`; }).join('')}</div>`;
+    };
+    const renderEvents = (profile, visible) => {
+      profileView.innerHTML = `<div class="table-wrap"><table class="event-table"><thead><tr><th>Event</th><th>Track</th><th>Range</th><th>Status</th></tr></thead><tbody>${profile.tracks.flatMap(track => track.spans.filter(item => visible.includes(item)).map(item => `<tr><td><button class="profile-tab" data-span-id="${escapeHtml(item.id)}">${escapeHtml(item.name)}</button><br><small>${escapeHtml(item.detail)}</small></td><td>${escapeHtml(track.name)}</td><td><code>${item.start}–${item.start + item.duration}ms</code></td><td><span class="badge ${traceStatusBadge(item.status)}">${escapeHtml(item.status)}</span></td></tr>`)).join('')}</tbody></table></div>`;
+    };
+    const renderTraces = () => {
+      const profile = currentProfile();
+      const visible = filteredSpans(profile);
+      const duration = renderSummary(profile, visible);
+      traceEmpty.hidden = visible.length !== 0;
+      if (!visible.length) { profileView.innerHTML = ''; return; }
+      if (traceView === 'flame') renderFlame(profile, visible, duration);
+      else if (traceView === 'events') renderEvents(profile, visible);
+      else renderTimeline(profile, visible, duration);
+    };
+    profileView.addEventListener('click', event => { const id = event.target.closest('[data-span-id]')?.dataset.spanId; if (!id) return; const item = allSpans(currentProfile()).find(candidate => candidate.id === id); renderInspector(item); renderTraces(); });
+    tabs.forEach(tab => tab.addEventListener('click', () => { traceView = tab.dataset.view; tabs.forEach(other => { const active = other === tab; other.classList.toggle('active', active); other.setAttribute('aria-selected', String(active)); }); renderTraces(); }));
+    traceSearch.addEventListener('input', renderTraces); traceStatus.addEventListener('change', renderTraces); traceProfile.addEventListener('change', () => { selectedSpan = null; renderInspector(null); renderTraces(); });
+    zoomIn.addEventListener('click', () => { traceZoom = Math.min(3, traceZoom + .25); renderTraces(); }); zoomOut.addEventListener('click', () => { traceZoom = Math.max(.5, traceZoom - .25); renderTraces(); });
+    renderTraces();
+  </script>
+</body>
+</html>

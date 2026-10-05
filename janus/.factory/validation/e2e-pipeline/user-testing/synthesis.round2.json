@@ -1,0 +1,64 @@
+{
+  "milestone": "e2e-pipeline",
+  "round": 2,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 16,
+    "passed": 10,
+    "failed": 4,
+    "blocked": 2
+  },
+  "passedAssertions": [
+    "VAL-CROSS-004",
+    "VAL-E2E-013",
+    "VAL-E2E-014",
+    "VAL-E2E-021",
+    "VAL-E2E-022",
+    "VAL-E2E-023",
+    "VAL-E2E-024",
+    "VAL-E2E-026",
+    "VAL-E2E-027",
+    "VAL-E2E-029"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-E2E-010",
+      "reason": "Only 1 of 8 live language builds reached built with the expected strategy names after the no-cache rebuild; the rebuilt build environment still lacked most non-Go toolchains on PATH and the Rust component fixture still resolved to rust_wasip1."
+    },
+    {
+      "id": "VAL-E2E-012",
+      "reason": "GET /api/v1/builds/{id}/logs/stream still returned HTTP 500 'streaming unsupported', so the required snapshot/log/status/heartbeat SSE sequence was not emitted."
+    },
+    {
+      "id": "VAL-E2E-015",
+      "reason": "Operation polling still diverged from the contract because live poll responses used status 'running' rather than 'processing', and deploy.create did not complete consistently in the rerun."
+    },
+    {
+      "id": "VAL-FH-018",
+      "reason": "The browser deployment workspace now signs in and creates deployments, but the immediate Deployment Created result card still shows status 'starting' with 'Waiting for runtime endpoint...' instead of a reachable endpoint link; running state appears only after manual refresh."
+    }
+  ],
+  "blockedAssertions": [
+    {
+      "id": "VAL-E2E-025",
+      "blockedBy": "The live API surface still did not expose a deterministic way to hold a build open past JANUS_BUILD_TIMEOUT_SEC=300 without monopolizing the shared build slot for more than 5 minutes; the exercised source-upload and repo-import builds both reached terminal states quickly."
+    },
+    {
+      "id": "VAL-E2E-030",
+      "blockedBy": "OAuth start now redirects correctly to GitHub authorize with a matching state cookie, but fully validating the callback still requires a legitimate authorization code from the configured GitHub OAuth app; a fake code only reached the exchange-failure redirect path."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added an e2e-pipeline low-memory rerun rule that constrains concurrency to 2 validators total when free RAM falls to roughly 4 GB or lower.",
+      "source": "setup"
+    },
+    {
+      "target": "user-testing.md",
+      "description": "Updated e2e-pipeline testing notes for the current rerun: no-cache backend rebuild commands, local-source web fallback, artifact upload now returning async 202/prebuilt_wasm, deployment/browser refresh quirks, source-build deployment fallback, and OAuth start vs callback behavior.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": "E:\\Janus\\.factory\\validation\\e2e-pipeline\\user-testing\\synthesis.round1.json"
+}

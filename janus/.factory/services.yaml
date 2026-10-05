@@ -1,0 +1,41 @@
+commands:
+  install-backend: cd E:\Janus\backend\janus-api; go mod download
+  build-backend: cd E:\Janus\backend\janus-api; go build ./...
+  vet-backend: cd E:\Janus\backend\janus-api; go vet ./...
+  install-frontend: cd E:\Janus\frontend\web; npm install
+  test-backend: cd E:\Janus\backend\janus-api; go test -count=1 -parallel 4 ./...
+  test-frontend: cd E:\Janus\frontend\web; npm run lint
+  unit-test-frontend: cd E:\Janus\frontend\web; npx vitest run
+  build-frontend: cd E:\Janus\frontend\web; npm run build
+  lint-frontend: cd E:\Janus\frontend\web; npm run lint
+  typecheck-frontend: cd E:\Janus\frontend\web; npm run build
+  e2e-frontend: cd E:\Janus\frontend\web; npm run test:e2e
+
+services:
+  postgres:
+    start: podman compose -f E:\Janus\podman-compose.yml up -d postgres
+    stop: podman compose -f E:\Janus\podman-compose.yml stop postgres
+    healthcheck: podman exec janus-postgres pg_isready -h localhost -p 5432
+    port: 5432
+    depends_on: []
+
+  minio:
+    start: podman compose -f E:\Janus\podman-compose.yml up -d minio
+    stop: podman compose -f E:\Janus\podman-compose.yml stop minio
+    healthcheck: curl.exe -sf http://localhost:9000/minio/health/live
+    port: 9000
+    depends_on: []
+
+  janus-api:
+    start: podman compose -f E:\Janus\podman-compose.yml up -d janus-api
+    stop: podman compose -f E:\Janus\podman-compose.yml stop janus-api
+    healthcheck: curl.exe -sf http://localhost:8080/healthz
+    port: 8080
+    depends_on: [postgres, minio]
+
+  janus-web:
+    start: powershell -NoProfile -Command "Start-Process -FilePath 'npm.cmd' -ArgumentList 'run','start' -WorkingDirectory 'E:\Janus\frontend\web' -WindowStyle Hidden"
+    stop: cmd /c "for /f \"tokens=5\" %i in ('netstat -ano ^| findstr :3000 ^| findstr LISTENING') do taskkill /PID %i /F"
+    healthcheck: curl.exe -sf http://localhost:3000
+    port: 3000
+    depends_on: [janus-api]

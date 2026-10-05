@@ -1,0 +1,216 @@
+{
+  "requested": [
+    "handle_play",
+    "send_mode_state",
+    "simulate_vertical",
+    "poll",
+    "change_game_mode",
+    "grant_player_game_mode",
+    "respawn",
+    "reset_loading",
+    "persist_player_state",
+    "player_state",
+    "player_state_update",
+    "player_respawn_request",
+    "requires_persistent_player_state",
+    "void_death_freezes_until_same_dimension_respawn_and_reloads_chunks",
+    "claim_player_state",
+    "release_player_state",
+    "update_player_vitals",
+    "request_player_respawn",
+    "gateway_player_state"
+  ],
+  "found": [
+    "change_game_mode",
+    "claim_player_state",
+    "gateway_player_state",
+    "grant_player_game_mode",
+    "handle_play",
+    "persist_player_state",
+    "player_respawn_request",
+    "player_state",
+    "player_state_update",
+    "poll",
+    "release_player_state",
+    "request_player_respawn",
+    "requires_persistent_player_state",
+    "reset_loading",
+    "respawn",
+    "send_mode_state",
+    "simulate_vertical",
+    "update_player_vitals",
+    "void_death_freezes_until_same_dimension_respawn_and_reloads_chunks"
+  ],
+  "missing": [],
+  "sources": [
+    {
+      "path": "src/connection.rs",
+      "sha256": "4b029605b1429593fcae25aeda91f854bfce5bc469ae0f85601c4657e285bd08",
+      "ranges": [
+        {
+          "function": "handle_play",
+          "start_line": 622,
+          "end_line": 1076
+        },
+        {
+          "function": "reset_loading",
+          "start_line": 1312,
+          "end_line": 1319
+        },
+        {
+          "function": "send_mode_state",
+          "start_line": 1355,
+          "end_line": 1379
+        },
+        {
+          "function": "respawn",
+          "start_line": 1381,
+          "end_line": 1422
+        },
+        {
+          "function": "simulate_vertical",
+          "start_line": 1424,
+          "end_line": 1522
+        },
+        {
+          "function": "persist_player_state",
+          "start_line": 1723,
+          "end_line": 1808
+        },
+        {
+          "function": "poll",
+          "start_line": 1832,
+          "end_line": 2128
+        },
+        {
+          "function": "requires_persistent_player_state",
+          "start_line": 4091,
+          "end_line": 4093
+        },
+        {
+          "function": "void_death_freezes_until_same_dimension_respawn_and_reloads_chunks",
+          "start_line": 4521,
+          "end_line": 4641
+        },
+        {
+          "function": "player_state",
+          "start_line": 4659,
+          "end_line": 4664
+        },
+        {
+          "function": "requires_persistent_player_state",
+          "start_line": 4674,
+          "end_line": 4676
+        },
+        {
+          "function": "player_respawn_request",
+          "start_line": 4677,
+          "end_line": 4684
+        }
+      ],
+      "selection": "functions",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    },
+    {
+      "path": "spacetimedb/src/world.rs",
+      "sha256": "a6c337d32d5934fa82b47072267ab565d14974da6b2ab93c24bd149a0389d765",
+      "ranges": [
+        {
+          "function": "gateway_player_state",
+          "start_line": 60,
+          "end_line": 101
+        },
+        {
+          "function": "claim_player_state",
+          "start_line": 103,
+          "end_line": 123
+        },
+        {
+          "function": "release_player_state",
+          "start_line": 125,
+          "end_line": 133
+        },
+        {
+          "function": "update_player_vitals",
+          "start_line": 136,
+          "end_line": 195
+        },
+        {
+          "function": "request_player_respawn",
+          "start_line": 198,
+          "end_line": 247
+        },
+        {
+          "function": "change_game_mode",
+          "start_line": 284,
+          "end_line": 333
+        },
+        {
+          "function": "grant_player_game_mode",
+          "start_line": 336,
+          "end_line": 355
+        }
+      ],
+      "selection": "whole_file",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    },
+    {
+      "path": "src/gateway.rs",
+      "sha256": "ffa42b08cb84e19a2e1f076103f2fddada9fa2448c778f381853619c11d09ea3",
+      "ranges": [
+        {
+          "function": "player_state",
+          "start_line": 123,
+          "end_line": 125
+        },
+        {
+          "function": "requires_persistent_player_state",
+          "start_line": 126,
+          "end_line": 128
+        },
+        {
+          "function": "player_state_update",
+          "start_line": 132,
+          "end_line": 144
+        },
+        {
+          "function": "player_respawn_request",
+          "start_line": 145,
+          "end_line": 153
+        },
+        {
+          "function": "change_game_mode",
+          "start_line": 154,
+          "end_line": 163
+        },
+        {
+          "function": "player_state",
+          "start_line": 1174,
+          "end_line": 1197
+        },
+        {
+          "function": "requires_persistent_player_state",
+          "start_line": 1199,
+          "end_line": 1201
+        },
+        {
+          "function": "player_state_update",
+          "start_line": 1207,
+          "end_line": 1241
+        },
+        {
+          "function": "player_respawn_request",
+          "start_line": 1243,
+          "end_line": 1266
+        },
+        {
+          "function": "change_game_mode",
+          "start_line": 1268,
+          "end_line": 1292
+        }
+      ],
+      "selection": "functions",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    }
+  ]
+}

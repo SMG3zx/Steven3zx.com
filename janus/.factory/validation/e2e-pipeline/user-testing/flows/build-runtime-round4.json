@@ -1,0 +1,484 @@
+{
+  "groupId": "build-runtime-round4",
+  "testedAt": "2026-03-15T13:48:36Z",
+  "isolation": {
+    "baseUrl": "http://localhost:8080",
+    "email": "e2e-pipeline-ut+build-r4-20260315t134713z@example.com",
+    "projectSlugPrefix": "e2e-pipeline-ut-build-r4-20260315t134713z",
+    "uniqueEmailPrefix": "e2e-pipeline-ut+build-r4-",
+    "uniqueProjectSlugPrefix": "e2e-pipeline-ut-build-r4-",
+    "matrixProjectId": "proj_7993",
+    "timeoutProjectId": "proj_7994"
+  },
+  "toolsUsed": [
+    "curl.exe",
+    "python3",
+    "docker-compose.exe",
+    "podman"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-E2E-010",
+      "title": "WASM language support matrix succeeds for all 8 supported languages",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Create an isolated authenticated user and one project for the language matrix",
+          "expected": "A dedicated project is available so each source-bundle upload maps to this validator only",
+          "observed": "Created projectId=proj_7993 slug=e2e-pipeline-ut-build-r4-20260315t134713z-matrix"
+        },
+        {
+          "action": "Upload 8 representative source bundles sequentially and wait for each build to reach a terminal state",
+          "expected": "Each target language produces one attributable build result",
+          "observed": "Executed 8 sequential uploads against /api/v1/uploads/source-bundles with per-build polling and log capture."
+        },
+        {
+          "action": "Compare each build's terminal status and buildStrategy with the expected 8-language matrix",
+          "expected": "All 8 builds finish with status built and their expected strategy names",
+          "observed": "3 of 8 language builds finished as built with the expected strategy name."
+        }
+      ],
+      "evidence": {
+        "projectId": "proj_7993",
+        "projectSummaryFile": "e2e-pipeline/build-runtime-round4/project-matrix.summary.json",
+        "perLanguage": [
+          {
+            "language": "Rust wasip1",
+            "expectedStrategy": "rust_wasip1",
+            "status": "pass",
+            "reason": "built with expected strategy",
+            "buildId": "bld_c1ac89af7ee9ed147b8b436b",
+            "finalBuild": {
+              "id": "bld_c1ac89af7ee9ed147b8b436b",
+              "projectId": "proj_7993",
+              "sourceRef": "rust-wasip1",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "artifactBucket": "janus-artifacts",
+              "artifactKey": "artifacts/REDACTED/REDACTED",
+              "artifactRuntime": "wasm/wasi-command",
+              "runtimeMode": "stdout-bridge",
+              "status": "built",
+              "logsUrl": "/api/v1/builds/bld_c1ac89af7ee9ed147b8b436b/logs",
+              "buildStrategy": "rust_wasip1",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:47:50.946081793Z",
+              "finishedAt": "2026-03-15T13:47:51.536736589Z",
+              "createdAt": "2026-03-15T13:47:50.683270424Z",
+              "updatedAt": "2026-03-15T13:47:51.536736589Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-rust-wasip1.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip1.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip1.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip1.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip1.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip1.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "Rust wasip2/component",
+            "expectedStrategy": "rust_wasip2_component",
+            "status": "pass",
+            "reason": "built with expected strategy",
+            "buildId": "bld_50ed514a73f2ab30ddec39f3",
+            "finalBuild": {
+              "id": "bld_50ed514a73f2ab30ddec39f3",
+              "projectId": "proj_7993",
+              "sourceRef": "rust-wasip2-component",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "artifactBucket": "janus-artifacts",
+              "artifactKey": "artifacts/REDACTED/REDACTED",
+              "artifactRuntime": "wasm/wasi-http-component",
+              "runtimeMode": "wasi-http-serve",
+              "status": "built",
+              "logsUrl": "/api/v1/builds/bld_50ed514a73f2ab30ddec39f3/logs",
+              "buildStrategy": "rust_wasip2_component",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:47:54.945763182Z",
+              "finishedAt": "2026-03-15T13:47:55.724691629Z",
+              "createdAt": "2026-03-15T13:47:53.861996062Z",
+              "updatedAt": "2026-03-15T13:47:55.724691629Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-rust-wasip2-component.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip2-component.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip2-component.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip2-component.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip2-component.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-rust-wasip2-component.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "Go wasip1",
+            "expectedStrategy": "go_wasip1",
+            "status": "pass",
+            "reason": "built with expected strategy",
+            "buildId": "bld_3554fe8c8ecf3c4bf5a59734",
+            "finalBuild": {
+              "id": "bld_3554fe8c8ecf3c4bf5a59734",
+              "projectId": "proj_7993",
+              "sourceRef": "go-wasip1",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "artifactBucket": "janus-artifacts",
+              "artifactKey": "artifacts/REDACTED/REDACTED",
+              "artifactRuntime": "wasm/wasi-command",
+              "runtimeMode": "stdout-bridge",
+              "status": "built",
+              "logsUrl": "/api/v1/builds/bld_3554fe8c8ecf3c4bf5a59734/logs",
+              "buildStrategy": "go_wasip1",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:47:46.945591987Z",
+              "finishedAt": "2026-03-15T13:47:47.666179342Z",
+              "createdAt": "2026-03-15T13:47:45.972812204Z",
+              "updatedAt": "2026-03-15T13:47:47.666179342Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-go-wasip1.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-go-wasip1.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-go-wasip1.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-go-wasip1.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-go-wasip1.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-go-wasip1.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "TinyGo wasip2",
+            "expectedStrategy": "tinygo_wasip2",
+            "status": "fail",
+            "reason": "final status=failed, buildStrategy=tinygo_wasip2, errorSnippet=build tinygo wasm artifact: stream command tinygo: exit: exit status 1",
+            "buildId": "bld_d5b2682811b94d9c0b768085",
+            "finalBuild": {
+              "id": "bld_d5b2682811b94d9c0b768085",
+              "projectId": "proj_7993",
+              "sourceRef": "tinygo-wasip2",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "runtimeMode": "stdout-bridge",
+              "status": "failed",
+              "logsUrl": "/api/v1/builds/bld_d5b2682811b94d9c0b768085/logs",
+              "errorSnippet": "build tinygo wasm artifact: stream command tinygo: exit: exit status 1",
+              "buildStrategy": "tinygo_wasip2",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:47:58.945866546Z",
+              "finishedAt": "2026-03-15T13:47:58.98532411Z",
+              "createdAt": "2026-03-15T13:47:58.518901513Z",
+              "updatedAt": "2026-03-15T13:47:58.98532411Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-tinygo-wasip2.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-tinygo-wasip2.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-tinygo-wasip2.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-tinygo-wasip2.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-tinygo-wasip2.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-tinygo-wasip2.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "C/C++ wasi-sdk",
+            "expectedStrategy": "c_wasi_sdk",
+            "status": "fail",
+            "reason": "final status=failed, buildStrategy=c_wasi_sdk, errorSnippet=build c/c++ wasm artifact: stream command clang: start: exec: \"clang\": executable file not found in $PATH",
+            "buildId": "bld_a936e60006ff3969d1f52bb0",
+            "finalBuild": {
+              "id": "bld_a936e60006ff3969d1f52bb0",
+              "projectId": "proj_7993",
+              "sourceRef": "c-wasi-sdk",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "runtimeMode": "stdout-bridge",
+              "status": "failed",
+              "logsUrl": "/api/v1/builds/bld_a936e60006ff3969d1f52bb0/logs",
+              "errorSnippet": "build c/c++ wasm artifact: stream command clang: start: exec: \"clang\": executable file not found in $PATH",
+              "buildStrategy": "c_wasi_sdk",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:48:02.945301229Z",
+              "finishedAt": "2026-03-15T13:48:02.961101755Z",
+              "createdAt": "2026-03-15T13:48:01.68697956Z",
+              "updatedAt": "2026-03-15T13:48:02.961101755Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-c-wasi-sdk.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-c-wasi-sdk.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-c-wasi-sdk.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-c-wasi-sdk.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-c-wasi-sdk.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-c-wasi-sdk.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "Python componentize-py",
+            "expectedStrategy": "python_componentize",
+            "status": "fail",
+            "reason": "final status=failed, buildStrategy=python_componentize, errorSnippet=build python wasm artifact: stream command componentize-py: exit: exit status 1",
+            "buildId": "bld_ec7339f8b184d311be0a98c6",
+            "finalBuild": {
+              "id": "bld_ec7339f8b184d311be0a98c6",
+              "projectId": "proj_7993",
+              "sourceRef": "python-componentize",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "runtimeMode": "stdout-bridge",
+              "status": "failed",
+              "logsUrl": "/api/v1/builds/bld_ec7339f8b184d311be0a98c6/logs",
+              "errorSnippet": "build python wasm artifact: stream command componentize-py: exit: exit status 1",
+              "buildStrategy": "python_componentize",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:48:04.945654519Z",
+              "finishedAt": "2026-03-15T13:48:05.273206706Z",
+              "createdAt": "2026-03-15T13:48:04.857750408Z",
+              "updatedAt": "2026-03-15T13:48:05.273206706Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-python-componentize.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-python-componentize.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-python-componentize.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-python-componentize.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-python-componentize.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-python-componentize.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "JS/TS jco",
+            "expectedStrategy": "js_componentize",
+            "status": "fail",
+            "reason": "final status=failed, buildStrategy=js_componentize, errorSnippet=build js/ts wasm artifact: stream command jco: exit: exit status 1",
+            "buildId": "bld_214e7114ceb044d23f33a653",
+            "finalBuild": {
+              "id": "bld_214e7114ceb044d23f33a653",
+              "projectId": "proj_7993",
+              "sourceRef": "js-componentize",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "runtimeMode": "stdout-bridge",
+              "status": "failed",
+              "logsUrl": "/api/v1/builds/bld_214e7114ceb044d23f33a653/logs",
+              "errorSnippet": "build js/ts wasm artifact: stream command jco: exit: exit status 1",
+              "buildStrategy": "js_componentize",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:48:08.945670954Z",
+              "finishedAt": "2026-03-15T13:48:09.124469773Z",
+              "createdAt": "2026-03-15T13:48:07.990870459Z",
+              "updatedAt": "2026-03-15T13:48:09.124469773Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-js-componentize.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-js-componentize.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-js-componentize.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-js-componentize.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-js-componentize.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-js-componentize.logs.stderr.txt"
+            }
+          },
+          {
+            "language": "C#/.NET componentize-dotnet",
+            "expectedStrategy": "dotnet_componentize",
+            "status": "fail",
+            "reason": "final status=failed, buildStrategy=dotnet_componentize, errorSnippet=build dotnet project: stream command dotnet: exit: exit status 1",
+            "buildId": "bld_30c6ba38330e40999dec6439",
+            "finalBuild": {
+              "id": "bld_30c6ba38330e40999dec6439",
+              "projectId": "proj_7993",
+              "sourceRef": "dotnet-componentize",
+              "provider": "upload",
+              "repoUrl": "",
+              "sourceBucket": "janus-artifacts",
+              "sourceKey": "source-bundles/REDACTED/REDACTED",
+              "sourceKind": "zip",
+              "runtimeMode": "stdout-bridge",
+              "status": "failed",
+              "logsUrl": "/api/v1/builds/bld_30c6ba38330e40999dec6439/logs",
+              "errorSnippet": "build dotnet project: stream command dotnet: exit: exit status 1",
+              "buildStrategy": "dotnet_componentize",
+              "attemptCount": 1,
+              "runnerId": "janus-build",
+              "workerId": "janus-build",
+              "startedAt": "2026-03-15T13:48:12.945278932Z",
+              "finishedAt": "2026-03-15T13:48:13.59584141Z",
+              "createdAt": "2026-03-15T13:48:11.140258761Z",
+              "updatedAt": "2026-03-15T13:48:13.59584141Z"
+            },
+            "bundleFile": "e2e-pipeline/build-runtime-round4/temp/matrix-dotnet-componentize.zip",
+            "submitSummaryFile": "e2e-pipeline/build-runtime-round4/matrix-dotnet-componentize.submit-summary.json",
+            "buildPollFile": "e2e-pipeline/build-runtime-round4/matrix-dotnet-componentize.build-poll.json",
+            "logsEvidence": {
+              "requestFile": "e2e-pipeline/build-runtime-round4/matrix-dotnet-componentize.logs.request.json",
+              "bodyFile": "e2e-pipeline/build-runtime-round4/matrix-dotnet-componentize.logs.body.txt",
+              "stderrFile": "e2e-pipeline/build-runtime-round4/matrix-dotnet-componentize.logs.stderr.txt"
+            }
+          }
+        ]
+      },
+      "issues": "Only 3 of 8 representative language builds reached status=built with the expected buildStrategy on the live stack."
+    },
+    {
+      "id": "VAL-E2E-012",
+      "title": "Build logs SSE stream emits snapshot/log/status/heartbeat while build is active",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Upload an intentionally slow JS/TS bundle and open GET /api/v1/builds/{buildId}/logs/stream while the build is active",
+          "expected": "The SSE stream stays open and emits snapshot, incremental log/status events, heartbeat events, and a terminal status event",
+          "observed": "BuildId=bld_5a5a81f1d7fd542b566a680e with SSE events=['snapshot', 'heartbeat', 'log', 'log', 'log', 'log', 'log', 'log', 'status', 'status', 'status', 'heartbeat', 'heartbeat', 'log', 'log', 'log', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat', 'log', 'status', 'heartbeat', 'heartbeat']"
+        },
+        {
+          "action": "Poll the build to completion and retrieve the non-stream log snapshot",
+          "expected": "The terminal build result matches the final SSE status event and the log snapshot contains active-build progress",
+          "observed": "Terminal build status=failed buildStrategy=js_componentize logStatusEvents=['pending', 'cloning', 'building', 'failed']"
+        }
+      ],
+      "evidence": {
+        "projectId": "proj_7994",
+        "buildId": "bld_5a5a81f1d7fd542b566a680e",
+        "submitSummaryFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.submit-summary.json",
+        "buildPollFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.build-poll.json",
+        "logsEvidence": {
+          "requestFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.logs.request.json",
+          "bodyFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.logs.body.txt",
+          "stderrFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.logs.stderr.txt"
+        },
+        "sseRawFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.sse.raw.txt",
+        "sseEventsFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.sse.events.json",
+        "sseStderrFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.sse.stderr.txt",
+        "eventNames": [
+          "snapshot",
+          "heartbeat",
+          "log",
+          "log",
+          "log",
+          "log",
+          "log",
+          "log",
+          "status",
+          "status",
+          "status",
+          "heartbeat",
+          "heartbeat",
+          "log",
+          "log",
+          "log",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "log",
+          "status",
+          "heartbeat",
+          "heartbeat"
+        ],
+        "terminalStatus": "failed",
+        "logLineCount": 11,
+        "logStatusEvents": [
+          "pending",
+          "cloning",
+          "building",
+          "failed"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-025",
+      "title": "Build timeout enforcement",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Confirm the live janus-build container timeout configuration before triggering a deliberately slow build",
+          "expected": "The live stack exposes a short timeout override so timeout enforcement can be observed attributablely",
+          "observed": "janus-build inspect shows JANUS_BUILD_TIMEOUT_TEST_SEC=10 and JANUS_BUILD_TIMEOUT_SEC=300 on the running container."
+        },
+        {
+          "action": "Upload a JS/TS source bundle whose npm preinstall sleeps for 15 seconds",
+          "expected": "The build exceeds the live timeout and is forcibly failed by the build worker",
+          "observed": "Build bld_5a5a81f1d7fd542b566a680e ended status=failed errorSnippet=build timeout exceeded (10s limit): install js dependencies: stream command npm: exit: signal: killed"
+        }
+      ],
+      "evidence": {
+        "projectId": "proj_7994",
+        "buildId": "bld_5a5a81f1d7fd542b566a680e",
+        "submitSummaryFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.submit-summary.json",
+        "buildPollFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.build-poll.json",
+        "logsEvidence": {
+          "requestFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.logs.request.json",
+          "bodyFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.logs.body.txt",
+          "stderrFile": "e2e-pipeline/build-runtime-round4/timeout-js-componentize.logs.stderr.txt"
+        },
+        "stackSummaryFile": "e2e-pipeline/build-runtime-round4/stack-summary.json",
+        "finalBuild": {
+          "id": "bld_5a5a81f1d7fd542b566a680e",
+          "projectId": "proj_7994",
+          "sourceRef": "timeout-js-componentize",
+          "provider": "upload",
+          "repoUrl": "",
+          "sourceBucket": "janus-artifacts",
+          "sourceKey": "source-bundles/REDACTED/REDACTED",
+          "sourceKind": "zip",
+          "runtimeMode": "stdout-bridge",
+          "status": "failed",
+          "logsUrl": "/api/v1/builds/bld_5a5a81f1d7fd542b566a680e/logs",
+          "errorSnippet": "build timeout exceeded (10s limit): install js dependencies: stream command npm: exit: signal: killed",
+          "buildStrategy": "js_componentize",
+          "attemptCount": 1,
+          "runnerId": "janus-build",
+          "workerId": "janus-build",
+          "startedAt": "2026-03-15T13:48:16.945497407Z",
+          "finishedAt": "2026-03-15T13:48:33.939398465Z",
+          "createdAt": "2026-03-15T13:48:15.829567658Z",
+          "updatedAt": "2026-03-15T13:48:33.939398465Z"
+        }
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 3 assertions: 2 passed, 1 failed, 0 blocked."
+}

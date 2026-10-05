@@ -1,0 +1,21 @@
+# Build the Rust Janus API.
+FROM rust:1.90-bookworm AS builder
+WORKDIR /src
+
+COPY janus-rust/Cargo.toml janus-rust/Cargo.lock ./janus-rust/
+COPY janus-rust/src ./janus-rust/src
+COPY janus-rust/web ./janus-rust/web
+RUN cargo build --manifest-path janus-rust/Cargo.toml --release --bin janus-api
+
+# Minimal runtime image for the Rust control plane.
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /src/janus-rust/target/release/janus-api /janus-api
+
+ENV JANUS_HTTP_ADDRESS=0.0.0.0:8080
+ENV JANUS_ENV=production
+EXPOSE 8080
+ENTRYPOINT ["/janus-api"]

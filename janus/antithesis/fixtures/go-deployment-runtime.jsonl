@@ -1,0 +1,1 @@
+{"antithesis_assert":{"details":{"deployment_id":"dep_reference","endpoint":"http://runtime.local","runtime_id":"run_reference"},"assert_type":"always","condition":true,"display_type":"Always","id":"running deployments have runtime identity and endpoint","message":"running deployments have runtime identity and endpoint","must_hit":true,"hit":true}}

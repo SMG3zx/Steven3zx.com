@@ -1,0 +1,150 @@
+{
+    "groupId":  "dashboard-shells-round2",
+    "testedAt":  "2026-03-15T01:10:47.8156270Z",
+    "isolation":  {
+                      "appUrl":  "http://localhost:3000",
+                      "apiUrl":  "http://localhost:8080",
+                      "browserSession":  "cca72486b76c__shells2",
+                      "accountEmail":  "frontend-hardening-ut+shells-round2-20260315@example.com",
+                      "password":  "[redacted test password]",
+                      "evidenceDir":  "frontend-hardening/dashboard-shells-round2"
+                  },
+    "toolsUsed":  [
+                      "agent-browser"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-FH-012",
+                           "title":  "Quick Actions navigate to correct panels",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /janus?view=all and click each of the seven Quick Action buttons from the dashboard shell",
+                                             "expected":  "Each action switches to the correct workspace view and leaves the destination panel visible in the viewport",
+                                             "observed":  "Create Project -\u003e /janus?view=projects with new-project-panel top 268 / bottom 686; Import Repo -\u003e /janus?view=pipeline with repo-import-panel top -820 / bottom -534 (outside viewport); Upload Bundle -\u003e /janus?view=pipeline with artifact-uploads-panel top -820 / bottom -240 (outside viewport); Review Builds -\u003e /janus?view=pipeline with builds-panel top -256 / bottom -41 (outside viewport); Create Deployment -\u003e /janus?view=pipeline with deployments-panel top -25 / bottom 569 (partially visible); Open Endpoint -\u003e /janus?view=pipeline with domains-panel top 585 / bottom 800; API Routes -\u003e /janus?view=reference with api-panel top 332 / bottom 800."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-dashboard-all-annotated.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-create-project-result.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-import-repo-result.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-upload-bundle-result.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-review-builds-result.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-create-deployment-result.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-open-endpoint-result.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-012-api-routes-result.png"
+                                                            ],
+                                            "consoleErrors":  "none observed via agent-browser errors during the quick-action checks",
+                                            "network":  "Quick Actions only changed the client-side /janus?view=projects|pipeline|reference route; no backend API call was required for the navigation itself."
+                                        },
+                           "issues":  "Import Repo, Upload Bundle, and Review Builds still overscrolled past their destination panels, leaving the targets completely outside the viewport after the workspace view switched."
+                       },
+                       {
+                           "id":  "VAL-FH-021",
+                           "title":  "Error boundaries catch and display errors gracefully",
+                           "status":  "blocked",
+                           "steps":  [
+                                         {
+                                             "action":  "Create the isolated account and sign into the real dashboard auth panel from /janus?view=auth",
+                                             "expected":  "The browser surface is authenticated so boundary-wrapped dashboard sections can be exercised through normal user actions",
+                                             "observed":  "The auth panel successfully created frontend-hardening-ut+shells-round2-20260315@example.com and then signed in the same account, leaving the dashboard usable in a signed-in state."
+                                         },
+                                         {
+                                             "action":  "Navigate the signed-in dashboard plus the /billing and /monitoring shell routes and check whether any real user action surfaces the boundary fallback UI",
+                                             "expected":  "A component-level crash reachable from the real UI renders a user-friendly fallback with retry/navigation guidance",
+                                             "observed":  "No user-triggerable crash path surfaced from the dashboard or shell routes; visible text never included fallback affordances such as \u0027Try Again\u0027, \u0027Something went wrong\u0027, or the section error titles, and no blank-screen crash occurred."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-021-auth-signed-in.png",
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-021-dashboard-signed-in.png"
+                                                            ],
+                                            "consoleErrors":  "none observed; agent-browser errors stayed empty while exercising the signed-in dashboard and shell routes",
+                                            "network":  "The auth panel completed the real sign-up/sign-in flows for the isolated account, but no boundary-specific fallback or crash behavior was exposed afterward."
+                                        },
+                           "issues":  "Blocked because no real user-surface action exposed a component-level crash that would surface the error-boundary fallback UI."
+                       },
+                       {
+                           "id":  "VAL-FH-025",
+                           "title":  "Billing page renders with proper states",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /billing in the browser session",
+                                             "expected":  "The billing route shows loading, empty, and error states around Stripe-backed billing data",
+                                             "observed":  "The route renders a static Billing / Coming Soon placeholder with back-to-dashboard links only."
+                                         },
+                                         {
+                                             "action":  "Inspect the page for billing-specific shells or retry UI",
+                                             "expected":  "At minimum, a loading shell, invoice empty state, or user-friendly error state is present",
+                                             "observed":  "No loading indicator, invoice empty state, or error shell appeared; the page stayed on the static placeholder copy."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-025-billing-page.png"
+                                                            ],
+                                            "consoleErrors":  "none observed while opening /billing",
+                                            "network":  "Navigating to /billing only rendered the route document; no billing-specific data shell or follow-on Stripe/invoice fetch state surfaced in the UI."
+                                        },
+                           "issues":  "The billing route exists, but it still renders only a static Coming Soon placeholder instead of the required loading, empty, and error states."
+                       },
+                       {
+                           "id":  "VAL-FH-026",
+                           "title":  "Monitoring page renders with proper states",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Open /monitoring in the browser session",
+                                             "expected":  "The monitoring route shows loading, empty, and user-friendly error states for deployment metrics",
+                                             "observed":  "The route renders a static Monitoring / Coming Soon placeholder with back-to-dashboard links only."
+                                         },
+                                         {
+                                             "action":  "Inspect the page for monitoring-specific shells or retry UI",
+                                             "expected":  "At minimum, a loading shell, empty metrics state, or user-friendly error state is present",
+                                             "observed":  "No loading indicator, empty metrics state, or error shell appeared; the page remained a static placeholder."
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+                                                                "frontend-hardening/dashboard-shells-round2/VAL-FH-026-monitoring-page.png"
+                                                            ],
+                                            "consoleErrors":  "none observed while opening /monitoring",
+                                            "network":  "Navigating to /monitoring only rendered the route document; no monitoring/metrics loading or error UI surfaced from the page."
+                                        },
+                           "issues":  "The monitoring route exists, but it still renders only a static Coming Soon placeholder instead of the required loading, empty, and error states."
+                       }
+                   ],
+    "frictions":  [
+                      {
+                          "description":  "Quick Action validation required DOM bounding-box checks because switching from All to Pipeline reflowed the page after the click, making screenshots alone ambiguous for viewport coverage.",
+                          "resolved":  true,
+                          "resolution":  "Recorded getBoundingClientRect() positions for each target panel and paired them with screenshots to determine whether the target remained in the viewport.",
+                          "affectedAssertions":  [
+                                                     "VAL-FH-012"
+                                                 ]
+                      },
+                      {
+                          "description":  "agent-browser get text body on these Next.js routes included streamed flight payload text after the visible page copy, which added noise while checking for fallback/placeholder text.",
+                          "resolved":  true,
+                          "resolution":  "Used screenshots plus targeted visible-text presence checks for boundary/fallback markers instead of relying on the raw body dump alone.",
+                          "affectedAssertions":  [
+                                                     "VAL-FH-021",
+                                                     "VAL-FH-025",
+                                                     "VAL-FH-026"
+                                                 ]
+                      }
+                  ],
+    "blockers":  [
+                     {
+                         "description":  "No real user-surface action exposed a component-level crash that would surface an error-boundary fallback.",
+                         "affectedAssertions":  [
+                                                    "VAL-FH-021"
+                                                ],
+                         "quickFixAttempted":  "Created and signed into the isolated account, exercised the signed-in dashboard and shell routes, and explicitly checked for boundary fallback text such as \u0027Try Again\u0027, \u0027Something went wrong\u0027, or the section error titles, but no crash/fallback UI became reachable."
+                     }
+                 ],
+    "summary":  "Tested 4 assigned assertions: 3 failed (VAL-FH-012, VAL-FH-025, VAL-FH-026) and 1 was blocked (VAL-FH-021). Quick-action overscroll still affects Import Repo, Upload Bundle, and Review Builds; /billing and /monitoring still render static Coming Soon placeholders; and no real-browser crash path surfaced the error-boundary UI."
+}

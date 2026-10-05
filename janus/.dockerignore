@@ -1,0 +1,15 @@
+.git
+.gitignore
+.dockerignore
+
+**/node_modules
+**/dist
+**/test-results
+**/.cache
+**/.vite
+**/.turbo
+
+backend/janus-api/.janus-go-cache
+artifacts
+results.json
+.janus

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.git/
+.openai/
+public/models/*.glb
+public/models/*.gltf
+public/models/*.bin
+data/adam/

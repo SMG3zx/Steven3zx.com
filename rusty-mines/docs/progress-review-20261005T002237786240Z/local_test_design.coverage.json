@@ -1,0 +1,38 @@
+{
+  "requested": [
+    "block_actions_reconcile_rejections_confirm_commits_and_isolate_late_results",
+    "chunk_load_reconciles_snapshot_changes_during_and_after_batch_emission",
+    "void_death_freezes_until_same_dimension_respawn_and_reloads_chunks"
+  ],
+  "found": [
+    "block_actions_reconcile_rejections_confirm_commits_and_isolate_late_results",
+    "chunk_load_reconciles_snapshot_changes_during_and_after_batch_emission",
+    "void_death_freezes_until_same_dimension_respawn_and_reloads_chunks"
+  ],
+  "missing": [],
+  "sources": [
+    {
+      "path": "src/connection.rs",
+      "sha256": "4b029605b1429593fcae25aeda91f854bfce5bc469ae0f85601c4657e285bd08",
+      "ranges": [
+        {
+          "function": "block_actions_reconcile_rejections_confirm_commits_and_isolate_late_results",
+          "start_line": 4310,
+          "end_line": 4497
+        },
+        {
+          "function": "void_death_freezes_until_same_dimension_respawn_and_reloads_chunks",
+          "start_line": 4521,
+          "end_line": 4641
+        },
+        {
+          "function": "chunk_load_reconciles_snapshot_changes_during_and_after_batch_emission",
+          "start_line": 4888,
+          "end_line": 5000
+        }
+      ],
+      "selection": "functions",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    }
+  ]
+}

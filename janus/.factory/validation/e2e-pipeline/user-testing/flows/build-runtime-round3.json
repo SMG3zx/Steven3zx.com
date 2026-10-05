@@ -1,0 +1,191 @@
+{
+  "groupId": "build-runtime-round3",
+  "testedAt": "2026-03-15T12:17:52.736342+00:00",
+  "isolation": {
+    "baseUrl": "http://localhost:8080",
+    "email": "e2e-pipeline-ut+build-r3-20260315t121752z@example.com",
+    "projectSlug": "e2e-pipeline-ut-build-r3-20260315t121752z",
+    "projectId": "proj_7987",
+    "buildId": "bld_e0e7188057175a0f95b5e22f",
+    "uniqueTestIdentityPrefix": "e2e-pipeline-ut+build-r3-",
+    "uniqueProjectSlugPrefix": "e2e-pipeline-ut-build-r3-"
+  },
+  "toolsUsed": [
+    "curl.exe",
+    "podman",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-E2E-010",
+      "title": "WASM language support matrix succeeds for all 8 supported languages",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Verify current stack and janus-build availability",
+          "expected": "janus-build present after the required no-cache rebuild so language builds can be exercised",
+          "observed": "podman ps showed running services janus-api, janus-control, janus-runner, minio, postgres; janus-build was absent, while setup evidence recorded the failed no-cache rebuild and provided the root cause."
+        },
+        {
+          "action": "Create isolated auth session and project, then enqueue a fresh source-bundle build",
+          "expected": "A representative build can start so the 8 language pipelines can be attributed on the current stack",
+          "observed": "POST /api/v1/uploads/source-bundles -> 202; operation succeeded with buildId=bld_e0e7188057175a0f95b5e22f but the scheduled buildJob stayed status=pending with runnerId empty and workerId null."
+        },
+        {
+          "action": "Poll the fresh build for terminal progress",
+          "expected": "Build progresses to built/failed with a concrete buildStrategy so language-specific behavior can be measured",
+          "observed": "Six GET /api/v1/builds?projectId=... polls over about 25 seconds all returned the same build in pending with startedAt and finishedAt unset (0001-01-01T00:00:00Z)."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/build-runtime-round3/setup-rebuild-summary.json",
+          "e2e-pipeline/build-runtime-round3/janus-build-no-cache-rebuild.txt",
+          "e2e-pipeline/build-runtime-round3/podman-ps.json",
+          "e2e-pipeline/build-runtime-round3/source-upload.request.json",
+          "e2e-pipeline/build-runtime-round3/source-upload.body.txt",
+          "e2e-pipeline/build-runtime-round3/source-upload-poll-01.body.txt",
+          "e2e-pipeline/build-runtime-round3/builds-list-01.body.txt",
+          "e2e-pipeline/build-runtime-round3/builds-list-06.body.txt",
+          "e2e-pipeline/build-runtime-round3/build-runtime-round3-observations.json"
+        ],
+        "network": [
+          "POST /api/v1/uploads/source-bundles -> 202",
+          "GET /api/v1/operations/op_8f4fd5e9b1784fba43baafe0 -> 200 status=succeeded",
+          "GET /api/v1/builds?projectId=proj_7987 -> 200 status=pending (6 polls)"
+        ],
+        "partialObservableBehavior": {
+          "buildId": "bld_e0e7188057175a0f95b5e22f",
+          "initialBuildStrategy": "unknown",
+          "finalObservedStatus": "pending",
+          "runnerId": null,
+          "workerId": null
+        }
+      },
+      "issues": "janus-build is absent from the live stack because the required no-cache rebuild failed at backend/janus-api/Containerfile:90 when `dotnet new install BytecodeAlliance.ComponentizeSharp.Templates` exited 103; no cached janus-build image was used as a workaround."
+    },
+    {
+      "id": "VAL-E2E-012",
+      "title": "Build logs SSE stream emits snapshot/log/status/heartbeat while build is active",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Reuse the fresh build and inspect the non-stream logs endpoint",
+          "expected": "Logs show an in-progress build lifecycle that can be streamed live",
+          "observed": "GET /api/v1/builds/bld_e0e7188057175a0f95b5e22f/logs returned 200 with one pending line/statusEvent only."
+        },
+        {
+          "action": "Open the SSE logs stream for 12 seconds",
+          "expected": "snapshot followed by incremental log and status events, heartbeat events, and a terminal status when the build completes",
+          "observed": "The stream opened with HTTP 200 and emitted one snapshot plus repeated heartbeat events, but no log events, no standalone status events, and no terminal status because the build never left pending while janus-build was absent."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/build-runtime-round3/build-logs.body.txt",
+          "e2e-pipeline/build-runtime-round3/VAL-E2E-012-build-logs-stream.headers.txt",
+          "e2e-pipeline/build-runtime-round3/VAL-E2E-012-build-logs-stream.raw.txt",
+          "e2e-pipeline/build-runtime-round3/VAL-E2E-012-build-logs-stream.stderr.txt",
+          "e2e-pipeline/build-runtime-round3/VAL-E2E-012-build-logs-stream.events.json",
+          "e2e-pipeline/build-runtime-round3/build-runtime-round3-observations.json"
+        ],
+        "network": [
+          "GET /api/v1/builds/bld_e0e7188057175a0f95b5e22f/logs -> 200",
+          "GET /api/v1/builds/bld_e0e7188057175a0f95b5e22f/logs/stream -> 200 (client timed out after 12s while stream stayed open)"
+        ],
+        "eventSequence": [
+          "snapshot",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat",
+          "heartbeat"
+        ],
+        "consoleErrors": "n/a (API flow)",
+        "partialObservableBehavior": {
+          "logStatus": "pending",
+          "snapshotSeen": true,
+          "heartbeatSeen": true,
+          "logEventSeen": false,
+          "statusEventSeen": false
+        }
+      },
+      "issues": "janus-build is absent from the live stack because the required no-cache rebuild failed at backend/janus-api/Containerfile:90 when `dotnet new install BytecodeAlliance.ComponentizeSharp.Templates` exited 103; no cached janus-build image was used as a workaround. Partial current-stack behavior: the SSE transport itself is reachable and sends snapshot+heartbeat on a pending build, but the required active-build log/status progression cannot be exercised."
+    },
+    {
+      "id": "VAL-E2E-025",
+      "title": "Build timeout enforcement",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Assess whether a fresh build can enter execution on the current stack",
+          "expected": "A build can start running so timeout enforcement can be observed on an overlong build",
+          "observed": "The representative source-bundle build never left pending during the observation window, so the stack never reached the point where timeout logic could apply."
+        },
+        {
+          "action": "Check whether any timeout-specific failure surfaced on the fresh build",
+          "expected": "A long-running build eventually fails with a timeout snippet and terminal failed status",
+          "observed": "No timeout-related state or errorSnippet appeared; the build remained pending with no worker assignment, so timeout enforcement was not reached."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/build-runtime-round3/setup-rebuild-summary.json",
+          "e2e-pipeline/build-runtime-round3/podman-ps.json",
+          "e2e-pipeline/build-runtime-round3/source-upload-poll-01.body.txt",
+          "e2e-pipeline/build-runtime-round3/builds-list-01.body.txt",
+          "e2e-pipeline/build-runtime-round3/builds-list-06.body.txt",
+          "e2e-pipeline/build-runtime-round3/build-runtime-round3-observations.json"
+        ],
+        "network": [
+          "POST /api/v1/uploads/source-bundles -> 202",
+          "GET /api/v1/builds?projectId=proj_7987 -> 200 status=pending (6 polls)"
+        ],
+        "partialObservableBehavior": {
+          "buildId": "bld_e0e7188057175a0f95b5e22f",
+          "observedStatuses": [
+            "pending",
+            "pending",
+            "pending",
+            "pending",
+            "pending",
+            "pending"
+          ],
+          "startedAt": "0001-01-01T00:00:00Z",
+          "finishedAt": "0001-01-01T00:00:00Z"
+        }
+      },
+      "issues": "janus-build is absent from the live stack because the required no-cache rebuild failed at backend/janus-api/Containerfile:90 when `dotnet new install BytecodeAlliance.ComponentizeSharp.Templates` exited 103; no cached janus-build image was used as a workaround. Because build execution never started, there was no safe, attributable way to drive a timeout on the current stack."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "GET /readyz still returned ok with only database/actor checks even though podman ps showed janus-build absent, so stack readiness did not surface the missing build worker directly.",
+      "resolved": false,
+      "resolution": "Corroborated the setup issue with podman ps plus a fresh source-upload build that remained pending.",
+      "affectedAssertions": [
+        "VAL-E2E-010",
+        "VAL-E2E-012",
+        "VAL-E2E-025"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "janus-build is absent from the live stack because the required no-cache rebuild failed at backend/janus-api/Containerfile:90 when `dotnet new install BytecodeAlliance.ComponentizeSharp.Templates` exited 103; no cached janus-build image was used as a workaround.",
+      "affectedAssertions": [
+        "VAL-E2E-010",
+        "VAL-E2E-012",
+        "VAL-E2E-025"
+      ],
+      "quickFixAttempted": "Used the current stack as-is, created a fresh isolated user/project/build, polled the build for about 25 seconds, and probed the logs plus SSE endpoints without restarting services or using cached janus-build images."
+    }
+  ],
+  "summary": "Tested 3 assertions: 0 passed, 0 failed, 3 blocked. The current stack accepted build requests but, with janus-build absent after the failed no-cache rebuild, the fresh build stayed pending, SSE only emitted snapshot plus heartbeat, and timeout enforcement could not be reached."
+}

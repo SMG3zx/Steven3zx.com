@@ -1,0 +1,34 @@
+{
+  "featureId": "e2e-auth-flow",
+  "reviewedAt": "2026-03-15T07:22:14.320847Z",
+  "commitId": "c96a16d",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds substantial auth lifecycle coverage, but it still misses two required parts of the contract. The new suite does not actually verify the async poll step for signup/signin, and the refresh path still does not prove or guarantee that a new JWT is issued.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/auth_e2e_test.go",
+        "line": 578,
+        "severity": "blocking",
+        "description": "The full-flow test never exercises the required `202 -> poll -> user created/session exchange` behavior. `stubSubmitter` auto-generates operation IDs as `op_stub_<kind>` (`auth_e2e_test.go:117-129`), but the test manually seeds different succeeded operations at lines 566 and 578 and exchanges `op_signin_alice` at line 582 instead of polling the `operationId`/`pollUrl` returned by signup/signin. There is no call to `OperationByIDRoute` anywhere in this file, so a regression where auth operations never expose the expected `result.user` payload via `/api/v1/operations/{id}` would still pass this feature even though polling is explicitly required by the feature description and VAL-E2E-001/002." 
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/handler.go",
+        "line": 112,
+        "severity": "blocking",
+        "description": "`AuthRefresh` still does not reliably issue a new JWT. `SetAccessCookie` signs tokens using only `sub`, `email`, `type`, and second-resolution `exp`/`iat` claims (`handler.go:112-120`), so a refresh performed in the same second as the original signin/exchange can reproduce the identical token value. The new tests weakened the requirement instead of catching/fixing it: `TestAuthRefresh_WithValidCookie` and the full-flow test only assert that the refreshed cookie is non-empty (`auth_e2e_test.go:420-446` and `:549-645`). That leaves the explicit `refresh ... issues new JWT` requirement and VAL-E2E-019 unmet." 
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's procedure is not being enforced reliably for API-test features. This worker marked `followedProcedure=true`, but the session evidence shows the new test file was created before any red-phase targeted test run and no manual `curl.exe` verification / `interactiveChecks` were recorded.",
+      "evidence": "`E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md:27-30` requires failing-test-first TDD and `:44-48` requires manual verification recorded in `interactiveChecks`; `C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-15T06-31-57-151Z__e2e-auth-flow__739580cb-2dc2-435b-a7f3-d7975b5dba90.json:13-16` records only `commandsRun` and `:121-123` still sets `followedProcedure=true`; `C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\worker-transcripts.jsonl:48` shows the targeted `TestAuth` run happened only after `auth_e2e_test.go` had already been created."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed commit `c96a16d` plus the worker handoff/transcript for `e2e-auth-flow`. Result: fail. The feature added useful auth and unauthenticated-route coverage, but it still does not verify the required operation polling flow and it leaves the refresh-new-JWT contract unproven and still vulnerable to same-second token reuse."
+}

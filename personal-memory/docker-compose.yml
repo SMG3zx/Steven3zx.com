@@ -1,0 +1,90 @@
+services:
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/change-me
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p change-me 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NEO4J_URI: neo4j://neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-me}
+      MEMORY_HOST: 0.0.0.0
+      CODEX_APP_SERVER_COMMAND: ${CODEX_APP_SERVER_COMMAND:-codex}
+      CODEX_HOME: /data/codex
+      AUDIT_FILE: /data/codex/audit.json
+      CONSOLIDATION_REQUIRE_APPROVAL: ${CONSOLIDATION_REQUIRE_APPROVAL:-0}
+      CONSOLIDATION_MODE: ${CONSOLIDATION_MODE:-model}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    ports:
+      - "4781:4781"
+    volumes:
+      - codex-data:/data/codex
+    command: ["bun", "run", "dev"]
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NEO4J_URI: neo4j://neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-me}
+      CONSOLIDATION_REQUIRE_APPROVAL: ${CONSOLIDATION_REQUIRE_APPROVAL:-0}
+      CONSOLIDATION_MODE: ${CONSOLIDATION_MODE:-model}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    command: ["bun", "run", "worker"]
+
+  # Optional local inference services. Start with:
+  # docker compose --profile local-models up -d
+  # Then set EMBEDDING_BASE_URL=http://embedding:8080 and
+  # RERANKER_BASE_URL=http://reranker:8080 in .env before starting api/worker.
+  embedding:
+    image: ${TEI_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.9}
+    profiles: ["local-models"]
+    restart: "no"
+    command: ["--model-id", "${EMBEDDING_MODEL_ID:-Qwen/Qwen3-Embedding-0.6B}"]
+    ports:
+      - "${EMBEDDING_HOST_PORT:-18080}:80"
+    volumes:
+      - model-cache:/data
+
+  reranker:
+    image: ${TEI_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.9}
+    profiles: ["local-models"]
+    restart: "no"
+    command: ["--model-id", "${RERANKER_MODEL_ID:-BAAI/bge-reranker-base}"]
+    ports:
+      - "${RERANKER_HOST_PORT:-18081}:80"
+    volumes:
+      - model-cache:/data
+
+volumes:
+  neo4j-data:
+  neo4j-logs:
+  model-cache:
+  codex-data:

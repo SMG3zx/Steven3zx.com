@@ -1,0 +1,44 @@
+{
+  "featureId": "fh-dashboard-panels",
+  "reviewedAt": "2026-03-14T18:48:36.6045381-05:00",
+  "commitId": "6588e49",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Commit 6588e49 adds broad panel test coverage and removes the remaining legacy dashboard CSS, and the current dashboard implementation covers most of the fh-dashboard-panels scope. The feature still misses one explicit requirement, though: the UploadsPanel forms do not actually reset after submission because the handlers only call form.reset() while the select/text inputs are controlled from React state. The new UploadsPanel tests also miss that required behavior, so the regression slipped through despite the handoff claiming comprehensive coverage.",
+    "issues": [
+      {
+        "file": "frontend/web/app/janus/page.tsx",
+        "line": 407,
+        "severity": "blocking",
+        "description": "Both upload handlers try to reset the forms with `event.currentTarget.reset()` (source at lines 403-407, artifact at lines 432-436), but UploadsPanel receives controlled values from `uploads` state (`sourceProjectId`, `sourceRef`, `artifactProjectId`, `artifactSourceRef`, `artifactRuntime`) at lines 574-579 and mutates that same state at lines 586-591. Because the controlled values are never cleared, only the file input resets; the previously selected project/ref/runtime fields remain populated after upload, so the required UploadsPanel form-reset behavior is not actually implemented."
+      },
+      {
+        "file": "frontend/web/app/janus/components/__tests__/UploadsPanel.test.tsx",
+        "line": 42,
+        "severity": "non_blocking",
+        "description": "The new UploadsPanel suite only checks rendering, messages, disabled state, loading text, and file input presence. It never exercises submit/reset behavior through the page-level handlers, so the feature's required form-reset behavior went untested even though the handoff describes the panel coverage as comprehensive."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill and procedure bookkeeping are out of sync on manual verification. The skill requires starting the dev server, manually verifying UI changes, and recording `interactiveChecks`, but this worker was still marked `followedProcedure: true` with only command-line validation recorded.",
+      "evidence": "E:\\Janus\\.factory\\skills\\frontend-worker\\SKILL.md:47-53,75-77 requires manual verification plus `interactiveChecks`; C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-14T23-35-56-510Z__fh-dashboard-panels__6c725515-14e2-45e1-a231-e36ac087ed81.json:13-30 records only `commandsRun`, while lines 390-393 mark `followedProcedure` true."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared architecture notes are stale for milestone 3 completion. They still describe Tailwind migration and dashboard decomposition as future work even though the repo already contains extracted dashboard components and a trimmed globals.css.",
+      "evidence": "E:\\Janus\\.factory\\library\\architecture.md:45 says Tailwind is a future target and line 50 says `/janus` 'will be decomposed into proper components'; the repo already has frontend/web/app/janus/components/ProjectsPanel.tsx, BuildsPanel.tsx, DeploymentsPanel.tsx, DomainsPanel.tsx, etc."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Feature provenance is split across two handoffs under the same feature id. The current feature record points at session `6c725515-14e2-45e1-a231-e36ac087ed81`, but the earlier `3503393d-ffa9-4f77-879a-9ebde2140f24` handoff contains the actual panel decomposition while the later handoff explicitly says it only added tests/CSS cleanup after that migration already existed.",
+      "evidence": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\features.json:1364-1368 marks session `6c725515-14e2-45e1-a231-e36ac087ed81` as the completed worker; handoff 2026-03-14T23-27-14-767Z__fh-dashboard-panels__3503393d-ffa9-4f77-879a-9ebde2140f24.json:6-10 says commit `9c0a646` decomposed the dashboard into responsive Tailwind components; handoff 2026-03-14T23-35-56-510Z__fh-dashboard-panels__6c725515-14e2-45e1-a231-e36ac087ed81.json:10-11 says the panels were already migrated by the prior worker and this session added tests plus globals.css cleanup."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed worker session 6c725515-14e2-45e1-a231-e36ac087ed81 / commit 6588e49 and the current dashboard panel code. The session adds useful tests and CSS cleanup, but fh-dashboard-panels still fails because the UploadsPanel forms do not actually reset their controlled values after submission. Shared-state gaps also remain around frontend skill procedure tracking, stale architecture notes, and split feature provenance across two fh-dashboard-panels handoffs."
+}

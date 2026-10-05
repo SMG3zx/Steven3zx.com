@@ -1,0 +1,85 @@
+{
+  "groupId": "backend-cli",
+  "surface": "backend-cli",
+  "testedAt": "2026-03-14T19:33:49.8163409Z",
+  "isolation": {
+    "surface": "backend-cli",
+    "workDir": "E:\\Janus\\backend\\janus-api",
+    "database": "janus_ut_bh_20260314143345",
+    "databasePrefix": "janus_ut_bh_",
+    "evidenceDir": "backend-hardening/backend-cli-round3"
+  },
+  "toolsUsed": [
+    "PowerShell",
+    "go build",
+    "temporary migration helper (removed after run)",
+    "podman exec",
+    "psql",
+    "pg_dump"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-BH-001",
+      "title": "Database Migration Up/Down Reversibility",
+      "status": "pass",
+      "summary": "migrate up/down/up succeeded on a fresh temporary database; all recorded exit codes were 0, migrate down returned version 0, only schema_migrations tooling objects remained after down, and the normalized first/second schema dumps matched.",
+      "steps": [
+        {
+          "action": "Create a fresh temporary PostgreSQL database",
+          "expected": "An isolated janus_ut_bh_ database is ready for validation",
+          "observed": "Created janus_ut_bh_20260314143345 successfully (drop/create exit codes 0)"
+        },
+        {
+          "action": "Run migrate up and capture schema dump",
+          "expected": "The latest migration version applies cleanly",
+          "observed": "first up exit code 0; helper reported 'up: success'; version check returned 'version=3 dirty=false'"
+        },
+        {
+          "action": "Run migrate down and inspect remaining public objects",
+          "expected": "Migration returns to version 0 with no application tables/sequences/indexes remaining",
+          "observed": "down exit code 0; version check returned 'version=0 dirty=false'; remaining public objects were only index:schema_migrations_pkey and table:schema_migrations"
+        },
+        {
+          "action": "Run migrate up again and compare normalized schema dumps",
+          "expected": "Second up succeeds and the application schema matches the first up",
+          "observed": "second up exit code 0; version check returned 'version=3 dirty=false'; normalized schema diff file was empty"
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "backend-hardening/backend-cli-round3/VAL-BH-001-migration-run.log",
+          "backend-hardening/backend-cli-round3/helper-build.log",
+          "backend-hardening/backend-cli-round3/db-drop-before.txt",
+          "backend-hardening/backend-cli-round3/db-create.txt",
+          "backend-hardening/backend-cli-round3/first-up.log",
+          "backend-hardening/backend-cli-round3/version-after-first-up.txt",
+          "backend-hardening/backend-cli-round3/down.log",
+          "backend-hardening/backend-cli-round3/version-after-down.txt",
+          "backend-hardening/backend-cli-round3/objects-after-down.txt",
+          "backend-hardening/backend-cli-round3/second-up.log",
+          "backend-hardening/backend-cli-round3/version-after-second-up.txt",
+          "backend-hardening/backend-cli-round3/db-drop-after.txt"
+        ],
+        "schemaDumps": [
+          "backend-hardening/backend-cli-round3/schema-after-first-up.sql",
+          "backend-hardening/backend-cli-round3/schema-after-second-up.sql",
+          "backend-hardening/backend-cli-round3/schema-diff-normalized.txt"
+        ],
+        "summary": "backend-hardening/backend-cli-round3/VAL-BH-001-summary.json"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The helper path referenced in the assignment was not present in the checked-out module tree, so an equivalent temporary helper was created inside backend/janus-api/cmd, used for the run, and deleted afterward.",
+      "resolved": true,
+      "resolution": "Built and used a temporary helper within the module tree, then removed both the helper source directory and compiled binary in cleanup.",
+      "affectedAssertions": [
+        "VAL-BH-001"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 1 assertion: 1 passed. VAL-BH-001 now passes on a fresh temporary database with clean up/down/up exit codes and matching normalized schema dumps."
+}

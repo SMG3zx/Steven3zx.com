@@ -1,0 +1,289 @@
+{
+  "groupId": "auth-surface",
+  "testedAt": "2026-03-14T19:50:42.3329746-05:00",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "email": "frontend-hardening-ut+auth-rerun-20260314194206@example.com",
+    "password": "[redacted test password]",
+    "desktopViewport": "1280x800",
+    "tabletViewport": "768x900",
+    "mobileViewport": "375x900",
+    "browserSession": "auth-surface-rerun"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "curl.exe"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-004",
+      "title": "Tailwind CSS replaces globals.css without layout regression",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open / at 1280x800 and inspect the landing layout.",
+          "expected": "Hero, cards, spacing, typography, and CTA alignment render without desktop regression.",
+          "observed": "The hero, signed-out CTA row, capability cards, and section spacing rendered cleanly with no visible overlap or broken styling."
+        },
+        {
+          "action": "Open /get-started at 1280x800 and inspect the dashboard shell.",
+          "expected": "Sidebar, topbar, quick actions, guide cards, and form panels render with consistent spacing and alignment.",
+          "observed": "The dashboard rendered with a stable sidebar, top status chips, quick actions, and aligned form panels with no obvious layout regression."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-006-landing-signed-out-desktop.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-004-get-started-desktop.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "Visual/layout assertion only."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-005",
+      "title": "Responsive design works at mobile and tablet breakpoints",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /janus at 768px width.",
+          "expected": "Dashboard adapts to tablet layout, exposes a sidebar toggle, and avoids horizontal overflow.",
+          "observed": "The tablet dashboard showed the toggle sidebar control, stacked quick actions cleanly, and reported scrollWidth 768 at innerWidth 768."
+        },
+        {
+          "action": "Open / and /sign-in at 375px width.",
+          "expected": "Landing and auth surfaces remain usable on mobile with no clipping, overlap, or horizontal overflow.",
+          "observed": "The landing page and sign-in card stayed readable and tappable at mobile width, and both reported scrollWidth 375 at innerWidth 375."
+        },
+        {
+          "action": "Open /janus at 375px width.",
+          "expected": "Dashboard controls collapse into a mobile-friendly single-column layout without overflow.",
+          "observed": "The dashboard stacked into a narrow-screen layout with the sidebar toggle still available and no horizontal overflow."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-005-dashboard-tablet.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-005-landing-tablet.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-005-dashboard-mobile.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-005-landing-mobile.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-005-sign-in-mobile.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "DOM checks reported no horizontal overflow at the tested 768px and 375px breakpoints."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-006",
+      "title": "Landing page renders and adapts to auth state",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Open / while signed out.",
+          "expected": "The landing page shows the hero, capability sections, flow content, and a signed-out primary CTA to /sign-up.",
+          "observed": "The signed-out landing page loaded and showed the primary CTA text \"Sign Up & Start Building\" linking to /sign-up."
+        },
+        {
+          "action": "Attempt to complete auth and revisit / in a signed-in state.",
+          "expected": "The primary CTA changes to \"Open Dashboard\" and the signed-in state resolves successfully.",
+          "observed": "The signed-in state could not be reached because every auth mutation failed after the initial 202 response with a service_unavailable grain-activation error."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-006-landing-signed-out-desktop.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "GET /api/v1/auth/me -> 401 while signed out; signed-in landing state blocked by failed auth operations."
+      },
+      "issues": "Blocked by backend auth failure: auth grain activation failed with \"node runtime dependency 'janus-node-runtime' not found in injected dependencies\"."
+    },
+    {
+      "id": "VAL-FH-007",
+      "title": "Sign-in flow completes successfully",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Open /sign-in and enter the isolated test email.",
+          "expected": "Continue enables and reveals the password step.",
+          "observed": "The two-step form worked locally: Continue enabled for a valid email and revealed the password field."
+        },
+        {
+          "action": "Inspect password-step links.",
+          "expected": "Forgot your password? and Email sign-in code links navigate with the email query parameter.",
+          "observed": "Both links resolved correctly to /reset-password?email=... and /magic-code?email=...."
+        },
+        {
+          "action": "Submit valid credentials.",
+          "expected": "The browser redirects to /get-started.",
+          "observed": "POST /api/v1/auth/signin/password returned 202, but the polled operation failed with service_unavailable and the UI stayed on /sign-in showing the grain activation error inline."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-007-sign-in-form.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-007-sign-in-password-step.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-007-sign-in-outcome.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "POST /api/v1/auth/signin/password -> 202; GET /api/v1/operations/op_6ee2e12f90c0d91b6c28b3af -> failed (service_unavailable)."
+      },
+      "issues": "Blocked by backend auth failure: sign-in never reached redirect because the auth grain could not activate."
+    },
+    {
+      "id": "VAL-FH-008",
+      "title": "Sign-up flow completes successfully",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Open /sign-up and enter the isolated test email.",
+          "expected": "Continue enables and reveals the password step.",
+          "observed": "The valid email enabled Continue and revealed the password step."
+        },
+        {
+          "action": "Enter a short password, then a valid password.",
+          "expected": "The short password keeps Create account disabled, while the valid password enables submission.",
+          "observed": "\"short\" kept Create account disabled, and [redacted test password] enabled submission."
+        },
+        {
+          "action": "Submit the form and inspect the alternate auth link.",
+          "expected": "Successful sign-up redirects to /get-started, and the Sign in link navigates back to /sign-in.",
+          "observed": "The Sign in link worked, but the signup request returned 202 and then failed during operation polling with service_unavailable, leaving the page on /sign-up with the grain activation error inline."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-008-sign-up-form.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-008-sign-up-password-step.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-008-sign-up-outcome.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "POST /api/v1/auth/signup -> 202; GET /api/v1/operations/op_38249f7bc548db3a4783c92b -> failed (service_unavailable)."
+      },
+      "issues": "Blocked by backend auth failure: sign-up never reached redirect because the auth grain could not activate."
+    },
+    {
+      "id": "VAL-FH-009",
+      "title": "Magic-code (passwordless) flow works end-to-end",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Open /magic-code?email=<isolated-email>.",
+          "expected": "The email is prefilled, the code request auto-submits, and six OTP inputs appear.",
+          "observed": "The email was prefilled and the page rendered six OTP inputs immediately after the request attempt."
+        },
+        {
+          "action": "Exercise OTP keyboard handling.",
+          "expected": "Typing advances focus, ArrowLeft moves back, and Backspace navigates within the OTP fields.",
+          "observed": "Typing in digit 1 moved focus to digit 2, ArrowLeft moved focus back to digit 1, and invalid-code entry later reset the OTP inputs."
+        },
+        {
+          "action": "Enter an invalid 6-digit code.",
+          "expected": "Verification auto-submits and shows an inline invalid-code error.",
+          "observed": "Entering 123456 produced the inline message \"Invalid one-time code\" and cleared the OTP fields."
+        },
+        {
+          "action": "Attempt the full passwordless happy path.",
+          "expected": "A valid code verification redirects to /get-started and resend works.",
+          "observed": "The initial magic-code request operation failed with service_unavailable, so the end-to-end success path could not be completed or validated."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-009-magic-code-form.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-009-magic-code-invalid-code.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "POST /api/v1/auth/magic-code/request -> 202; GET /api/v1/operations/op_284d0ec0be48264351446764 -> failed (service_unavailable); entering 6 digits triggered POST /api/v1/auth/magic-code/verify and produced an inline invalid-code state."
+      },
+      "issues": "Blocked by backend auth failure: the magic-code request operation failed before the success redirect path could be validated."
+    },
+    {
+      "id": "VAL-FH-010",
+      "title": "Reset-password flow works",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Open /reset-password?email=<isolated-email>.",
+          "expected": "The email field is prefilled.",
+          "observed": "The route prefilled the encoded test email correctly."
+        },
+        {
+          "action": "Use the Back to sign-in link.",
+          "expected": "Navigation returns to /sign-in.",
+          "observed": "The Back to sign-in link navigated correctly to /sign-in."
+        },
+        {
+          "action": "Submit the reset-password form.",
+          "expected": "The page shows either the reset-instructions success flash or a normal inline error state.",
+          "observed": "POST /api/v1/auth/reset-password/request returned 202, but the polled operation failed with service_unavailable and the UI showed the grain activation error inline."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-010-reset-password-form.png",
+          "frontend-hardening/auth-surface-rerun/VAL-FH-010-reset-password-outcome.png"
+        ],
+        "consoleErrors": "none observed",
+        "network": "POST /api/v1/auth/reset-password/request -> 202; GET /api/v1/operations/op_38cfb6ce9141856621584650 -> failed (service_unavailable)."
+      },
+      "issues": "Blocked by backend auth failure: reset-password never reached a normal success outcome because the auth grain could not activate."
+    },
+    {
+      "id": "VAL-FH-028",
+      "title": "404 page for unknown routes",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /nonexistent-auth-surface-rerun.",
+          "expected": "A user-friendly 404 page renders with recovery navigation back to the dashboard.",
+          "observed": "The app rendered a branded 404 page with the message \"Page Not Found\" and a \"Back to Dashboard\" link."
+        },
+        {
+          "action": "Use the recovery link.",
+          "expected": "The link navigates back to the dashboard surface.",
+          "observed": "The recovery link navigated successfully to /janus."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-rerun/VAL-FH-028-404-page.png"
+        ],
+        "consoleErrors": "none observed beyond the expected 404 response for the unknown route",
+        "network": "GET /nonexistent-auth-surface-rerun -> 404 page rendered; recovery link navigated to /janus."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The auth pages surfaced a backend grain-activation error inline after the initial 202 response, so I had to poll the returned /api/v1/operations/* URLs directly to confirm whether the blocker was in the UI or the backend auth workflow.",
+      "resolved": true,
+      "resolution": "Polled the signup, signin, magic-code request, and reset-password operation records with curl.exe and confirmed the same failed/service_unavailable backend error for each flow.",
+      "affectedAssertions": [
+        "VAL-FH-006",
+        "VAL-FH-007",
+        "VAL-FH-008",
+        "VAL-FH-009",
+        "VAL-FH-010"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "All tested auth mutations failed after their initial 202 response because auth grain activation could not resolve the injected dependency \"janus-node-runtime\".",
+      "affectedAssertions": [
+        "VAL-FH-006",
+        "VAL-FH-007",
+        "VAL-FH-008",
+        "VAL-FH-009",
+        "VAL-FH-010"
+      ],
+      "quickFixAttempted": "Retried each browser flow on the local source-built frontend, then polled the resulting operation records directly from http://localhost:8080; signup, signin, magic-code request, and reset-password request all still ended in failed/service_unavailable with the same missing dependency message."
+    }
+  ],
+  "summary": "Tested 8 assertions: 3 passed (VAL-FH-004, VAL-FH-005, VAL-FH-028) and 5 were blocked by the current-source backend auth grain dependency failure (VAL-FH-006 through VAL-FH-010)."
+}

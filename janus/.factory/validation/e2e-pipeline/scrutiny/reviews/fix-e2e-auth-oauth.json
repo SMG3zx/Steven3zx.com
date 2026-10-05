@@ -1,0 +1,28 @@
+{
+  "featureId": "fix-e2e-auth-oauth",
+  "reviewedAt": "2026-03-15T08:16:11.193462Z",
+  "commitId": "2e8ba28",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix addresses the four originally reported code defects: auth tests now poll `OperationByIDRoute`, `SetAccessCookie` adds a unique `jti`, GitHub OAuth now round-trips a cookie-backed `state` value, and `GetGitCredential` propagates non-`sql.ErrNoRows` errors. However, the OAuth test rewrite introduced a regression in contract coverage by deleting the original success/provider assertions and replacing them with state-only tests that do not verify credential persistence.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/github_oauth_test.go",
+        "line": 171,
+        "severity": "blocking",
+        "description": "The fix rewrote `github_oauth_test.go` as state-focused tests only. The surviving success-path test (`github_oauth_test.go:171-251`) uses `newStubAuthStore`, whose git-credential methods are no-ops (`auth_e2e_test.go:69-76`), so it no longer verifies that callback success persists a GitHub credential or that `/api/v1/git/providers` reports `connected=true`. Those behaviors are still part of the original feature contract (`features.json:1419-1430`) and were covered in the original implementation commit (`91a9c1e` had `TestGitHubOAuthCallbackRoute_Success` and `TestGitProvidersRoute_ShowsConnectedAfterOAuth`). As written, a regression in credential storage/provider-status behavior would now pass this fix, so the original OAuth feature is not fully protected against regression."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's required manual API verification is still not being followed/enforced for API fixes. This worker marked `followedProcedure=true`, but the handoff records only `commandsRun` and no `interactiveChecks` even though the feature changed API handler behavior.",
+      "evidence": "E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md:44-49 requires `curl.exe` verification and `interactiveChecks`; C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-15T07-39-09-358Z__fix-e2e-auth-oauth__3f31d99b-55bc-4496-bf43-e5edcd4be56d.json:13-18 records only `commandsRun`, and :69-72 still marks `followedProcedure` true."
+    }
+  ],
+  "addressesFailureFrom": "E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\e2e-auth-flow.json; E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\e2e-github-oauth.json",
+  "summary": "Reviewed fix commit `2e8ba28` together with the original `e2e-auth-flow` and `e2e-github-oauth` reviews, handoffs, diffs, and transcript skeletons. The code changes themselves resolve the original polling/JWT uniqueness/OAuth state/error-propagation findings, but the fix also removed the original OAuth success/provider coverage and replaced it with state-only tests that use a no-op credential stub. Result: fail, because the fix weakens regression coverage for core GitHub OAuth behavior."
+}

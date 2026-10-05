@@ -1,0 +1,11 @@
+{
+  "database": "janus-local",
+  "server": "local",
+  "module-path": "./janus-spacetimedb",
+  "generate": [
+    {
+      "language": "rust",
+      "out-dir": "./janus-rust/src/module_bindings"
+    }
+  ]
+}

@@ -1,0 +1,255 @@
+{
+  "groupId": "auth-session-oauth",
+  "overallStatus": "fail",
+  "assertions": [
+    {
+      "id": "VAL-E2E-001",
+      "title": "Auth signup operation envelope completes successfully",
+      "status": "pass",
+      "reason": "POST /api/v1/auth/signup returned 202 and operation op_a93838d27abd3241b0bc29ed reached succeeded in 2 poll(s) for e2e-pipeline-ut+auth-44e846610a@example.com.",
+      "evidence": {
+        "http": [
+          "POST /api/v1/auth/signup -> 202",
+          "GET /api/v1/operations/op_a93838d27abd3241b0bc29ed -> 200 status=succeeded"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup-poll-02.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup-poll-02.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup-poll-02.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signup-poll-02.meta.json"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-002",
+      "title": "Auth signin exchanges into a valid session cookie",
+      "status": "pass",
+      "reason": "POST /api/v1/auth/signin returned 202, session exchange set janus_access, and JWT claims matched sub=usr_9c1e75bb2376a78400327a86 email=e2e-pipeline-ut+auth-44e846610a@example.com.",
+      "evidence": {
+        "http": [
+          "POST /api/v1/auth/signin -> 202",
+          "GET /api/v1/operations/op_40b2168aff2e9eb15649c52b -> 200 status=succeeded",
+          "POST /api/v1/auth/session/exchange -> 200"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin-poll-02.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin-poll-02.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin-poll-02.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signin-poll-02.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\session-exchange.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\session-exchange.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\session-exchange.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\session-exchange.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-session.cookies.txt"
+        ],
+        "jwtClaims": {
+          "email": "e2e-pipeline-ut+auth-44e846610a@example.com",
+          "exp": 1773565215,
+          "iat": 1773564315,
+          "sub": "usr_9c1e75bb2376a78400327a86",
+          "type": "access"
+        }
+      }
+    },
+    {
+      "id": "VAL-E2E-003",
+      "title": "Auth me resolves the signed-in identity and rejects anonymous access",
+      "status": "pass",
+      "reason": "GET /api/v1/auth/me returned 200 with the signed-in user and 401 without a cookie.",
+      "evidence": {
+        "http": [
+          "GET /api/v1/auth/me (cookie) -> 200",
+          "GET /api/v1/auth/me (no cookie) -> 401"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-anon.meta.json"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-019",
+      "title": "Auth refresh issues a new JWT and rejects invalid cookies",
+      "status": "pass",
+      "reason": "POST /api/v1/auth/refresh issued a new JWT with exp 1773565216 > 1773565215 and rejected an invalid cookie with 401.",
+      "evidence": {
+        "http": [
+          "POST /api/v1/auth/refresh (valid cookie) -> 200",
+          "POST /api/v1/auth/refresh (invalid cookie) -> 401"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-valid.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-valid.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-valid.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-valid.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-invalid.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-invalid.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-invalid.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\refresh-invalid.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-session.cookies.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-refresh.cookies.txt"
+        ],
+        "jwtClaimsBefore": {
+          "email": "e2e-pipeline-ut+auth-44e846610a@example.com",
+          "exp": 1773565215,
+          "iat": 1773564315,
+          "sub": "usr_9c1e75bb2376a78400327a86",
+          "type": "access"
+        },
+        "jwtClaimsAfter": {
+          "email": "e2e-pipeline-ut+auth-44e846610a@example.com",
+          "exp": 1773565216,
+          "iat": 1773564316,
+          "sub": "usr_9c1e75bb2376a78400327a86",
+          "type": "access"
+        }
+      }
+    },
+    {
+      "id": "VAL-E2E-020",
+      "title": "Auth signout invalidates the session",
+      "status": "pass",
+      "reason": "POST /api/v1/auth/signout returned 200 and subsequent GET /api/v1/auth/me returned 401 with the updated cookie jar.",
+      "evidence": {
+        "http": [
+          "POST /api/v1/auth/signout -> 200",
+          "GET /api/v1/auth/me (after signout) -> 401"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signout.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signout.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signout.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\signout.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-after-signout.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-after-signout.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-after-signout.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-me-after-signout.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\auth-signout.cookies.txt"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-029",
+      "title": "GitHub OAuth start redirects to GitHub with the expected contract",
+      "status": "fail",
+      "reason": "Expected OAuth start 302 to GitHub authorize with client_id, redirect_uri, scope, and matching state cookie; observed http=302 location='http://localhost:8080/app?git=github_oauth_not_supported'.",
+      "evidence": {
+        "http": [
+          "GET /api/v1/git/providers/github/oauth/start -> 302",
+          "Location: http://localhost:8080/app?git=github_oauth_not_supported"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.cookies.txt"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-030",
+      "title": "GitHub OAuth callback exchanges a valid authorization code",
+      "status": "blocked",
+      "reason": "Blocked: the localhost OAuth start route did not initiate GitHub authorization or set callback state, so a legitimate callback exchange could not be attempted.",
+      "evidence": {
+        "http": [
+          "GET /api/v1/git/providers/github/oauth/start -> 302",
+          "GET /api/v1/git/providers/github/oauth/callback?code=factory-invalid-code&state=<state> -> not attempted",
+          "Callback redirect: n/a"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\oauth-start.cookies.txt"
+        ]
+      }
+    },
+    {
+      "id": "VAL-CROSS-004",
+      "title": "Protected resource families reject unauthenticated requests",
+      "status": "fail",
+      "reason": "Unauthenticated projects/builds/deployments/domains returned 401, but contract route families for billing and/or metrics did not; see evidence.",
+      "evidence": {
+        "http": [
+          "GET /api/v1/projects -> 401",
+          "GET /api/v1/builds -> 401",
+          "GET /api/v1/deployments -> 401",
+          "GET /api/v1/domains -> 401",
+          "GET /api/v1/billing -> 404",
+          "GET /api/v1/metrics -> 404",
+          "GET /api/v1/telemetry -> 401"
+        ],
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-projects-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-projects-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-projects-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-projects-anon.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-builds-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-builds-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-builds-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-builds-anon.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-deployments-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-deployments-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-deployments-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-deployments-anon.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-domains-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-domains-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-domains-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-domains-anon.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-billing-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-billing-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-billing-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-billing-anon.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-metrics-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-metrics-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-metrics-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-metrics-anon.meta.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-telemetry-anon.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-telemetry-anon.body.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-telemetry-anon.stderr.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth\\protected-telemetry-anon.meta.json"
+        ]
+      }
+    }
+  ],
+  "toolsUsed": [
+    "curl.exe",
+    "python3"
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "assertionId": "VAL-E2E-030",
+      "description": "GitHub OAuth could not be initiated from localhost because GET /api/v1/git/providers/github/oauth/start redirected to http://localhost:8080/app?git=github_oauth_not_supported instead of GitHub and did not issue a github_oauth_state cookie.",
+      "evidence": [
+        "OAuth start redirect: http://localhost:8080/app?git=github_oauth_not_supported",
+        "OAuth state cookie present: False",
+        "Callback attempt with placeholder code -> not attempted location=n/a"
+      ]
+    }
+  ],
+  "appliedUpdates": [],
+  "isolation": {
+    "apiBaseUrl": "http://localhost:8080",
+    "email": "e2e-pipeline-ut+auth-44e846610a@example.com",
+    "evidenceDir": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\auth-session-oauth"
+  },
+  "testedAt": "2026-03-15T08:45:17.108354+00:00"
+}

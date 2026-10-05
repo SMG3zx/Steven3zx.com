@@ -1,0 +1,69 @@
+{
+  "milestone": "frontend-hardening",
+  "round": 3,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 19,
+    "passed": 14,
+    "failed": 5,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-FH-006",
+    "VAL-FH-007",
+    "VAL-FH-008",
+    "VAL-FH-012",
+    "VAL-FH-013",
+    "VAL-FH-014",
+    "VAL-FH-015",
+    "VAL-FH-017",
+    "VAL-FH-019",
+    "VAL-FH-021",
+    "VAL-FH-022",
+    "VAL-FH-023",
+    "VAL-FH-025",
+    "VAL-FH-026"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-FH-009",
+      "reason": "The happy path could not be completed, Resend now stayed disabled after the cooldown, invalid-code UI feedback was missing, and Backspace did not clear the previous OTP digit."
+    },
+    {
+      "id": "VAL-FH-010",
+      "reason": "Submitting reset-password surfaced the inline internal error \"actor not found\" instead of the expected reset-instructions success flash or normal user-facing error state."
+    },
+    {
+      "id": "VAL-FH-016",
+      "reason": "Both upload flows created real builds, but each success state also surfaced an inline 'Cannot read properties of null (reading 'reset')' error after the upload completed."
+    },
+    {
+      "id": "VAL-FH-018",
+      "reason": "One built artifact failed immediately with 'resource profile not ready yet', and the retry deployment dep_9173a9c71ba57387021b2015 remained stuck in status \"starting\" for repeated polls without a reachable runtime endpoint."
+    },
+    {
+      "id": "VAL-FH-020",
+      "reason": "The log modal loaded, filtered, downloaded, and closed correctly, but Copy failed with 'Failed to execute writeText on Clipboard: Write permission denied.' in the real browser session."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented that authenticated agent-browser sessions can become unreadable right after redirecting to /get-started even while localhost stays healthy; recover by restarting only the assigned browser daemon/session and reapplying auth via /api/v1/auth/session/exchange.",
+      "source": "flow-report"
+    },
+    {
+      "target": "user-testing.md",
+      "description": "Documented that agent-browser may ignore requested download paths for exported log files; when that happens, move the file from %LOCALAPPDATA%\\Temp\\playwright-artifacts-* into the assigned evidence directory and note the relocation in the flow report.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/frontend-hardening/user-testing/synthesis.round2.json",
+  "flowReports": [
+    ".factory/validation/frontend-hardening/user-testing/flows/auth-surface-round4-rerun.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-panels-round4-rerun.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-shells-round4-rerun.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/cli-error-boundary-round4-rerun.json"
+  ]
+}

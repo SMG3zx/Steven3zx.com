@@ -1,0 +1,358 @@
+{
+  "groupId": "dashboard-panels-round3",
+  "testedAt": "2026-03-15T02:16:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "browserSession": "7d36c99fcfde__u2",
+    "accountEmail": "frontend-hardening-ut+panels-round3-20260314t2101@example.com",
+    "projectId": "proj_7959",
+    "projectName": "Panels Round3 Project 20260315-0156",
+    "projectSlug": "panels-round3-20260315-0156",
+    "evidenceDirectory": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\frontend-hardening\\dashboard-panels-round3"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "curl.exe"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-011",
+      "title": "Sidebar workspace view switching + active highlight + stats chips reflecting data",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Authenticate the assigned browser session and open /get-started.",
+          "expected": "The authenticated dashboard renders sidebar view buttons and stat chips.",
+          "observed": "The authenticated dashboard rendered Pipeline, Projects, Auth, API, and All buttons plus Projects 963 / Builds 793 / Deployments 787 / Domains 787 chips."
+        },
+        {
+          "action": "Switch through Pipeline, Projects, Auth, API, and All from the sidebar.",
+          "expected": "Each click changes the active view, updates the URL, and shows only the relevant sections.",
+          "observed": "Pipeline -> repo/build/deploy/domain panels only, Projects -> project panels only, Auth -> auth panel only, API -> api panel only, All -> every section visible; the clicked button gained the active bg-blue-50 styling each time."
+        },
+        {
+          "action": "Corroborate sidebar counts against the authenticated APIs.",
+          "expected": "Stats chips reflect actual data counts.",
+          "observed": "curl.exe counts matched the rendered chips exactly: 963 projects, 793 builds, 787 deployments, 787 domains."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/45-all-view.png"
+        ],
+        "consoleErrors": "No view-switch-specific console error surfaced during the sidebar probe.",
+        "network": "Authenticated count corroboration via GET /api/v1/projects (963), GET /api/v1/builds (793), GET /api/v1/deployments (787), GET /api/v1/domains (787)."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-014",
+      "title": "Project creation and listing including Use Across Workflows propagation",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open Projects view, fill the New Project form, and submit a unique project.",
+          "expected": "A new project is created and appears in the Projects list.",
+          "observed": "The UI created Panels Round3 Project 20260315-0156 and listed it at the top of the project cards with id proj_7959."
+        },
+        {
+          "action": "Use project-card workflow propagation controls.",
+          "expected": "Use Across Workflows pushes the chosen project into repo import, source upload, artifact upload, and deployment forms.",
+          "observed": "Clicking Sim Project 002's Use Across Workflows changed all pipeline project selectors to Sim Project 002; clicking the new project's Use Across Workflows switched them back to Panels Round3 Project 20260315-0156 across repo import, source upload, and artifact upload/deployment selectors."
+        },
+        {
+          "action": "Corroborate project persistence via API.",
+          "expected": "The new project exists in the backend with the submitted metadata.",
+          "observed": "GET /api/v1/projects returned proj_7959 with slug panels-round3-20260315-0156, repo URL https://github.com/octocat/Spoon-Knife, and branch main."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/19-project-form-filled.png",
+          "frontend-hardening/dashboard-panels-round3/21-project-created.png",
+          "frontend-hardening/dashboard-panels-round3/23-pipeline-after-workflow-switches.png"
+        ],
+        "consoleErrors": "No project-create-specific console error surfaced during the successful create/list/propagation flow.",
+        "network": "UI create persisted as GET /api/v1/projects -> {id: proj_7959, slug: panels-round3-20260315-0156, repoUrl: https://github.com/octocat/Spoon-Knife, repoBranch: main}."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-015",
+      "title": "Repository import triggers a build",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "From Pipeline view, submit Repo Import for https://github.com/octocat/Spoon-Knife on branch main using the propagated project.",
+          "expected": "The import shows Importing..., returns an Import Accepted result card, and triggers a build.",
+          "observed": "The submit button showed Importing..., the panel rendered Import Accepted with build job bld_765baae5960d975645b427e6, and the sidebar/build totals increased from 790 to 791."
+        },
+        {
+          "action": "Inspect the imported project's builds.",
+          "expected": "The builds list includes the new repo-import build.",
+          "observed": "The filtered builds API and builds panel both showed bld_765baae5960d975645b427e6 for proj_7959."
+        },
+        {
+          "action": "Corroborate the build outcome via API.",
+          "expected": "The import request produces a real build record.",
+          "observed": "GET /api/v1/builds?projectId=proj_7959 returned bld_765baae5960d975645b427e6 with provider github, sourceRef main, repoUrl https://github.com/octocat/Spoon-Knife, and status failed after strategy detection."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/24-repo-import-form-filled.png",
+          "frontend-hardening/dashboard-panels-round3/25-repo-import-loading.png",
+          "frontend-hardening/dashboard-panels-round3/26-repo-import-result.png"
+        ],
+        "consoleErrors": "No import-panel-specific client exception was surfaced while the repo import was queued.",
+        "network": "Repo import result card rendered Import Accepted -> build bld_765baae5960d975645b427e6; GET /api/v1/builds?projectId=proj_7959 confirmed the queued build record and GET /api/v1/builds/bld_765baae5960d975645b427e6/logs returned real clone/build status events."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-016",
+      "title": "Source bundle and WASM artifact uploads",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Upload a real zip source bundle containing noop-start.wasm through the Source Bundle Upload form.",
+          "expected": "The source upload shows Uploading... and then a success message with build details.",
+          "observed": "The Source Bundle form showed Uploading... and then rendered 'Bundle accepted. Build bld_7af35a705aa8be7d81ca29ec is in pending.' before the build completed as built."
+        },
+        {
+          "action": "Upload the real noop-start.wasm file through the Prebuilt WASM Artifact form.",
+          "expected": "The artifact upload succeeds, shows build details, and resets the form.",
+          "observed": "The artifact form rendered 'Artifact ready: bld_3fbff63f83925f869fcd18f9 (wasm/wasi-command / stdout-bridge)' and reset the Source Ref field back to its default 'upload' placeholder value."
+        },
+        {
+          "action": "Corroborate the resulting build records.",
+          "expected": "Both upload forms create real build records.",
+          "observed": "GET /api/v1/builds?projectId=proj_7959 returned bld_7af35a705aa8be7d81ca29ec (provider upload, sourceKind zip, buildStrategy prebuilt_wasm, status built) and bld_3fbff63f83925f869fcd18f9 (provider upload, buildStrategy uploaded_artifact, status built)."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/27-source-upload-form-filled.png",
+          "frontend-hardening/dashboard-panels-round3/28-source-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round3/29-source-upload-result.png",
+          "frontend-hardening/dashboard-panels-round3/30-artifact-upload-form-filled.png",
+          "frontend-hardening/dashboard-panels-round3/31-artifact-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round3/32-artifact-upload-result.png"
+        ],
+        "consoleErrors": "No upload-form-specific client exception surfaced during the successful source/artifact submissions.",
+        "network": "GET /api/v1/builds?projectId=proj_7959 confirmed source upload build bld_7af35a705aa8be7d81ca29ec (built) and artifact upload build bld_3fbff63f83925f869fcd18f9 (built)."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-017",
+      "title": "Builds panel status, filtering, and log entry point",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Filter the Builds panel to proj_7959.",
+          "expected": "Only that project's builds remain and the stats chips update to the filtered counts.",
+          "observed": "The filtered panel showed Total: 3, built: 2, failed: 1 with build cards bld_3fbff63f83925f869fcd18f9, bld_7af35a705aa8be7d81ca29ec, and bld_765baae5960d975645b427e6."
+        },
+        {
+          "action": "Use the filtered build cards to open View Logs.",
+          "expected": "Each filtered card exposes a View Logs entry point.",
+          "observed": "The filtered panel exposed 3 View Logs buttons, one per build card."
+        },
+        {
+          "action": "Corroborate the filtered build data and logs via API.",
+          "expected": "The panel contents reflect actual build status/log data.",
+          "observed": "GET /api/v1/builds?projectId=proj_7959 returned the same 3 builds, and GET /api/v1/builds/bld_765baae5960d975645b427e6/logs returned the clone/build failure lines shown through the modal flow."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/38-builds-filtered.png"
+        ],
+        "consoleErrors": "No builds-panel-specific client exception surfaced while filtering the panel to proj_7959.",
+        "network": "Filtered GET /api/v1/builds?projectId=proj_7959 -> 3 builds (2 built, 1 failed); GET /api/v1/builds/bld_765baae5960d975645b427e6/logs -> real log lines and status events."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Use the propagated deployment form for proj_7959 and submit a preview deployment from bld_7af35a705aa8be7d81ca29ec with targetRef panels-round3-preview-0156 and env ROUND3=1.",
+          "expected": "The form shows Deploying..., then renders a deployment result card with status, domain, reachable endpoint link, and resource profile; the deployment/domain lists refresh.",
+          "observed": "The form showed Deploying... and rendered Deployment Created for dep_2a3ad419893f0ffa4b495c46 with status starting, domain panels-round3-20260315-0156-1.janus.run, and a resource profile, but the reachable endpoint stayed 'Not available yet'."
+        },
+        {
+          "action": "Filter the Deployments panel to proj_7959.",
+          "expected": "The filtered list narrows to the new deployment and exposes a log entry point.",
+          "observed": "The filtered list narrowed to Total: 1 / starting: 1 and exposed one View Logs button for dep_2a3ad419893f0ffa4b495c46."
+        },
+        {
+          "action": "Poll the deployment through the real API after the UI create succeeds.",
+          "expected": "The deployment reaches a running state with a runtime endpoint.",
+          "observed": "GET /api/v1/deployments?projectId=proj_7959 kept dep_2a3ad419893f0ffa4b495c46 in status starting for repeated polls over ~40 seconds, and the related domain binding still had runtimeEndpoint: \"\"."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/33-deployment-form-filled.png",
+          "frontend-hardening/dashboard-panels-round3/36-deployment-loading-actual.png",
+          "frontend-hardening/dashboard-panels-round3/37-deployment-created.png",
+          "frontend-hardening/dashboard-panels-round3/49-deployments-filtered.png"
+        ],
+        "consoleErrors": "The authenticated browser session accumulated repeated 500 console resource errors during the long-running dashboard session while the new deployment remained stuck in starting.",
+        "network": "UI create persisted as dep_2a3ad419893f0ffa4b495c46; repeated GET /api/v1/deployments?projectId=proj_7959 stayed at status starting, and GET /api/v1/domains?projectId=proj_7959 returned dom_0e4198540cd5def1bd99f0dd with runtimeEndpoint empty."
+      },
+      "issues": "Deployment creation/listing is incomplete for the new project because the created deployment never progressed beyond starting and never exposed a reachable endpoint link."
+    },
+    {
+      "id": "VAL-FH-019",
+      "title": "Domains panel bindings + endpoint links",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Filter the Domains panel to proj_7959.",
+          "expected": "The panel narrows to the new deployment's binding.",
+          "observed": "The filtered panel narrowed to Total: 1 / starting: 1 and rendered panels-round3-20260315-0156-1.janus.run with project, deployment, revision, type, and a fallback note telling the user to check the Deployments panel for the runtime endpoint."
+        },
+        {
+          "action": "Clear the filter and inspect the general domains list.",
+          "expected": "The panel shows many bindings with reachable endpoint links that open in new tabs.",
+          "observed": "The unfiltered panel showed Total: 787 with 776 endpoint links, and sampled links rendered target=_blank (for example http://localhost:35637/)."
+        },
+        {
+          "action": "Corroborate the new project's domain binding via API.",
+          "expected": "The new deployment has a persisted domain binding.",
+          "observed": "GET /api/v1/domains?projectId=proj_7959 returned dom_0e4198540cd5def1bd99f0dd for dep_2a3ad419893f0ffa4b495c46 with domain panels-round3-20260315-0156-1.janus.run and status starting."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/46-domains-filtered-our-project.png",
+          "frontend-hardening/dashboard-panels-round3/48-domains-unfiltered-links-actual.png"
+        ],
+        "consoleErrors": "No domains-panel-specific client exception surfaced while switching between filtered and unfiltered states.",
+        "network": "GET /api/v1/domains?projectId=proj_7959 -> dom_0e4198540cd5def1bd99f0dd (starting, no runtimeEndpoint yet); unfiltered DOM inspection showed 776 reachable endpoint anchors with target=_blank."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-020",
+      "title": "Log modal open/filter/auto-update/copy/download/close",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Open View Logs for build bld_765baae5960d975645b427e6 from the filtered Builds panel.",
+          "expected": "A modal opens and shows its loading/open states.",
+          "observed": "The modal opened with title Build Logs - bld_765baae5960d975645b427e6 and showed the Loading logs... state before the failed-build logs were visible."
+        },
+        {
+          "action": "Toggle Auto update off and switch the severity filter to Errors.",
+          "expected": "The modal updates the active controls and narrows the visible line count.",
+          "observed": "Clicking Auto update changed the checkbox to unchecked, clicking Errors reduced the chip to Visible: 1, and the modal still showed the failed build status summary."
+        },
+        {
+          "action": "Use Copy, Download, and Close.",
+          "expected": "Copy writes the visible logs to the clipboard, Download saves a file, and Close dismisses the modal.",
+          "observed": "Download saved a real file under evidence/frontend-hardening/dashboard-panels-round3/downloads/3ab764be-f1b0-4634-a360-499efaf47e65 and Close dismissed the modal, but Copy raised 'Failed to execute writeText on Clipboard: Write permission denied' and the system clipboard did not contain readable log text."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/41-log-modal-loading.png",
+          "frontend-hardening/dashboard-panels-round3/42-log-modal-open.png",
+          "frontend-hardening/dashboard-panels-round3/43-log-modal-filtered-errors.png",
+          "frontend-hardening/dashboard-panels-round3/44-log-modal-closed.png",
+          "frontend-hardening/dashboard-panels-round3/50-log-modal-download-attempt.png"
+        ],
+        "consoleErrors": "agent-browser errors reported 'Failed to execute writeText on Clipboard: Write permission denied.' when the Copy button was used.",
+        "network": "GET /api/v1/builds/bld_765baae5960d975645b427e6/logs returned the 6 log lines displayed in the modal; Download produced evidence/frontend-hardening/dashboard-panels-round3/downloads/3ab764be-f1b0-4634-a360-499efaf47e65 with the expected log content."
+      },
+      "issues": "The modal's Copy control did not successfully place readable log text on the clipboard during the real browser test, even though filtering, auto-update toggle, download, and close all worked."
+    },
+    {
+      "id": "VAL-FH-022",
+      "title": "Dashboard loading states during authenticated fetches/actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Trigger authenticated mutations across the dashboard.",
+          "expected": "Submit buttons surface real in-flight labels instead of showing stale empty states.",
+          "observed": "The Repo Import button showed Importing..., the Source Bundle button showed Uploading..., and the Deployment button showed Deploying... during their real submissions."
+        },
+        {
+          "action": "Trigger authenticated refresh/loading behaviors.",
+          "expected": "Refresh buttons and the log modal expose their in-flight loading labels.",
+          "observed": "The Builds refresh control showed Refreshing... at 50 ms after click, and the build log modal showed Loading logs... while fetching the log body."
+        },
+        {
+          "action": "Inspect the resulting panels while these operations are in flight.",
+          "expected": "The UI does not fall back to stale empty states during active requests.",
+          "observed": "During import/upload/deploy/log fetches the relevant panels stayed in their active loading/result layouts rather than flashing back to empty-state copy."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round3/25-repo-import-loading.png",
+          "frontend-hardening/dashboard-panels-round3/28-source-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round3/36-deployment-loading-actual.png",
+          "frontend-hardening/dashboard-panels-round3/42-log-modal-open.png",
+          "frontend-hardening/dashboard-panels-round3/51-builds-refreshing-visible.png"
+        ],
+        "consoleErrors": "No loading-state-specific client exception surfaced during the successful import/upload/refresh/log-loading probes beyond the unrelated clipboard-permission failure from the modal Copy action.",
+        "network": "Real authenticated in-flight states were observed while POST /api/v1/repos/import, POST /api/v1/uploads/source-bundles, POST /api/v1/deployments, GET /api/v1/builds refreshes, and GET /api/v1/builds/bld_765baae5960d975645b427e6/logs executed."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The assigned agent-browser session frequently became unreadable immediately after authenticated redirects/opening the dashboard unless I force-killed only the session PID from C:\\Users\\steve\\.agent-browser\\7d36c99fcfde__u2.pid and then reopened the page with a ~10 second settle wait.",
+      "resolved": true,
+      "resolution": "Recovered only the assigned session process (not shared Janus services), re-authenticated in-browser via /api/v1/auth/session/exchange, and waited 10s before taking authenticated screenshots or DOM reads.",
+      "affectedAssertions": [
+        "VAL-FH-011",
+        "VAL-FH-014",
+        "VAL-FH-015",
+        "VAL-FH-016",
+        "VAL-FH-017",
+        "VAL-FH-018",
+        "VAL-FH-019",
+        "VAL-FH-020",
+        "VAL-FH-022"
+      ]
+    },
+    {
+      "description": "The authenticated dashboard is backed by large shared seeded data (963 projects / 793 builds / 787 deployments / 787 domains), so authenticated empty-state branches were not naturally reachable after sign-in.",
+      "resolved": true,
+      "resolution": "Used unique project data plus project-filtered views to isolate the round3 records while still corroborating the global sidebar/domain counts via the real APIs.",
+      "affectedAssertions": [
+        "VAL-FH-014",
+        "VAL-FH-017",
+        "VAL-FH-018",
+        "VAL-FH-019",
+        "VAL-FH-022"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "The new deployment dep_2a3ad419893f0ffa4b495c46 never advanced beyond status starting, so its runtime endpoint stayed unavailable and its domain binding dom_0e4198540cd5def1bd99f0dd had runtimeEndpoint=\"\" throughout the retry window.",
+      "affectedAssertions": [
+        "VAL-FH-018"
+      ],
+      "quickFixAttempted": "Waited in the UI after Deploying..., refreshed the filtered deployments/domains panels, and polled GET /api/v1/deployments?projectId=proj_7959 plus GET /api/v1/domains?projectId=proj_7959 for ~40 seconds; the deployment stayed starting with no endpoint."
+    },
+    {
+      "description": "The log-modal Copy action hit a browser clipboard permission denial in the real agent-browser session and did not leave readable log text on the system clipboard.",
+      "affectedAssertions": [
+        "VAL-FH-020"
+      ],
+      "quickFixAttempted": "Clicked Copy repeatedly, inspected agent-browser errors, and read the Windows clipboard via Get-Clipboard/Format-Hex; Download still worked, but Copy remained blocked by writeText permission denial."
+    }
+  ],
+  "summary": "Tested 9 assigned dashboard-panel assertions in the authenticated browser flow. 7 passed (VAL-FH-011, 014, 015, 016, 017, 019, 022) and 2 failed (VAL-FH-018: new deployment stayed starting with no endpoint; VAL-FH-020: Copy in the log modal failed because clipboard write permission was denied, though filter/auto-update/download/close worked)."
+}

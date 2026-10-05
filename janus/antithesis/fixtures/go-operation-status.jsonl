@@ -1,0 +1,1 @@
+{"antithesis_assert":{"details":{"next_status":"processing","operation_id":"reference-operation","operation_kind":"build.enqueue","previous_status":"pending"},"assert_type":"always","condition":true,"display_type":"Always","id":"operation status transitions never regress","message":"operation status transitions never regress","must_hit":true,"hit":true}}

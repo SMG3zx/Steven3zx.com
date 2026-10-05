@@ -1,0 +1,197 @@
+{
+  "groupId": "contracts-oauth-round3",
+  "testedAt": "2026-03-15T12:12:34.585888+00:00",
+  "isolation": {
+    "baseUrl": "http://localhost:8080",
+    "emailPrefix": "e2e-pipeline-ut+contracts-r3-",
+    "projectSlugPrefix": "e2e-pipeline-ut-contracts-r3-",
+    "email": "e2e-pipeline-ut+contracts-r3-20260315t121049z@example.com",
+    "projectSlug": "e2e-pipeline-ut-contracts-r3-20260315t121049z",
+    "userId": "usr_56d052954d88ae5988a4e9ff",
+    "projectId": "proj_7986",
+    "artifactBuildId": "bld_9235970df6b73287074a1faa",
+    "deploymentId": null
+  },
+  "toolsUsed": [
+    "curl.exe",
+    "go test",
+    "source inspection"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-E2E-015",
+      "title": "Operation polling envelope contract",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Check /healthz and /readyz before mutating calls",
+          "expected": "API healthy and ready",
+          "observed": "GET /healthz -> 200 and GET /readyz -> 200 with actors/database ok"
+        },
+        {
+          "action": "Submit auth.signup and poll operation",
+          "expected": "202 envelope then allowed statuses only",
+          "observed": "POST /api/v1/auth/signup -> 202; poll statuses processing -> succeeded"
+        },
+        {
+          "action": "Submit auth.signin.password, poll, and exchange the session",
+          "expected": "202 envelope then allowed statuses only and authenticated cookie available for protected routes",
+          "observed": "POST /api/v1/auth/signin/password -> 202; poll statuses processing -> succeeded; POST /api/v1/auth/session/exchange -> 200 with janus_access cookie (redacted)"
+        },
+        {
+          "action": "Submit project.create and poll operation",
+          "expected": "202 envelope then allowed statuses only",
+          "observed": "POST /api/v1/projects -> 202; poll status succeeded"
+        },
+        {
+          "action": "Submit build.enqueue via repo import and poll operation",
+          "expected": "202 envelope then allowed statuses only",
+          "observed": "POST /api/v1/repos/import -> 202; poll status succeeded with kind build.enqueue and result.buildJob.status pending"
+        },
+        {
+          "action": "Submit deploy.create and a duplicate project.create to inspect failed operations",
+          "expected": "Failed operations expose failure.code, failure.message, and failure.retryable",
+          "observed": "POST /api/v1/deployments -> 202 then failed with failure {code: conflict, message: resource profile not ready yet, retryable: true}; duplicate POST /api/v1/projects -> 202 then failed with failure {code: conflict, message: a project with this slug already exists, retryable: true}"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round3/VAL-E2E-015.json",
+          "e2e-pipeline/contracts-oauth-round3/VAL-E2E-015-go-test.txt"
+        ],
+        "network": [
+          "GET /healthz -> 200",
+          "GET /readyz -> 200",
+          "POST /api/v1/auth/signup -> 202",
+          "GET /api/v1/operations/op_58a74aeb857a3a4cbd6e8397 -> 200 (processing, succeeded)",
+          "POST /api/v1/auth/signin/password -> 202",
+          "GET /api/v1/operations/op_e3f1b39ced54c21a23584dc4 -> 200 (processing, succeeded)",
+          "POST /api/v1/auth/session/exchange -> 200",
+          "POST /api/v1/projects -> 202",
+          "GET /api/v1/operations/op_9ddae38db0a857b8f874e512 -> 200 (succeeded)",
+          "POST /api/v1/repos/import -> 202",
+          "GET /api/v1/operations/op_c3e6e5aa88b92303184b544f -> 200 (succeeded)",
+          "POST /api/v1/uploads/artifacts -> 202",
+          "GET /api/v1/operations/op_20835373055f42cf9cf1d8df -> 200 (succeeded)",
+          "POST /api/v1/deployments -> 202",
+          "GET /api/v1/operations/op_ac88771049b8b0c717223e61 -> 200 (failed)",
+          "POST /api/v1/projects duplicate slug -> 202",
+          "GET /api/v1/operations/op_f436bc1fe70de6474d3c65b7 -> 200 (failed)"
+        ],
+        "pollResults": {
+          "observedStatuses": [
+            "processing",
+            "succeeded",
+            "processing",
+            "succeeded",
+            "succeeded",
+            "succeeded",
+            "succeeded",
+            "failed",
+            "failed"
+          ],
+          "unexpectedStatuses": [],
+          "failureShapeChecks": {
+            "duplicateProjectCreate": {
+              "code": "conflict",
+              "message": "a project with this slug already exists",
+              "retryable": true,
+              "hasRequiredFields": true
+            },
+            "deployCreate": {
+              "code": "conflict",
+              "message": "resource profile not ready yet",
+              "retryable": true,
+              "hasRequiredFields": true
+            }
+          }
+        },
+        "cookies": "janus_access set by /api/v1/auth/session/exchange (redacted in evidence)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-030",
+      "title": "GitHub OAuth callback exchanges code",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Start GitHub OAuth from an authenticated session",
+          "expected": "302 to GitHub authorize plus github_oauth_state cookie",
+          "observed": "GET /api/v1/git/providers/github/oauth/start -> 302 to github.com/login/oauth/authorize with matching state cookie (redacted)"
+        },
+        {
+          "action": "Attempt the live callback without a legitimate GitHub authorization code",
+          "expected": "A real code would exchange and connect the provider; if unavailable, capture the live limitation and use the allowed override",
+          "observed": "No legitimate code was available for the configured localhost OAuth app; fake-code callback returned 302 to /janus?git=error&message=failed+to+exchange+authorization+code and /api/v1/git/providers still showed connected=false"
+        },
+        {
+          "action": "Run targeted Go tests and inspect source-backed evidence for the allowed override",
+          "expected": "Tests/source prove state-cookie generation/validation and credential persistence after a successful callback exchange",
+          "observed": "Targeted go test exited 0, and cited source/tests show state generation, callback state validation, UpsertGitCredential persistence, and connected=true after the mocked successful round-trip callback"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round3/VAL-E2E-030-live.json",
+          "e2e-pipeline/contracts-oauth-round3/VAL-E2E-030-go-test.txt",
+          "e2e-pipeline/contracts-oauth-round3/VAL-E2E-030-source-backed.json"
+        ],
+        "network": [
+          "GET /api/v1/git/providers/github/oauth/start -> 302",
+          "GET /api/v1/git/providers/github/oauth/callback?code=fake-contracts-r3-code&state=... -> 302",
+          "GET /api/v1/git/providers -> 200"
+        ],
+        "cookies": "github_oauth_state issued on OAuth start and cleared on callback attempt (values redacted)",
+        "sourceBacked": {
+          "goTestLog": "e2e-pipeline/contracts-oauth-round3/VAL-E2E-030-go-test.txt",
+          "citations": [
+            {
+              "file": "E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth.go",
+              "lines": "71-89",
+              "summary": "GitHub OAuth start generates a crypto-random state value and sets it in the github_oauth_state HttpOnly SameSite=Lax cookie before redirecting to GitHub authorize."
+            },
+            {
+              "file": "E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth.go",
+              "lines": "114-144",
+              "summary": "GitHub OAuth callback requires the github_oauth_state cookie, rejects missing or mismatched state values with 400, and clears the state cookie after validation."
+            },
+            {
+              "file": "E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth.go",
+              "lines": "209-219",
+              "summary": "After a successful token exchange, the callback persists the GitHub credential via UpsertGitCredential and redirects to /janus?git=success."
+            },
+            {
+              "file": "E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth_test.go",
+              "lines": "18-73",
+              "summary": "Start-route test asserts the authorize redirect includes state and that the github_oauth_state cookie matches it."
+            },
+            {
+              "file": "E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth_test.go",
+              "lines": "110-168",
+              "summary": "Callback tests reject missing state cookies, mismatched state values, and missing state params."
+            },
+            {
+              "file": "E:\\Janus\\backend\\janus-api\\internal\\api\\handler\\github_oauth_test.go",
+              "lines": "172-294",
+              "summary": "Round-trip callback test mocks a successful exchange, verifies credential persistence with GetGitCredential, and confirms /api/v1/git/providers reports connected=true."
+            }
+          ]
+        }
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "A legitimate GitHub authorization code for the configured localhost OAuth app was not available during the rerun, so the live callback could not complete a real token exchange.",
+      "resolved": true,
+      "resolution": "Used the allowed override: kept the live start/callback probe for real-surface evidence, then corroborated state-cookie generation/validation and callback credential persistence with targeted Go tests plus source citations.",
+      "affectedAssertions": [
+        "VAL-E2E-030"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 2 assertions: 2 passed. VAL-E2E-030 passed via the allowed override because no legitimate live GitHub authorization code was available."
+}

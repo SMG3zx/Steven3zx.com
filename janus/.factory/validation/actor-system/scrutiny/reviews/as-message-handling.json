@@ -1,0 +1,33 @@
+{
+  "featureId": "as-message-handling",
+  "reviewedAt": "2026-03-14T20:31:26.856821Z",
+  "commitId": "2c83125809d142b41425546e0e3be095021bdd18",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The implementation correctly replaces the six targeted actor-side silent drops with `ctx.Unhandled()` and limits `ctx.Err()` to fatal configuration errors, but the new non-blocking email retry flow breaks Ask/Response semantics. Because retries are rescheduled without preserving the original sender, any email send that needs a retry will cause the calling grain to time out, so VAL-AS-005 is not actually satisfied.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/actors/control_actors.go",
+        "line": 286,
+        "severity": "blocking",
+        "description": "`handleEmailDispatch` reschedules retries with `ctx.ActorSystem().ScheduleOnce(ctx.Context(), retryMsg, ctx.Self(), delay)` but does not preserve the original sender/reply context (for example via `actor.WithSender(ctx.Sender())`). The later `ctx.Response(...)` therefore runs against the scheduled self-message instead of the original Ask caller. Since auth flows invoke the email actor with `ctx.AskActor(..., emailDispatchTimeout)` at `backend/janus-api/internal/actors/grains.go:197-210` and `261-274`, any send that requires a retry will time out even if a later attempt succeeds. That is a functional regression in the email retry path and fails VAL-AS-005." 
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "There is a scope mismatch between the feature definition and VAL-AS-003: the feature description/expected behavior only target six actor `Receive` handlers, while the validation contract text says every actor and grain default case should use `ctx.Unhandled()`. That makes it unclear whether grain `bad_request` handlers are intended behavior or validation failures.",
+      "evidence": "C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/features.json:1188-1199 scopes the behavior to actor defaults and email retry handling, while C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/validation-contract.md:185-191 defines VAL-AS-003 in terms of all actor and grain default cases."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill requires tests-first work and actor message-handling verification, but this feature handoff reported no new tests and still marked the procedure as followed. That left the Ask-plus-retry behavior untested and allowed the regression above to land.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:27-31 and 47-53 require TDD plus actor message-handling verification. The handoff at C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-14T19-56-20-654Z__as-message-handling__1f181457-d81e-4d15-b150-900e0dcb8fce.json:42-49 reports `tests.added: []` and `followedProcedure: true`, and E:/Janus/backend/janus-api/internal/actors/testkit_test.go:1614-1670 only covers immediate success, unhandled messages, and retry delay calculation for the email actor."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed: the targeted `ctx.Unhandled()` and `ctx.Err()` cleanups landed, but the new scheduled email retry path loses the original Ask caller and makes retrying email sends time out."
+}

@@ -1,0 +1,29 @@
+{
+  "milestone": "backend-hardening",
+  "round": 3,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-BH-001",
+    "VAL-BH-006"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Updated backend-hardening rerun guidance to use docker-compose.exe for the required no-cache janus-api/janus-control rebuild because podman compose delegates to an external provider here and did not accept --no-cache directly.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/backend-hardening/user-testing/synthesis.round2.json",
+  "flowReports": [
+    ".factory/validation/backend-hardening/user-testing/flows/backend-cli.json",
+    ".factory/validation/backend-hardening/user-testing/flows/api.json"
+  ]
+}

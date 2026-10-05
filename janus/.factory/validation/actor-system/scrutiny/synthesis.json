@@ -1,0 +1,39 @@
+{
+  "milestone": "actor-system",
+  "round": 2,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "Set-Location \"E:\\Janus\\backend\\janus-api\"; go test -count=1 -parallel 4 ./...",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "Set-Location \"E:\\Janus\\backend\\janus-api\"; go build ./...",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "Set-Location \"E:\\Janus\\backend\\janus-api\"; go vet ./...",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Added actor-system notes to .factory/library/architecture.md documenting that SpawnSingleton does not expose supervision options and that ReadyChecks discovery may legitimately report 'down: cluster disabled' in non-clustered TestKit coverage.",
+      "sourceFeature": "as-scrutiny-fixes"
+    }
+  ],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/actor-system/scrutiny/synthesis.round1.json"
+}

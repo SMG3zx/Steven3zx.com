@@ -1,0 +1,79 @@
+﻿{
+    "groupId":  "cli-error-boundary-round4-rerun",
+    "surface":  "frontend-cli",
+    "testedAt":  "2026-03-14T22:25:07.4070325-05:00",
+    "isolation":  {
+                      "repoRoot":  "E:\\Janus",
+                      "workingDirectory":  "E:\\Janus\\frontend\\web",
+                      "missionDir":  "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410",
+                      "milestone":  "frontend-hardening",
+                      "evidenceDir":  "frontend-hardening/cli-error-boundary-round4-rerun"
+                  },
+    "toolsUsed":  [
+                      "PowerShell",
+                      "npm",
+                      "npx vitest",
+                      "source inspection"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-FH-021",
+                           "title":  "Error boundaries catch and display errors gracefully",
+                           "status":  "pass",
+                           "summary":  "Source inspection confirmed a real ErrorBoundary component in app/components/ErrorBoundary.tsx that catches render failures, logs them, and renders a user-friendly fallback with retry/navigation actions. app/janus/page.tsx wraps the auth, projects, pipeline, and reference dashboard sections with that boundary, and the related unit tests passed both as a targeted run (1 file, 6 tests) and in the full frontend Vitest suite (21 files, 246 tests).",
+                           "checks":  [
+                                          {
+                                              "action":  "Inspect E:\\Janus\\frontend\\web\\app\\components\\ErrorBoundary.tsx",
+                                              "expected":  "A real error boundary catches errors and displays graceful recovery/navigation UI.",
+                                              "observed":  "ErrorBoundary uses getDerivedStateFromError (line 23) and componentDidCatch (line 27), resets state via handleRetry (line 31), and renders a fallback with role=alert plus a Try Again button and Go to Dashboard link (lines 60 and 66)."
+                                          },
+                                          {
+                                              "action":  "Inspect E:\\Janus\\frontend\\web\\app\\janus\\page.tsx",
+                                              "expected":  "Major page sections are wrapped so a component crash does not blank the full dashboard.",
+                                              "observed":  "ErrorBoundary wraps AuthPanel at line 529, ProjectCreatePanel + ProjectsPanel at line 548, the pipeline section panels at line 570, and ApiRoutesPanel at line 658; each wrapper provides user-facing fallback guidance."
+                                          },
+                                          {
+                                              "action":  "Inspect E:\\Janus\\frontend\\web\\app\\components\\__tests__\\ErrorBoundary.test.tsx",
+                                              "expected":  "Unit tests explicitly cover fallback UI plus retry/navigation behavior.",
+                                              "observed":  "The file defines the relevant tests renders fallback UI when a child throws (line 32), renders custom fallback title and message (line 47), shows a Try Again button that resets the error state (line 60), shows a Go to Dashboard link (line 74), and has role=alert on the fallback container (line 85)."
+                                          },
+                                          {
+                                              "action":  "Run npx vitest run app/components/__tests__/ErrorBoundary.test.tsx --reporter=verbose from E:\\Janus\\frontend\\web",
+                                              "expected":  "The specific ErrorBoundary tests pass.",
+                                              "observed":  "Exit code 0; Vitest reported 1 passed test file and 6 passed tests. Verbose output showed passes for children rendering, fallback rendering, custom fallback copy, retry reset behavior, dashboard navigation link, and role=alert coverage."
+                                          },
+                                          {
+                                              "action":  "Run npm run test from E:\\Janus\\frontend\\web",
+                                              "expected":  "The real frontend Vitest suite still passes with the ErrorBoundary coverage included.",
+                                              "observed":  "Exit code 0; Vitest reported 21 passed test files and 246 passed tests in 3.74s, including app/components/__tests__/ErrorBoundary.test.tsx (6 tests)."
+                                          }
+                                      ],
+                           "evidence":  {
+                                            "terminalSnapshots":  [
+                                                                      "frontend-hardening/cli-error-boundary-round4-rerun/VAL-FH-021-source-inspection.txt",
+                                                                      "frontend-hardening/cli-error-boundary-round4-rerun/VAL-FH-021-error-boundary-test-output.txt",
+                                                                      "frontend-hardening/cli-error-boundary-round4-rerun/VAL-FH-021-vitest-output.txt"
+                                                                  ],
+                                            "commands":  [
+                                                             {
+                                                                 "command":  "npx vitest run app/components/__tests__/ErrorBoundary.test.tsx --reporter=verbose",
+                                                                 "exitCode":  0
+                                                             },
+                                                             {
+                                                                 "command":  "npm run test",
+                                                                 "exitCode":  0
+                                                             }
+                                                         ],
+                                            "informationalOutput":  "Both Vitest logs include repeated \u0027Error: Test crash\u0027 React stack traces from the intentional throwing child used by ErrorBoundary tests. Per frontend-cli guidance, these were treated as informational because both commands exited 0 and the suites passed."
+                                        },
+                           "issues":  null
+                       }
+                   ],
+    "frictions":  [
+
+                  ],
+    "blockers":  [
+
+                 ],
+    "summary":  "Tested 1 frontend CLI assertion: 1 passed, 0 failed, 0 blocked. VAL-FH-021 is satisfied by the real ErrorBoundary implementation, its dashboard section wrappers, and passing targeted/full Vitest coverage."
+}

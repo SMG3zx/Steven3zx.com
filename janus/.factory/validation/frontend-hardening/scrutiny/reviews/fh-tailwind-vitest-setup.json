@@ -1,0 +1,45 @@
+{
+  "featureId": "fh-tailwind-vitest-setup",
+  "reviewedAt": "2026-03-14T23:48:59.640671Z",
+  "commitId": "009dc7d",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature set up Tailwind, PostCSS, Vitest, and initial reducer/utility tests, but it does not fully satisfy the feature contract. The Tailwind migration kept the 27KB global stylesheet effectively intact instead of replacing it with utility-driven styling plus a minimal base layer, and the promised validation coverage still omits API-client error handling that VAL-FH-003 requires.",
+    "issues": [
+      {
+        "file": "frontend/web/app/globals.css",
+        "line": 75,
+        "severity": "blocking",
+        "description": "The stylesheet migration does not actually replace the monolithic globals.css with Tailwind utilities plus a minimal custom layer. Starting at the `@layer components` block, the feature preserves hundreds of lines of legacy class-based CSS (`.appSidebar`, `.splashHero`, `.authPage`, `.startedLayout`, etc. through line 351), leaving the file at 379 lines / 27,390 bytes. That keeps the 27KB monolith essentially intact and does not meet the feature description (`features.json:1219-1231`) or VAL-FH-004's requirement that Tailwind utility classes replace the old global stylesheet with only a minimal base layer remaining (`validation-contract.md:362-363`)."
+      },
+      {
+        "file": "frontend/web/app/janus/lib/api-client.ts",
+        "line": 43,
+        "severity": "blocking",
+        "description": "The feature claims VAL-FH-003, but no tests were added for the API client's error-handling paths. `toJanusApiError()` and `JanusApiClient.request()` contain the envelope parsing, fallback-message, and request-id propagation logic at lines 43-76 and 111-143, yet the feature diff only added `reducer.test.ts` and `utils.test.ts`; there is no API-client test file under `frontend/web/app/janus/lib/__tests__`. Regressions in these paths would still ship untested, so the declared validation coverage is incomplete."
+      },
+      {
+        "file": "frontend/web/app/janus/lib/__tests__/utils.test.ts",
+        "line": 164,
+        "severity": "non_blocking",
+        "description": "The test named `returns null when window is undefined (SSR)` does not exercise `parseWorkspaceViewFromLocation()` under SSR conditions. Instead it calls `parseWorkspaceViewParam(null)` because jsdom always defines `window`, which leaves the utility's `typeof window === \"undefined\"` branch unverified even though this function was specifically called out in the feature requirements."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The feature metadata under-specifies the frontend test scope. `features.json` says this setup feature needs reducer and utility tests, but the mapped validation rule VAL-FH-003 also requires API-client error-handling coverage, which was omitted here.",
+      "evidence": "C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/features.json:1219-1234 describes only reducer and utility tests; C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/validation-contract.md:357-358 says Vitest coverage must also include API client error handling."
+    },
+    {
+      "area": "skills",
+      "observation": "The handoff commit pointer is unreliable for this feature. `handoff.commitId` points to a services-only follow-up commit, so downstream reviewers must inspect git history to find the actual implementation commit.",
+      "evidence": "C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-14T22-58-27-721Z__fh-tailwind-vitest-setup__7047d72a-7ad4-4d52-a2d6-cac678e079c5.json:6-11 records commitId `009dc7d`; `git show --stat 009dc7d` only changes `.factory/services.yaml`, while `git show --stat 1b275c4` contains the Tailwind/Vitest/test-file changes described in the same handoff."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, skill file, and the relevant git history for `fh-tailwind-vitest-setup`. Result: fail. The feature set up tooling successfully, but it did not actually reduce `globals.css` to a minimal Tailwind base layer, and it missed the API-client error-handling coverage required by VAL-FH-003."
+}

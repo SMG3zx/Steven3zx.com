@@ -1,0 +1,319 @@
+{
+  "groupId": "dashboard-panels-round4-rerun",
+  "testedAt": "2026-03-15T03:20:38.301402Z",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "browserSession": "def2730f6e24__u2r",
+    "email": "frontend-hardening-ut+panels-rerun-def2730f6e24u2r@example.com",
+    "projectNamePrefix": "fh-panels-rerun-def2730f6e24u2r",
+    "projectSlugPrefix": "fh-panels-rerun-def2730f6e24u2r",
+    "projectId": "proj_7960",
+    "projectName": "fh-panels-rerun-def2730f6e24u2r 0315",
+    "projectSlug": "fh-panels-rerun-def2730f6e24u2r-0315",
+    "desktopViewport": "1280x800",
+    "evidenceDir": "frontend-hardening/dashboard-panels-round4-rerun"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "curl.exe"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-014",
+      "title": "Project creation and listing works",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open the Projects view and submit a unique project using the assigned prefixes.",
+          "expected": "A new project is created and listed in the Projects panel.",
+          "observed": "The UI created fh-panels-rerun-def2730f6e24u2r 0315 as proj_7960 and rendered it as the first project card with slug fh-panels-rerun-def2730f6e24u2r-0315."
+        },
+        {
+          "action": "Use project-card workflow propagation controls.",
+          "expected": "Use Across Workflows updates the repo import, source upload, artifact upload, and deployment project selectors.",
+          "observed": "Clicking the visible Panels Round3 Project 20260315-0156 card switched all four selectors to proj_7959, and clicking the new proj_7960 card switched repo import, source upload, artifact upload, and deployment selectors back to fh-panels-rerun-def2730f6e24u2r 0315."
+        },
+        {
+          "action": "Corroborate the created project through the backend API.",
+          "expected": "The project persists with the submitted metadata.",
+          "observed": "GET /api/v1/projects returned proj_7960 with slug fh-panels-rerun-def2730f6e24u2r-0315, repoUrl https://github.com/octocat/Spoon-Knife, and repoBranch main."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/08-project-form-filled-authenticated.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/09-project-creating-authenticated.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/10-project-created-authenticated.png"
+        ],
+        "consoleErrors": "none observed during project creation or workflow-propagation clicks",
+        "network": "UI creation persisted as proj_7960; GET /api/v1/projects included the new project with the submitted slug, repo URL, and branch."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-015",
+      "title": "Repository import triggers a build",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Submit Repo Import for https://github.com/octocat/Spoon-Knife on branch main for proj_7960.",
+          "expected": "The submit button shows Importing..., an Import Accepted result appears, and a build is queued.",
+          "observed": "The button showed Importing..., the panel rendered Import Accepted, and the result card reported build job bld_fc5c9d8f774a1ad0beaaf6ff."
+        },
+        {
+          "action": "Trigger a manual builds refresh and inspect the filtered Builds panel.",
+          "expected": "Refresh Builds shows Refreshing... and the new import build appears in the project-scoped build list.",
+          "observed": "The Builds refresh control showed Refreshing..., and the filtered Builds panel listed bld_fc5c9d8f774a1ad0beaaf6ff alongside the two upload builds for proj_7960."
+        },
+        {
+          "action": "Corroborate the imported build via API.",
+          "expected": "The repo import creates a real build record.",
+          "observed": "GET /api/v1/builds?projectId=proj_7960 returned bld_fc5c9d8f774a1ad0beaaf6ff with provider github, sourceRef main, repoUrl https://github.com/octocat/Spoon-Knife, and status failed after strategy detection."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/11-repo-import-form-filled.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/12-repo-import-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/13-repo-import-result.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/21-builds-refreshing.png"
+        ],
+        "consoleErrors": "none observed while the repo import was queued and the builds panel refreshed",
+        "network": "The UI returned Import Accepted with build bld_fc5c9d8f774a1ad0beaaf6ff; GET /api/v1/builds?projectId=proj_7960 confirmed the new github/main build record."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-016",
+      "title": "File uploads work for source bundles and WASM artifacts",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Upload a zip source bundle containing app.wasm through the Source Bundle Upload form.",
+          "expected": "The form shows Uploading..., then a success message with build details, and resets cleanly without surfacing an error.",
+          "observed": "The Source Bundle form showed Uploading... and then rendered 'Bundle accepted. Build bld_3fb2a3ec530f21bdabde63b5 is in pending.', but the same success state also surfaced the inline error 'Cannot read properties of null (reading 'reset')'."
+        },
+        {
+          "action": "Upload a .wasm artifact through the Prebuilt WASM Artifact form.",
+          "expected": "The form shows Uploading..., then a success message with build details, and resets cleanly without surfacing an error.",
+          "observed": "The artifact form rendered 'Artifact ready: bld_059bfb1865ab88bba1ce203d (wasm/wasi-command / stdout-bridge)' and reset the Source Ref to upload, but it also displayed the inline error 'Cannot read properties of null (reading 'reset')'."
+        },
+        {
+          "action": "Corroborate the resulting build records through the API.",
+          "expected": "Both upload forms create real built records.",
+          "observed": "GET /api/v1/builds?projectId=proj_7960 returned bld_3fb2a3ec530f21bdabde63b5 with buildStrategy prebuilt_wasm and status built, plus bld_059bfb1865ab88bba1ce203d with buildStrategy uploaded_artifact and status built."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/14-source-upload-form-filled.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/15-source-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/16-source-upload-result.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/17-artifact-upload-form-filled.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/18-artifact-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/19-artifact-upload-result.png"
+        ],
+        "consoleErrors": "none observed in the browser console; the failure was a user-visible inline form error shown after each successful upload",
+        "network": "GET /api/v1/builds?projectId=proj_7960 confirmed both upload builds were created and marked built despite the UI surfacing reset errors."
+      },
+      "issues": "Both upload flows created real builds, but the success state is incorrect because each form also surfaced an inline 'Cannot read properties of null (reading 'reset')' error after the upload completed."
+    },
+    {
+      "id": "VAL-FH-017",
+      "title": "Builds panel displays status, filtering, and log viewing",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Filter the Builds panel to proj_7960.",
+          "expected": "Only that project's builds remain and the stats chips update to the filtered counts.",
+          "observed": "The filtered panel showed Total: 3, built: 2, failed: 1 with build cards bld_059bfb1865ab88bba1ce203d, bld_3fb2a3ec530f21bdabde63b5, and bld_fc5c9d8f774a1ad0beaaf6ff."
+        },
+        {
+          "action": "Trigger Refresh Builds and inspect the filtered cards.",
+          "expected": "The refresh control shows Refreshing... and each filtered build card exposes a View Logs action.",
+          "observed": "Refresh Builds showed Refreshing..., and the filtered panel exposed three View Logs entry points for the three proj_7960 build cards."
+        },
+        {
+          "action": "Corroborate the filtered build data and logs via API.",
+          "expected": "The panel reflects the real build records and log data.",
+          "observed": "GET /api/v1/builds?projectId=proj_7960 returned the same three builds, and GET /api/v1/builds/bld_fc5c9d8f774a1ad0beaaf6ff/logs returned the six log lines shown through the modal flow."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/20-builds-filtered.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/21-builds-refreshing.png"
+        ],
+        "consoleErrors": "none observed while filtering or refreshing the Builds panel",
+        "network": "Filtered GET /api/v1/builds?projectId=proj_7960 returned 3 builds (2 built, 1 failed); GET /api/v1/builds/bld_fc5c9d8f774a1ad0beaaf6ff/logs returned the failed-build log lines used in the modal."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing works",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Submit a deployment using the first built-only option shown in the form.",
+          "expected": "A built artifact should be deployable through the form, showing Deploying... and then a deployment result card.",
+          "observed": "The first built option bld_059bfb1865ab88bba1ce203d showed Deploying..., but the UI returned the inline error 'resource profile not ready yet' and no deployment record was created."
+        },
+        {
+          "action": "Retry deployment using the alternate built artifact bld_3fb2a3ec530f21bdabde63b5.",
+          "expected": "The result card shows deployment ID, status, domain, reachable endpoint link, resource profile, and the deployments/domains lists refresh with log access.",
+          "observed": "The retry showed Deploying... and did create dep_9173a9c71ba57387021b2015 plus domain fh-panels-rerun-def2730f6e24u2r-0315-1.janus.run; the filtered Deployments panel refreshed and exposed a deployment View Logs button, but the deployment stayed starting and the reachable endpoint remained 'Not available yet'."
+        },
+        {
+          "action": "Poll the deployment after creation through the UI/API.",
+          "expected": "The deployment reaches a usable runtime endpoint.",
+          "observed": "Repeated API polls over ~40 seconds kept dep_9173a9c71ba57387021b2015 in status starting and the matching domain record dom_d8538b16a058e53c7e54bace had runtimeEndpoint ''."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/26-deployment-form-filled.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/27-deployment-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/28-deployment-result.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/34-deployment-form-filled-retry.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/35-deployment-loading-retry.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/36-deployment-result-retry.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/37-deployments-filtered-retry.png"
+        ],
+        "consoleErrors": "none observed while submitting the deployment form or opening the deployment log entry point",
+        "network": "The first built option failed in the UI with 'resource profile not ready yet'. The retry persisted as GET /api/v1/deployments?projectId=proj_7960 -> dep_9173a9c71ba57387021b2015 (starting, build bld_3fb2a3ec530f21bdabde63b5); client-side filtering of GET /api/v1/domains showed dom_d8538b16a058e53c7e54bace with runtimeEndpoint empty."
+      },
+      "issues": "Deployment creation is incomplete: one built artifact cannot be deployed because the UI reports 'resource profile not ready yet', and the alternate built artifact never advanced past starting or exposed a reachable endpoint link."
+    },
+    {
+      "id": "VAL-FH-019",
+      "title": "Domains panel displays bindings with endpoint links",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Filter the Domains panel to proj_7960.",
+          "expected": "The panel narrows to the isolated project's binding state.",
+          "observed": "After the retry deployment, the filtered panel narrowed to fh-panels-rerun-def2730f6e24u2r-0315-1.janus.run with project proj_7960, deployment dep_9173a9c71ba57387021b2015, revision 1, type temporary, and fallback endpoint guidance pointing to the Deployments panel while the runtime endpoint remained unavailable."
+        },
+        {
+          "action": "Clear the project filter and inspect general domain bindings.",
+          "expected": "The unfiltered panel shows many bindings with endpoint links that open in new tabs.",
+          "observed": "The unfiltered Domains panel exposed 776 endpoint links; the first sampled link was http://localhost:35637/ with target _blank."
+        },
+        {
+          "action": "Corroborate the isolated domain binding via API.",
+          "expected": "The deployment has a persisted domain record.",
+          "observed": "Client-side filtering of GET /api/v1/domains returned dom_d8538b16a058e53c7e54bace for project proj_7960 with domain fh-panels-rerun-def2730f6e24u2r-0315-1.janus.run and deploymentStatus starting."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/38-domains-filtered-retry.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/31-domains-unfiltered-links.png"
+        ],
+        "consoleErrors": "none observed while switching the Domains panel between filtered and unfiltered states",
+        "network": "The filtered UI matched client-side filtering of GET /api/v1/domains for proj_7960, while DOM inspection of the unfiltered panel found 776 endpoint anchors with target=_blank."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-020",
+      "title": "Log modal displays, filters, and exports logs",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Open View Logs for failed build bld_fc5c9d8f774a1ad0beaaf6ff from the filtered Builds panel.",
+          "expected": "A modal opens and shows the Loading logs... state before the log lines render.",
+          "observed": "The modal opened with title Build Logs - bld_fc5c9d8f774a1ad0beaaf6ff and showed Loading logs... before the failed-build lines rendered."
+        },
+        {
+          "action": "Toggle Auto update off and switch the severity filter to Errors.",
+          "expected": "The modal updates its controls and narrows the visible line count.",
+          "observed": "Auto update toggled to unchecked, the Errors filter reduced the chip to Visible: 1, and the modal retained the failed-build status summary."
+        },
+        {
+          "action": "Use Copy, Download, and Close.",
+          "expected": "Copy writes the visible logs to the clipboard, Download saves a file, and Close dismisses the modal.",
+          "observed": "Download produced a real log file that was copied into the evidence directory and Close dismissed the modal, but Copy failed with 'Failed to execute writeText on Clipboard: Write permission denied.'."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/22-log-modal-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/23-log-modal-open.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/24-log-modal-filtered-errors.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/25-log-modal-closed.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/downloads/bld_fc5c9d8f774a1ad0beaaf6ff-errors-only.log"
+        ],
+        "consoleErrors": "agent-browser errors reported 'Failed to execute writeText' on Clipboard: Write permission denied.' when Copy was used.",
+        "network": "GET /api/v1/builds/bld_fc5c9d8f774a1ad0beaaf6ff/logs returned the six lines shown in the modal; Download exported the filtered error line to the captured .log evidence file."
+      },
+      "issues": "The modal's Copy control did not succeed in the real browser session because clipboard write permission was denied, even though filtering, auto-update toggle, download, and close all worked."
+    },
+    {
+      "id": "VAL-FH-022",
+      "title": "Loading states show during data fetches",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Trigger dashboard mutations across project creation, repo import, uploads, and deployment creation.",
+          "expected": "Submit buttons surface Creating..., Importing..., Uploading..., and Deploying... while requests are in flight.",
+          "observed": "The New Project form showed Creating..., Repo Import showed Importing..., both upload forms showed Uploading..., and deployment creation showed Deploying... during the live submissions."
+        },
+        {
+          "action": "Trigger refresh/loading behaviors for builds and logs.",
+          "expected": "Refresh controls and the log modal surface their in-flight labels.",
+          "observed": "The Builds refresh control showed Refreshing..., and the build log modal showed Loading logs... before the failed-build lines were rendered."
+        },
+        {
+          "action": "Inspect the panels during and immediately around those in-flight states.",
+          "expected": "The UI keeps its active loading/result layouts instead of falling back to stale empty states while requests are running.",
+          "observed": "During create/import/upload/deploy/log fetches the relevant panels stayed in their active loading/result layouts; quick reload attempts into the seeded dashboard also never flashed a stale 'No projects yet.' empty state for the populated Projects panel."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round4-rerun/09-project-creating-authenticated.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/12-repo-import-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/15-source-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/18-artifact-upload-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/21-builds-refreshing.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/22-log-modal-loading.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/35-deployment-loading-retry.png",
+          "frontend-hardening/dashboard-panels-round4-rerun/33-dashboard-all-quick-loading-attempt.png"
+        ],
+        "consoleErrors": "no loading-state-specific console error surfaced during the create/import/upload/refresh/log/deploy probes",
+        "network": "Real in-flight states were observed while POST /api/v1/projects, POST /api/v1/repos/import, POST /api/v1/uploads/source-bundles, POST /api/v1/uploads/artifacts, POST /api/v1/deployments, GET /api/v1/builds refreshes, and GET /api/v1/builds/bld_fc5c9d8f774a1ad0beaaf6ff/logs executed."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The assigned agent-browser session repeatedly became unreadable shortly after authenticated dashboard loads even while localhost:3000 and localhost:8080 remained healthy.",
+      "resolved": true,
+      "resolution": "Killed only the assigned def2730f6e24__u2r browser PID and re-authenticated the same session via /api/v1/auth/session/exchange before continuing the browser checks.",
+      "affectedAssertions": [
+        "VAL-FH-014",
+        "VAL-FH-015",
+        "VAL-FH-016",
+        "VAL-FH-017",
+        "VAL-FH-018",
+        "VAL-FH-019",
+        "VAL-FH-020",
+        "VAL-FH-022"
+      ]
+    },
+    {
+      "description": "agent-browser ignored --download-path once the daemon was already running, so the log export landed in a temp Playwright artifacts directory instead of the assigned evidence folder.",
+      "resolved": true,
+      "resolution": "Located the downloaded file under C:\\Users\\steve\\AppData\\Local\\Temp\\playwright-artifacts-wwxni8 and copied it into the assigned evidence downloads directory.",
+      "affectedAssertions": [
+        "VAL-FH-020"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 8 assigned dashboard-panel rerun assertions: 5 passed (VAL-FH-014, VAL-FH-015, VAL-FH-017, VAL-FH-019, VAL-FH-022) and 3 failed (VAL-FH-016, VAL-FH-018, VAL-FH-020). Strongest evidence: proj_7960 was created and propagated across workflow selectors; repo import plus both upload paths created real build records, but uploads surfaced inline reset errors on success; deployment retry persisted dep_9173a9c71ba57387021b2015/dom_d8538b16a058e53c7e54bace yet stayed starting with no endpoint after ~40 seconds; and the log modal's Copy action still failed with clipboard write permission denied while Download succeeded."
+}

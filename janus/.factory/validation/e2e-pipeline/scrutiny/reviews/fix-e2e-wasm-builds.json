@@ -1,0 +1,34 @@
+{
+  "featureId": "fix-e2e-wasm-builds",
+  "reviewedAt": "2026-03-15T08:16:23Z",
+  "commitId": "ba4df5c914083bde3b706579710a33770424f804",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix tightens the detection heuristics and corrects most of the researched container/component commands, but it does not fully resolve the prior blocking toolchain-alignment issue. Python builds still invoke componentize-py with a filename such as app.py instead of the documented module-name form, and the new tests still bypass the real container/timeout paths that were meant to guard these command strings.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/build_executor.go",
+        "line": 332,
+        "severity": "blocking",
+        "description": "buildPythonComponentize now switches to wasi:http/proxy, but it still feeds componentize-py the filename returned by findPythonAppModule (for example app.py or main.py). The documented command in docs/wasm-language-support-research.md is componentize-py -d wit -w wasi:http/proxy componentize app -o app.wasm, i.e. a module name, not a .py path. Because findPythonAppModule returns filenames (see the helper at lines 498-512), the Python component build path is still misaligned with the researched toolchain and can fail for the advertised language support."
+      },
+      {
+        "file": "backend/janus-api/internal/core/build_executor_test.go",
+        "line": 433,
+        "severity": "non_blocking",
+        "description": "The added build-path coverage still does not exercise the risky paths that changed in this fix. The new tests explicitly set JANUS_BUILD_NO_CONTAINER=1, so they only hit host-mode fallbacks and never verify the real container command construction, and TestBuildTimeout_ContextCancelled only checks that a cancelled context returns some error instead of asserting the timeout snippet emitted by workflow.go. That leaves the containerized command wiring and timeout-reporting contract weakly covered."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker procedure has no equivalent of API manual verification for non-API infrastructure changes such as containerized build command wiring, so a worker can mark followedProcedure=true after only unit-test coverage even when the change hinges on an external tool invocation string.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md lines 44-53 require manual verification only for API changes and then move straight to go vet/go test. The fix handoff at C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-15T07-58-48-444Z__fix-e2e-wasm-builds__93bc0330-9584-4449-b8ad-92880a5bf7bc.json records only commandsRun plus followedProcedure=true."
+    }
+  ],
+  "addressesFailureFrom": "E:/Janus/.factory/validation/e2e-pipeline/scrutiny/reviews/e2e-wasm-languages.json",
+  "summary": "Reviewed the original failing feature (e2e-wasm-languages / 4f742c7) together with fix commit ba4df5c914083bde3b706579710a33770424f804. The fix does resolve the broad detection-marker problem and most of the component-command alignment work, but it still leaves the Python componentize-py invocation inconsistent with the repo's documented build command, so the original toolchain-alignment failure is not fully closed. Status: fail."
+}

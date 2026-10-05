@@ -1,0 +1,41 @@
+{
+  "milestone": "backend-hardening",
+  "round": 2,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 7,
+    "passed": 5,
+    "failed": 2,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-BH-005",
+    "VAL-BH-008",
+    "VAL-BH-009",
+    "VAL-BH-010",
+    "VAL-BH-013"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-BH-001",
+      "reason": "migrate down now leaves zero tables, but the run still exits non-zero because the migrate tool errors after the down migration drops schema_migrations (relation \"public.schema_migrations\" does not exist)."
+    },
+    {
+      "id": "VAL-BH-006",
+      "reason": "successful auth.signup and auth.signin.password operations still serialize result:{} instead of result.user, so /api/v1/auth/session/exchange returns 400 \"operation has no user result\" and authenticated follow-up checks remain inaccessible."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented that backend-hardening API reruns should rebuild janus-api with podman compose up -d --build to avoid stale container binaries before validating live error envelopes.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/backend-hardening/user-testing/synthesis.round1.json",
+  "flowReports": [
+    ".factory/validation/backend-hardening/user-testing/flows/backend-cli.json",
+    ".factory/validation/backend-hardening/user-testing/flows/api.json"
+  ]
+}

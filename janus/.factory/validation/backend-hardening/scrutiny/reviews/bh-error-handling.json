@@ -1,0 +1,45 @@
+{
+  "featureId": "bh-error-handling",
+  "reviewedAt": "2026-03-14T17:07:35.001395Z",
+  "commitId": "1c80bd5",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "I reviewed the mission context, the e04f45b3-4acd-4333-9054-70203b701dc1 transcript skeleton, the handoff for commit 1c80bd5, and the feature footprint from commits ac8ea92 and 1c80bd5. The error envelope/sanitization work is substantial, but the feature still does not fully satisfy the wrong-method requirements in VAL-BH-006 because multiple GET-only handlers continue to accept unsupported methods or return the wrong status.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/telemetry_admin_events.go",
+        "line": 22,
+        "severity": "blocking",
+        "description": "Several read-only handlers in this file never validate `r.Method`: `TelemetryRoute` (line 22), `TelemetryStreamRoute` (line 54), `AdminOverviewRoute` (line 65), `AdminTelemetryRoute` (line 74), `EventsRoute` (line 87), and `EventsStreamRoute` (line 96). For an authenticated caller, unsupported methods like POST/DELETE still return 200 or open an SSE stream instead of a 405 `method_not_allowed` response, so the feature does not yet meet the "wrong method => 405" requirement in the feature description / VAL-BH-006."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/misc_routes.go",
+        "line": 34,
+        "severity": "blocking",
+        "description": "Method handling is still incorrect on multiple supporting API routes. `TemplatesRoute` (line 34), `BackendResourcesRoute` (line 43), and `LogsRoute` (line 52) always return 200 for authenticated requests regardless of HTTP method, and `GitProvidersRoute` (line 61) returns 501 `not_implemented` for non-GET requests instead of 405 `method_not_allowed`. These endpoints therefore still violate the feature's required method-status semantics."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/error_handling_test.go",
+        "line": 167,
+        "severity": "non_blocking",
+        "description": "The new wrong-method coverage only exercises `Healthz`, `APIFallback`, `DeploymentsRoute`, `ProjectsRoute`, and `RepoImport` (see tests starting at lines 167, 229, 249, and 268). None of the unguarded telemetry/admin/event/misc routes are covered, which is why the incomplete 405 handling escaped despite the added test suite."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "Shared guidance says to use structured errors and proper HTTP status codes, but it does not explicitly call out a route-level convention to use `requireMethod` (or otherwise reject unsupported methods) on every read-only handler. That gap likely contributed to the feature missing several GET-only routes.",
+      "evidence": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\AGENTS.md and E:\\Janus\\.factory\\library\\architecture.md mention structured error responses / proper status codes, but the unguarded handlers remain in backend/janus-api/internal/api/handler/telemetry_admin_events.go:22,54,65,74,87,96 and misc_routes.go:34,43,52,61."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's TDD step assumes the first targeted test run should fail, but this feature work started from partially implemented infrastructure so the new tests passed immediately on the first run. The skill should mention that enhancement work may begin in a green state and that the worker should then expand coverage until the remaining gaps are exercised.",
+      "evidence": "E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md step 3 instructs workers to confirm new tests fail first. In the e04f45b3-4acd-4333-9054-70203b701dc1 transcript skeleton, the first targeted run after creating error_handling_test.go returned `ok`, and the handoff's `skillFeedback.suggestedChanges` calls out the same mismatch."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The feature meaningfully improves error normalization, sanitization, and error wrapping, but it is not complete: multiple GET-only API handlers still return 200/SSE (or 501) for unsupported methods instead of 405. I marked the review as failed until those route-level method checks are completed and covered by tests."
+}

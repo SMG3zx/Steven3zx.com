@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "eve": {"path": "eve", "language": "JavaScript", "state": "active", "depends_on": [], "tasks": {"build": ["npm", "run", "build"], "test": ["npm", "test"]}, "ci": [{"name": "test", "command": ["npm", "test"]}, {"name": "build", "command": ["npm", "run", "build"]}]},
+    "janus": {"path": "janus", "language": "Go/Rust/TypeScript", "state": "active", "depends_on": ["rusty-mines", "janus-web"], "tasks": {}},
+    "janus-web": {"path": "janus-web", "language": "TypeScript", "state": "active", "depends_on": [], "tasks": {}},
+    "mein-factory": {"path": "mein-factory", "language": "TypeScript", "state": "active", "depends_on": [], "tasks": {"build": ["bun", "run", "build"], "test": ["bun", "run", "test"]}, "ci": [{"name": "test", "command": ["bun", "run", "test"]}, {"name": "build", "command": ["bun", "run", "build"]}]},
+    "personal-memory": {"path": "personal-memory", "language": "TypeScript", "state": "active", "depends_on": [], "tasks": {"build": ["bun", "run", "build"], "test": ["bun", "test"]}, "ci": [{"name": "test", "command": ["bun", "test"]}, {"name": "build", "command": ["bun", "run", "build"]}]},
+    "qwik": {"path": "qwik", "language": "TypeScript", "state": "prototype", "depends_on": [], "tasks": {"build": ["npm", "run", "build"]}, "ci": [{"name": "lint", "command": ["npm", "run", "lint"]}, {"name": "build", "command": ["npm", "run", "build"]}]},
+    "rusty-mines": {"path": "rusty-mines", "language": "Rust", "state": "active", "depends_on": [], "tasks": {"build": ["cargo", "build"], "test": ["cargo", "test"]}, "ci": [{"name": "test", "command": ["cargo", "test"]}]},
+    "skill-level-up-platform": {"path": "skill-level-up-platform", "language": "TypeScript", "state": "active", "depends_on": [], "tasks": {"build": ["npm", "run", "build"], "test": ["npm", "test"]}, "ci": [{"name": "build", "command": ["npm", "run", "build"]}]},
+    "tcp-typescript": {"path": "tcp-typescript", "language": "TypeScript", "state": "prototype", "depends_on": [], "tasks": {"build": ["bun", "run", "build"], "test": ["bun", "run", "test"]}, "ci": [{"name": "test", "command": ["bun", "run", "test"]}, {"name": "build", "command": ["bun", "run", "build"]}]},
+    "tech-func": {"path": "tech-func", "language": "Mixed", "state": "active", "depends_on": [], "tasks": {}},
+    "zig-invaders": {"path": "zig-invaders", "language": "Zig", "state": "prototype", "depends_on": [], "tasks": {"build": ["zig", "build"]}, "ci": [{"name": "build", "command": ["zig", "build"]}]}
+  }
+}

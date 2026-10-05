@@ -1,0 +1,72 @@
+[
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--all-targets"
+    ],
+    "started_utc": "2026-10-04T23:07:33.944717+00:00",
+    "exit_code": 0,
+    "log": "validation-1.log"
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "inventory-core/Cargo.toml"
+    ],
+    "started_utc": "2026-10-04T23:07:37.523360+00:00",
+    "exit_code": 0,
+    "log": "validation-2.log"
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "spacetimedb/Cargo.toml"
+    ],
+    "started_utc": "2026-10-04T23:07:37.904090+00:00",
+    "exit_code": 0,
+    "log": "validation-3.log"
+  },
+  {
+    "command": [
+      "cargo",
+      "check",
+      "--manifest-path",
+      "spacetimedb/Cargo.toml",
+      "--target",
+      "wasm32-unknown-unknown"
+    ],
+    "started_utc": "2026-10-04T23:07:38.192654+00:00",
+    "exit_code": 0,
+    "log": "validation-4.log"
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "started_utc": "2026-10-04T23:07:38.415874+00:00",
+    "exit_code": 0,
+    "log": "validation-5.log"
+  },
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "started_utc": "2026-10-04T23:07:39.251517+00:00",
+    "exit_code": 0,
+    "log": "validation-6.log"
+  }
+]

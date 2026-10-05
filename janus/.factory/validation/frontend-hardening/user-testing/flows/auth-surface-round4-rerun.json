@@ -1,0 +1,251 @@
+{
+  "groupId": "auth-surface-round4-rerun",
+  "testedAt": "2026-03-15T02:54:31.206918Z",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "email": "frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com",
+    "password": "[redacted test password]",
+    "desktopViewport": "1280x800",
+    "browserSession": "def2730f6e24__u1r",
+    "evidenceDir": "frontend-hardening/auth-surface-round4-rerun",
+    "uniquePrefix": "auth-rerun-def2730f6e24u1r"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "curl.exe"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-006",
+      "title": "Landing page renders and adapts to auth state",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open / in a clean signed-out browser session.",
+          "expected": "The landing page shows the hero, capability cards, How It Works flow, footer, and a signed-out CTA to /sign-up.",
+          "observed": "The signed-out landing page rendered the Janus hero, capability cards, How It Works flow, footer links, and a primary CTA labelled \"Sign Up & Start Building\"."
+        },
+        {
+          "action": "Revisit / with a corroborated signed-in auth cookie for the isolated account.",
+          "expected": "The primary CTA changes to Open Dashboard and the auth chip resolves to the signed-in email.",
+          "observed": "With the corroborated janus_access cookie loaded, / showed an \"Open Dashboard\" CTA and the landing page copy resolved to \"Signed in: frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com\"."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-006-landing-signed-out.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-006-landing-signed-in.png"
+        ],
+        "consoleErrors": "none observed on the landing page in signed-out or signed-in states",
+        "network": "Signed-in corroboration via curl.exe replay: POST /api/v1/auth/signin/password -> 202 (op_8e02c14be7eb074a6f0b4a5b), GET /api/v1/operations/op_8e02c14be7eb074a6f0b4a5b -> succeeded, POST /api/v1/auth/session/exchange -> 200, GET /api/v1/auth/me -> 200 for frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-007",
+      "title": "Sign-in flow completes successfully",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /sign-in and enter the isolated test email.",
+          "expected": "Continue enables for a valid email and reveals the password step.",
+          "observed": "Continue enabled for the valid email and revealed the password field."
+        },
+        {
+          "action": "Inspect the password-step links and submit an invalid password.",
+          "expected": "Forgot your password? points to /reset-password?email=..., Email sign-in code points to /magic-code?email=..., and invalid credentials show an inline error.",
+          "observed": "Forgot your password? resolved to /reset-password?email=frontend-hardening-ut%2Bauth-rerun-def2730f6e24u1r%40example.com, Email sign-in code resolved to /magic-code?email=frontend-hardening-ut%2Bauth-rerun-def2730f6e24u1r%40example.com, and the invalid password attempt rendered the inline message \"invalid credentials\"."
+        },
+        {
+          "action": "Submit the valid password.",
+          "expected": "Valid credentials redirect to /get-started and the signed-in state can be corroborated.",
+          "observed": "Submitting Janus!Pass1234 redirected the browser to http://localhost:3000/get-started, and the isolated account's signed-in state was corroborated through operation polling plus /api/v1/auth/me."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-007-sign-in-form.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-007-sign-in-password-step.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-007-sign-in-invalid-inline-error.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-007-sign-in-redirect-plain.png"
+        ],
+        "consoleErrors": "none observed during the sign-in flow",
+        "network": "curl.exe corroboration: POST /api/v1/auth/signin/password -> 202 (op_631ca4290a5f0c6d96f1b379), GET /api/v1/operations/op_631ca4290a5f0c6d96f1b379 -> running -> succeeded, POST /api/v1/auth/session/exchange -> 200, GET /api/v1/auth/me -> 200 for frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-008",
+      "title": "Sign-up flow completes successfully",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /sign-up and enter the isolated test email.",
+          "expected": "Continue enables and reveals the password step.",
+          "observed": "The valid email enabled Continue and revealed the password field."
+        },
+        {
+          "action": "Try a short password and then the assigned valid password.",
+          "expected": "A short password keeps Create account disabled, while a 10+ character password enables submission.",
+          "observed": "Create account stayed disabled for \"short\" and became enabled for Janus!Pass1234. The alternate link on the sign-up page resolved to /sign-in."
+        },
+        {
+          "action": "Submit the form.",
+          "expected": "Successful sign-up redirects to /get-started and creates a usable account.",
+          "observed": "Submitting the form changed the browser URL to http://localhost:3000/get-started. A follow-up curl.exe sign-in replay for the same credentials succeeded, confirming the account was created and usable."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-008-sign-up-form.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-008-sign-up-password-step.png"
+        ],
+        "consoleErrors": "none observed during the sign-up flow before the post-submit dashboard redirect",
+        "network": "Browser submission redirected to /get-started. Corroborating curl.exe replay: POST /api/v1/auth/signin/password -> 202 (op_8e02c14be7eb074a6f0b4a5b), GET /api/v1/operations/op_8e02c14be7eb074a6f0b4a5b -> succeeded, POST /api/v1/auth/session/exchange -> 200, GET /api/v1/auth/me -> 200 for the newly created account."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-009",
+      "title": "Magic-code (passwordless) flow works end-to-end",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Open /magic-code?email=<isolated-email>.",
+          "expected": "The email is prefilled, the request auto-sends, and six OTP inputs appear.",
+          "observed": "The page prefilled frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com, rendered six OTP inputs immediately, initially showed \"please wait before requesting another code\", and exposed an email preview with the literal placeholder <one_time_code>."
+        },
+        {
+          "action": "Exercise OTP keyboard navigation.",
+          "expected": "Typing advances focus, ArrowLeft moves back, and Backspace from an empty next field moves back and clears the previous digit.",
+          "observed": "Typing 1 advanced focus from digit 1 to digit 2, ArrowLeft moved focus back to digit 1, but Backspace from the empty second field only moved focus back and did not clear the previous digit."
+        },
+        {
+          "action": "Enter an invalid 6-digit code.",
+          "expected": "Entering all 6 digits auto-submits, shows an inline invalid-code error, and resets the digit inputs.",
+          "observed": "Typing 123456 auto-submitted and reset all six inputs to blank, but the page never rendered any visible invalid-code error text."
+        },
+        {
+          "action": "Wait for resend availability and corroborate the backend request path.",
+          "expected": "Resend now becomes available and a valid code can complete the redirect to /get-started.",
+          "observed": "After the cooldown text disappeared, Resend now remained disabled. A cooldown-expired curl.exe retry of POST /api/v1/auth/magic-code/request still failed with internal_error \"actor not found\", so the happy path could not be completed."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-009-magic-code-form.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-009-magic-code-invalid-code.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-009-magic-code-resend-state.png"
+        ],
+        "consoleErrors": "none observed on the magic-code page",
+        "network": "UI auto-send initially put the endpoint into cooldown. curl.exe corroboration: POST /api/v1/auth/magic-code/verify with 123456 -> 202 (op_fdca08c3f442c308667e75b8), GET /api/v1/operations/op_fdca08c3f442c308667e75b8 -> failed unauthorized \"invalid one-time code\". After cooldown, POST /api/v1/auth/magic-code/request -> 202 (op_f23c06ab675d51ada0ff2777), GET /api/v1/operations/op_f23c06ab675d51ada0ff2777 -> failed internal_error \"actor not found\"."
+      },
+      "issues": "The passwordless flow did not meet the contract: the happy path could not be completed, Resend now stayed disabled after the cooldown, invalid-code UI feedback was missing, and Backspace did not clear the previous OTP digit."
+    },
+    {
+      "id": "VAL-FH-010",
+      "title": "Reset-password flow works",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Open /reset-password?email=<isolated-email>.",
+          "expected": "The email is prefilled.",
+          "observed": "The email field was prefilled with frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com."
+        },
+        {
+          "action": "Use the Back to sign-in link.",
+          "expected": "The link navigates back to /sign-in.",
+          "observed": "Clicking the back link navigated the browser to http://localhost:3000/sign-in."
+        },
+        {
+          "action": "Submit the reset-password request.",
+          "expected": "The page shows the reset-instructions success flash or a normal user-facing error state.",
+          "observed": "The page stayed on /reset-password and rendered the inline text \"actor not found\" instead of the expected reset-instructions outcome."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-010-reset-password-form.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-010-reset-password-outcome.png"
+        ],
+        "consoleErrors": "none observed on the reset-password page",
+        "network": "After waiting out the endpoint cooldown, curl.exe corroboration showed POST /api/v1/auth/reset-password/request -> 202 (op_4de320aa7b5438ed52afe94d), GET /api/v1/operations/op_4de320aa7b5438ed52afe94d -> failed internal_error \"actor not found\"."
+      },
+      "issues": "Reset-password did not provide the expected success flash or a normal recovery message; it surfaced the backend actor failure directly in the UI."
+    },
+    {
+      "id": "VAL-FH-013",
+      "title": "Topbar displays correct contextual information",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /get-started while signed out.",
+          "expected": "The topbar shows the active workspace label, signed-out state, and the no-project hint.",
+          "observed": "The signed-out dashboard topbar showed \"Current view: Pipeline\", \"API /api/v1\", \"Signed out\", and \"Create a project in Projects view\"."
+        },
+        {
+          "action": "Open /get-started with the corroborated signed-in session.",
+          "expected": "The topbar updates to the signed-in email branch and retains the workspace context.",
+          "observed": "With the corroborated auth cookie applied, the topbar showed \"Current view: Pipeline\", \"API /api/v1\", the signed-in email frontend-hardening-ut+auth-rerun-def2730f6e24u1r@example.com, and a visible Sign Out control."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-013-dashboard-signed-out-topbar.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-013-dashboard-signed-in-topbar-plain.png"
+        ],
+        "consoleErrors": "none observed on the signed-out or signed-in dashboard topbar checks",
+        "network": "Signed-in state was corroborated with curl.exe via POST /api/v1/auth/signin/password -> 202 (op_631ca4290a5f0c6d96f1b379), GET /api/v1/operations/op_631ca4290a5f0c6d96f1b379 -> succeeded, POST /api/v1/auth/session/exchange -> 200, and GET /api/v1/auth/me -> 200."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-023",
+      "title": "Frontend signout flow",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Reach the authenticated dashboard state for the isolated account.",
+          "expected": "A Sign Out control is visible in the dashboard topbar.",
+          "observed": "The signed-in dashboard rendered a visible Sign Out control beside the isolated account email."
+        },
+        {
+          "action": "Click Sign Out.",
+          "expected": "The app clears auth state and redirects to landing or sign-in.",
+          "observed": "Clicking Sign Out redirected the browser to http://localhost:3000/sign-in and returned the session to signed-out UI."
+        },
+        {
+          "action": "Corroborate the cleared auth state against the backend.",
+          "expected": "The signout endpoint succeeds and /api/v1/auth/me rejects the cleared session.",
+          "observed": "A curl.exe replay returned POST /api/v1/auth/signout -> {\"ok\":true}, and GET /api/v1/auth/me with the same cookie jar returned 401 unauthorized."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-013-dashboard-signed-in-topbar-plain.png",
+          "frontend-hardening/auth-surface-round4-rerun/VAL-FH-023-signout-redirect.png"
+        ],
+        "consoleErrors": "none observed during the signout click and redirect",
+        "network": "Browser click redirected to /sign-in. Corroborating curl.exe replay: POST /api/v1/auth/signout -> {\"ok\":true}; GET /api/v1/auth/me with the same cookie jar -> 401 unauthorized."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The assigned agent-browser session repeatedly became unreadable after browser-driven auth redirects to /get-started, even while localhost:3000 and localhost:8080 stayed healthy.",
+      "resolved": true,
+      "resolution": "Killed only the identified def2730f6e24__u1r agent-browser daemon tree, reopened the same assigned session name, and used a corroborated janus_access cookie plus plain screenshots/eval reads to capture stable authenticated dashboard evidence.",
+      "affectedAssertions": [
+        "VAL-FH-006",
+        "VAL-FH-007",
+        "VAL-FH-008",
+        "VAL-FH-013",
+        "VAL-FH-023"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 7 assigned frontend-hardening auth-surface rerun assertions: 5 passed (VAL-FH-006, VAL-FH-007, VAL-FH-008, VAL-FH-013, VAL-FH-023) and 2 failed (VAL-FH-009, VAL-FH-010). Strongest evidence: credential sign-in and signout both corroborated cleanly through /api/v1/operations/* plus /api/v1/auth/me, while magic-code and reset-password still failed with user-visible errors and backend internal_error \"actor not found\" outcomes."
+}

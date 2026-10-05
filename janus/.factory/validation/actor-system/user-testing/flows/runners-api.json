@@ -1,0 +1,212 @@
+{
+    "milestone":  "actor-system",
+    "groupId":  "runners-api",
+    "surface":  "api",
+    "testedAt":  "2026-03-14T22:45:27.1519915Z",
+    "isolation":  {
+                      "surface":  "api",
+                      "baseUrl":  "http://localhost:8080",
+                      "runnerIdPrefix":  "actor-system-ut-",
+                      "uniqueRunnerId":  "actor-system-ut-runners-rerun-20260314-224411"
+                  },
+    "toolsUsed":  [
+                      "curl.exe"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-AS-019",
+                           "title":  "Runner Listing API",
+                           "status":  "pass",
+                           "reason":  "GET /api/v1/runners now satisfies the recency contract: the freshly registered runner actor-system-ut-runners-rerun-20260314-224411 listed with id/status/lastSeenAt and status=healthy immediately after registration, then listed as status=stale after 75 seconds, while 43 clearly stale existing runners were also returned as status=stale with zero stale healthy violations observed before or after the aging check.",
+                           "evidence":  {
+                                            "analysis":  [
+                                                             "actor-system/runners-api/rerun-analysis.json"
+                                                         ],
+                                            "supportingHealth":  [
+                                                                     "actor-system/runners-api/rerun-readyz-before.headers.txt",
+                                                                     "actor-system/runners-api/rerun-readyz-before.body.txt",
+                                                                     "actor-system/runners-api/rerun-readyz-after.headers.txt",
+                                                                     "actor-system/runners-api/rerun-readyz-after.body.txt"
+                                                                 ],
+                                            "requests":  [
+                                                             {
+                                                                 "name":  "rerun-runners-list-baseline",
+                                                                 "responseHeaders":  "actor-system/runners-api/rerun-runners-list-baseline.headers.txt",
+                                                                 "responseBody":  "actor-system/runners-api/rerun-runners-list-baseline.body.txt",
+                                                                 "status":  200
+                                                             },
+                                                             {
+                                                                 "name":  "rerun-register-healthy",
+                                                                 "request":  "actor-system/runners-api/rerun-register-healthy.request.json",
+                                                                 "responseHeaders":  "actor-system/runners-api/rerun-register-healthy.headers.txt",
+                                                                 "responseBody":  "actor-system/runners-api/rerun-register-healthy.body.txt",
+                                                                 "status":  200
+                                                             },
+                                                             {
+                                                                 "name":  "rerun-runners-list-post-register",
+                                                                 "responseHeaders":  "actor-system/runners-api/rerun-runners-list-post-register.headers.txt",
+                                                                 "responseBody":  "actor-system/runners-api/rerun-runners-list-post-register.body.txt",
+                                                                 "status":  200
+                                                             },
+                                                             {
+                                                                 "name":  "rerun-runners-list-after-aging",
+                                                                 "responseHeaders":  "actor-system/runners-api/rerun-runners-list-after-aging.headers.txt",
+                                                                 "responseBody":  "actor-system/runners-api/rerun-runners-list-after-aging.body.txt",
+                                                                 "status":  200
+                                                             }
+                                                         ],
+                                            "observed":  {
+                                                             "runnerId":  "actor-system-ut-runners-rerun-20260314-224411",
+                                                             "staleThresholdSeconds":  60,
+                                                             "fieldCheckPassed":  true,
+                                                             "registerResponse":  {
+                                                                                      "runner":  {
+                                                                                                     "id":  "actor-system-ut-runners-rerun-20260314-224411",
+                                                                                                     "name":  "Actor System UT Rerun Healthy Runner",
+                                                                                                     "capabilities":  {
+                                                                                                                          "rerun":  true,
+                                                                                                                          "role":  "user-test",
+                                                                                                                          "surface":  "api"
+                                                                                                                      },
+                                                                                                     "labels":  {
+                                                                                                                    "group":  "runners-api",
+                                                                                                                    "rerun":  "true",
+                                                                                                                    "suite":  "actor-system"
+                                                                                                                },
+                                                                                                     "status":  "healthy",
+                                                                                                     "runtimeEndpoint":  "http://runner.local/actor-system-ut-runners-rerun-20260314-224411",
+                                                                                                     "lastSeenAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                                     "heartbeatAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                                     "createdAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                                     "updatedAt":  "2026-03-14T22:44:11.940052275Z"
+                                                                                                 }
+                                                                                  },
+                                                             "freshRunner":  {
+                                                                                 "id":  "actor-system-ut-runners-rerun-20260314-224411",
+                                                                                 "name":  "Actor System UT Rerun Healthy Runner",
+                                                                                 "status":  "healthy",
+                                                                                 "lastSeenAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                 "heartbeatAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                 "createdAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                 "updatedAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                 "runtimeEndpoint":  "http://runner.local/actor-system-ut-runners-rerun-20260314-224411",
+                                                                                 "ageSecondsAtCapture":  0.026
+                                                                             },
+                                                             "agedRunner":  {
+                                                                                "id":  "actor-system-ut-runners-rerun-20260314-224411",
+                                                                                "name":  "Actor System UT Rerun Healthy Runner",
+                                                                                "status":  "stale",
+                                                                                "lastSeenAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                "heartbeatAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                "createdAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                "updatedAt":  "2026-03-14T22:44:11.940052275Z",
+                                                                                "runtimeEndpoint":  "http://runner.local/actor-system-ut-runners-rerun-20260314-224411",
+                                                                                "ageSecondsAtCapture":  75.059
+                                                                            },
+                                                             "baselineStaleCount":  43,
+                                                             "baselineStaleHealthyCount":  0,
+                                                             "agedStaleCount":  44,
+                                                             "agedStaleHealthyCount":  0,
+                                                             "baselineStaleSample":  [
+                                                                                         {
+                                                                                             "id":  "actor-system-ut-runners-rerun-20260314-224226",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-14T22:42:26.271583176Z",
+                                                                                             "ageSecondsAtCapture":  105.635
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "actor-system-ut-runners-rerun-20260314-223442",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-14T22:34:42.961495183Z",
+                                                                                             "ageSecondsAtCapture":  568.945
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "janus-runner",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-14T21:19:08.442692123Z",
+                                                                                             "ageSecondsAtCapture":  5103.464
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "actor-system-ut-runners-20260314-degraded-210606",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-14T21:06:06.780105843Z",
+                                                                                             "ageSecondsAtCapture":  5885.127
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "actor-system-ut-runners-20260314-healthy-210606",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-14T21:06:06.736613446Z",
+                                                                                             "ageSecondsAtCapture":  5885.17
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "runner-9d5e0ddd9535",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-11T08:29:06.272483882Z",
+                                                                                             "ageSecondsAtCapture":  310505.634
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "runner-321ae69f33fa",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-06T03:01:58.867160872Z",
+                                                                                             "ageSecondsAtCapture":  762133.04
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "runner-67cfd6dc3ced",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-05T04:24:47.952593681Z",
+                                                                                             "ageSecondsAtCapture":  843563.954
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "runner-8266187b4bcd",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-04T08:29:56.513344468Z",
+                                                                                             "ageSecondsAtCapture":  915255.394
+                                                                                         },
+                                                                                         {
+                                                                                             "id":  "runner-9cc6214d39bb",
+                                                                                             "status":  "stale",
+                                                                                             "lastSeenAt":  "2026-03-03T06:29:55.146336001Z",
+                                                                                             "ageSecondsAtCapture":  1008856.761
+                                                                                         }
+                                                                                     ],
+                                                             "readyBefore":  {
+                                                                                 "checks":  {
+                                                                                                "actors.actor_system":  "ok",
+                                                                                                "actors.command_gateway":  "ok",
+                                                                                                "actors.discovery":  "ok",
+                                                                                                "database":  "ok"
+                                                                                            },
+                                                                                 "ok":  true,
+                                                                                 "ts":  "2026-03-14T22:44:11.875128651Z"
+                                                                             },
+                                                             "readyAfter":  {
+                                                                                "checks":  {
+                                                                                               "actors.actor_system":  "ok",
+                                                                                               "actors.command_gateway":  "ok",
+                                                                                               "actors.discovery":  "ok",
+                                                                                               "database":  "ok"
+                                                                                           },
+                                                                                "ok":  true,
+                                                                                "ts":  "2026-03-14T22:45:27.013381209Z"
+                                                                            }
+                                                         }
+                                        }
+                       }
+                   ],
+    "frictions":  [
+
+                  ],
+    "blockers":  [
+
+                 ],
+    "commandsRun":  [
+                        "curl.exe -sS --max-time 20 -D \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-readyz-before.headers.txt\" -o \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-readyz-before.body.txt\" -w \u0027%{http_code}\u0027 -X GET http://localhost:8080/readyz",
+                        "curl.exe -sS --max-time 20 -D \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-runners-list-baseline.headers.txt\" -o \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-runners-list-baseline.body.txt\" -w \u0027%{http_code}\u0027 -X GET http://localhost:8080/api/v1/runners",
+                        "curl.exe -sS --max-time 20 -D \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-register-healthy.headers.txt\" -o \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-register-healthy.body.txt\" -w \u0027%{http_code}\u0027 -X POST --data-binary @\"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-register-healthy.request.json\" -H \"Content-Type: application/json\" http://localhost:8080/api/v1/runners/register",
+                        "curl.exe -sS --max-time 20 -D \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-runners-list-post-register.headers.txt\" -o \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-runners-list-post-register.body.txt\" -w \u0027%{http_code}\u0027 -X GET http://localhost:8080/api/v1/runners",
+                        "Start-Sleep -Seconds 75",
+                        "curl.exe -sS --max-time 20 -D \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-runners-list-after-aging.headers.txt\" -o \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-runners-list-after-aging.body.txt\" -w \u0027%{http_code}\u0027 -X GET http://localhost:8080/api/v1/runners",
+                        "curl.exe -sS --max-time 20 -D \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-readyz-after.headers.txt\" -o \"C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\runners-api\\rerun-readyz-after.body.txt\" -w \u0027%{http_code}\u0027 -X GET http://localhost:8080/readyz"
+                    ],
+    "summary":  "Tested 1 assertion: VAL-AS-019 passed on the definitive rerun after rebuild."
+}

@@ -1,0 +1,34 @@
+{
+  "milestone": "e2e-pipeline",
+  "round": 4,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-E2E-012",
+    "VAL-E2E-025"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-E2E-010",
+      "reason": "Only 3 of 8 representative language builds reached status=built with the expected buildStrategy on the live stack; TinyGo, C/C++, Python, JS/TS, and .NET still fail with concrete toolchain/runtime errors."
+    },
+    {
+      "id": "VAL-FH-018",
+      "reason": "The real /get-started deployment flow now succeeds server-side and the deployment reaches running, but the browser result/deployment/domain cards stay stuck at starting with no endpoint link even while the browser keeps polling the deployment API."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Updated e2e-pipeline notes with the successful round-4 no-cache rebuild, live SSE+timeout evidence, remaining 5-language matrix failures, the frontend deployment-poller regression, and the isolated browser-session restart workaround.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": "E:\\Janus\\.factory\\validation\\e2e-pipeline\\user-testing\\synthesis.round3.json"
+}

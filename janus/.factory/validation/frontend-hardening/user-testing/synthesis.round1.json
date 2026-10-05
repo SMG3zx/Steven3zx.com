@@ -1,0 +1,119 @@
+{
+  "milestone": "frontend-hardening",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 26,
+    "passed": 7,
+    "failed": 3,
+    "blocked": 16
+  },
+  "passedAssertions": [
+    "VAL-FH-001",
+    "VAL-FH-002",
+    "VAL-FH-003",
+    "VAL-FH-004",
+    "VAL-FH-005",
+    "VAL-FH-028",
+    "VAL-FH-011"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-FH-012",
+      "reason": "Three of the seven actions (Import Repo, Upload Bundle, Review Builds) overscrolled past their intended target after switching from All to Pipeline, so the destination panel was not left in the viewport."
+    },
+    {
+      "id": "VAL-FH-025",
+      "reason": "The corrected local source build serves /billing, but only as a Coming Soon placeholder rather than the required loading/empty/error shells."
+    },
+    {
+      "id": "VAL-FH-026",
+      "reason": "The corrected local source build serves /monitoring, but only as a Coming Soon placeholder rather than the required loading/empty/error shells."
+    }
+  ],
+  "blockedAssertions": [
+    {
+      "id": "VAL-FH-006",
+      "blockedBy": "Blocked by backend auth failure: auth grain activation failed with \"node runtime dependency 'janus-node-runtime' not found in injected dependencies\"."
+    },
+    {
+      "id": "VAL-FH-007",
+      "blockedBy": "Blocked by backend auth failure: sign-in never reached redirect because the auth grain could not activate."
+    },
+    {
+      "id": "VAL-FH-008",
+      "blockedBy": "Blocked by backend auth failure: sign-up never reached redirect because the auth grain could not activate."
+    },
+    {
+      "id": "VAL-FH-009",
+      "blockedBy": "Blocked by backend auth failure: the magic-code request operation failed before the success redirect path could be validated."
+    },
+    {
+      "id": "VAL-FH-010",
+      "blockedBy": "Blocked by backend auth failure: reset-password never reached a normal success outcome because the auth grain could not activate."
+    },
+    {
+      "id": "VAL-FH-013",
+      "blockedBy": "Only the signed-out/no-project branch was validated; the auth blocker prevented checking the signed-in email chip and post-project hint updates."
+    },
+    {
+      "id": "VAL-FH-021",
+      "blockedBy": "Blocked because the running app did not expose a real-browser path to intentionally trip an error boundary without modifying or mocking the app."
+    },
+    {
+      "id": "VAL-FH-022",
+      "blockedBy": "Blocked by the auth prerequisite; only the signed-out unauthorized path was reachable, and it did not yield a stable capture of the intended loading indicators."
+    },
+    {
+      "id": "VAL-FH-023",
+      "blockedBy": "Blocked by the failed isolated signup prerequisite."
+    },
+    {
+      "id": "VAL-FH-014",
+      "blockedBy": "Blocked by a broken authentication prerequisite: isolated signup fails, leaving the dashboard signed out so project CRUD cannot be exercised."
+    },
+    {
+      "id": "VAL-FH-015",
+      "blockedBy": "Blocked upstream by failed account creation and the resulting inability to create/select a project for repo import."
+    },
+    {
+      "id": "VAL-FH-016",
+      "blockedBy": "Blocked because uploads require a project context, and authenticated project creation never became available."
+    },
+    {
+      "id": "VAL-FH-017",
+      "blockedBy": "Blocked by missing authenticated build data; filtering and log-view entry points could not be exercised against real build rows."
+    },
+    {
+      "id": "VAL-FH-018",
+      "blockedBy": "Blocked upstream by the missing authenticated project/build data needed to create and list deployments."
+    },
+    {
+      "id": "VAL-FH-019",
+      "blockedBy": "Blocked because no authenticated deployments/domains could be created or listed."
+    },
+    {
+      "id": "VAL-FH-020",
+      "blockedBy": "Blocked because no build or deployment rows existed from which to open the log modal."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "services.yaml",
+      "description": "Corrected janus-web service management to use a detached local npm run start process with port-based stop semantics, because cached container images were stale and container rebuilds currently fail on npm ci peer dependency resolution.",
+      "source": "setup"
+    },
+    {
+      "target": "user-testing.md",
+      "description": "Documented frontend-hardening concurrency guidance and the local-source frontend validation path after confirming the cached janus-web container missed current routes such as /billing and /monitoring.",
+      "source": "setup"
+    }
+  ],
+  "previousRound": null,
+  "flowReports": [
+    ".factory/validation/frontend-hardening/user-testing/flows/cli-toolchain.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/auth-surface.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-shells.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-panels.json"
+  ]
+}

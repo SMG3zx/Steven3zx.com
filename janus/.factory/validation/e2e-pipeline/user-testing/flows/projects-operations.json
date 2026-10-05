@@ -1,0 +1,172 @@
+{
+  "groupId": "projects-operations",
+  "overallStatus": "fail",
+  "assertions": [
+    {
+      "id": "VAL-E2E-004",
+      "status": "pass",
+      "reason": "Project creation returned an async operation envelope, the poll reached succeeded, and GET /api/v1/projects listed the new slug.",
+      "evidence": {
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-create.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-create.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-create.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-create.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-list-after-create.body.json"
+        ],
+        "network": [
+          "POST /api/v1/projects -> 202",
+          "GET /api/v1/operations/op_d86e6933cc3871bec4e09c8e -> succeeded",
+          "GET /api/v1/projects -> 200"
+        ],
+        "projectId": "proj_7965",
+        "observedStatuses": [
+          "succeeded"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-027",
+      "status": "fail",
+      "reason": "Duplicate slug rejection did not match the expected failed-operation conflict behavior.",
+      "evidence": {
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-duplicate-create.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-duplicate-create.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-list-after-duplicate.body.json"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-007",
+      "status": "pass",
+      "reason": "Malformed repo URLs, unsupported providers, and missing projectId were all rejected with HTTP 400 bad_request error envelopes before entering the build pipeline.",
+      "evidence": {
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\repo-import-invalid-url.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\repo-import-invalid-url.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\repo-import-unsupported-provider.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\repo-import-unsupported-provider.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\repo-import-missing-project.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\repo-import-missing-project.body.json"
+        ],
+        "errors": [
+          {
+            "code": "bad_request",
+            "message": "repoUrl must be a valid URL",
+            "requestId": "29d9533fbb3f8b308a066f40"
+          },
+          {
+            "code": "bad_request",
+            "message": "unsupported provider",
+            "requestId": "3774e6a159c7a84527e830cf"
+          },
+          {
+            "code": "bad_request",
+            "message": "projectId is required",
+            "requestId": "25b1af30f1123f9e836f688a"
+          }
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-005",
+      "status": "pass",
+      "reason": "PATCH /api/v1/projects/{id} returned an async operation that succeeded and updated the list values, and DELETE /api/v1/projects/{id} returned an async operation that succeeded and removed the project from the list.",
+      "evidence": {
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-update.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-update.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-update.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-update.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-list-after-update.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-delete.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-delete.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-delete.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-delete.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-list-after-delete.body.json"
+        ],
+        "updatedProject": {
+          "id": "proj_7965",
+          "name": "Projects Validator A 20260315035147531920-3043 updated",
+          "slug": "e2e-pipeline-ut-projects-20260315035147531920-3043-a",
+          "description": "Updated description for project CRUD validation.",
+          "status": "active",
+          "repoCheckedAt": "0001-01-01T00:00:00Z",
+          "createdAt": "2026-03-15T08:51:51.806430679Z"
+        },
+        "observedStatuses": [
+          "succeeded",
+          "succeeded"
+        ]
+      }
+    },
+    {
+      "id": "VAL-CROSS-011",
+      "status": "pass",
+      "reason": "Deleting the project succeeded and all associated project, build, deployment, and domain resources disappeared from list queries.",
+      "evidence": {
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-create.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-create.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-create.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-create.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\source-bundle.zip",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-source-upload.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-source-upload.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-source-upload.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-source-upload.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-build.builds.2.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-build.build-history.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-deploy-create.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-deploy-create.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-deploy-create.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-deploy-create.poll.1.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-deployments-list.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-domains-list.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-delete-while-active.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-delete-while-active.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-delete-while-active.poll.1.headers.txt",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-delete-while-active.poll.1.body.json"
+        ],
+        "buildId": "bld_ddd21c69345eaced7cbab549",
+        "deploymentId": "dep_ab602bb8c4e7ee19731c1c66",
+        "activeDeleteFailure": null,
+        "observedOperationStatuses": [
+          "succeeded",
+          "succeeded",
+          "succeeded"
+        ]
+      }
+    },
+    {
+      "id": "VAL-E2E-015",
+      "status": "fail",
+      "reason": "One or more exercised mutating endpoints did not consistently expose the expected async operation envelope or failure object contract.",
+      "evidence": {
+        "files": [
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\auth-signup.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\auth-signin-password.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-create.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-update.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-delete.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-a-duplicate-create.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-source-upload.body.json",
+          "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\projects-operations\\project-b-deploy-create.body.json"
+        ]
+      }
+    }
+  ],
+  "toolsUsed": [
+    "curl.exe"
+  ],
+  "frictions": [],
+  "blockers": [],
+  "appliedUpdates": [
+    "Created fresh test user e2e-pipeline-ut+projects-20260315035147531920-3043@example.com (usr_3ae8e3d154299f69e500a859) via auth.signup.",
+    "Created project A proj_7965 (e2e-pipeline-ut-projects-20260315035147531920-3043-a).",
+    "Updated and deleted project A proj_7965 (e2e-pipeline-ut-projects-20260315035147531920-3043-a).",
+    "Created project B proj_7967 (e2e-pipeline-ut-projects-20260315035147531920-3043-b).",
+    "Deleted project B proj_7967 during cleanup with status failed."
+  ]
+}

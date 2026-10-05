@@ -1,0 +1,70 @@
+{
+  "milestone": "e2e-pipeline",
+  "round": 3,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go test -count=1 -parallel 4 ./...\"; powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npx vitest run\"",
+      "exitCode": 0,
+      "details": [
+        {
+          "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go test -count=1 -parallel 4 ./...\"",
+          "exitCode": 0
+        },
+        {
+          "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npx vitest run\"",
+          "exitCode": 0
+        }
+      ]
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go build ./...\"; powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run build\"",
+      "exitCode": 0,
+      "details": [
+        {
+          "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go build ./...\"",
+          "exitCode": 0
+        },
+        {
+          "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run build\"",
+          "exitCode": 0
+        }
+      ]
+    },
+    "lint": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go vet ./...\"; powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run lint\"",
+      "exitCode": 0,
+      "details": [
+        {
+          "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go vet ./...\"",
+          "exitCode": 0
+        },
+        {
+          "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run lint\"",
+          "exitCode": 0
+        }
+      ]
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Escalate manual API/runtime verification from guidance to an enforceable contract: if a backend worker claims `followedProcedure=true` on work that requires manual verification, the handoff should include `interactiveChecks`; otherwise the worker should set `followedProcedure=false` with an explicit deviation. Consider enforcing this in the worker procedure or validation flow instead of relying on skill text alone.",
+      "evidence": "The `fix-e2e-scrutiny-round2` review found that `.factory/skills/backend-worker/SKILL.md` already requires manual API verification plus `interactiveChecks`, but the corresponding handoff still reported `followedProcedure=true` with no `interactiveChecks` and no recorded `curl.exe` validation steps in the transcript skeleton.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/e2e-pipeline/scrutiny/synthesis.round2.json"
+}

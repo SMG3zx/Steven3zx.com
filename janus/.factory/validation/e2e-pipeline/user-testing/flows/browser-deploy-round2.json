@@ -1,0 +1,87 @@
+{
+  "groupId": "browser-deploy-round2",
+  "testedAt": "2026-03-15T11:07:40Z",
+  "isolation": {
+    "browserBaseUrl": "http://localhost:3000",
+    "apiBaseUrl": "http://localhost:8080",
+    "browserSession": "browser-deploy-r2-20260315105356",
+    "emailPrefix": "e2e-pipeline-ut+browser-r2-",
+    "projectSlugPrefix": "e2e-pipeline-ut-browser-r2-",
+    "email": "e2e-pipeline-ut+browser-r2-20260315105356@example.com",
+    "projectSlug": "e2e-pipeline-ut-browser-r2-20260315105356",
+    "projectId": "proj_7985",
+    "buildId": "bld_3e05327c74105198c211f1ea",
+    "deploymentId": "dep_4daefb57968da6be8128a10b"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "Playwright",
+    "Python"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing works",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Open /get-started in an isolated signed-in browser session.",
+          "expected": "The deployment workspace is accessible with the isolated account and built artifact available for selection.",
+          "observed": "Signed-in state rendered correctly for e2e-pipeline-ut+browser-r2-20260315105356@example.com with Sign Out visible, and the deployment form allowed selecting project proj_7985 plus built artifact bld_3e05327c74105198c211f1ea."
+        },
+        {
+          "action": "Submit a preview deployment with target ref browser-deploy-r2-1773572808818 and runtime env entries.",
+          "expected": "A success result card shows deployment ID, status, domain, reachable endpoint link, and resource profile.",
+          "observed": "POST /api/v1/deployments returned 202 and the UI rendered Deployment Created for dep_4daefb57968da6be8128a10b, but the result card stayed at status starting and showed Reachable Endpoint = \"Waiting for runtime endpoint...\" instead of a link."
+        },
+        {
+          "action": "Verify the filtered deployments/domains lists and open View Logs from the created deployment.",
+          "expected": "The project filter narrows the list to the created deployment, the domains list refreshes, and View Logs opens the modal.",
+          "observed": "Immediately after submit, the filtered deployment and domain cards appeared for proj_7985 but still showed starting / no endpoint. After manual Refresh Deployments and Refresh Domains, both cards updated to running with runtime endpoint http://janus-runner:35365/. View Logs opened a modal for Deployment Logs - dep_4daefb57968da6be8128a10b with 4 visible lines."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "e2e-pipeline/browser-deploy-round2/01-signed-in-state.png",
+          "e2e-pipeline/browser-deploy-round2/02-deployment-form-filled.png",
+          "e2e-pipeline/browser-deploy-round2/03-deployment-result.png",
+          "e2e-pipeline/browser-deploy-round2/04-deployment-list-filtered.png",
+          "e2e-pipeline/browser-deploy-round2/05-domains-list-filtered.png",
+          "e2e-pipeline/browser-deploy-round2/06-log-modal-open.png",
+          "e2e-pipeline/browser-deploy-round2/07-deployment-list-after-refresh.png",
+          "e2e-pipeline/browser-deploy-round2/08-domains-after-refresh.png"
+        ],
+        "files": [
+          "e2e-pipeline/browser-deploy-round2/setup-state.json",
+          "e2e-pipeline/browser-deploy-round2/playwright-observation.json",
+          "e2e-pipeline/browser-deploy-round2/network-log.json",
+          "e2e-pipeline/browser-deploy-round2/console-errors.json",
+          "e2e-pipeline/browser-deploy-round2/09-api-corroboration.json"
+        ],
+        "consoleErrors": "Console captured one RSC fallback fetch error for /sign-in navigation and repeated \"Failed to load resource: the server responded with a status of 500\" errors caused by GET /api/v1/builds/bld_3e05327c74105198c211f1ea/logs/stream while the log modal auto-updated.",
+        "network": "POST /api/v1/auth/session/exchange -> 200; GET /api/v1/auth/me -> 200; GET /api/v1/projects -> 200; GET /api/v1/builds -> 200; POST /api/v1/deployments -> 202 with projectId=proj_7985 buildJobId=bld_3e05327c74105198c211f1ea; immediate GET /api/v1/deployments and GET /api/v1/domains -> 200 showing dep_4daefb57968da6be8128a10b / e2e-pipeline-ut-browser-r2-20260315105356-1.janus.run in starting state; manual browser refreshes later showed running cards with http://janus-runner:35365/; GET /api/v1/builds/bld_3e05327c74105198c211f1ea/logs -> 200; repeated GET /api/v1/builds/bld_3e05327c74105198c211f1ea/logs/stream -> 500."
+      },
+      "issues": "VAL-FH-018 still fails because the immediate Deployment Created result card does not satisfy the assertion requirement for a reachable endpoint link (it remains \"Waiting for runtime endpoint...\") and the post-submit list refresh initially stays in starting state even though the deployment becomes running shortly afterward."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The assigned agent-browser session became unstable when using screenshot commands; the daemon disconnected twice while the authenticated /get-started page was loaded.",
+      "resolved": true,
+      "resolution": "Closed/restarted only the isolated agent-browser session, then captured the required screenshots with a single isolated Playwright browser context while keeping the same isolated user/project data.",
+      "affectedAssertions": [
+        "VAL-FH-018"
+      ]
+    },
+    {
+      "description": "Opening the deployment log modal triggered repeated failed /logs/stream auto-update requests that surfaced as console/network 500s.",
+      "resolved": false,
+      "resolution": "The modal still rendered stable log content from GET /api/v1/builds/{buildId}/logs, so the assertion was testable, but the SSE/stream failures remain visible evidence.",
+      "affectedAssertions": [
+        "VAL-FH-018"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 1 assertion. Deployment creation, project filtering, domains listing, and the View Logs modal all worked through the real browser surface, and a manual refresh later showed the deployment/domain running at http://janus-runner:35365/. However, the immediate Deployment Created result card still stops at status starting with no reachable endpoint link, so VAL-FH-018 remains a fail rather than a pass."
+}

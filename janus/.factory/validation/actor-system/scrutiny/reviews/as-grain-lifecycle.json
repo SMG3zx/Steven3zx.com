@@ -1,0 +1,39 @@
+{
+  "featureId": "as-grain-lifecycle",
+  "reviewedAt": "2026-03-14T20:31:15Z",
+  "commitId": "f113965667a5e69d0f0246a428b724a1620729d5",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Passivation options are now threaded through grain identity resolution and execution actors already invoke ctx.Shutdown(), but the feature still falls short of the actor-system contract. On the mission's Windows platform, the retry guard only recognizes a Linux-style bind error, and the added lifecycle tests do not behaviorally prove grain deactivation, retry recovery, or execution-actor disappearance.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/actors/node.go",
+        "line": 510,
+        "severity": "blocking",
+        "description": "`isAddressInUseErr` only matches `address already in use`. In this Windows mission environment, a real bind conflict reproduces as `[WinError 10048] Only one usage of each socket address ...`, so `StartActorNode` misses the retry branch at `backend/janus-api/internal/actors/node.go:102-114` and can return an error instead of bumping ports. That makes VAL-AS-016 unreliable on the documented platform."
+      },
+      {
+        "file": "backend/janus-api/internal/actors/lifecycle_test.go",
+        "line": 26,
+        "severity": "non_blocking",
+        "description": "The new lifecycle tests are mostly structural. They check option counts, helper arithmetic, and non-nil constructors (`TestGatewayGrainOptsWithPassivation`, `TestPortCollisionRetryLoopBumps`, `TestExecutionActorShutdownOnReceive`), but they never wait for a grain to passivate / call `OnDeactivate`, start a colliding second node and observe retry recovery, or assert execution actors disappear after work completes. Regressions against VAL-AS-007 and VAL-AS-017 would likely slip through, and VAL-AS-016 still lacks direct behavioral coverage."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill says actor changes should verify lifecycle behavior via tests, but it does not explicitly warn that lifecycle features need behavioral assertions rather than constructor/configuration checks. This feature was marked as verified even though the added tests never observed passivation, actual retry recovery, or actor disappearance.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:27-31 and :47 say to write tests for expected behavior and verify actor lifecycle; compare with backend/janus-api/internal/actors/lifecycle_test.go:26-42, :86-105, and :157-169 plus the handoff's verification claims."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared state documents Windows as the platform, but there is no actor-system note capturing that bind-collision errors are OS-specific. That omission makes it easy to implement Linux-only address-in-use detection.",
+      "evidence": "E:/Janus/.factory/library/environment.md documents Windows as the platform, while backend/janus-api/internal/actors/node.go:510-514 hard-codes `address already in use` matching; a local reproduction in this session returned `[WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Fail: passivation wiring and execution-actor shutdown calls are present, but port-collision recovery is not reliable on Windows because the retry guard only recognizes a Linux-style bind error. The added tests are also too shallow to directly validate passivation, retry recovery, and post-execution actor cleanup."
+}

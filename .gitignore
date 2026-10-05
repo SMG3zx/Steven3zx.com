@@ -1,0 +1,63 @@
+.env
+.env.*
+!.env.example
+# Host services and their private state/binaries are not project source.
+/CADDY/
+/GITEA/
+# Superseded duplicate checkout; the curated copy is /mein-factory/.
+/MeinFactory/
+# Leftover staging directory from the initial copy workflow.
+/projects/
+# Local infrastructure notes disclose service topology and account identifiers.
+/index.md
+# These operational/industrial materials need an explicit public-release review.
+/tech-func/
+# The generated/private documentation vault is local-only.
+/janus/docs/Janus/
+# Keep oversized local assets outside the public history until reviewed.
+/janus/docs/Janus.excalidraw
+/rusty-mines/assets/inventory-26.3.json
+# Local AI/editor databases and generated indexes can contain private material.
+**/.smart-env/
+**/.mastra/
+**/.obsidian/plugins/
+**/.idea/workspace.xml
+**/.vscode/*.log
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/id_rsa*
+**/id_ed25519*
+**/credentials*
+**/secrets*
+**/token*
+**/node_modules/
+**/target/
+**/dist/
+**/build/
+**/.zig-cache/
+**/zig-cache/
+**/zig-out/
+**/zig-pkg/
+**/__pycache__/
+**/.pytest_cache/
+**/playwright-report/
+**/test-results/
+**/data/
+**/backups/
+**/go-cache/
+**/local-events/
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.etl
+**/*.log
+**/*.vhdx
+**/__pycache__/
+CADDY/data/
+CADDY/*.log
+GITEA/data/
+GITEA/gitea-repositories/
+GITEA/log/
+GITEA/*.db

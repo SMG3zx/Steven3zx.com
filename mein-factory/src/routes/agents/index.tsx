@@ -1,0 +1,3 @@
+import { component$ } from "@builder.io/qwik";
+import { WorkspacePage } from "../../components/workspace-page";
+export default component$(() => <WorkspacePage eyebrow="WORKSPACE" title="Agents" description="Specialized local agents that coordinate the factory pipeline."><div class="workspace-list"><div class="workspace-list-row"><span class="service-indicator online" /><div><strong>Factory Agent</strong><small>Planner · qwen2.5:14b-instruct</small></div><span class="run-pill running-pill">Available</span></div><div class="workspace-list-row"><span class="service-indicator muted" /><div><strong>Builder Agent</strong><small>Workspace tools not connected yet</small></div><span class="run-pill done-pill">Planned</span></div></div></WorkspacePage>);

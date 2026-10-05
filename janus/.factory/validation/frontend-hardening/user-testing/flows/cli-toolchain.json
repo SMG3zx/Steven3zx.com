@@ -1,0 +1,96 @@
+{
+  "groupId": "cli-toolchain",
+  "surface": "frontend-cli",
+  "testedAt": "2026-03-14T19:20:09.654037-05:00",
+  "isolation": {
+    "repoRoot": "E:\\Janus",
+    "workingDirectory": "E:\\Janus\\frontend\\web",
+    "missionDir": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410",
+    "milestone": "frontend-hardening"
+  },
+  "toolsUsed": [
+    "powershell",
+    "python",
+    "npm"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-001",
+      "title": "TypeScript strict-mode build succeeds",
+      "status": "pass",
+      "summary": "npm run build exited 0 under tsconfig strict mode and Next.js completed compilation, lint/type validation, and static route generation without errors.",
+      "checks": [
+        {
+          "action": "Inspect frontend/web/tsconfig.json",
+          "expected": "compilerOptions.strict is true",
+          "observed": "strict is set to true."
+        },
+        {
+          "action": "Run npm run build from E:\\Janus\\frontend\\web",
+          "expected": "Build exits 0 with no type errors for the frontend routes.",
+          "observed": "Exit code 0; Next.js reported compiled successfully, completed lint/type validation, and generated 12 static pages including /, /sign-in, /sign-up, /magic-code, /reset-password, /get-started, /janus, /billing, /monitoring, and /_not-found."
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "frontend-hardening/cli-toolchain/VAL-FH-001-build-output.txt"
+        ],
+        "command": "npm run build",
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-002",
+      "title": "ESLint passes cleanly",
+      "status": "pass",
+      "summary": "npm run lint exited 0 and reported no ESLint warnings or errors.",
+      "checks": [
+        {
+          "action": "Run npm run lint from E:\\Janus\\frontend\\web",
+          "expected": "Lint exits 0 with zero warnings and zero errors.",
+          "observed": "Exit code 0; next lint output was \"No ESLint warnings or errors\"."
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "frontend-hardening/cli-toolchain/VAL-FH-002-lint-output.txt"
+        ],
+        "command": "npm run lint",
+        "exitCode": 0
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-003",
+      "title": "Vitest unit test suite passes",
+      "status": "pass",
+      "summary": "npm run test exited 0 with 21 test files and 240 tests passing. The suite included reducer, utility, and API-client coverage targets; repeated ErrorBoundary stack traces were present after the pass summary but treated as informational per the assignment because the command exited 0 and Vitest reported all tests passing.",
+      "checks": [
+        {
+          "action": "Run npm run test from E:\\Janus\\frontend\\web",
+          "expected": "Vitest exits 0 with no failing tests.",
+          "observed": "Exit code 0; Vitest reported 21 passed test files and 240 passed tests in 3.67s."
+        },
+        {
+          "action": "Inspect unit-test coverage targets in app/janus/lib/__tests__",
+          "expected": "Reducer logic, slugify, normalizeDate, parseDeploymentRuntimeEnvInput, parseWorkspaceViewFromLocation, and API client error handling are covered by the suite.",
+          "observed": "Passing suite included reducer.test.ts, utils.test.ts, and api-client.test.ts; source inspection confirmed the named utility functions and JanusApiError/JanusApiClient coverage targets are present."
+        }
+      ],
+      "evidence": {
+        "terminalSnapshots": [
+          "frontend-hardening/cli-toolchain/VAL-FH-003-test-output.txt",
+          "frontend-hardening/cli-toolchain/VAL-FH-003-coverage-inspection.txt"
+        ],
+        "command": "npm run test",
+        "exitCode": 0,
+        "informationalOutput": "Expected React error-boundary stack traces from ErrorBoundary tests appeared in stdout after the passing summary."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 3 frontend CLI toolchain assertions: 3 passed, 0 failed, 0 blocked."
+}

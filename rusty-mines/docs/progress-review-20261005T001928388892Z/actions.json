@@ -1,0 +1,941 @@
+{
+  "schema_version": 2,
+  "actions": [
+    {
+      "id": "EVIDENCE-FRESHNESS",
+      "category": "missing_execution",
+      "status": "ready",
+      "priority": "P0",
+      "files": [],
+      "next_step": "Capture an unchanged source snapshot and run the complete local validation suite.",
+      "acceptance_criteria": [
+        "All required commands pass against an unchanged snapshot."
+      ],
+      "evidence_refs": [
+        "manifest.json",
+        "validation.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-current_live_mutation_pass",
+      "category": "missing_execution",
+      "status": "blocked",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish current M6/M7 live reducer mutation acceptance, not only schema publication or test compilation.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_live_mutation_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": "Explicit disposable backend/admin authorization required"
+    },
+    {
+      "id": "CHECK-current_rollback_pass",
+      "category": "missing_execution",
+      "status": "blocked",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish host rollback on block/inventory failure with no partial mutation.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_rollback_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": "Explicit disposable backend/admin authorization required"
+    },
+    {
+      "id": "CHECK-current_restart_pass",
+      "category": "missing_execution",
+      "status": "blocked",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish edits surviving actual backend restart and subsequent client reload.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_restart_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": "Explicit disposable backend/admin authorization required"
+    },
+    {
+      "id": "CHECK-current_two_client_pass",
+      "category": "missing_execution",
+      "status": "blocked",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish two official graphical Java 26.3 clients seeing committed edits and entity lifecycle correctly.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_two_client_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": "Renewed graphical authorization required"
+    },
+    {
+      "id": "CHECK-current_race_pass",
+      "category": "missing_execution",
+      "status": "blocked",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish concurrent edit, revocation and lease-expiry race acceptance.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_race_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": "Explicit disposable backend/admin authorization required"
+    },
+    {
+      "id": "CHECK-current_backpressure_pass",
+      "category": "missing_execution",
+      "status": "ready",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish bounded queue behavior under slow clients and input floods for the selected demo.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_backpressure_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-current_component_review",
+      "category": "missing_execution",
+      "status": "ready",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish independent component-field and hash semantic review beyond generated sample roundtrips.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_component_review",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-current_m7_acceptance",
+      "category": "missing_execution",
+      "status": "blocked",
+      "priority": "P0",
+      "files": [
+        "docs/play-implementation-plan.md",
+        "src/foundation_live_tests.rs"
+      ],
+      "next_step": "Record a scoped execution test for: Records establish graphical all-mode abilities, food, controlled death/respawn and limited physics acceptance.",
+      "acceptance_criteria": [
+        "Record source hashes, exact command/scenario and actual outcome; test definitions or Jev support are insufficient."
+      ],
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_m7_acceptance",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": "Renewed graphical authorization required"
+    },
+    {
+      "id": "CHECK-local_edit_test_design",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Supplied test bodies exercise rejected-edit correction, confirmed edits and late-result isolation; this is coverage design, not live execution.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "local_test_design.request.json#/questions/local_edit_test_design",
+        "local_test_design.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-local_chunk_test_design",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Supplied test bodies exercise override changes during and after chunk batch emission; this is coverage design, not graphical execution.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "local_test_design.request.json#/questions/local_chunk_test_design",
+        "local_test_design.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-local_respawn_test_design",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Supplied test bodies exercise freezing after void death and same-dimension respawn with renewed chunk loading; this is coverage design, not graphical execution.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "local_test_design.request.json#/questions/local_respawn_test_design",
+        "local_test_design.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-flight_authority",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Client flight flags cannot grant flight outside server-authorized Creative/Spectator mode.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/flight_authority",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-mode_wire_sync",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Mode changes synchronize client game-mode and abilities, including Adventure and Spectator.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/mode_wire_sync",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-gravity_authority",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Normal-mode vertical movement and ground state are computed by the server rather than accepted solely from client flags.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/gravity_authority",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-simulation_catchup",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Simulation catch-up work is bounded after a delayed poll.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/simulation_catchup",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-sprint_food",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Food loss applies to accepted Survival sprinting, not Creative/Adventure/Spectator sprint intent.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/sprint_food",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-vitals_persistence",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Health and food are persisted authoritatively and restored across reconnect.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/vitals_persistence",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-death_respawn_protocol",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Void death uses controlled death and protocol Respawn lifecycle, including renewed loading/teleport readiness, rather than only teleporting back to spawn.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/death_respawn_protocol",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edited_terrain_collision",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "spacetimedb/src/world.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Collision responds to committed edited terrain, rather than always using the unmodified flat platform.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "player_state.request.json#/questions/edited_terrain_collision",
+        "player_state.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_ownership",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Block edits require both authenticated gateway identity and exact owner connection.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_ownership",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_lease_phase",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Block edits require an unexpired lease and active Play phase.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_lease_phase",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_reach_interest",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Block edits check server-known reach and owned chunk interest before mutation.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_reach_interest",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_mode_policy",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Survival/Creative edits follow explicit policy while unsupported Adventure and Spectator edits are denied.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_mode_policy",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_inventory_atomic",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Supported Survival item consumption/drop collection and block mutation occur in the same reducer transaction.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_inventory_atomic",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_retry_conflict",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Exact block-action retries are idempotent and conflicting or out-of-order requests are rejected.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_retry_conflict",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_storage_caps",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: New persistent overrides enforce both per-chunk and total-world bounds.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_storage_caps",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-mode_grant_authority",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "spacetimedb/src/world.rs",
+        "spacetimedb/src/policy.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Elevated mode grants require backend administrator authority, not offline username identity.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_backend.request.json#/questions/mode_grant_authority",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_one_pending",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Each connection permits at most one outstanding block action.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_one_pending",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_success_callback",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: The successful mutation path waits for reducer success before acknowledging the prediction sequence.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_success_callback",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_success_subscription",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: The successful mutation path also requires matching subscribed sequence, coordinates, expected state and result.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_success_subscription",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_reject_reconcile",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Rejected or unsupported edits attempt authoritative correction before prediction acknowledgement.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_reject_reconcile",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-edit_deadline",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Missing or delayed block-action confirmations have bounded deadlines and fail closed.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_deadline",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-override_decoder_bounds",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Chunk override decoding enforces byte limits, record boundaries and coordinate membership.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/override_decoder_bounds",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-override_revision_order",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Loaded chunk updates use revisions to avoid applying an older snapshot after a newer snapshot.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/override_revision_order",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    },
+    {
+      "id": "CHECK-chunk_reload_overlays",
+      "category": "missing_evidence",
+      "status": "ready",
+      "priority": "P1",
+      "files": [
+        "src/connection.rs",
+        "src/gateway.rs"
+      ],
+      "next_step": "Inspect the selected implementation and dependencies for: Newly loaded base chunks are reconciled with authoritative override snapshots before assuming the client has current terrain.",
+      "acceptance_criteria": [
+        "Reproduce a defect or document missing evidence with exact source/test references before changing code."
+      ],
+      "evidence_refs": [
+        "world_worker.request.json#/questions/chunk_reload_overlays",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ],
+      "dependencies": [],
+      "blocker": null
+    }
+  ],
+  "next_three_ready": [
+    "CHECK-current_backpressure_pass",
+    "CHECK-current_component_review",
+    "EVIDENCE-FRESHNESS"
+  ],
+  "delta": {
+    "new": [
+      "EVIDENCE-FRESHNESS",
+      "CHECK-current_live_mutation_pass",
+      "CHECK-current_rollback_pass",
+      "CHECK-current_restart_pass",
+      "CHECK-current_two_client_pass",
+      "CHECK-current_race_pass",
+      "CHECK-current_backpressure_pass",
+      "CHECK-current_component_review",
+      "CHECK-current_m7_acceptance",
+      "CHECK-local_edit_test_design",
+      "CHECK-local_chunk_test_design",
+      "CHECK-local_respawn_test_design",
+      "CHECK-flight_authority",
+      "CHECK-mode_wire_sync",
+      "CHECK-gravity_authority",
+      "CHECK-simulation_catchup",
+      "CHECK-sprint_food",
+      "CHECK-vitals_persistence",
+      "CHECK-death_respawn_protocol",
+      "CHECK-edited_terrain_collision",
+      "CHECK-edit_ownership",
+      "CHECK-edit_lease_phase",
+      "CHECK-edit_reach_interest",
+      "CHECK-edit_mode_policy",
+      "CHECK-edit_inventory_atomic",
+      "CHECK-edit_retry_conflict",
+      "CHECK-edit_storage_caps",
+      "CHECK-mode_grant_authority",
+      "CHECK-edit_one_pending",
+      "CHECK-edit_success_callback",
+      "CHECK-edit_success_subscription",
+      "CHECK-edit_reject_reconcile",
+      "CHECK-edit_deadline",
+      "CHECK-override_decoder_bounds",
+      "CHECK-override_revision_order",
+      "CHECK-chunk_reload_overlays"
+    ],
+    "unchanged": [],
+    "status_changes": [],
+    "not_reassessed": [
+      "A00",
+      "A01",
+      "A02",
+      "A03",
+      "A04",
+      "A05",
+      "A06",
+      "A07"
+    ],
+    "verdict_changes": [
+      {
+        "id": "current_live_mutation_pass",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_rollback_pass",
+        "before": "insufficient_evidence",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_restart_pass",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_two_client_pass",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_race_pass",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_backpressure_pass",
+        "before": "insufficient_evidence",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_component_review",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "current_m7_acceptance",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "flight_authority",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "mode_wire_sync",
+        "before": "contradicts",
+        "after": "not_assessed"
+      },
+      {
+        "id": "gravity_authority",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "simulation_catchup",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "sprint_food",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "vitals_persistence",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "death_respawn_protocol",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edited_terrain_collision",
+        "before": "insufficient_evidence",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_ownership",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_lease_phase",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_reach_interest",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_mode_policy",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_inventory_atomic",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_retry_conflict",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "edit_storage_caps",
+        "before": "supports",
+        "after": "not_assessed"
+      },
+      {
+        "id": "mode_grant_authority",
+        "before": "supports",
+        "after": "not_assessed"
+      }
+    ]
+  }
+}

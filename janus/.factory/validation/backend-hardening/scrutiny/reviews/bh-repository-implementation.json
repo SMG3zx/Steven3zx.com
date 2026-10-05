@@ -1,0 +1,39 @@
+{
+  "featureId": "bh-repository-implementation",
+  "reviewedAt": "2026-03-14T17:08:31.785377Z",
+  "commitId": "5783ea9",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature successfully centralized several scan/RETURNING clauses, added connection-pool settings, and added some lookup indexes, but it does not fully satisfy the DRY-SQL and indexing requirements in VAL-BH-008/009. Duplicate project-by-id query patterns still exist in multiple repository methods, and the case-insensitive domain lookup still lacks a usable supporting index.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/projects.go",
+        "line": 91,
+        "severity": "blocking",
+        "description": "VAL-BH-008 is still unmet: the `FROM projects WHERE id=$1` query pattern appears in multiple methods/files instead of a single canonical repository method. Current duplicates include `projects.go:91`, `repo_check.go:34`, `repo_check.go:266`, and `workflow_deployments.go:49`, which directly contradicts the validation contract's pass condition that fragments like `FROM projects WHERE id` appear in at most one location."
+      },
+      {
+        "file": "backend/janus-api/internal/core/workflow_deployments.go",
+        "line": 291,
+        "severity": "blocking",
+        "description": "The feature did not fully cover the required lookup indexing. `ResolveDomainRuntimeEndpoint` performs `WHERE LOWER(db.domain)=LOWER($1)`, but migration `000002_add_lookup_indexes.up.sql` only adds `idx_domain_bindings_deployment_id` at line 25. The base schema's `UNIQUE(domain)` constraint is not a usable index for this expression lookup, so this hot single-entity lookup remains effectively unindexed and VAL-BH-009 is not fully satisfied."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The shared architecture library is stale after milestone 1 completion. It still describes golang-migrate and the repository pattern as future targets instead of current repository state, so future workers will start from outdated assumptions.",
+      "evidence": "E:/Janus/.factory/library/architecture.md:28-29 still says `Migration strategy: golang-migrate (target after milestone 1)` and `Repository pattern with interfaces (target after milestone 1)` even though this mission already completed `bh-migration-tooling`, `bh-repository-interfaces`, and this feature's repository refactor work."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's mandatory TDD procedure is too rigid for refactor/indexing features and does not match how this feature was actually executed or handed off.",
+      "evidence": "`E:/Janus/.factory/skills/backend-worker/SKILL.md:27-30` requires creating failing tests first and running them red, but the handoff for this feature reports `tests.added: []` at `C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-14T06-39-54-253Z__bh-repository-implementation__b4d6d469-f2f4-41d0-872d-b3838bcb1e59.json:32-34` because the work was a DRY/index/pool refactor validated via existing tests and grep checks."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed commit `5783ea9` and its transcript/handoff footprint. Result: fail, because the feature only partially removed duplicated SQL and missed an indexable implementation for case-insensitive domain lookup."
+}

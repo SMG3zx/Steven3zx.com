@@ -1,0 +1,50 @@
+{
+  "featureId": "fh-dashboard-layout",
+  "reviewedAt": "2026-03-14T23:47:31.834302Z",
+  "commitId": "a7c52dc",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Commit a7c52dc successfully migrated Topbar and Sidebar styling to Tailwind and added focused component tests, but it only delivered part of the fh-dashboard-layout contract. The reviewed implementation still lacks the required mobile/tablet sidebar collapse behavior and leaves key dashboard layout surfaces on legacy CSS classes instead of a fully Tailwind-based layout.",
+    "issues": [
+      {
+        "file": "frontend/web/app/janus/components/Sidebar.tsx",
+        "line": 15,
+        "severity": "blocking",
+        "description": "The sidebar remains a static desktop aside in this commit. There is no mobile/tablet collapse state, hamburger toggle, or overlay, so the required responsive navigation behavior for narrow viewports is not implemented."
+      },
+      {
+        "file": "frontend/web/app/janus/page.tsx",
+        "line": 486,
+        "severity": "blocking",
+        "description": "The dashboard shell was not fully migrated to Tailwind. The page still renders legacy CSS hooks like `appShell`, `appMain`, and `flash`, so the monolithic layout/CSS dependency remains instead of the requested all-Tailwind dashboard layout."
+      },
+      {
+        "file": "frontend/web/app/janus/lib/constants.ts",
+        "line": 20,
+        "severity": "non_blocking",
+        "description": "The workspace selector exposes the `reference` view with the label `API` instead of the feature's requested `Reference`, so the visible workspace naming does not match the specification."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill's strict red/green TDD step does not fit pure Tailwind/classname migration tasks. The worker explicitly called this out in skill feedback after this feature.",
+      "evidence": "E:/Janus/.factory/skills/frontend-worker/SKILL.md step 3 requires writing failing tests first; handoff 2026-03-14T23-19-25-192Z__fh-dashboard-layout__1d667f1a-26eb-4092-adee-219ff861d140.json -> handoff.skillFeedback.suggestedChanges says this is impractical for UI component migrations that mainly replace class names."
+    },
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill and the review bookkeeping are out of sync on manual verification. The skill requires dev-server/browser verification with interactiveChecks, but this handoff was still considered procedure-compliant without any recorded interactive checks.",
+      "evidence": "E:/Janus/.factory/skills/frontend-worker/SKILL.md step 6 requires `npm run dev`, manual verification, and one `interactiveChecks` entry per verification; the fh-dashboard-layout handoff only records commandsRun, and the saved transcript skeleton for workerSessionId 1d667f1a-26eb-4092-adee-219ff861d140 contains no `npm run dev`, `agent-browser`, or `interactiveChecks` markers."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared architecture notes are stale about the dashboard status. They still describe `/janus` as something that 'will be decomposed into proper components', even though the codebase already contains extracted dashboard components.",
+      "evidence": "E:/Janus/.factory/library/architecture.md -> Frontend Architecture / Pages says `/janus` 'will be decomposed into proper components'; the repo already has frontend/web/app/janus/components/Sidebar.tsx, Topbar.tsx, QuickActions.tsx, ProjectsPanel.tsx, etc."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed handoff 1d667f1a-26eb-4092-adee-219ff861d140 and commit a7c52dc. The commit improves Topbar/Sidebar styling and tests, but it does not fully satisfy the fh-dashboard-layout feature because responsive sidebar collapse is missing and the dashboard shell still depends on legacy non-Tailwind layout classes."
+}

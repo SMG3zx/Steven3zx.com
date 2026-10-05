@@ -1,0 +1,45 @@
+{
+  "featureId": "e2e-project-repo",
+  "reviewedAt": "2026-03-15T07:20:13.402315Z",
+  "commitId": "7baf31d",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature improves project deletion and duplicate-slug handling, but it does not fully satisfy the project/repo requirements. Repo import still accepts non-GitHub URLs, and project writes can still report success after database write failures because the repository layer discards Exec errors.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/projects.go",
+        "line": 69,
+        "severity": "blocking",
+        "description": "`CreateProject` and `UpdateProject` both ignore `db.Exec` errors. The new pre-check in `internal/actors/grains.go:326-335` is not atomic, so concurrent duplicate-slug creates—or any INSERT/UPDATE failure, including PATCHing a slug to one that already exists—can still return a succeeded operation with a project payload that was never persisted."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/builds_deployments.go",
+        "line": 211,
+        "severity": "blocking",
+        "description": "`RepoImport` only calls `url.ParseRequestURI`, so any syntactically valid URI is accepted. Inputs like `ftp://bad` therefore enter the build pipeline instead of returning 400, which violates the feature requirement to accept only valid GitHub repository URLs."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/project_repo_e2e_test.go",
+        "line": 422,
+        "severity": "non_blocking",
+        "description": "The new handler tests stop at the initial 202 envelope for project update/delete and repo import, so they do not actually verify operation completion, build status progression, or delete cascade behavior required by VAL-E2E-005/006. The suite also codifies the bad FTP acceptance at lines 667-668."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill requires TDD and manual API verification, but this worker implemented the changes before creating the new tests and did not record any curl-based interactive checks. The handoff still marks `followedProcedure` as true, so the skill feedback is not reflecting actual execution.",
+      "evidence": "`E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md:27-30` requires writing failing tests first and `:44-46` requires manual `curl.exe` verification; `worker-transcripts.jsonl:50` shows 'Now let me implement the solution' before 'Now let me create the comprehensive E2E handler test file'; `C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-15T06-49-54-299Z__e2e-project-repo__3e05e99d-3956-42c0-91a8-b9678fad9719.json:163` records `followedProcedure=true`."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared state does not capture the intended repo-import URL contract ('GitHub HTTPS URL only'), and the new tests now encode the looser behavior. That contract should be documented centrally so future workers do not preserve the wrong validation rule.",
+      "evidence": "`backend/janus-api/internal/api/handler/builds_deployments.go:211-222` accepts any URI that parses and only checks `provider == github`; `backend/janus-api/internal/api/handler/project_repo_e2e_test.go:667-668` explicitly expects `ftp://bad` to return 202."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed commit `7baf31d` and the worker transcript/handoff for `e2e-project-repo`. The feature added useful checks and test coverage, but it still fails the milestone requirements because repo import validation is too permissive and project create/update can falsely succeed when the database rejects a write."
+}

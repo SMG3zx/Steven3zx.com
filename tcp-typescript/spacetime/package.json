@@ -1,0 +1,8 @@
+{
+  "name": "tcp-capture-spacetime-module",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "spacetimedb": "^2.0.0"
+  }
+}

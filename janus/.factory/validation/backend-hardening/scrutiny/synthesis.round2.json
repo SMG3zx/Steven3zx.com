@@ -1,0 +1,47 @@
+{
+  "milestone": "backend-hardening",
+  "round": 2,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cmd /d /c \"cd /d E:\\Janus\\backend\\janus-api && go test -count=1 -parallel 4 ./...\"",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cmd /d /c \"cd /d E:\\Janus\\backend\\janus-api && go build ./...\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cmd /d /c \"cd /d E:\\Janus\\backend\\janus-api && go vet ./...\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "failedFeatures": [
+      "bh-scrutiny-fix-code"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "bh-scrutiny-fix-code",
+      "severity": "blocking",
+      "description": "`backend/janus-api/internal/core/repository_test.go` still does not exercise the repository operations called out in the original bh-core-tests failure. Round 2 resolved the migration DDL literal, project-by-id query deduplication/indexing, GET-only method guards, and `/readyz` healthy-path actor-check coverage, but it did not add direct coverage for `CreateUser`, `FindUserByEmail`, `CreateProject`, `UpdateProject`, `DeleteProject`, `ClaimBuildJob`, `ClaimDeployment`, or `CreateOperation`."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Updated `.factory/library/backend-hardening.md` with the current repository-test harness gap: no checked-in sqlite/sqlmock fixture exists under `backend/janus-api`, and scrutiny requires direct repository-operation coverage rather than scan/helper-only tests.",
+      "sourceFeature": "bh-scrutiny-fix-code"
+    }
+  ],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/backend-hardening/scrutiny/synthesis.round1.json"
+}

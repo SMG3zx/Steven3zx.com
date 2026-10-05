@@ -1,0 +1,39 @@
+{
+  "milestone": "backend-hardening",
+  "round": 3,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cmd /d /c \"cd /d E:\\Janus\\backend\\janus-api && go test -count=1 -parallel 4 ./...\"",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cmd /d /c \"cd /d E:\\Janus\\backend\\janus-api && go build ./...\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cmd /d /c \"cd /d E:\\Janus\\backend\\janus-api && go vet ./...\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Updated `.factory/library/backend-hardening.md` to replace the stale repository-test gap note with the current checked-in `state_repo_test.go` coverage and the `database/sql`/`go-sqlmock` compatibility rule for `State.db`.",
+      "sourceFeature": "bh-scrutiny-fix-repo-tests"
+    }
+  ],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/backend-hardening/scrutiny/synthesis.round2.json"
+}

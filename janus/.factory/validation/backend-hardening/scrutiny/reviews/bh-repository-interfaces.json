@@ -1,0 +1,38 @@
+{
+  "featureId": "bh-repository-interfaces",
+  "reviewedAt": "2026-03-14T17:09:36.294069Z",
+  "commitId": "72e0b2ecb8f0cc1ff072d9f914d591efe4975827",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implementation footprint matches the feature intent: `internal/core/repositories.go` defines repository interfaces for users, auth challenges/password resets, projects, builds, deployments, operations, runners, telemetry, and artifacts; `Handler`, `Server`, actor grains, and actor node/runtime types now depend on `core.DataStore` instead of `*core.State`; and targeted greps found no `db.Exec`/`db.Query`/`db.QueryRow` or inline SQL usage in `internal/api/handler/` or `internal/actors/`. I did not find a blocking gap against VAL-BH-003 or VAL-BH-004.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/actors/control_actors.go",
+        "line": 67,
+        "severity": "non_blocking",
+        "description": "This commit also changes unsupported-message handling in several actors from explicit errors/responses to log-and-ignore behavior. `commandGatewayActor` now only logs and returns here, and similar changes appear in `build_actors.go:50` and `runner_actors.go:69,136,165`. That behavior drift is outside the repository-interface scope and can turn programmer mistakes into timeouts/harder debugging if an actor receives the wrong message type."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's mandatory TDD step does not fit interface-only refactors very well. This worker validated the feature with compile-time interface assertions plus existing build/test coverage, and the handoff explicitly calls out that compile-time checks were the primary verification mechanism.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:27-30 requires a red test first; C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-14T06-31-51-940Z__bh-repository-interfaces__03334e38-5732-4dd1-911a-f1df2cfd0c84.json:50-51 says compile-time interface satisfaction checks were the appropriate primary test for this feature."
+    },
+    {
+      "area": "services",
+      "observation": "Shared command metadata is missing backend build/vet entries even though backend-hardening verification routinely uses them. Future workers have to rediscover the exact commands instead of reusing a shared alias.",
+      "evidence": "E:/Janus/.factory/services.yaml:2-4 defines only `install-backend` and `test-backend`; C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-14T06-31-51-940Z__bh-repository-interfaces__03334e38-5732-4dd1-911a-f1df2cfd0c84.json:16 and :21 record `go build ./...` and `go vet ./...` as standard verification for this feature."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared architecture note about the repository pattern is now stale. It still says repository interfaces are a future target, even though this feature has landed them in `internal/core/repositories.go` and refactored handlers/actors to use `core.DataStore`.",
+      "evidence": "E:/Janus/.factory/library/architecture.md:29 says `Repository pattern with interfaces (target after milestone 1)`; E:/Janus/backend/janus-api/internal/core/repositories.go:22-135 now defines the repository interfaces and compile-time `*State` satisfaction checks."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed handoff, transcript skeleton, backend-worker skill, shared-state docs, and commit 72e0b2ecb8f0cc1ff072d9f914d591efe4975827. Result: pass. The repository-interface refactor satisfies the requested handler/actor abstraction and no-raw-SQL assertions, with one non-blocking note about unrelated actor unsupported-message handling becoming log-only."
+}

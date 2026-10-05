@@ -1,0 +1,105 @@
+{
+  "milestone": "frontend-hardening",
+  "round": 2,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 19,
+    "passed": 0,
+    "failed": 3,
+    "blocked": 16
+  },
+  "passedAssertions": [],
+  "failedAssertions": [
+    {
+      "id": "VAL-FH-012",
+      "reason": "Import Repo, Upload Bundle, and Review Builds still overscrolled past their destination panels, leaving the targets completely outside the viewport after the workspace view switched."
+    },
+    {
+      "id": "VAL-FH-025",
+      "reason": "The billing route exists, but it still renders only a static Coming Soon placeholder instead of the required loading, empty, and error states."
+    },
+    {
+      "id": "VAL-FH-026",
+      "reason": "The monitoring route exists, but it still renders only a static Coming Soon placeholder instead of the required loading, empty, and error states."
+    }
+  ],
+  "blockedAssertions": [
+    {
+      "id": "VAL-FH-006",
+      "blockedBy": "Blocked by backend auth failure: signup/signin operations still fail after 202 with service_unavailable because the auth grain cannot activate without injected dependency \"janus-node-runtime\"."
+    },
+    {
+      "id": "VAL-FH-007",
+      "blockedBy": "Blocked by backend auth failure: password sign-in never reached redirect because the auth operation failed during grain activation."
+    },
+    {
+      "id": "VAL-FH-008",
+      "blockedBy": "Blocked by backend auth failure: sign-up never reached redirect because the auth signup operation failed during grain activation."
+    },
+    {
+      "id": "VAL-FH-009",
+      "blockedBy": "Blocked by backend auth failure: the magic-code request operation failed during grain activation before any valid-code success path could be completed."
+    },
+    {
+      "id": "VAL-FH-010",
+      "blockedBy": "Blocked by backend auth failure: reset-password never reached a normal success outcome because the auth reset request failed during grain activation."
+    },
+    {
+      "id": "VAL-FH-013",
+      "blockedBy": "Only the signed-out branch was validated; backend auth failures prevented reaching a trustworthy signed-in topbar state."
+    },
+    {
+      "id": "VAL-FH-014",
+      "blockedBy": "Blocked by a broken authentication prerequisite: isolated signup still fails, leaving the dashboard signed out so project CRUD cannot be exercised."
+    },
+    {
+      "id": "VAL-FH-015",
+      "blockedBy": "Blocked upstream by failed authentication and the resulting lack of any selectable project for repo import."
+    },
+    {
+      "id": "VAL-FH-016",
+      "blockedBy": "Blocked because uploads require an authenticated project context and signup never produced one."
+    },
+    {
+      "id": "VAL-FH-017",
+      "blockedBy": "Blocked by missing authenticated build data; the dashboard remained signed out and /api/v1/builds returned 401."
+    },
+    {
+      "id": "VAL-FH-018",
+      "blockedBy": "Blocked by the missing authenticated project/build data needed to create and list deployments."
+    },
+    {
+      "id": "VAL-FH-019",
+      "blockedBy": "Blocked because no authenticated deployments or domain bindings could be listed."
+    },
+    {
+      "id": "VAL-FH-020",
+      "blockedBy": "Blocked because the signed-out dashboard exposed no build or deployment rows from which to open the log modal."
+    },
+    {
+      "id": "VAL-FH-021",
+      "blockedBy": "Blocked because no real user-surface action exposed a component-level crash that would surface the error-boundary fallback UI."
+    },
+    {
+      "id": "VAL-FH-022",
+      "blockedBy": "Blocked by the auth prerequisite; only fast signed-out empty/unauthorized states were reachable, so authenticated loading indicators could not be validated."
+    },
+    {
+      "id": "VAL-FH-023",
+      "blockedBy": "Blocked because the rerun never reached an authenticated dashboard session from which sign-out could be exercised."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented that frontend-hardening auth reruns must corroborate any browser-observed signed-in state with /api/v1/operations/* polling and /api/v1/auth/me, because round-2 evidence still showed backend auth failures from missing janus-node-runtime dependency.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/frontend-hardening/user-testing/synthesis.round1.json",
+  "flowReports": [
+    ".factory/validation/frontend-hardening/user-testing/flows/auth-surface-round2.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-panels-round2.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-shells-round2.json"
+  ]
+}

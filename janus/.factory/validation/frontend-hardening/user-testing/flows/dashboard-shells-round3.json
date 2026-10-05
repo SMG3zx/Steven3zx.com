@@ -1,0 +1,161 @@
+{
+  "groupId": "dashboard-shells-round3",
+  "testedAt": "2026-03-15T01:44:27.400535+00:00",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "browserSession": "7d36c99fcfde__u3",
+    "evidenceDir": "frontend-hardening/dashboard-shells-round3"
+  },
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-012",
+      "title": "Quick Actions navigate to correct panels and keep the target panel in the viewport",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /janus?view=all and capture the dashboard shell quick actions",
+          "expected": "All 7 quick-action buttons are available from the dashboard shell",
+          "observed": "The shell rendered Create Project, Import Repo, Upload Bundle, Review Builds, Create Deployment, Open Endpoint, and API Routes in the quick-actions region."
+        },
+        {
+          "action": "Re-open /janus?view=all before each click, then trigger every quick action and measure the destination panel bounding box",
+          "expected": "Each action switches to the correct view and keeps the destination panel within the 1280x800 viewport",
+          "observed": "Create Project -> /janus?view=projects with new-project-panel top 268 / bottom 686; Import Repo -> /janus?view=pipeline with repo-import-panel top 0 / bottom 286; Upload Bundle -> /janus?view=pipeline with artifact-uploads-panel top 0 / bottom 580; Review Builds -> /janus?view=pipeline with builds-panel top 0 / bottom 215; Create Deployment -> /janus?view=pipeline with deployments-panel top 0 / bottom 594; Open Endpoint -> /janus?view=pipeline with domains-panel top 585 / bottom 800; API Routes -> /janus?view=reference with api-panel top 332 / bottom 800. All targets remained within the viewport after navigation."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-dashboard-all-annotated.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-create-project-result.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-import-repo-result.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-upload-bundle-result.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-review-builds-result.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-create-deployment-result.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-open-endpoint-result.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-012-api-routes-result.png"
+        ],
+        "consoleErrors": "none observed via agent-browser errors during the quick-action validation sequence",
+        "network": "No backend API request was required for the quick actions themselves; each button changed the client-side /janus?view route and scroll position to the destination panel."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-025",
+      "title": "Billing page states",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /billing without a preview parameter",
+          "expected": "Record the default route behavior",
+          "observed": "The default /billing route rendered a Billing page with a 'Coming Soon' placeholder and Back to Dashboard link."
+        },
+        {
+          "action": "Open /billing?preview=loading",
+          "expected": "A loading state is visible while billing data is being fetched",
+          "observed": "The page rendered 'Loading Billing Data' with the message 'Fetching your invoices and usage information from Stripe…'."
+        },
+        {
+          "action": "Open /billing?preview=empty",
+          "expected": "An empty billing state explains that no invoices exist yet",
+          "observed": "The page rendered 'No Invoices Yet' with copy explaining that invoices and usage records will appear after deployments consume resources."
+        },
+        {
+          "action": "Open /billing?preview=error",
+          "expected": "A user-friendly billing error state is shown",
+          "observed": "The page rendered 'Failed to Load Billing Data' with retry guidance and a visible Retry button."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-025-billing-default.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-025-billing-loading.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-025-billing-empty.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-025-billing-error.png"
+        ],
+        "consoleErrors": "none observed while validating the billing default and preview states",
+        "network": "No billing-specific API requests were surfaced in the browser session during these checks; the loading, empty, and error states were driven by the preview query parameter."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-026",
+      "title": "Monitoring page states",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /monitoring without a preview parameter",
+          "expected": "Record the default route behavior",
+          "observed": "The default /monitoring route rendered a Monitoring page with a 'Coming Soon' placeholder and Back to Dashboard link."
+        },
+        {
+          "action": "Open /monitoring?preview=loading",
+          "expected": "A loading state is visible while metrics are being fetched",
+          "observed": "The page rendered 'Loading Monitoring Data' with the message 'Fetching deployment metrics and resource usage data…'."
+        },
+        {
+          "action": "Open /monitoring?preview=empty",
+          "expected": "An empty monitoring state explains that no metrics have been collected yet",
+          "observed": "The page rendered 'No Metrics Available' with copy explaining that CPU, RAM, disk, and network metrics will appear after a service is deployed."
+        },
+        {
+          "action": "Open /monitoring?preview=error",
+          "expected": "A user-friendly monitoring error state is shown",
+          "observed": "The page rendered 'Failed to Load Monitoring Data' with retry guidance and a visible Retry button."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-026-monitoring-default.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-026-monitoring-loading.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-026-monitoring-empty.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-026-monitoring-error.png"
+        ],
+        "consoleErrors": "none observed while validating the monitoring default and preview states",
+        "network": "No monitoring-specific API requests were surfaced in the browser session during these checks; the loading, empty, and error states were driven by the preview query parameter."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-028",
+      "title": "Custom 404 page and back-to-dashboard navigation",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open a nonexistent route (/does-not-exist-round3)",
+          "expected": "A user-friendly 404 page renders instead of a blank page or raw framework error",
+          "observed": "The route rendered a custom 404 page with heading '404', supporting explanatory copy, and a 'Back to Dashboard' recovery link."
+        },
+        {
+          "action": "Click the 404 page recovery link",
+          "expected": "Navigation returns to the dashboard shell",
+          "observed": "Clicking 'Back to Dashboard' navigated to /janus, where the Operations Dashboard shell rendered successfully."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-028-404-page.png",
+          "frontend-hardening/dashboard-shells-round3/VAL-FH-028-back-to-dashboard-result.png"
+        ],
+        "consoleErrors": "none observed during the 404 and recovery-link flow",
+        "network": "Client-side navigation rendered /does-not-exist-round3 as the custom 404 route and the recovery link returned the browser to /janus; no relevant backend API request was required for the recovery behavior."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Viewport visibility for some quick actions landed exactly on the viewport boundary (for example domains-panel bottom 800 and api-panel bottom 800), so screenshots alone were slightly ambiguous.",
+      "resolved": true,
+      "resolution": "Recorded getBoundingClientRect() measurements for every quick-action destination panel alongside screenshots to confirm that each target remained inside the 1280x800 viewport.",
+      "affectedAssertions": [
+        "VAL-FH-012"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assigned assertions: all 4 passed. All seven dashboard quick actions now switch to the expected view and keep the target panel in the viewport, the billing and monitoring preview URLs render loading/empty/error states without console issues, and the custom 404 page recovers back to /janus via its Back to Dashboard link; the default /billing and /monitoring routes still show Coming Soon placeholders when no preview parameter is supplied."
+}

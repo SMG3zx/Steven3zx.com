@@ -1,0 +1,51 @@
+{
+  "featureId": "e2e-wasm-languages",
+  "reviewedAt": "2026-03-15T07:24:15Z",
+  "commitId": "4f742c7",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Commit 4f742c7 broadens strategy detection and timeout messaging, but it does not satisfy the e2e-wasm-languages contract. The build path still executes host-installed toolchains instead of containerized builds, several component-language detections/build commands do not match the repo's WASM research, and the added tests stop at detection/parsing rather than representative multi-language builds or timeout enforcement.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/workflow.go",
+        "line": 187,
+        "severity": "blocking",
+        "description": "All of the new language builders ultimately run host binaries through exec.CommandContext via streamCommand/streamCommandWithEnv instead of a container runtime. That leaves success dependent on every runner having cargo-component, tinygo, clang+wasi-sdk, componentize-py, jco, and componentize-dotnet installed locally, so the feature's required containerized-build isolation was not implemented."
+      },
+      {
+        "file": "backend/janus-api/internal/core/wasm_build_strategy.go",
+        "line": 124,
+        "severity": "blocking",
+        "description": "The new recognition heuristics are too broad for the component-model languages. hasDotnetProject accepts any .csproj/.fsproj, isPythonComponentizeProject accepts any requirements.txt/pyproject.toml + .py, and isJSComponentizeProject accepts any package.json + .js/.ts. Ordinary Node/Python/.NET repos will therefore be classified as supported instead of failing early with buildStrategy \"unknown\", which breaks the unsupported-language rejection behavior required by VAL-E2E-009."
+      },
+      {
+        "file": "backend/janus-api/internal/core/build_executor.go",
+        "line": 211,
+        "severity": "blocking",
+        "description": "Several of the new component builders do not follow the documented toolchains. Python and JS hardcode the world name \"component\" instead of the researched wasi:http/proxy world (and JS omits -w entirely when wit/ is absent), while the .NET path shells out to a standalone componentize-dotnet CLI even though the project research specifies dotnet build with BytecodeAlliance.ComponentizeSharp MSBuild integration. That makes multiple newly-advertised language paths unlikely to produce valid wasi-http components."
+      },
+      {
+        "file": "backend/janus-api/internal/core/build_executor_test.go",
+        "line": 52,
+        "severity": "non_blocking",
+        "description": "The added tests only exercise strategy detection helpers and parseBuildTimeout. There is no coverage for buildWasmArtifact, no representative repo builds for the new languages, and no test that a timed-out build job actually transitions to failed with the timeout snippet, so the highest-risk contract paths remain unverified."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "backend-worker procedure compliance is being overstated by the handoff bookkeeping. The skill requires red/green TDD plus manual verification recorded in interactiveChecks, but this feature was marked followedProcedure=true without either artifact.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md lines 27-48 require \"Write tests first (TDD)\" and manual verification with interactiveChecks. The saved handoff 2026-03-15T06-57-31-960Z__e2e-wasm-languages__50ffca7a-1e84-46b9-9de0-0bd445f93828.json only records commandsRun and still sets handoff.skillFeedback.followedProcedure=true. Transcript extraction for workerSessionId 50ffca7a-1e84-46b9-9de0-0bd445f93828 showed has_interactiveChecks=False, has_curl=False, has_test_run=False, and the first Edit occurred after baseline full-suite testing rather than after a failing targeted test."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared library files do not carry the WASM-specific detection/container guidance that already exists in repo research. Workers following backend-worker only read architecture/environment notes, so the stricter component-language requirements are easy to miss.",
+      "evidence": "E:/Janus/docs/wasm-language-support-research.md lines 149, 257, and 286 record that .NET should build through dotnet/MSBuild with BytecodeAlliance.ComponentizeSharp, that Python/JS/.NET detection should key off component-specific config/dependencies, and that container-based builds are essential. E:/Janus/.factory/library/architecture.md and E:/Janus/.factory/library/environment.md contain no corresponding WASM build guidance."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed handoff 50ffca7a-1e84-46b9-9de0-0bd445f93828 and commit 4f742c7. The feature expands enums, heuristics, and timeout strings, but it does not deliver containerized multi-language WASM builds and uses overly broad detection plus mismatched component build commands for several of the newly claimed languages. Scrutiny status: fail."
+}

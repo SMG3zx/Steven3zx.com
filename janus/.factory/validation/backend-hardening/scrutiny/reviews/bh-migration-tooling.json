@@ -1,0 +1,44 @@
+{
+  "featureId": "bh-migration-tooling",
+  "reviewedAt": "2026-03-14T17:09:39.458778Z",
+  "commitId": "5801d72",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature does move schema setup into versioned SQL and wires golang-migrate into NewState(), but it does not fully satisfy the stated validation contract. A blocking issue remains because the new Go test file reintroduces the exact CREATE TABLE literal that VAL-BH-002 requires to be absent outside migration files.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/migrate_test.go",
+        "line": 65,
+        "severity": "blocking",
+        "description": "The test embeds the exact `CREATE TABLE IF NOT EXISTS` literal in Go code (and repeats it at line 165). VAL-BH-002 explicitly requires `grep -rn \"CREATE TABLE IF NOT EXISTS\\|ALTER TABLE.*ADD COLUMN\" backend/janus-api/internal/` to return zero matches outside migration files, so this implementation still fails that assertion."
+      },
+      {
+        "file": "backend/janus-api/internal/core/migrations/000001_initial_schema.up.sql",
+        "line": 203,
+        "severity": "non_blocking",
+        "description": "The prior inline migrator also executed legacy cleanup for `message_inbox`, `message_outbox`, and `message_queue`, but the new initial migration omits that behavior entirely. Fresh databases are fine, yet existing installs no longer get the same cleanup semantics that `State.migrate()` previously provided."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill says to write tests first and prove a failing red phase, but this worker implemented migrations and migrate.go before creating migrate_test.go while handoff.skillFeedback still reported followedProcedure=true.",
+      "evidence": "Transcript skeleton shows migration files and `internal/core/migrate.go` created before `internal/core/migrate_test.go`; `.factory/skills/backend-worker/SKILL.md` step 3 requires TDD first."
+    },
+    {
+      "area": "services",
+      "observation": "The shared command catalog does not expose any repo-level migration up/down command even though the validation contract depends on running migrations directly.",
+      "evidence": "Validation contract VAL-BH-001 and VAL-BH-014 require `migrate up` / `migrate down` execution, but `E:\\Janus\\.factory\\services.yaml` only lists install/test/build/lint commands and no migration helper."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Migration-specific implementation gotchas are not captured in shared knowledge: the pgx v5 golang-migrate driver path and Go embed requiring migration files to live at or below the embedding package.",
+      "evidence": "Transcript skeleton shows web searches for the pgx v5 driver package and a mid-stream move of the migrations directory into `internal/core/migrations` so `//go:embed` would work."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed commit 5801d72 plus the worker handoff and transcript skeleton. The feature adds golang-migrate with embedded SQL migrations, but the review fails because `internal/core/migrate_test.go` still contains `CREATE TABLE IF NOT EXISTS` literals in Go code, which violates VAL-BH-002's required grep check. I also noted an omitted legacy cleanup step and several shared-state gaps for future workers."
+}

@@ -1,0 +1,44 @@
+{
+  "featureId": "as-dependency-injection",
+  "reviewedAt": "2026-03-14T20:31:07Z",
+  "commitId": "d7174fefb74c907d14d1923ba1926f3a02d0e480",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature successfully removes the global runtime registry and rewires actors/grains to resolve dependencies through GoAkt DI, but it does not fully satisfy the contracted behavior for VAL-AS-004 and VAL-AS-008. emailDispatch never receives the same explicit restart supervisor as the other critical actors, and the removed registry identifiers still remain in comments, so the feature's own grep-based evidence still fails.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/actors/node.go",
+        "line": 160,
+        "severity": "blocking",
+        "description": "`emailDispatch` is spawned via `system.SpawnSingleton(..., actor.WithSingletonRole(RoleControl))` without the explicit `criticalActorSupervisor()` that the feature description requires for all critical actors. The OneForOne+Restart policy is only attached to commandGateway/buildNode/runnerNode at `node.go:181`, `node.go:195`, and `node.go:214`, so VAL-AS-004 is not fully met for emailDispatch."
+      },
+      {
+        "file": "backend/janus-api/internal/actors/dependencies.go",
+        "line": 16,
+        "severity": "blocking",
+        "description": "The code path for the old registry is gone, but the literal identifiers `nodeRuntimeRegistry` and `sync.Map` still remain in the comment on this file. The feature's verification step and VAL-AS-008 evidence call for grepping the actors package to return zero matches for those strings, so the contracted validation signal still fails."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The shared actor-system notes do not document the new GoAkt DI pattern (`system.Inject`, `ctx.Dependencies()`, `props.Dependencies()`) or how singleton supervision should be handled, even though workers now need that guidance to implement actor features correctly.",
+      "evidence": "`E:/Janus/.factory/library/architecture.md` covers actor roles, command flow, serializables, and TestKit, but not DI or singleton supervision. The transcript skeleton shows repeated `go doc` exploration of `WithDependencies`, `Inject`, `Dependency`, and supervisor APIs before implementation."
+    },
+    {
+      "area": "knowledge",
+      "observation": "There is no shared guidance that some actor-system assertions use literal grep-based checks, so workers can leave deprecated identifiers in comments and still think the validation evidence passes.",
+      "evidence": "`backend/janus-api/internal/actors/dependencies.go:16` still contains `sync.Map-based nodeRuntimeRegistry approach`, and the handoff explicitly recorded grep hits coming from that comment while still treating the feature as verified."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's tests-first requirement is too rigid for internal refactors that are already covered by existing actor integration tests, and the worker handoff had to explain away that mismatch manually.",
+      "evidence": "`E:/Janus/.factory/skills/backend-worker/SKILL.md` requires writing tests first, while the handoff for this feature reports `tests.added: []` and includes `skillFeedback.suggestedChanges` explaining that existing integration tests already covered the refactor."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Fail: the DI refactor removed the runtime registry and switched actors/grains to injected dependencies, but emailDispatch still lacks the required explicit restart supervision and the old registry identifiers remain in comments, so VAL-AS-004 and VAL-AS-008 are not fully satisfied."
+}

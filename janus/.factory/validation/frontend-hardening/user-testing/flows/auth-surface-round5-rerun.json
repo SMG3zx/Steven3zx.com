@@ -1,0 +1,108 @@
+{
+  "groupId": "auth-surface-round5-rerun",
+  "testedAt": "2026-03-15T06:06:08.516167Z",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "email": "frontend-hardening-ut+auth-round5-96b7fe82e5d8u1-0548@example.com",
+    "password": "[redacted test password]",
+    "desktopViewport": "1280x800",
+    "browserSession": "96b7fe82e5d8__u1",
+    "evidenceDir": "frontend-hardening/auth-surface-round5-rerun",
+    "uniquePrefix": "auth-round5-96b7fe82e5d8u1"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "curl.exe",
+    "podman exec",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-009",
+      "title": "Magic-code (passwordless) flow works end-to-end",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /magic-code?email=<isolated-email> in the assigned browser session.",
+          "expected": "The email is prefilled, a code request is auto-sent, and six OTP inputs render.",
+          "observed": "The email field was prefilled with frontend-hardening-ut+auth-round5-96b7fe82e5d8u1-0548@example.com, all six OTP inputs rendered immediately, and the page showed the visible copy \"Code sent to frontend-hardening-ut+auth-round5-96b7fe82e5d8u1-0548@example.com.\" plus the email preview text containing the literal placeholder <one_time_code>."
+        },
+        {
+          "action": "Exercise OTP keyboard navigation.",
+          "expected": "Typing advances focus, ArrowLeft/ArrowRight move between fields, and Backspace from an empty field moves back and clears the previous digit.",
+          "observed": "Typing 1 in digit 1 moved focus to digit 2, ArrowLeft moved focus back to digit 1, ArrowRight moved focus to digit 2, and Backspace from the empty second field moved focus back to digit 1 and cleared the previously entered 1."
+        },
+        {
+          "action": "Enter an invalid 6-digit code.",
+          "expected": "Entering all 6 digits auto-submits, shows an inline invalid-code error, and resets the inputs.",
+          "observed": "Typing 123456 auto-submitted the form, rendered the inline text \"invalid one-time code\", and reset all six OTP inputs back to blank."
+        },
+        {
+          "action": "Wait for resend availability and click Resend now.",
+          "expected": "After the cooldown, Resend now becomes enabled and triggers another code request.",
+          "observed": "Resend now was enabled, and clicking it kept the user on the magic-code page while backend corroboration showed a fresh auth.magic.request success (op_0a2112c1fbf9260381a7de21) plus a new auth_magic_challenges row mgc_8ecf1b2b531c427770f73190 created at 2026-03-15T05:50:38.58977916Z."
+        },
+        {
+          "action": "Recover the latest valid code from auth_magic_challenges.code_hash, then enter it.",
+          "expected": "The valid 6-digit code auto-submits and redirects to /get-started.",
+          "observed": "Brute-forcing the latest SHA-256 code_hash recovered the valid code 889320. Entering 889320 in the browser redirected to http://localhost:3000/get-started. Backend corroboration showed auth.magic.verify operation op_f566c25eff51311fe8f157c8 succeeded, POST /api/v1/auth/session/exchange returned 200, and GET /api/v1/auth/me returned the isolated user record."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round5-rerun/VAL-FH-009-magic-code-form.png",
+          "frontend-hardening/auth-surface-round5-rerun/VAL-FH-009-magic-code-invalid-code.png",
+          "frontend-hardening/auth-surface-round5-rerun/VAL-FH-009-magic-code-resend-state.png",
+          "frontend-hardening/auth-surface-round5-rerun/VAL-FH-009-magic-code-get-started.png"
+        ],
+        "consoleErrors": "none observed on the magic-code page, during invalid-code handling, or after reaching /get-started",
+        "network": "Browser request log captured POST /api/v1/auth/magic-code/verify -> op_50423ff37fd84789fcc55d27 failed unauthorized \"invalid one-time code\", POST /api/v1/auth/magic-code/request -> op_0a2112c1fbf9260381a7de21 succeeded with {accepted:true}, and POST /api/v1/auth/magic-code/verify -> op_f566c25eff51311fe8f157c8 succeeded with result.user. Supporting corroboration: POST /api/v1/auth/session/exchange -> 200 and GET /api/v1/auth/me -> 200 for frontend-hardening-ut+auth-round5-96b7fe82e5d8u1-0548@example.com."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-010",
+      "title": "Reset-password flow works",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open /reset-password?email=<isolated-email>.",
+          "expected": "The email is prefilled.",
+          "observed": "The email field was prefilled with frontend-hardening-ut+auth-round5-96b7fe82e5d8u1-0548@example.com."
+        },
+        {
+          "action": "Use the Back to sign-in link.",
+          "expected": "The link navigates back to /sign-in.",
+          "observed": "Clicking \"← Back to sign-in\" navigated the browser to http://localhost:3000/sign-in."
+        },
+        {
+          "action": "Return to /reset-password and submit the form.",
+          "expected": "The page shows the reset-instructions success flash or another user-friendly non-internal message.",
+          "observed": "Submitting the form kept the browser on /reset-password and rendered the exact success flash \"Reset instructions sent if the email is registered.\" No raw internal error text appeared."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/auth-surface-round5-rerun/VAL-FH-010-reset-password-form.png",
+          "frontend-hardening/auth-surface-round5-rerun/VAL-FH-010-reset-password-outcome.png"
+        ],
+        "consoleErrors": "none observed on the reset-password page or after submitting the form",
+        "network": "Browser submission produced the success flash. Backend corroboration from PostgreSQL showed the latest operations row op_e62d7ace62802c56cc53353a (kind auth.reset.request) reached status succeeded at 2026-03-15T06:04:21.816446875Z, and auth_password_resets row rst_11c2b4fafbb5a4a99a7a7870 was created at 2026-03-15T06:04:21.824952754Z for the same email."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Immediately after the successful magic-code redirect to /get-started, the assigned agent-browser session became unreadable/time-out prone even though localhost:3000 and localhost:8080 stayed healthy.",
+      "resolved": true,
+      "resolution": "Restarted only the assigned agent-browser daemon/session, then reapplied the already-succeeded auth operation via POST /api/v1/auth/session/exchange inside the same session to capture the authenticated /get-started screenshot.",
+      "affectedAssertions": [
+        "VAL-FH-009"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 2 assigned frontend-hardening auth rerun assertions and both passed. The magic-code flow now completed end-to-end with working OTP navigation, visible invalid-code feedback, successful resend, and a confirmed redirect/authenticated state; the reset-password flow showed the expected generic success flash and no internal error leakage."
+}

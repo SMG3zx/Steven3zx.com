@@ -1,0 +1,48 @@
+services:
+  spacetime:
+    image: clockworklabs/spacetime:latest
+    container_name: janus-spacetime
+    restart: unless-stopped
+    command: ["start"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - janus_spacetime_data:/home/spacetime/.local/share/spacetime
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: janus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: janusminio
+      MINIO_ROOT_PASSWORD: janusminio
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - janus_minio_data:/data
+
+  janus-api:
+    build:
+      context: .
+      dockerfile: Containerfile
+      target: runtime
+    container_name: janus-api
+    restart: unless-stopped
+    environment:
+      JANUS_HTTP_ADDRESS: "0.0.0.0:8080"
+      JANUS_ENV: production
+      JANUS_OBJECT_ROOT: /var/lib/janus/artifacts
+    depends_on:
+      - spacetime
+      - minio
+    ports:
+      - "${JANUS_API_PORT:-8080}:8080"
+    volumes:
+      - janus_artifacts:/var/lib/janus/artifacts
+
+volumes:
+  janus_spacetime_data:
+  janus_minio_data:
+  janus_artifacts:

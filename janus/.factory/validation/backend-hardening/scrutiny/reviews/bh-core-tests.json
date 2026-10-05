@@ -1,0 +1,39 @@
+{
+  "featureId": "bh-core-tests",
+  "reviewedAt": "2026-03-14T17:08:16.754165Z",
+  "commitId": "bcd5500d26d4c9552868b343aa53c9a2ae5f8509",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds meaningful new test coverage for helper utilities, rate limiting, and /healthz, but it does not satisfy the requested scope. The core-domain tests do not cover the repository operations called out in the feature description, and the /readyz verification misses the required healthy-path and dependency-check assertions.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/repositories.go",
+        "line": 22,
+        "severity": "blocking",
+        "description": "The promised comprehensive core-domain coverage is still missing. The new tests exercise helpers/constants (for example, domain_test.go and operations_test.go) but do not cover the repository methods that implement the requested auth/projects/builds/deployments/operations behavior: CreateUser/FindUserByEmail (lines 23-24), CreateProject/UpdateProject/DeleteProject (41-43), ClaimBuildJob/ClaimBuildJobByID (57-58), ClaimDeployment/ClaimDeploymentByID (69-70), or CreateOperation (78). A grep across **/*_test.go for those method names returns no matches."
+      },
+      {
+        "file": "backend/janus-api/internal/api/readyz_test.go",
+        "line": 45,
+        "severity": "blocking",
+        "description": "The readiness verification is incomplete versus the feature requirements and VAL-BH-012. This file only checks method-not-allowed, content type, and a nil-state 503 response; it never verifies the healthy 200 path, and it never asserts the actor-system/command-gateway readiness checks that the runtime exposes. Grep shows no actor_system or command_gateway assertions in this test file, even though actors/node.go reports those checks."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill and the handoff compliance signal are out of sync for API-focused test work. The skill requires manual curl-based verification with interactiveChecks entries, but this feature's handoff records only go test/go vet while still marking followedProcedure=true.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:44-52 requires manual verification and interactiveChecks; C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-14T17-02-48-394Z__bh-core-tests__17b4666d-8326-4e5b-993b-6f9c710bf0bd.json:13-23 records only commandsRun, and line 243 marks followedProcedure true."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The readiness-response contract is not documented in shared state. Actor readiness originates as actor_system/command_gateway checks, but the HTTP server prefixes actor-node checks under actors.* and uses a generic actors=down shortcut when the node is nil. Without documenting that shape, workers can easily write weaker /readyz assertions.",
+      "evidence": "E:/Janus/backend/janus-api/internal/actors/node.go:281-312 defines actor_system and command_gateway checks; E:/Janus/backend/janus-api/internal/api/server.go:242-251 maps them into the HTTP response; neither C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/AGENTS.md nor E:/Janus/.factory/library/architecture.md documents the expected /readyz checks payload."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed handoff, transcript skeleton, skill file, and commit bcd5500d26d4c9552868b343aa53c9a2ae5f8509. Result: fail, because the new tests do not provide the requested comprehensive core-domain coverage and they do not fully verify the /readyz contract described for backend hardening."
+}

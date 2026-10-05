@@ -1,0 +1,292 @@
+{
+  "groupId": "dashboard-panels",
+  "testedAt": "2026-03-15T00:46:39.734789+00:00",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "browserSession": "fh-panels-rerun-20260315",
+    "accountEmail": "frontend-hardening-ut+panels-rerun-2026031501@example.com",
+    "accountSignupRetryEmail": "frontend-hardening-ut+panels-rerun-2026031502@example.com",
+    "fixtureFiles": [
+      "frontend-hardening/dashboard-panels-rerun/source-bundle.zip",
+      "frontend-hardening/dashboard-panels-rerun/minimal-module.wasm"
+    ]
+  },
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-014",
+      "title": "Project creation and listing works",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Open /sign-up and create a unique isolated account",
+          "expected": "Signup succeeds and redirects into an authenticated dashboard session",
+          "observed": "The UI stayed on /sign-up and rendered an inline grain activation failure: auth grain activate: node runtime dependency \"janus-node-runtime\" not found in injected dependencies."
+        },
+        {
+          "action": "Open /get-started, switch to the Projects workspace, and inspect the empty list state",
+          "expected": "The New Project form renders and the empty state is only a pre-submit starting point for an authenticated user",
+          "observed": "The Projects panel rendered with 'Signed out', '0 total', and 'No projects yet.' while no authenticated session existed."
+        },
+        {
+          "action": "Fill the New Project form and submit it",
+          "expected": "A project is created and appears in the Projects list, enabling the Use Across Workflows propagation path",
+          "observed": "Submitting the populated form surfaced an inline 'unauthorized' message, and the list remained empty."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/sign-up-password-step.png",
+          "frontend-hardening/dashboard-panels-rerun/post-sign-up.png",
+          "frontend-hardening/dashboard-panels-rerun/projects-panel.png",
+          "frontend-hardening/dashboard-panels-rerun/project-create-attempt.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "POST /api/v1/auth/signup -> 202 with pollUrl /api/v1/operations/op_b8c8c67db836edbf008e8e24; GET /api/v1/operations/op_b8c8c67db836edbf008e8e24 -> 200 {status: failed, failure.code: service_unavailable, failure.message includes missing janus-node-runtime dependency}; POST /api/v1/projects -> 401 unauthorized; GET /api/v1/projects -> 401 unauthorized."
+      },
+      "issues": "Blocked by a broken authentication prerequisite: isolated signup fails, leaving the dashboard signed out so project CRUD cannot be exercised."
+    },
+    {
+      "id": "VAL-FH-015",
+      "title": "Repository import triggers a build",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Switch to the Pipeline workspace and inspect Repo Import",
+          "expected": "An authenticated project can be selected before importing a repository",
+          "observed": "The Project selector only exposed 'Select project' because no authenticated project context existed."
+        },
+        {
+          "action": "Enter a valid public repository URL and branch",
+          "expected": "The Import Repository action can be submitted and produce a build result card",
+          "observed": "The repo URL field accepted https://github.com/fermyon/http-rust-template and branch main, but Import Repository remained disabled because no project could be selected."
+        },
+        {
+          "action": "Use the same browser session to confirm project access",
+          "expected": "The project list is available for repo import prerequisites",
+          "observed": "The authenticated prerequisite was still missing and the projects endpoint returned 401 unauthorized."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/repo-import-and-uploads-blocked.png",
+          "frontend-hardening/dashboard-panels-rerun/pipeline-full.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "GET /api/v1/projects -> 401 unauthorized. No POST /api/v1/repos/import request was emitted from the UI because the repo import form stayed disabled without a selectable project."
+      },
+      "issues": "Blocked upstream by failed account creation and the resulting inability to create/select a project for repo import."
+    },
+    {
+      "id": "VAL-FH-016",
+      "title": "File uploads work for source bundles and WASM artifacts",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Search the repository for reusable upload fixtures",
+          "expected": "A zip/tar.gz/tgz bundle and a .wasm artifact are already available",
+          "observed": "No suitable repo fixtures were present, so minimal local fixtures were created in the assigned mission evidence directory."
+        },
+        {
+          "action": "Inspect the Direct Uploads panel in Pipeline view",
+          "expected": "Both forms can select a project, accept the local files, and submit multipart uploads",
+          "observed": "Both Project selectors only exposed 'Select project', so Upload Source Bundle and Upload WASM Artifact stayed disabled before any multipart request could be sent."
+        },
+        {
+          "action": "Confirm the missing prerequisite in the same browser session",
+          "expected": "An authenticated project list is available to unlock uploads",
+          "observed": "Projects access remained unauthorized, so upload submission could not be reached."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/repo-import-and-uploads-blocked.png",
+          "frontend-hardening/dashboard-panels-rerun/pipeline-full.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "GET /api/v1/projects -> 401 unauthorized. No POST /api/v1/uploads/source-bundles or POST /api/v1/uploads/artifacts request fired because both upload forms were blocked at project selection."
+      },
+      "issues": "Blocked because uploads require a project context, and authenticated project creation never became available."
+    },
+    {
+      "id": "VAL-FH-017",
+      "title": "Builds panel displays status, filtering, and log viewing",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Inspect the Build Status panel in Pipeline view",
+          "expected": "Build cards, project filtering, status chips, and View Logs actions are available once builds exist",
+          "observed": "The panel rendered the Project Filter and Refresh Builds controls but only showed 'Total: 0' and 'No builds yet.' with no build cards."
+        },
+        {
+          "action": "Confirm build data access from the same browser session",
+          "expected": "The dashboard can retrieve build data for the signed-in user",
+          "observed": "The builds endpoint returned 401 unauthorized while the UI continued to present an empty state."
+        },
+        {
+          "action": "Check for log entry points",
+          "expected": "At least one build row exposes View Logs once data is present",
+          "observed": "The DOM contained 0 View Logs buttons because no build rows rendered."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/builds-panel.png",
+          "frontend-hardening/dashboard-panels-rerun/pipeline-full.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "GET /api/v1/builds -> 401 unauthorized; DOM probe reported viewLogsButtons: 0."
+      },
+      "issues": "Blocked by missing authenticated build data; filtering and log-view entry points could not be exercised against real build rows."
+    },
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing works",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Inspect the Deployments panel and creation form",
+          "expected": "An authenticated project and built artifact can be selected, then deployment creation refreshes the deployments and domains lists",
+          "observed": "The Project selector only exposed 'Select project', the Artifact Build selector only exposed 'Select artifact build', and Create Deployment stayed disabled."
+        },
+        {
+          "action": "Inspect the deployments list state",
+          "expected": "Real deployment rows appear and can be filtered",
+          "observed": "The panel showed 'Total: 0' and 'No deployments yet.' in the signed-out session."
+        },
+        {
+          "action": "Confirm deployment data access from the same browser session",
+          "expected": "The dashboard can retrieve deployment data for the signed-in user",
+          "observed": "The deployments endpoint returned 401 unauthorized."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/deployments-panel.png",
+          "frontend-hardening/dashboard-panels-rerun/pipeline-full.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "GET /api/v1/deployments -> 401 unauthorized. No POST /api/v1/deployments request was emitted because the form never had a valid project/build selection."
+      },
+      "issues": "Blocked upstream by the missing authenticated project/build data needed to create and list deployments."
+    },
+    {
+      "id": "VAL-FH-019",
+      "title": "Domains panel displays bindings with endpoint links",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Inspect the Domains panel",
+          "expected": "Domain bindings render with project/deployment details, status badges, and reachable endpoint links",
+          "observed": "The panel rendered the Project Filter and Refresh Domains controls but only showed 'Total: 0' and 'No domains yet.'"
+        },
+        {
+          "action": "Check for endpoint links",
+          "expected": "Rendered domain rows expose endpoint links that open in a new tab",
+          "observed": "The DOM contained 0 endpoint links because no domain rows rendered."
+        },
+        {
+          "action": "Confirm domain data access from the same browser session",
+          "expected": "The dashboard can retrieve domain data for the signed-in user",
+          "observed": "The domains endpoint returned 401 unauthorized."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/domains-panel.png",
+          "frontend-hardening/dashboard-panels-rerun/pipeline-full.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "GET /api/v1/domains -> 401 unauthorized; DOM probe reported endpointLinks: 0."
+      },
+      "issues": "Blocked because no authenticated deployments/domains could be created or listed."
+    },
+    {
+      "id": "VAL-FH-020",
+      "title": "Log modal displays, filters, and exports logs",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Look for View Logs entry points on builds and deployments",
+          "expected": "At least one build or deployment row exposes a View Logs button that opens the log modal",
+          "observed": "No build or deployment rows were present, and the DOM contained 0 View Logs buttons."
+        },
+        {
+          "action": "Confirm whether build/deployment data is available to drive the modal",
+          "expected": "Authenticated build/deployment API responses provide a target for modal validation",
+          "observed": "Both builds and deployments endpoints returned 401 unauthorized."
+        },
+        {
+          "action": "Attempt to reach a modal-open path through the assigned dashboard panels",
+          "expected": "The modal opens and exposes filtering/copy/download controls",
+          "observed": "No modal-open path existed in the signed-out empty states, so the modal could not be opened at all."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-rerun/builds-panel.png",
+          "frontend-hardening/dashboard-panels-rerun/deployments-panel.png"
+        ],
+        "consoleErrors": "Repeated browser errors after dashboard loads: Failed to load resource: the server responded with a status of 401 (Unauthorized); no separate JavaScript exception stack traces were observed.",
+        "network": "GET /api/v1/builds -> 401 unauthorized; GET /api/v1/deployments -> 401 unauthorized; DOM probe reported viewLogsButtons: 0."
+      },
+      "issues": "Blocked because no build or deployment rows existed from which to open the log modal."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The repository did not contain reusable upload fixtures for VAL-FH-016.",
+      "resolved": true,
+      "resolution": "Created frontend-hardening/dashboard-panels-rerun/minimal-module.wasm (8-byte valid WASM header) and frontend-hardening/dashboard-panels-rerun/source-bundle.zip containing module.wasm under the assigned evidence directory.",
+      "affectedAssertions": [
+        "VAL-FH-016"
+      ]
+    },
+    {
+      "description": "The signed-out dashboard rendered empty-state panels while the underlying API calls were failing with 401 responses, which hid the auth blocker from the visible UI alone.",
+      "resolved": false,
+      "resolution": "Confirmed the hidden failure mode with browser-side fetch probes for /api/v1/auth/me, /projects, /builds, /deployments, and /domains.",
+      "affectedAssertions": [
+        "VAL-FH-014",
+        "VAL-FH-015",
+        "VAL-FH-016",
+        "VAL-FH-017",
+        "VAL-FH-018",
+        "VAL-FH-019",
+        "VAL-FH-020"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Isolated account creation is broken: auth signup operations fail with service_unavailable because the auth grain cannot activate without the injected janus-node-runtime dependency.",
+      "affectedAssertions": [
+        "VAL-FH-014",
+        "VAL-FH-015",
+        "VAL-FH-016",
+        "VAL-FH-017",
+        "VAL-FH-018",
+        "VAL-FH-019",
+        "VAL-FH-020"
+      ],
+      "quickFixAttempted": "Retried the sign-up flow in the browser with a second unique email and also polled the returned operation directly from the same browser session; both attempts failed with the same missing janus-node-runtime dependency message."
+    },
+    {
+      "description": "Because the browser session remained signed out, dashboard data endpoints for projects, builds, deployments, and domains all returned 401 unauthorized, leaving downstream forms disabled and lists empty.",
+      "affectedAssertions": [
+        "VAL-FH-014",
+        "VAL-FH-015",
+        "VAL-FH-016",
+        "VAL-FH-017",
+        "VAL-FH-018",
+        "VAL-FH-019",
+        "VAL-FH-020"
+      ],
+      "quickFixAttempted": "Confirmed GET /api/v1/auth/me, /projects, /builds, /deployments, and /domains from the same browser session; each returned 401 unauthorized while the UI continued to show signed-out empty states."
+    }
+  ],
+  "summary": "Re-ran all 7 assigned dashboard panel assertions against the local source-built frontend on port 3000. All 7 remain blocked by a backend auth prerequisite: isolated signup fails with a missing janus-node-runtime dependency, and the signed-out dashboard then receives 401 responses for projects/builds/deployments/domains while rendering empty states instead of usable data."
+}

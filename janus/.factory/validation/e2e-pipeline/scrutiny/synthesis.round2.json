@@ -1,0 +1,88 @@
+{
+  "milestone": "e2e-pipeline",
+  "round": 2,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go test -count=1 -parallel 4 ./...\"",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go build ./...\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go vet ./...\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 4,
+    "passed": 0,
+    "failed": 4,
+    "failedFeatures": [
+      "fix-e2e-auth-oauth",
+      "fix-e2e-project-repo",
+      "fix-e2e-wasm-builds",
+      "fix-e2e-deployment-operations"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "fix-e2e-auth-oauth",
+      "severity": "blocking",
+      "description": "`github_oauth_test.go` was rewritten as state-focused coverage and now uses a no-op credential stub on the remaining success path, so callback success no longer verifies GitHub credential persistence or `/api/v1/git/providers` connected-status behavior from the original OAuth contract."
+    },
+    {
+      "featureId": "fix-e2e-project-repo",
+      "severity": "blocking",
+      "description": "Repo-import host validation still uses a raw `HasSuffix(..., \"github.com\")` check, which accepts lookalike domains such as `evilgithub.com` instead of enforcing canonical GitHub host boundaries."
+    },
+    {
+      "featureId": "fix-e2e-wasm-builds",
+      "severity": "blocking",
+      "description": "The Python component build path still passes a filename such as `app.py` to `componentize-py` instead of the documented module-name form (`componentize app`), so the researched toolchain alignment issue is not fully resolved."
+    },
+    {
+      "featureId": "fix-e2e-deployment-operations",
+      "severity": "blocking",
+      "description": "Uploaded-artifact operations still return an in-memory `BuildJob` without `buildStrategy`, so a successful artifact-upload poll can omit the required `buildStrategy=\"prebuilt_wasm\"` payload even though the database row now persists that strategy."
+    },
+    {
+      "featureId": "fix-e2e-deployment-operations",
+      "severity": "blocking",
+      "description": "The new deployment tests remain stubbed and do not prove a real deploy → runtime 2xx access → delete → runtime shutdown lifecycle, so the original deployment-access verification gap remains unresolved."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Updated `.factory/library/e2e-pipeline.md` to include artifact uploads in the async operation-envelope route list and to document that repo-import host checks must validate `parsedURL.Hostname()` against `github.com` / `*.github.com` boundaries rather than a naive string suffix.",
+      "sourceFeature": "fix-e2e-project-repo / fix-e2e-deployment-operations"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Require transcript and handoff evidence for backend API/runtime manual verification (`curl.exe` plus `interactiveChecks`) before a worker can claim `followedProcedure=true`, or document an explicit exception path when such verification is impossible.",
+      "evidence": "The fix reviews for `fix-e2e-auth-oauth`, `fix-e2e-project-repo`, and `fix-e2e-deployment-operations` all found handoffs marked `followedProcedure=true` even though the transcripts and handoffs recorded only automated commands and no required manual API/runtime checks.",
+      "isSystemic": true
+    },
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Add an explicit verification branch for non-API infrastructure changes whose correctness hinges on external command wiring (for example containerized build toolchains), so workers must directly exercise or otherwise concretely validate those command strings before claiming procedure compliance.",
+      "evidence": "The `fix-e2e-wasm-builds` review found the worker could mark `followedProcedure=true` after unit-test-only coverage even though the risky change was containerized toolchain invocation wiring rather than handler logic.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Repeated backend-worker manual-verification observations across `fix-e2e-auth-oauth`, `fix-e2e-project-repo`, and `fix-e2e-deployment-operations`.",
+      "reason": "duplicate; consolidated into one backend-worker skill recommendation in `suggestedGuidanceUpdates`."
+    }
+  ],
+  "previousRound": ".factory/validation/e2e-pipeline/scrutiny/synthesis.round1.json"
+}

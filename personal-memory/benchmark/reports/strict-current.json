@@ -1,0 +1,231 @@
+{
+  "apiUrl": "http://127.0.0.1:4781",
+  "cases": 12,
+  "hitRate": 1,
+  "abstentionAccuracy": 1,
+  "provenanceCases": 12,
+  "attributionRate": 1,
+  "faithfulnessRate": 1,
+  "reasoningSupportRate": 1,
+  "estimatedCostUsd": 0,
+  "meanLatencyMs": 17.816666666666666,
+  "p95LatencyMs": 26.22,
+  "measurements": [
+    {
+      "id": "fact-001",
+      "category": "fact",
+      "elapsedMs": 20.17,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical",
+        "hybrid",
+        "graph"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 8,
+      "abstain": false
+    },
+    {
+      "id": "temporal-001",
+      "category": "temporal",
+      "elapsedMs": 15.1,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical",
+        "hybrid",
+        "graph"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "multi-hop-001",
+      "category": "multi-hop",
+      "elapsedMs": 16.15,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "hybrid",
+        "lexical",
+        "graph"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "multi-session-001",
+      "category": "multi-session",
+      "elapsedMs": 15.12,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical",
+        "hybrid",
+        "graph"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "procedural-001",
+      "category": "procedural",
+      "elapsedMs": 14.96,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "contradiction-001",
+      "category": "contradiction",
+      "elapsedMs": 22.65,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "attribution-001",
+      "category": "attribution",
+      "elapsedMs": 19.36,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "faithfulness-001",
+      "category": "faithfulness",
+      "elapsedMs": 26.22,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical",
+        "hybrid",
+        "graph"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "reflection-001",
+      "category": "reflection",
+      "elapsedMs": 17.9,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical",
+        "hybrid",
+        "graph"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": false
+    },
+    {
+      "id": "failure-001",
+      "category": "failure",
+      "elapsedMs": 15.04,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 5,
+      "abstain": false
+    },
+    {
+      "id": "skill-001",
+      "category": "procedural",
+      "elapsedMs": 15.08,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 4,
+      "abstain": false
+    },
+    {
+      "id": "abstention-001",
+      "category": "abstention",
+      "elapsedMs": 16.05,
+      "hit": true,
+      "attributed": true,
+      "faithfulness": true,
+      "reasoningSupport": true,
+      "retrievalMethods": [
+        "lexical"
+      ],
+      "faithfulnessJudge": "lexical-fallback",
+      "abstentionCorrect": true,
+      "estimatedCostUsd": 0,
+      "resultCount": 10,
+      "abstain": true
+    }
+  ]
+}

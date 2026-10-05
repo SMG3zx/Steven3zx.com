@@ -1,0 +1,113 @@
+{
+  "milestone": "actor-system",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd E:\\Janus\\backend\\janus-api; go test -count=1 -parallel 4 ./...",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd E:\\Janus\\backend\\janus-api; go build ./...",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd E:\\Janus\\backend\\janus-api; go vet ./...",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 4,
+    "passed": 0,
+    "failed": 4,
+    "failedFeatures": [
+      "as-dependency-injection",
+      "as-message-handling",
+      "as-grain-lifecycle",
+      "as-actor-tests"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "as-dependency-injection",
+      "severity": "blocking",
+      "description": "emailDispatch is still spawned without the explicit restart supervisor required for critical actors, so VAL-AS-004 is not fully satisfied."
+    },
+    {
+      "featureId": "as-dependency-injection",
+      "severity": "blocking",
+      "description": "Deprecated `sync.Map` / `nodeRuntimeRegistry` identifiers remain in a comment in backend/janus-api/internal/actors/dependencies.go, so the contracted zero-match grep evidence for VAL-AS-008 still fails."
+    },
+    {
+      "featureId": "as-message-handling",
+      "severity": "blocking",
+      "description": "The scheduled email retry path uses fire-and-forget self-messages, which drop the original Ask reply context and can make retrying email sends time out even after a later success."
+    },
+    {
+      "featureId": "as-grain-lifecycle",
+      "severity": "blocking",
+      "description": "Port-collision retry only recognizes the Linux-style `address already in use` string; on this Windows mission host it can miss bind conflicts and fail instead of bumping ports, so VAL-AS-016 is not reliable."
+    },
+    {
+      "featureId": "as-actor-tests",
+      "severity": "blocking",
+      "description": "Runner heartbeat coverage only proves that a heartbeat call happened and does not verify persisted `status` / `last_seen_at` behavior required by VAL-AS-013."
+    },
+    {
+      "featureId": "as-actor-tests",
+      "severity": "blocking",
+      "description": "Runner listing coverage only checks HTTP 200 and array length, not the required `id`, `status`, and `lastSeenAt` response fields and semantics for VAL-AS-019."
+    },
+    {
+      "featureId": "as-actor-tests",
+      "severity": "blocking",
+      "description": "ReadyChecks happy-path coverage omits the `discovery` assertion even though `Node.ReadyChecks()` reports it, so VAL-AS-014 is not fully verified."
+    },
+    {
+      "featureId": "as-actor-tests",
+      "severity": "blocking",
+      "description": "The operation lifecycle suite does not cover invalid transitions being rejected, leaving the full VAL-AS-010 state-machine contract unproven."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Added a GoAkt scheduling note to .factory/library/architecture.md documenting that scheduled self-messages do not preserve Ask reply context.",
+      "sourceFeature": "as-message-handling"
+    },
+    {
+      "target": "library",
+      "description": "Added a Windows-specific bind-conflict note to .factory/library/environment.md so future port-collision handling recognizes the host's socket error wording.",
+      "sourceFeature": "as-grain-lifecycle"
+    },
+    {
+      "target": "library",
+      "description": "Added a scrutiny validation note to .factory/library/user-testing.md that literal grep assertions also match comments.",
+      "sourceFeature": "as-dependency-injection"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "For actor-system features, require behavioral tests that cover retry/reply semantics, lifecycle effects, and response payload contracts; allow workers extending an existing suite to adapt the TDD step toward targeted coverage additions instead of superficial config/construction checks.",
+      "evidence": "as-message-handling shipped without an Ask+retry regression test, as-grain-lifecycle only added option-count/helper/construction checks, and as-actor-tests missed assertions for heartbeat persistence and runner-list response fields.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "When a feature depends on literal grep evidence or the validation contract is broader than the short feature description, restate that explicitly in the feature spec so workers treat comments/literals and adjacent actor-or-grain coverage as in scope.",
+      "evidence": "as-dependency-injection failed because deprecated identifiers remained in a comment despite a zero-match grep assertion, and as-message-handling exposed a mismatch between the feature summary and VAL-AS-003's actor-plus-grain wording.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Document the new DI pattern together with a singleton-supervision caveat in shared actor docs.",
+      "reason": "ambiguous: the reviewed implementation still has a blocking supervision gap for emailDispatch, so the final guidance is not stable enough to record yet."
+    }
+  ],
+  "previousRound": null
+}

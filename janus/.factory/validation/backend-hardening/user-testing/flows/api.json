@@ -1,0 +1,177 @@
+{
+    "groupId":  "api",
+    "surface":  "api",
+    "testedAt":  "2026-03-14T14:25:03.1951355-05:00",
+    "isolation":  {
+                      "surface":  "api",
+                      "baseUrl":  "http://localhost:8080",
+                      "emailPrefix":  "backend-hardening-ut+r4-",
+                      "email":  "backend-hardening-ut+r4-20260314142501576@example.com",
+                      "evidenceDir":  "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4",
+                      "rateLimitIp":  "127.0.0.184"
+                  },
+    "toolsUsed":  [
+                      "curl.exe",
+                      "PowerShell"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-BH-006",
+                           "title":  "API Returns Proper HTTP Status Codes",
+                           "status":  "pass",
+                           "summary":  "Representative 405/400/404/401/409/429 responses remained semantically correct, and both successful auth.signup and auth.signin.password operations included result.user so session exchange and authenticated follow-up requests succeeded on the live API.",
+                           "reason":  "Round 2\u0027s blocker remains resolved: signup returned 202, polled to succeeded with result.user, POST /api/v1/auth/session/exchange returned 200 with Set-Cookie, and GET /api/v1/auth/me returned 200. Signin repeated the same successful pattern. Representative error checks also returned the expected 405, 400, 404, 401, 409, and 429 statuses with structured error envelopes.",
+                           "previousBlockerResolved":  true,
+                           "checks":  [
+                                          {
+                                              "request":  "GET /api/v1/auth/signin",
+                                              "expectedStatus":  405,
+                                              "observedStatus":  405,
+                                              "observedBody":  "{\"error\":{\"code\":\"method_not_allowed\",\"message\":\"method not allowed\",\"requestId\":\"8a4f50739ca663df139aa07e\"}}\n",
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\wrong_method_auth_signin.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\wrong_method_auth_signin.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\wrong_method_auth_signin.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\wrong_method_auth_signin.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "POST /api/v1/auth/session/exchange with {}",
+                                              "expectedStatus":  400,
+                                              "observedStatus":  400,
+                                              "observedBody":  "{\"error\":{\"code\":\"bad_request\",\"message\":\"operationId is required\",\"requestId\":\"bea717e5610a92867e4ac04c\"}}\n",
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_field.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_field.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_field.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_field.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "POST /api/v1/auth/session/exchange with missing operation id",
+                                              "expectedStatus":  404,
+                                              "observedStatus":  404,
+                                              "observedBody":  "{\"error\":{\"code\":\"not_found\",\"message\":\"operation not found\",\"requestId\":\"a19e568bfc6788263586e722\"}}\n",
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_resource.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_resource.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_resource.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\session_exchange_missing_resource.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "GET /api/v1/auth/me without auth cookie",
+                                              "expectedStatus":  401,
+                                              "observedStatus":  401,
+                                              "observedBody":  "{\"error\":{\"code\":\"unauthorized\",\"message\":\"user not authenticated\",\"requestId\":\"16f06900c2c72eba56e95176\"}}\n",
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\auth_me_missing_auth.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\auth_me_missing_auth.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\auth_me_missing_auth.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\auth_me_missing_auth.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "POST /api/v1/auth/session/exchange for failed signin operation",
+                                              "expectedStatus":  409,
+                                              "observedStatus":  409,
+                                              "observedBody":  "{\"error\":{\"code\":\"conflict\",\"message\":\"operation is not complete\",\"requestId\":\"51b536c11b00015f7239c719\"}}\n",
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_submit.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_submit.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_submit.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_submit.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_operation.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_operation.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_operation.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_exchange.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_exchange.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_exchange.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_bad_password_exchange.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "POST /api/v1/auth/signup loop with X-Forwarded-For 127.0.0.184",
+                                              "expectedStatus":  429,
+                                              "observedStatus":  429,
+                                              "observedBody":  "{\"error\":{\"code\":\"rate_limited\",\"message\":\"Too many requests. Please retry after 1 second.\"}}\n",
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\rate_limit_sequence.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\rate_limit_signup_attempt_04.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\rate_limit_signup_attempt_04.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\rate_limit_signup_attempt_04.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\rate_limit_signup_attempt_04.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "POST /api/v1/auth/signup -\u003e poll -\u003e POST /api/v1/auth/session/exchange -\u003e GET /api/v1/auth/me",
+                                              "expectedStatus":  "202 submit, succeeded operation with result.user, 200 exchange, 200 auth/me",
+                                              "observed":  {
+                                                               "submitStatus":  202,
+                                                               "submitBody":  "{\"operationId\":\"op_9774da07833b9a013799ca29\",\"status\":\"pending\",\"submittedAt\":\"2026-03-14T19:25:01.979367086Z\",\"pollUrl\":\"/api/v1/operations/op_9774da07833b9a013799ca29\",\"correlationId\":\"corr_c8887161b08c8962\"}\n",
+                                                               "operationHttpStatus":  200,
+                                                               "operationBody":  "{\"correlationId\":\"corr_c8887161b08c8962\",\"kind\":\"auth.signup\",\"operationId\":\"op_9774da07833b9a013799ca29\",\"pollUrl\":\"/api/v1/operations/op_9774da07833b9a013799ca29\",\"result\":{\"user\":{\"email\":\"backend-hardening-ut+r4-20260314142501576@example.com\",\"id\":\"usr_099e4166888fc96ac43445f6\",\"name\":\"Backend Hardening Round 4\"}},\"status\":\"succeeded\",\"submittedAt\":\"2026-03-14T19:25:01.979367086Z\",\"updatedAt\":\"2026-03-14T19:25:02.031653911Z\"}\n",
+                                                               "exchangeStatus":  200,
+                                                               "exchangeBody":  "{\"user\":{\"id\":\"usr_099e4166888fc96ac43445f6\",\"email\":\"backend-hardening-ut+r4-20260314142501576@example.com\",\"name\":\"Backend Hardening Round 4\"}}\n",
+                                                               "authMeStatus":  200,
+                                                               "authMeBody":  "{\"user\":{\"id\":\"usr_099e4166888fc96ac43445f6\",\"email\":\"backend-hardening-ut+r4-20260314142501576@example.com\",\"name\":\"Backend Hardening Round 4\"}}\n"
+                                                           },
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_submit.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_submit.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_submit.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_submit.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_operation.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_operation.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_operation.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_session_exchange.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_session_exchange.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_session_exchange.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_session_exchange.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_auth_me.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_auth_me.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signup_auth_me.body.txt"
+                                                           ]
+                                          },
+                                          {
+                                              "request":  "POST /api/v1/auth/signin/password -\u003e poll -\u003e POST /api/v1/auth/session/exchange -\u003e GET /api/v1/auth/me",
+                                              "expectedStatus":  "202 submit, succeeded operation with result.user, 200 exchange, 200 auth/me",
+                                              "observed":  {
+                                                               "submitStatus":  202,
+                                                               "submitBody":  "{\"operationId\":\"op_74f0cab8a6fe6b418318b626\",\"status\":\"pending\",\"submittedAt\":\"2026-03-14T19:25:02.368191026Z\",\"pollUrl\":\"/api/v1/operations/op_74f0cab8a6fe6b418318b626\",\"correlationId\":\"corr_484128d25ae1e5c5\"}\n",
+                                                               "operationHttpStatus":  200,
+                                                               "operationBody":  "{\"correlationId\":\"corr_484128d25ae1e5c5\",\"kind\":\"auth.signin.password\",\"operationId\":\"op_74f0cab8a6fe6b418318b626\",\"pollUrl\":\"/api/v1/operations/op_74f0cab8a6fe6b418318b626\",\"result\":{\"user\":{\"email\":\"backend-hardening-ut+r4-20260314142501576@example.com\",\"id\":\"usr_099e4166888fc96ac43445f6\",\"name\":\"Backend Hardening Round 4\"}},\"status\":\"succeeded\",\"submittedAt\":\"2026-03-14T19:25:02.368191026Z\",\"updatedAt\":\"2026-03-14T19:25:02.421293732Z\"}\n",
+                                                               "exchangeStatus":  200,
+                                                               "exchangeBody":  "{\"user\":{\"id\":\"usr_099e4166888fc96ac43445f6\",\"email\":\"backend-hardening-ut+r4-20260314142501576@example.com\",\"name\":\"Backend Hardening Round 4\"}}\n",
+                                                               "authMeStatus":  200,
+                                                               "authMeBody":  "{\"user\":{\"id\":\"usr_099e4166888fc96ac43445f6\",\"email\":\"backend-hardening-ut+r4-20260314142501576@example.com\",\"name\":\"Backend Hardening Round 4\"}}\n"
+                                                           },
+                                              "evidence":  [
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_submit.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_submit.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_submit.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_submit.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_operation.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_operation.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_operation.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_session_exchange.request.json",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_session_exchange.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_session_exchange.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_session_exchange.body.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_auth_me.status.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_auth_me.headers.txt",
+                                                               "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4\\signin_auth_me.body.txt"
+                                                           ]
+                                          }
+                                      ],
+                           "issues":  null
+                       }
+                   ],
+    "frictions":  [
+
+                  ],
+    "blockers":  [
+
+                 ],
+    "overallNotes":  "VAL-BH-006 passes on the live local API in round 4. Successful signup and signin operations serialize result.user, both session exchanges return HTTP 200 with janus_access cookies, and authenticated GET /api/v1/auth/me returns HTTP 200 after each exchange. Representative error checks also returned the expected 405, 400, 404, 401, 409, and 429 statuses with structured error envelopes. Evidence is stored under C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\backend-hardening\\api-round4."
+}

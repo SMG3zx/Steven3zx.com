@@ -1,0 +1,198 @@
+{
+  "milestone": "actor-system",
+  "groupId": "operations-suite",
+  "surface": "backend-cli",
+  "testedAt": "2026-03-14T21:16:14.890824Z",
+  "toolsUsed": [
+    "Read",
+    "Grep",
+    "curl.exe",
+    "go test"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-AS-009",
+      "status": "pass",
+      "reason": "Source inspection shows `commandGatewayActor.Receive` and `grainIdentity()` cover all 11 assigned domain command types, and the full actor test run passed both `TestCommandGatewayRouting_AllCommandTypes` and `TestGrainIdentity_AllMessageTypes`. The TestKit run emitted operation-grain fallback warnings, but every auth/project/build/deploy command variant was still routed instead of remaining pending or falling into the default case.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestCommandGatewayRouting_AllCommandTypes",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestGrainIdentity_AllMessageTypes"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-009",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\control_actors.go:35-59",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\control_actors.go:112-147"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-010",
+      "status": "pass",
+      "reason": "`operations.go` defines the pending/running/succeeded/failed/dead_lettered state machine and constrains writes to pending|running origins only. The actor test suite passed success, failure, dead-letter, and invalid-transition rejection tests, proving both forward progress and rejection of illegal state changes.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationGrain_SuccessCommand",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationGrain_FailureCommand",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationGrain_DeadLetterCommand",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationLifecycle_PendingToRunningToSucceeded",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationLifecycle_PendingToRunningToFailed",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationTransition_SucceededToRunning_Rejected",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationTransition_FailedToSucceeded_Rejected",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationTransition_DeadLetteredToRunning_Rejected",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestOperationTransition_SucceededToFailed_Rejected"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-010",
+          "E:\\Janus\\backend\\janus-api\\internal\\core\\operations.go:12-16",
+          "E:\\Janus\\backend\\janus-api\\internal\\core\\operations.go:122-203"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-011",
+      "status": "pass",
+      "reason": "The node schedules `buildPollTick`, `buildNodeActor.claimBuilds` claims queued work and spawns `build-<id>` execution children, and the actor test suite passed `TestBuildNodeActor_ClaimAndExecute`, which observed a queued build reach `success` after the poll tick.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestBuildNodeActor_ClaimAndExecute"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-011",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\node.go:209-213",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\build_actors.go:57-68"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-012",
+      "status": "pass",
+      "reason": "The node schedules `runnerPollTick`, `runnerNodeActor.claimDeployments` claims queued deployments and spawns `deploy-<id>` execution children, and the actor test suite passed `TestRunnerNodeActor_ClaimAndExecuteDeployment`, which observed a queued deployment reach `running` after the poll tick.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestRunnerNodeActor_ClaimAndExecuteDeployment"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-012",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\node.go:228-230",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\runner_actors.go:97-113"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-013",
+      "status": "pass",
+      "reason": "The node schedules `runnerHeartbeatTick`, `runnerNodeActor.reportHeartbeat` writes a healthy heartbeat through `ReportRunnerHeartbeat`, and `TestRunnerNodeActor_Heartbeat` passed after verifying the stored heartbeat had `status=healthy` and a fresh non-zero `LastSeenAt` timestamp.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestRunnerNodeActor_Heartbeat"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-013",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\node.go:234-236",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\runner_actors.go:75-94",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:1644-1707"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-014",
+      "status": "pass",
+      "reason": "`Node.ReadyChecks()` explicitly evaluates actor_system, discovery, command_gateway, runner_node, and build_node health, and the actor tests passed both healthy-system and missing-actor cases. A live `GET /readyz` check also returned HTTP 200 with `ok=true` and actor-related checks reported `ok` on the running stack.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestReadyChecks_RunningSystem_AllOk",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestReadyChecks_MissingActors_Down"
+        ],
+        "http": [
+          "actor-system/operations-suite/readyz.headers.txt :: HTTP/1.1 200 OK",
+          "actor-system/operations-suite/readyz.body.txt :: {\"checks\":{\"actors.actor_system\":\"ok\",\"actors.command_gateway\":\"ok\",\"actors.discovery\":\"ok\",\"database\":\"ok\"},\"ok\":true,...}"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-014",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\node.go:286-334"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-015",
+      "status": "pass",
+      "reason": "The required package-level command `go test -count=1 -v ./internal/actors/...` exited 0. The output includes passing GoAkt TestKit-based coverage for command routing, operation lifecycle, build polling, runner polling, heartbeat reporting, and readiness checks; the optional DB-backed `TestActorNodeWorkflow` remained skipped because `JANUS_TEST_DATABASE_URL` was not set, but the package still passed cleanly.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestCommandGatewayRouting_AllCommandTypes",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestBuildNodeActor_ClaimAndExecute",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestRunnerNodeActor_ClaimAndExecuteDeployment",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestRunnerNodeActor_Heartbeat",
+          "actor-system/operations-suite/go-test-internal-actors.txt :: PASS TestReadyChecks_RunningSystem_AllOk"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-015",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:1375",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:1527",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:1582",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:1644",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:2022"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-016",
+      "status": "pass",
+      "reason": "A temporary overlay test started two actor nodes with the same initial port configuration. The second start hit real Windows bind collisions, logged automatic retries and port bumps, and then started successfully on alternate ports (`remote=56941`, `peers=56942`, `discovery=56940`) without manual intervention.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-operations-overlay.txt :: PASS TestFlowValidatorPortCollisionRecovery"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-016",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\node.go:90-118",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\node.go:461-520"
+        ],
+        "files": [
+          "actor-system/operations-suite/z_flow_validator_operations_test.go",
+          "actor-system/operations-suite/go_test_overlay.json"
+        ]
+      }
+    },
+    {
+      "id": "VAL-AS-017",
+      "status": "pass",
+      "reason": "Source inspection shows both execution actors call `ctx.Shutdown()` immediately after `ExecuteBuildJob`/`ExecuteDeployment`, and the overlay test passed after confirming the spawned `build-<id>` and `deploy-<id>` child actors disappeared once their work completed.",
+      "evidence": {
+        "tests": [
+          "actor-system/operations-suite/go-test-operations-overlay.txt :: PASS TestFlowValidatorExecutionActorsSelfTerminate"
+        ],
+        "source": [
+          "actor-system/operations-suite/source-audit-operations-suite.txt :: VAL-AS-017",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\runner_actors.go:143-144",
+          "E:\\Janus\\backend\\janus-api\\internal\\actors\\runner_actors.go:172-173"
+        ],
+        "files": [
+          "actor-system/operations-suite/z_flow_validator_operations_test.go",
+          "actor-system/operations-suite/go_test_overlay.json"
+        ]
+      }
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The existing repository tests gave only structural coverage for port-collision recovery and execution-actor shutdown, so I needed an evidence-only overlay test to prove VAL-AS-016 and VAL-AS-017 without modifying repository source files.",
+      "resolved": true,
+      "resolution": "Added `z_flow_validator_operations_test.go` plus `go_test_overlay.json` under the mission evidence directory and ran `go test -overlay ...` against `./internal/actors`.",
+      "affectedAssertions": [
+        "VAL-AS-016",
+        "VAL-AS-017"
+      ]
+    }
+  ],
+  "blockers": [],
+  "commandsRun": [
+    "curl.exe -sS -D C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\operations-suite\\readyz.headers.txt -o C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\operations-suite\\readyz.body.txt -X GET http://localhost:8080/readyz",
+    "go version | Tee-Object -FilePath C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\operations-suite\\go-version.txt",
+    "go test -C E:\\Janus\\backend\\janus-api -count=1 -v ./internal/actors/...",
+    "go test -C E:\\Janus\\backend\\janus-api -count=1 -v -overlay C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\actor-system\\operations-suite\\go_test_overlay.json -run 'TestFlowValidatorPortCollisionRecovery|TestFlowValidatorExecutionActorsSelfTerminate' ./internal/actors",
+    "Read/Grep inspection of E:\\Janus\\backend\\janus-api\\internal\\actors\\{control_actors.go,build_actors.go,runner_actors.go,node.go,testkit_test.go,lifecycle_test.go} and E:\\Janus\\backend\\janus-api\\internal\\core\\operations.go"
+  ]
+}

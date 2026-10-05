@@ -1,0 +1,24 @@
+{
+  "source_sha256": {
+    "docs/play-implementation-plan.md": "4aa35f7e2b68fb28a74be454e431a31e0f64d6cc5228a58ecee497cc1c434726",
+    "src/foundation_live_tests.rs": "2d450fe1bc711e6e127ba36f6be63da0b05683adb17e2e7b0edf84d770d93c8a",
+    "spacetimedb/src/world.rs": "a6c337d32d5934fa82b47072267ab565d14974da6b2ab93c24bd149a0389d765",
+    "src/connection.rs": "6b5621df3622855537af68c6d1ee5c5b982278310555dc6149a75dc29b5abd8f",
+    "src/gateway.rs": "ffa42b08cb84e19a2e1f076103f2fddada9fa2448c778f381853619c11d09ea3",
+    "spacetimedb/src/policy.rs": "6b775eb83f595e00549721c9a5c6d20a3c71ae6f350c8bac85ffacb02f562fb2"
+  },
+  "changed_since_previous_review": [
+    "docs/play-implementation-plan.md",
+    "src/foundation_live_tests.rs",
+    "spacetimedb/src/world.rs",
+    "src/connection.rs",
+    "src/gateway.rs"
+  ],
+  "changed_during_review": [
+    "src/connection.rs"
+  ],
+  "scope": "Focused M6/M7 and acceptance; not exhaustive semantic repo scan",
+  "api_failures": {
+    "world_worker": "Typed response validation failed; no verdict accepted"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-e2e-scrutiny-round2",
+  "reviewedAt": "2026-03-15T08:32:02.699323Z",
+  "commitId": "e065061",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Reviewed the fix commit against all four prior failed fix reviews and found that it closes each of the five remaining round-2 blockers. OAuth regression coverage was restored by making the auth stub persist credentials and by asserting both stored GitHub credentials and `/api/v1/git/providers` connected=true in the callback round-trip test. Repo import now validates `parsedURL.Hostname()` against the `github.com` / `*.github.com` boundary and adds lookalike-domain coverage. Python component builds now pass a module name instead of a `.py` filename to `componentize-py`, uploaded-artifact BuildJobs now carry `buildStrategy=prebuilt_wasm` on the returned struct, and the deployment suite now includes a create→poll lifecycle test that verifies `runtimeEndpoint` and `status=running` from the operation result. I did not find any remaining or newly introduced blocking issues in scope for this rerun.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill was strengthened in this commit to require API manual verification and `interactiveChecks`, but this worker session still marked `followedProcedure=true` without recording any `interactiveChecks`. That means the handoff compliance signal is still unreliable even though the shared skill text is now clearer.",
+      "evidence": "E:\\Janus\\.factory\\skills\\backend-worker\\SKILL.md:44-49 requires manual API verification plus `interactiveChecks`; C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-15T08-28-29-145Z__fix-e2e-scrutiny-round2__d2a12379-df51-4141-9137-cbdffaac9a32.json:13-14 records only `commandsRun`, :12 leaves `whatWasLeftUndone` empty, and :90 still sets `followedProcedure` true. The transcript skeleton at worker-transcripts.jsonl:60 likewise shows test/vet execution but no `curl.exe` manual verification steps."
+    }
+  ],
+  "addressesFailureFrom": "E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\fix-e2e-auth-oauth.json; E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\fix-e2e-project-repo.json; E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\fix-e2e-wasm-builds.json; E:\\Janus\\.factory\\validation\\e2e-pipeline\\scrutiny\\reviews\\fix-e2e-deployment-operations.json",
+  "summary": "Reviewed fix commit `e065061`, the worker transcript skeleton, the handoff, and the four prior failed fix reviews. Result: pass. The rerun resolves all five previously blocking scrutiny findings (OAuth credential/provider verification, GitHub host boundary validation, Python module-name componentize invocation, returned uploaded-artifact BuildStrategy, and deployment create→poll runtimeEndpoint/status coverage). One non-blocking shared-state observation remains: the updated backend-worker skill now correctly requires manual API verification, but this session still reported `followedProcedure=true` without any recorded `interactiveChecks`."
+}

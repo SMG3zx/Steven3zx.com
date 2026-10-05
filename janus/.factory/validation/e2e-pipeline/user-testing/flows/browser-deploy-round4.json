@@ -1,0 +1,91 @@
+{
+  "groupId": "browser-deploy-round4",
+  "testedAt": "2026-03-15T14:15:39.220309Z",
+  "isolation": {
+    "browserBaseUrl": "http://localhost:3000",
+    "apiBaseUrl": "http://localhost:8080",
+    "email": "e2e-pipeline-ut+browser-r4-20260315t141241@example.com",
+    "projectSlug": "e2e-pipeline-ut-browser-r4-20260315t141241",
+    "projectId": "proj_7997",
+    "buildId": "bld_ab8115d046c393cc6a97fbe6",
+    "deploymentId": "dep_49f5d0f141ba8ffa946d1f5d",
+    "domain": "e2e-pipeline-ut-browser-r4-20260315t141241-1.janus.run"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing works",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Prepare an isolated authenticated user, project, and prebuilt WASM build, then open /get-started.",
+          "expected": "The signed-in deployment workspace loads with the isolated project and deployable build available.",
+          "observed": "Signed in as e2e-pipeline-ut+browser-r4-20260315t141241@example.com on /get-started. Prepared project proj_7997 and built artifact bld_ab8115d046c393cc6a97fbe6 (buildStrategy prebuilt_wasm, resource profile CPU 250m / RAM 512MB / Disk 1024MB)."
+        },
+        {
+          "action": "In the deployment form, select the isolated project/build, set target ref browser-deploy-r4-1773583961551, set runtime env, and apply project filters for deployments/domains.",
+          "expected": "The form accepts the isolated project and built artifact, and the project filters narrow the lists to only the isolated records.",
+          "observed": "Deployment form accepted proj_7997 and bld_ab8115d046c393cc6a97fbe6. Before submit the filtered deployments list showed Total: 0 / No deployments yet, confirming the filter narrowed to only the isolated project."
+        },
+        {
+          "action": "Submit a preview deployment from the deployment form and observe the immediate result card.",
+          "expected": "The result card shows deployment ID, status, domain, reachable endpoint link, and resource profile.",
+          "observed": "Result card rendered Deployment Created with deployment ID dep_49f5d0f141ba8ffa946d1f5d, status starting (updating...), launch mode stdout-bridge, domain e2e-pipeline-ut-browser-r4-20260315t141241-1.janus.run, and resource profile CPU 250m / RAM 512MB / Disk 1024MB (low). The reachable endpoint stayed at 'Polling for runtime endpoint...' instead of becoming a link."
+        },
+        {
+          "action": "Wait for UI auto-refresh/polling without clicking Refresh Deployments or Refresh Domains.",
+          "expected": "The deployment result card, deployments list, and domains list auto-refresh to the running state with a reachable endpoint link for the isolated deployment.",
+          "observed": "The browser issued repeated GET /api/v1/deployments/dep_49f5d0f141ba8ffa946d1f5d polls, but after 15s the result card still showed starting (updating...) / Polling for runtime endpoint..., the filtered deployment card still showed starting with 'Reachable Endpoint: Not available yet', and the filtered domain card still showed starting with 'Reachable Endpoint: Check deployment runtime endpoint in Deployments panel'. Separate API checks showed the same deployment/domain were already running with runtimeEndpoint http://janus-runner:37775."
+        },
+        {
+          "action": "Open View Logs from the isolated deployment card.",
+          "expected": "The deployment log modal opens.",
+          "observed": "View Logs opened a deployment log modal for dep_49f5d0f141ba8ffa946d1f5d. The modal showed deployment logs including 'stdout-compatible wasm runtime ready at http://janus-runner:37775'."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "e2e-pipeline/browser-deploy-round4/02-dashboard-overview-plain.png",
+          "e2e-pipeline/browser-deploy-round4/03-deployment-form-filled.png",
+          "e2e-pipeline/browser-deploy-round4/04-deployment-submitted.png",
+          "e2e-pipeline/browser-deploy-round4/05-deployment-autorefresh-check.png",
+          "e2e-pipeline/browser-deploy-round4/06-view-logs-modal.png"
+        ],
+        "files": [
+          "e2e-pipeline/browser-deploy-round4/setup-state.json",
+          "e2e-pipeline/browser-deploy-round4/playwright-observation.json",
+          "e2e-pipeline/browser-deploy-round4/api-state.json",
+          "e2e-pipeline/browser-deploy-round4/network-log.json",
+          "e2e-pipeline/browser-deploy-round4/console-errors.txt",
+          "e2e-pipeline/browser-deploy-round4/09-log-modal.txt"
+        ],
+        "network": [
+          "GET /api/v1/auth/me loaded the authenticated user in the dashboard.",
+          "GET /api/v1/projects, /api/v1/builds, /api/v1/deployments, and /api/v1/domains loaded the initial dashboard state.",
+          "POST /api/v1/deployments returned operation op_7991adfade586b64676af1c5.",
+          "GET /api/v1/operations/op_7991adfade586b64676af1c5 returned status succeeded with deployment result status starting plus domainBinding/resourceProfile payloads.",
+          "The browser then issued repeated GET /api/v1/deployments/dep_49f5d0f141ba8ffa946d1f5d polls, but the UI never merged the running runtimeEndpoint into the result/deployment/domain cards.",
+          "Independent API evidence in api-state.json shows GET /api/v1/deployments/dep_49f5d0f141ba8ffa946d1f5d and the matching domain record were already running with runtimeEndpoint http://janus-runner:37775 while the UI remained stale."
+        ],
+        "consoleErrors": "none"
+      },
+      "issues": "VAL-FH-018 fails on the current post-fix stack because the deployment submit path does not finish the UI state transition: the immediate result card never shows a reachable endpoint link, the deployment/domain cards remain stuck at starting, and the browser keeps polling even though the backend has already advanced the isolated deployment and domain to running with runtimeEndpoint http://janus-runner:37775. The project filters and View Logs modal worked."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "On /get-started, agent-browser snapshot/annotate and networkidle waits repeatedly timed out even though the page was reachable. This made the normal ref-based workflow unreliable for this route.",
+      "resolved": true,
+      "resolution": "Restarted only the assigned browser session per guidance, then used fixed waits, plain screenshots, CSS/semantic locators, and direct DOM extraction to complete the validation without restarting shared services.",
+      "affectedAssertions": [
+        "VAL-FH-018"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "VAL-FH-018 failed: deployment creation from the isolated prebuilt WASM build succeeded and View Logs opened, but the deployment result/deployments/domains UI never auto-refreshed from starting to running or surfaced the runtime endpoint link even though the backend and browser polling data showed the isolated deployment/domain were already running."
+}

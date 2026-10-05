@@ -1,0 +1,48 @@
+[package]
+name = "janus-core"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic actor-owned ECS core for Janus"
+license = "MIT"
+repository = "https://github.com/nerfs/Janus"
+keywords = ["ecs", "actix-web", "deterministic", "janus"]
+categories = ["concurrency", "web-programming"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+aes-gcm = "0.10"
+actix-web = { version = "=4.15.0", default-features = false, features = ["cookies", "macros"] }
+bcrypt = "0.15"
+base32 = "0.5"
+base64 = "0.22"
+hmac = "0.12"
+futures-util = "0.3"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha1 = "0.10"
+sha2 = "0.10"
+spacetimedb-sdk = "2"
+tokio = { version = "1", default-features = false, features = ["io-util", "net", "rt", "sync", "time"] }
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+actix-http = "3"
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+
+[lints.clippy]
+# Keep the Rust replacement on the strictest practical built-in Clippy profile.
+# The local gate still passes `-D warnings`, so compiler and Clippy diagnostics
+# remain fatal even when a toolchain adds a new lint outside these groups.
+# The cargo metadata group is intentionally excluded: SpacetimeDB's generated
+# SDK currently requires parallel transitive versions (for example base64 and
+# tokio). Dependency duplication is tracked by the storage integration gate;
+# handwritten code remains fatal under all, pedantic, and nursery.
+all = "deny"
+pedantic = "deny"
+nursery = "deny"

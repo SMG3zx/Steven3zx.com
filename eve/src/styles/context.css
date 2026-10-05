@@ -1,0 +1,66 @@
+.map-wrap {
+  height: 500px;
+  background: #0d1820;
+}
+.context-menu {
+  display: none;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: 205px;
+  background: rgba(12, 24, 31, 0.95);
+  border: 1px solid #3b7f7e;
+  border-radius: 8px;
+  padding: 13px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+}
+.context-menu.open {
+  display: block;
+}
+.context-kicker {
+  font: 9px 'DM Mono';
+  letter-spacing: 1px;
+  color: #72cfc4;
+  margin-bottom: 6px;
+}
+.context-menu strong {
+  font: 12px Manrope;
+  color: #edf7f3;
+}
+.context-actions {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+.context-actions button {
+  border: 1px solid #2d464e;
+  background: #162630;
+  border-radius: 5px;
+  text-align: left;
+  padding: 8px;
+  color: #c7d9d6;
+  font-size: 10px;
+}
+.context-actions button:hover {
+  background: #20434a;
+  border-color: #55bcb4;
+  color: #fff;
+}
+.context-toast {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  background: #3ebba9;
+  color: #071b1d;
+  border-radius: 5px;
+  padding: 8px 11px;
+  font: 10px 'DM Mono';
+  opacity: 0;
+  transform: translateY(6px);
+  transition: 0.18s ease;
+}
+.context-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}

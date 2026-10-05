@@ -1,0 +1,8 @@
+{
+  "dev": {
+    "run": "cargo run"
+  },
+  "module-path": "./spacetimedb",
+  "server": "maincloud",
+  "database": "rusty-mines-5gxbr"
+}

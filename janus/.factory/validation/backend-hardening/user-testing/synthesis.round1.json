@@ -1,0 +1,65 @@
+{
+  "milestone": "backend-hardening",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 15,
+    "passed": 8,
+    "failed": 6,
+    "blocked": 1
+  },
+  "passedAssertions": [
+    "VAL-BH-002",
+    "VAL-BH-003",
+    "VAL-BH-004",
+    "VAL-BH-007",
+    "VAL-BH-011",
+    "VAL-BH-012",
+    "VAL-BH-014",
+    "VAL-BH-015"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-BH-001",
+      "reason": "migrate down left public.schema_migrations in the temp database, so the full down run did not leave zero tables remaining."
+    },
+    {
+      "id": "VAL-BH-005",
+      "reason": "representative 405 and 429 responses did not use the required nested error envelope."
+    },
+    {
+      "id": "VAL-BH-008",
+      "reason": "duplicate canonical runner lookup SQL remains in internal/core/runners.go."
+    },
+    {
+      "id": "VAL-BH-009",
+      "reason": "role checks in internal/actors/node.go still use slice scans instead of set-based lookup."
+    },
+    {
+      "id": "VAL-BH-010",
+      "reason": "exported functions in internal/core/runners.go, internal/telemetry/otel.go, and internal/actors/node.go still return bare err values without added context."
+    },
+    {
+      "id": "VAL-BH-013",
+      "reason": "rate limiting returned HTTP 429 but the body was an unstructured top-level payload instead of error.code=rate_limited in the standard envelope."
+    }
+  ],
+  "blockedAssertions": [
+    {
+      "id": "VAL-BH-006",
+      "blockedBy": "successful auth.signup and auth.signin.password operations returned result:{}, and POST /api/v1/auth/session/exchange then failed 400 with \"operation has no user result\", blocking full authenticated status-code validation across endpoints."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added backend-hardening backend-cli guidance, API/backend-cli concurrency limits, and isolation rules for flow validators.",
+      "source": "setup"
+    }
+  ],
+  "previousRound": null,
+  "flowReports": [
+    ".factory/validation/backend-hardening/user-testing/flows/backend-cli.json",
+    ".factory/validation/backend-hardening/user-testing/flows/api.json"
+  ]
+}

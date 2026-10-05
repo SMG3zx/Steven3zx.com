@@ -1,0 +1,3 @@
+import { component$ } from "@builder.io/qwik";
+import { WorkspacePage } from "../../components/workspace-page";
+export default component$(() => <WorkspacePage eyebrow="RUN HISTORY" title="Runs" description="Every factory request, status transition, and review checkpoint in one place."><div class="workspace-list"><div class="workspace-list-row"><span class="run-status running" /><div><strong>Build project dashboard</strong><small>Planning · local workspace</small></div><span class="run-pill running-pill">Active</span></div><div class="workspace-list-row"><span class="run-status done" /><div><strong>Update API documentation</strong><small>Review complete · today</small></div><span class="run-pill done-pill">Complete</span></div></div></WorkspacePage>);

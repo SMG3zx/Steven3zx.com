@@ -1,0 +1,40 @@
+{
+  "milestone": "frontend-hardening",
+  "round": 2,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run test\"",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run build\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\frontend\\web'; npm run lint\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "frontend-worker skill",
+      "suggestion": "Enforce the skill's manual-verification requirement so workers cannot mark followedProcedure=true without transcript evidence of `npm run dev` plus recorded `interactiveChecks` (or explicitly document an allowed exception path).",
+      "evidence": "The fh-scrutiny-fixes rerun review found the same enforcement gap as round 1: the skill requires recorded manual UI verification, but the fix feature handoff still had no `npm run dev`, `agent-browser`, or `interactiveChecks` evidence while reporting followedProcedure=true.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/frontend-hardening/scrutiny/synthesis.round1.json"
+}

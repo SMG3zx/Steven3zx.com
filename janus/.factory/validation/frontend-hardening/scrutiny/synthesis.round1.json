@@ -1,0 +1,112 @@
+{
+  "milestone": "frontend-hardening",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "Set-Location \"E:\\Janus\\frontend\\web\"; npm run test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "Set-Location \"E:\\Janus\\frontend\\web\"; npm run build",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "Set-Location \"E:\\Janus\\frontend\\web\"; npm run lint",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 0,
+    "failed": 5,
+    "failedFeatures": [
+      "fh-tailwind-vitest-setup",
+      "fh-landing-auth-pages",
+      "fh-dashboard-layout",
+      "fh-dashboard-panels",
+      "fh-error-loading-states"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "fh-tailwind-vitest-setup",
+      "severity": "blocking",
+      "description": "globals.css remained a large legacy stylesheet instead of being reduced to Tailwind utilities plus a minimal base layer, so the feature did not satisfy the promised Tailwind replacement scope."
+    },
+    {
+      "featureId": "fh-tailwind-vitest-setup",
+      "severity": "blocking",
+      "description": "The setup feature did not add API-client error-handling tests, even though VAL-FH-003 requires frontend unit-test coverage for that logic."
+    },
+    {
+      "featureId": "fh-landing-auth-pages",
+      "severity": "blocking",
+      "description": "The landing page CTA is derived from currentUser before the auth lookup resolves, so authenticated users can briefly see and click the signed-out CTA during initial load."
+    },
+    {
+      "featureId": "fh-dashboard-layout",
+      "severity": "blocking",
+      "description": "The reviewed dashboard layout feature lacked the required mobile/tablet sidebar collapse and hamburger behavior for narrow viewports."
+    },
+    {
+      "featureId": "fh-dashboard-layout",
+      "severity": "blocking",
+      "description": "The reviewed dashboard layout still depended on legacy dashboard shell CSS hooks instead of a fully Tailwind-based layout implementation."
+    },
+    {
+      "featureId": "fh-dashboard-panels",
+      "severity": "blocking",
+      "description": "The UploadsPanel forms do not actually reset controlled project/ref/runtime fields after submission, so the required post-submit form reset behavior is incomplete."
+    },
+    {
+      "featureId": "fh-error-loading-states",
+      "severity": "blocking",
+      "description": "The billing shell page fetches /api/v1/billing, but that route does not exist in the current codebase, so the page falls straight into its error state instead of supporting the promised shell states."
+    },
+    {
+      "featureId": "fh-error-loading-states",
+      "severity": "blocking",
+      "description": "The monitoring shell page fetches /api/v1/monitoring/metrics, which does not exist in the repo and also diverges from the documented metrics API example, so the page cannot render real data or a genuine empty state."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "frontend-worker skill",
+      "suggestion": "Clarify the TDD requirement for frontend migrations: allow a lighter test-first expectation only for strictly presentational Tailwind/classname refactors, while explicitly keeping mandatory behavior/state coverage for auth, routing, form, and async interaction changes.",
+      "evidence": "fh-dashboard-layout feedback said strict red/green TDD is impractical for pure Tailwind/classname migration work, but fh-landing-auth-pages still missed behavior regressions in auth-aware CTA and OTP submission logic after adding client behavior without tests.",
+      "isSystemic": true
+    },
+    {
+      "target": "frontend-worker skill",
+      "suggestion": "Enforce or reconcile the manual-verification requirement so workers cannot report followedProcedure=true without recorded dev-server/browser checks and interactiveChecks evidence.",
+      "evidence": "fh-dashboard-layout, fh-dashboard-panels, and fh-error-loading-states each reported the feature as procedure-following without transcript evidence of npm run dev, agent-browser/manual checks, or interactiveChecks entries, despite the skill requiring them.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add a bookkeeping rule that feature handoffs and mission metadata must reference the actual implementation commit(s) and clearly capture split provenance when multiple worker sessions contribute to one feature.",
+      "evidence": "fh-tailwind-vitest-setup's handoff pointed to commit 009dc7d even though the implementation lived in 1b275c4, and fh-dashboard-panels provenance was split across two worker sessions while only the later session was marked completed in features.json.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Update .factory/library/architecture.md to replace stale /janus and dashboard-decomposition notes.",
+      "reason": "Rejected for now because it is a documentation-only update outside the requested validation scope, and worker instructions forbid documentation edits unless explicitly requested."
+    },
+    {
+      "observation": "Patch mission feature metadata so fh-tailwind-vitest-setup explicitly mentions API-client test coverage.",
+      "reason": "Rejected because the validation contract is already the source of truth, and retroactively editing mission metadata during scrutiny would blur the historical record rather than fix the implementation gap."
+    },
+    {
+      "observation": "Document a temporary shared API contract for billing and monitoring shell pages before backend milestones land.",
+      "reason": "Rejected as ambiguous because the corresponding backend milestones are still pending, so any library update now would risk cementing speculative routes rather than established contracts."
+    }
+  ],
+  "previousRound": null
+}

@@ -1,0 +1,21 @@
+{
+  "name": "meinfactory-mastra",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "build": "tsc --noEmit",
+    "start": "bun run src/server.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "latest",
+    "@mastra/core": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "latest",
+    "mastra": "latest",
+    "typescript": "latest"
+  }
+}

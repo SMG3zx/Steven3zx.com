@@ -1,0 +1,130 @@
+{
+  "milestone": "e2e-pipeline",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go test -count=1 -parallel 4 ./...\"",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go build ./...\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "powershell -NoProfile -Command \"Set-Location 'E:\\Janus\\backend\\janus-api'; go vet ./...\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 6,
+    "passed": 0,
+    "failed": 6,
+    "failedFeatures": [
+      "e2e-auth-flow",
+      "e2e-github-oauth",
+      "e2e-project-repo",
+      "e2e-wasm-languages",
+      "e2e-deployment-access",
+      "e2e-operations-logs"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "e2e-auth-flow",
+      "severity": "blocking",
+      "description": "The auth E2E suite never polls the returned operationId/pollUrl for signup or signin, so VAL-E2E-001/002 can regress without failing the tests."
+    },
+    {
+      "featureId": "e2e-auth-flow",
+      "severity": "blocking",
+      "description": "Auth refresh still does not reliably issue a new JWT because SetAccessCookie only varies second-resolution claims and the tests only assert a non-empty cookie."
+    },
+    {
+      "featureId": "e2e-github-oauth",
+      "severity": "blocking",
+      "description": "GitHub OAuth start/callback handling does not generate or validate a session-bound state parameter, leaving the flow vulnerable to OAuth CSRF/account-linking attacks."
+    },
+    {
+      "featureId": "e2e-project-repo",
+      "severity": "blocking",
+      "description": "CreateProject and UpdateProject ignore database Exec errors, so operations can report success even when writes fail or duplicate-slug races occur."
+    },
+    {
+      "featureId": "e2e-project-repo",
+      "severity": "blocking",
+      "description": "RepoImport accepts any parseable URI such as ftp://bad instead of enforcing the required GitHub HTTPS repository URL contract."
+    },
+    {
+      "featureId": "e2e-wasm-languages",
+      "severity": "blocking",
+      "description": "The new multi-language build paths still execute host-installed toolchains instead of containerized builds, so the milestone's isolation/toolchain requirement is unmet."
+    },
+    {
+      "featureId": "e2e-wasm-languages",
+      "severity": "blocking",
+      "description": "Python, JS/TS, and .NET detection heuristics are too broad and can classify ordinary repos as supported instead of failing with buildStrategy \"unknown\"."
+    },
+    {
+      "featureId": "e2e-wasm-languages",
+      "severity": "blocking",
+      "description": "Several component-language build commands do not match the documented toolchains, including hardcoded world names for Python/JS and a standalone componentize-dotnet path instead of the researched dotnet/MSBuild integration."
+    },
+    {
+      "featureId": "e2e-deployment-access",
+      "severity": "blocking",
+      "description": "ArtifactUploadRoute still returns a synchronous 201 response instead of the required 202 async operation envelope."
+    },
+    {
+      "featureId": "e2e-deployment-access",
+      "severity": "blocking",
+      "description": "Uploaded artifact builds are stored as build_strategy \"uploaded_artifact\" instead of the required \"prebuilt_wasm\" strategy."
+    },
+    {
+      "featureId": "e2e-deployment-access",
+      "severity": "blocking",
+      "description": "DeleteDeployment only updates database state; the runtime abstraction has no stop/terminate path, so DELETE does not guarantee the WASM runtime is actually shut down."
+    },
+    {
+      "featureId": "e2e-deployment-access",
+      "severity": "blocking",
+      "description": "The added deployment tests do not verify polling to a running deployment result with runtimeEndpoint/domainBinding, successful upload flows, runtime 2xx access, or shutdown after deletion."
+    },
+    {
+      "featureId": "e2e-operations-logs",
+      "severity": "blocking",
+      "description": "The operation-envelope coverage omits POST /api/v1/uploads/source-bundles, so it does not yet verify the 202 async envelope contract across every relevant mutating endpoint."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Added .factory/library/e2e-pipeline.md documenting the GitHub OAuth env vars, the concrete async operation-submitting routes, the GitHub HTTPS repo-import contract, and the repo research file that defines containerized/component-language WASM build expectations.",
+      "sourceFeature": "e2e-github-oauth / e2e-project-repo / e2e-wasm-languages / e2e-operations-logs"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Require transcript/handoff evidence for backend API manual verification (`curl.exe` plus `interactiveChecks`) and failing-test-first TDD before workers can claim `followedProcedure=true`, or document an explicit exception path when manual verification is impossible.",
+      "evidence": "All six e2e-pipeline feature reviews (e2e-auth-flow, e2e-github-oauth, e2e-project-repo, e2e-wasm-languages, e2e-deployment-access, e2e-operations-logs) reported the same mismatch: handoffs marked `followedProcedure=true` while transcript evidence showed no manual curl verification, no interactiveChecks, and in several cases no red-phase targeted test before implementation.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add an explicit OAuth security convention that any third-party OAuth start/callback flow must generate, persist, and validate a session-bound `state` parameter before accepting the callback.",
+      "evidence": "The e2e-github-oauth review found `backend/janus-api/internal/api/handler/github_oauth.go` implemented start/callback handling without any `state` parameter, and AGENTS.md currently only provides a broad security rule rather than an OAuth-specific requirement.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Repeated backend-worker procedure-enforcement observations across all six e2e-pipeline reviews.",
+      "reason": "duplicate; consolidated into one backend-worker skill recommendation in suggestedGuidanceUpdates."
+    }
+  ],
+  "previousRound": null
+}

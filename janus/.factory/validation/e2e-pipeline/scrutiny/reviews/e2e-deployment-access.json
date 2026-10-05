@@ -1,0 +1,46 @@
+{
+  "featureId": "e2e-deployment-access",
+  "reviewedAt": "2026-03-15T07:21:31.615445Z",
+  "commitId": "0c7f9b5",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "I reviewed the mission context, AGENTS/shared-state files, the worker transcript skeleton, the handoff for session 2754358c-3126-44a3-9050-396637e445b9, and commit 0c7f9b5. The feature adds useful deployment CRUD coverage and build-status prevalidation, but it does not yet satisfy the upload/runtime-access parts of the feature or several required VAL-E2E assertions.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/api/handler/builds_deployments.go",
+        "line": 639,
+        "severity": "blocking",
+        "description": "`ArtifactUploadRoute` still behaves as a synchronous create endpoint: it directly calls `CreateUploadedArtifactBuild` and returns `201 Created` with `uploadBuildResponse` instead of returning the required `202` operation envelope. That does not satisfy VAL-E2E-022 / the feature contract, which requires polling an operation result for artifact uploads."
+      },
+      {
+        "file": "backend/janus-api/internal/core/workflow_uploads.go",
+        "line": 47,
+        "severity": "blocking",
+        "description": "Uploaded artifact builds are persisted with build_strategy `\"uploaded_artifact\"`, while the feature and VAL-E2E-022 require `buildStrategy: \"prebuilt_wasm\"`. The constructed `BuildJob` also never sets `BuildStrategy`, so the returned build payload omits the required strategy even before it is reloaded from storage."
+      },
+      {
+        "file": "backend/janus-api/internal/core/workflow_deployments.go",
+        "line": 123,
+        "severity": "blocking",
+        "description": "`DeleteDeployment` only marks the deployment/runtime rows as stopped/terminated in the database. There is no actual runtime shutdown call, and the runtime abstraction only exposes `Launch` (see `backend/janus-api/internal/core/runtime_launcher.go:36`). As implemented, DELETE cannot guarantee that the WASM process is terminated or that the old runtime endpoint stops serving, which violates VAL-E2E-024 and the feature's deletion/runtime-access requirements."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/deployment_e2e_test.go",
+        "line": 125,
+        "severity": "blocking",
+        "description": "The new test suite is much narrower than the feature scope. It checks envelope/listing/guard behavior (for example at lines 125, 326, 409, 619, and 653), but it never verifies polling a deployment operation to a succeeded result with `result.deployment.status == \"running\"`, non-empty `runtimeEndpoint`, and `domainBinding`; it never exercises a successful source-bundle upload or artifact upload; it never proves runtime GET returns 2xx; and it never proves the runtime endpoint becomes unreachable after deletion. Because this feature is explicitly about end-to-end deployment/runtime verification, those missing checks are blocking review gaps."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill requires manual `curl.exe` verification and `interactiveChecks` entries, but this feature handoff recorded only `go test` / `go vet` commands and still marked `followedProcedure: true`. That mismatch made it easy for handler-only tests to stand in for the required runtime/upload verification.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:44-55 requires manual verification plus `interactiveChecks`. The handoff at C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-15T07-06-02-652Z__e2e-deployment-access__2754358c-3126-44a3-9050-396637e445b9.json:14-26 lists only `go test`/`go vet`, and line 140 marks `followedProcedure: true`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed. The commit improves deployment handler coverage, but artifact upload still misses the required async/prebuilt_wasm contract, deletion does not actually terminate runtimes, and the added tests do not verify the end-to-end runtime access behaviors this feature was supposed to prove."
+}

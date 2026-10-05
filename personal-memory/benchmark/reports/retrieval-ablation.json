@@ -1,0 +1,362 @@
+{
+  "apiUrl": "http://127.0.0.1:4781",
+  "projectId": "benchmark-suite",
+  "reports": [
+    {
+      "mode": "lexical",
+      "methods": [
+        "lexical"
+      ],
+      "cases": 15,
+      "hitRate": 1,
+      "abstentionAccuracy": 1,
+      "meanLatencyMs": 10.838666666666667,
+      "p95LatencyMs": 17.05,
+      "measurements": [
+        {
+          "id": "fact-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.85,
+          "resultCount": 8
+        },
+        {
+          "id": "temporal-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 10.64,
+          "resultCount": 10
+        },
+        {
+          "id": "multi-hop-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 10.03,
+          "resultCount": 10
+        },
+        {
+          "id": "multi-session-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 9.46,
+          "resultCount": 10
+        },
+        {
+          "id": "procedural-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 9.81,
+          "resultCount": 10
+        },
+        {
+          "id": "contradiction-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 9.41,
+          "resultCount": 10
+        },
+        {
+          "id": "attribution-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 17.05,
+          "resultCount": 10
+        },
+        {
+          "id": "faithfulness-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 11.36,
+          "resultCount": 10
+        },
+        {
+          "id": "reflection-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 9.5,
+          "resultCount": 10
+        },
+        {
+          "id": "failure-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 9.59,
+          "resultCount": 5
+        },
+        {
+          "id": "skill-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 8.29,
+          "resultCount": 4
+        },
+        {
+          "id": "extraction-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 10.02,
+          "resultCount": 10
+        },
+        {
+          "id": "supersession-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 10.74,
+          "resultCount": 10
+        },
+        {
+          "id": "forgetting-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 11.66,
+          "resultCount": 10
+        },
+        {
+          "id": "abstention-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 10.17,
+          "resultCount": 10
+        }
+      ]
+    },
+    {
+      "mode": "graph",
+      "methods": [
+        "graph"
+      ],
+      "cases": 15,
+      "hitRate": 0.4,
+      "abstentionAccuracy": 0.6,
+      "meanLatencyMs": 16.593333333333337,
+      "p95LatencyMs": 31.79,
+      "measurements": [
+        {
+          "id": "fact-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 15.12,
+          "resultCount": 1
+        },
+        {
+          "id": "temporal-001",
+          "hit": false,
+          "abstentionCorrect": true,
+          "elapsedMs": 19.76,
+          "resultCount": 1
+        },
+        {
+          "id": "multi-hop-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 17.65,
+          "resultCount": 1
+        },
+        {
+          "id": "multi-session-001",
+          "hit": false,
+          "abstentionCorrect": true,
+          "elapsedMs": 31.79,
+          "resultCount": 1
+        },
+        {
+          "id": "procedural-001",
+          "hit": false,
+          "abstentionCorrect": false,
+          "elapsedMs": 14.42,
+          "resultCount": 0
+        },
+        {
+          "id": "contradiction-001",
+          "hit": false,
+          "abstentionCorrect": false,
+          "elapsedMs": 15.54,
+          "resultCount": 0
+        },
+        {
+          "id": "attribution-001",
+          "hit": false,
+          "abstentionCorrect": false,
+          "elapsedMs": 15.49,
+          "resultCount": 0
+        },
+        {
+          "id": "faithfulness-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 19.5,
+          "resultCount": 1
+        },
+        {
+          "id": "reflection-001",
+          "hit": false,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.02,
+          "resultCount": 1
+        },
+        {
+          "id": "failure-001",
+          "hit": false,
+          "abstentionCorrect": false,
+          "elapsedMs": 15.38,
+          "resultCount": 0
+        },
+        {
+          "id": "skill-001",
+          "hit": false,
+          "abstentionCorrect": false,
+          "elapsedMs": 12.74,
+          "resultCount": 0
+        },
+        {
+          "id": "extraction-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.63,
+          "resultCount": 1
+        },
+        {
+          "id": "supersession-001",
+          "hit": false,
+          "abstentionCorrect": false,
+          "elapsedMs": 12.27,
+          "resultCount": 0
+        },
+        {
+          "id": "forgetting-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 16.54,
+          "resultCount": 0
+        },
+        {
+          "id": "abstention-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.05,
+          "resultCount": 0
+        }
+      ]
+    },
+    {
+      "mode": "hybrid",
+      "methods": [
+        "lexical",
+        "vector",
+        "graph"
+      ],
+      "cases": 15,
+      "hitRate": 1,
+      "abstentionAccuracy": 1,
+      "meanLatencyMs": 16.61,
+      "p95LatencyMs": 31.4,
+      "measurements": [
+        {
+          "id": "fact-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 13.79,
+          "resultCount": 8
+        },
+        {
+          "id": "temporal-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.06,
+          "resultCount": 10
+        },
+        {
+          "id": "multi-hop-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.05,
+          "resultCount": 10
+        },
+        {
+          "id": "multi-session-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 23.26,
+          "resultCount": 10
+        },
+        {
+          "id": "procedural-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 13.83,
+          "resultCount": 10
+        },
+        {
+          "id": "contradiction-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 22.38,
+          "resultCount": 10
+        },
+        {
+          "id": "attribution-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.56,
+          "resultCount": 10
+        },
+        {
+          "id": "faithfulness-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.01,
+          "resultCount": 10
+        },
+        {
+          "id": "reflection-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 31.4,
+          "resultCount": 10
+        },
+        {
+          "id": "failure-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14,
+          "resultCount": 5
+        },
+        {
+          "id": "skill-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 12.12,
+          "resultCount": 4
+        },
+        {
+          "id": "extraction-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 15.58,
+          "resultCount": 10
+        },
+        {
+          "id": "supersession-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 17.45,
+          "resultCount": 10
+        },
+        {
+          "id": "forgetting-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 14.73,
+          "resultCount": 10
+        },
+        {
+          "id": "abstention-001",
+          "hit": true,
+          "abstentionCorrect": true,
+          "elapsedMs": 13.93,
+          "resultCount": 10
+        }
+      ]
+    }
+  ]
+}

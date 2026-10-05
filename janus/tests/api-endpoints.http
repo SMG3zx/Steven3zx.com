@@ -1,0 +1,451 @@
+### GET http://localhost:8080/ui
+GET http://localhost:8080/ui
+
+### GET http://localhost:8080/healthz
+GET http://localhost:8080/healthz
+
+### GET http://localhost:8080/readyz
+GET http://localhost:8080/readyz
+
+###
+GET http://localhost:8080/metrics
+
+### Auth
+# @name authSignup
+POST http://localhost:8080/api/v1/auth/signup
+Content-Type: {{json}}
+X-Request-Id: signup-request-1
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "API Test User"
+}
+
+###
+# @name authSignin
+POST http://localhost:8080/api/v1/auth/signin
+Content-Type: {{json}}
+X-Request-Id: signin-request-1
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/signin/password
+Content-Type: {{json}}
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/magic-code/request
+Content-Type: {{json}}
+
+{
+  "email": "{{email}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/magic-code/verify
+Content-Type: {{json}}
+
+{
+  "email": "{{email}}",
+  "code": "{{magicCode}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/reset-password/request
+Content-Type: {{json}}
+
+{
+  "email": "{{email}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/reset-password/confirm
+Content-Type: {{json}}
+
+{
+  "email": "{{email}}",
+  "token": "{{resetToken}}",
+  "newPassword": "{{newPassword}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/session/exchange
+Content-Type: {{json}}
+
+{
+  "operationId": "{{operationId}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/signout
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/auth/refresh
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/auth/me
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/mfa/status
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/mfa/totp/enroll
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/mfa/totp/verify
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "code": "{{mfaCode}}"
+}
+
+###
+POST http://localhost:8080/api/v1/mfa/totp/disable
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/mfa/email/enroll
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/mfa/email/verify
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "code": "{{mfaCode}}"
+}
+
+###
+POST http://localhost:8080/api/v1/mfa/email/send
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/mfa/email/disable
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/mfa/recovery/generate
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "password": "{{password}}"
+}
+
+###
+POST http://localhost:8080/api/v1/mfa/verify
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "code": "{{mfaCode}}",
+  "method": "{{mfaMethod}}"
+}
+
+###
+GET http://localhost:8080/api/v1/projects
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/projects
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "name": "API Test Project",
+  "slug": "api-test-project",
+  "description": "Created from tests/api-endpoints.http",
+  "repoProvider": "github",
+  "repoUrl": "https://github.com/example/repo",
+  "repoBranch": "main"
+}
+
+###
+PATCH http://localhost:8080/api/v1/projects/{{projectId}}
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "name": "API Test Project Updated",
+  "slug": "api-test-project",
+  "description": "Updated from the HTTP suite",
+  "status": "active",
+  "repoProvider": "github",
+  "repoUrl": "https://github.com/example/repo",
+  "repoBranch": "main"
+}
+
+###
+DELETE http://localhost:8080/api/v1/projects/{{projectId}}
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/templates
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/backend-resources
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/repos/import
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "projectId": "{{projectId}}",
+  "provider": "github",
+  "repoUrl": "https://github.com/example/repo",
+  "branch": "main",
+  "runnerId": "{{runnerId}}"
+}
+
+###
+POST http://localhost:8080/api/v1/repos/validate
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "projectId": "{{projectId}}"
+}
+
+###
+GET http://localhost:8080/api/v1/git/providers
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/git/providers/github/oauth/start
+Cookie: {{authCookie}}
+
+### GET http://localhost:8080/api/v1/git/providers/github/oauth/callback?state=replace-stat...
+GET http://localhost:8080/api/v1/git/providers/github/oauth/callback?state=replace-state&code=replace-code
+Cookie: github_oauth_state=replace-state; {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/uploads/source-bundles
+Cookie: {{authCookie}}
+Content-Type: multipart/form-data; boundary=JanusSourceBoundary
+
+--JanusSourceBoundary
+Content-Disposition: form-data; name="projectId"
+
+{{projectId}}
+--JanusSourceBoundary
+Content-Disposition: form-data; name="sourceRef"
+
+main
+--JanusSourceBoundary
+Content-Disposition: form-data; name="sourceKind"
+
+zip
+--JanusSourceBoundary
+Content-Disposition: form-data; name="file"; filename="sample-source.zip"
+Content-Type: application/zip
+
+< ./fixtures/sample-source.zip
+--JanusSourceBoundary--
+
+###
+POST http://localhost:8080/api/v1/uploads/artifacts
+Cookie: {{authCookie}}
+Content-Type: multipart/form-data; boundary=JanusArtifactBoundary
+
+--JanusArtifactBoundary
+Content-Disposition: form-data; name="projectId"
+
+{{projectId}}
+--JanusArtifactBoundary
+Content-Disposition: form-data; name="sourceRef"
+
+upload
+--JanusArtifactBoundary
+Content-Disposition: form-data; name="artifactRuntime"
+
+wasm/wasi-http-component
+--JanusArtifactBoundary
+Content-Disposition: form-data; name="file"; filename="sample-module.wasm"
+Content-Type: application/wasm
+
+< ./fixtures/sample-module.wasm
+--JanusArtifactBoundary--
+
+###
+GET http://localhost:8080/api/v1/builds
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/builds?projectId={{projectId}}
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/builds/{{buildId}}/logs
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/builds/{{buildId}}/logs/stream
+Accept: text/event-stream
+Cache-Control: no-cache
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/operations/{{operationId}}
+
+###
+GET http://localhost:8080/api/v1/logs
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/deployments
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/deployments?projectId={{projectId}}
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/deployments
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "projectId": "{{projectId}}",
+  "buildJobId": "{{buildId}}",
+  "targetType": "preview",
+  "targetRef": "pr-123",
+  "runnerId": "{{runnerId}}",
+  "env": {
+    "JANUS_ENV": "test",
+    "FEATURE_FLAG_X": "true"
+  }
+}
+
+###
+GET http://localhost:8080/api/v1/deployments/{{deploymentId}}
+Cookie: {{authCookie}}
+
+###
+DELETE http://localhost:8080/api/v1/deployments/{{deploymentId}}
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/domains
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/runners
+Authorization: Bearer {{runnerToken}}
+
+###
+POST http://localhost:8080/api/v1/runners/register
+Content-Type: {{json}}
+Authorization: Bearer {{runnerToken}}
+
+{
+  "id": "{{runnerId}}",
+  "name": "Local Runner",
+  "capabilities": {
+    "wasm": true,
+    "builds": true
+  },
+  "labels": {
+    "region": "local",
+    "tier": "dev"
+  },
+  "runtimeEndpoint": "http://127.0.0.1:9001",
+  "status": "ready"
+}
+
+###
+POST http://localhost:8080/api/v1/runners/heartbeat
+Content-Type: {{json}}
+Authorization: Bearer {{runnerToken}}
+
+{
+  "runnerId": "{{runnerId}}",
+  "status": "ready",
+  "cpuFree": 2000,
+  "memFree": 4096,
+  "diskFree": 20480,
+  "runtimeEndpoint": "http://127.0.0.1:9001"
+}
+
+###
+GET http://localhost:8080/api/v1/billing
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/metrics
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/telemetry
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/telemetry/views
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/telemetry/views
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "name": "Smoke Test View"
+}
+
+###
+GET http://localhost:8080/api/v1/telemetry/stream
+Accept: text/event-stream
+Cache-Control: no-cache
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/admin/overview
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/admin/telemetry
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/admin/telemetry/views
+Cookie: {{authCookie}}
+
+###
+POST http://localhost:8080/api/v1/admin/telemetry/views
+Content-Type: {{json}}
+Cookie: {{authCookie}}
+
+{
+  "name": "Admin Smoke View"
+}
+
+###
+GET http://localhost:8080/api/v1/events
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/events/stream
+Accept: text/event-stream
+Cache-Control: no-cache
+Cookie: {{authCookie}}
+
+###
+GET http://localhost:8080/api/v1/does-not-exist

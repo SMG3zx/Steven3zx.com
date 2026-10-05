@@ -1,0 +1,108 @@
+{
+  "milestone": "e2e-pipeline",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 30,
+    "passed": 14,
+    "failed": 14,
+    "blocked": 2
+  },
+  "passedAssertions": [
+    "VAL-CROSS-007",
+    "VAL-CROSS-011",
+    "VAL-E2E-001",
+    "VAL-E2E-002",
+    "VAL-E2E-003",
+    "VAL-E2E-004",
+    "VAL-E2E-005",
+    "VAL-E2E-006",
+    "VAL-E2E-007",
+    "VAL-E2E-008",
+    "VAL-E2E-009",
+    "VAL-E2E-011",
+    "VAL-E2E-019",
+    "VAL-E2E-020"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-CROSS-004",
+      "reason": "Unauthenticated projects/builds/deployments/domains returned 401, but contract route families for billing and/or metrics did not; see evidence."
+    },
+    {
+      "id": "VAL-E2E-010",
+      "reason": "Only 1 of 8 claimed language strategies built successfully with the expected strategy names in the live environment."
+    },
+    {
+      "id": "VAL-E2E-012",
+      "reason": "The SSE log stream did not capture the full required event set on the live build."
+    },
+    {
+      "id": "VAL-E2E-013",
+      "reason": "Deployment create returned 202 and final status succeeded with deployment.status='starting', runtimeEndpoint='', domainBindingPresent=True."
+    },
+    {
+      "id": "VAL-E2E-014",
+      "reason": "Runtime endpoint '' returned status None."
+    },
+    {
+      "id": "VAL-E2E-015",
+      "reason": "One or more exercised mutating endpoints did not consistently expose the expected async operation envelope or failure object contract."
+    },
+    {
+      "id": "VAL-E2E-021",
+      "reason": "Valid source upload returned 202 and completed succeeded; invalid file type returned 202."
+    },
+    {
+      "id": "VAL-E2E-022",
+      "reason": "Artifact upload returned 201 with an immediate build payload, and the stored build later appeared as buildStrategy='uploaded_artifact' instead of the expected prebuilt_wasm operation result."
+    },
+    {
+      "id": "VAL-E2E-023",
+      "reason": "Deployment listing statuses were all=200 filtered=200; filtered match present=True."
+    },
+    {
+      "id": "VAL-E2E-024",
+      "reason": "Delete returned 404 then None; runtime after delete returned None."
+    },
+    {
+      "id": "VAL-E2E-026",
+      "reason": "Failed build status='failed'; deployment attempt returned 202."
+    },
+    {
+      "id": "VAL-E2E-027",
+      "reason": "Duplicate slug rejection did not match the expected failed-operation conflict behavior."
+    },
+    {
+      "id": "VAL-E2E-029",
+      "reason": "Expected OAuth start 302 to GitHub authorize with client_id, redirect_uri, scope, and matching state cookie; observed http=302 location='http://localhost:8080/app?git=github_oauth_not_supported'."
+    },
+    {
+      "id": "VAL-FH-018",
+      "reason": "The browser-reachable /get-started deployment workspace rendered as signed out with zero projects/builds/deployments, so the deployment form could not be completed against a real built artifact and no deployment result card or log modal was reached."
+    }
+  ],
+  "blockedAssertions": [
+    {
+      "id": "VAL-E2E-025",
+      "blockedBy": "No actual timeout-enforced failure was demonstrated: janus-build does not set JANUS_BUILD_TIMEOUT_SEC, so the live stack is using the 15 minute default timeout from workflow.go. Triggering a >15 minute intentional stall was not performed in this shared validator batch."
+    },
+    {
+      "id": "VAL-E2E-030",
+      "blockedBy": "Blocked: the localhost OAuth start route did not initiate GitHub authorization or set callback state, so a legitimate callback exchange could not be attempted."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added e2e-pipeline concurrency guidance plus API isolation notes for build/deploy-heavy validator batches.",
+      "source": "setup"
+    },
+    {
+      "target": "user-testing.md",
+      "description": "Recorded live validation knowledge for e2e-pipeline: known-good repo import sample, known unsupported-language sample, artifact upload response shape, and current /get-started auth instability.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": null
+}

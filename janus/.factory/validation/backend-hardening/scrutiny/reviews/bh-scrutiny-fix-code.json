@@ -1,0 +1,28 @@
+{
+  "featureId": "bh-scrutiny-fix-code",
+  "reviewedAt": "2026-03-14T17:31:33.844128Z",
+  "commitId": "bbde9b789f2668949d03257366bb89f407f82ef2",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix resolves three of the four round-1 blockers: the forbidden migration DDL literal is gone from Go files, the duplicate project-by-id SELECTs were centralized behind GetProjectByID and backed by a LOWER(domain) expression index, and the missing GET-only method guards plus /readyz healthy-path actor checks are now covered. The remaining blocker is the repository-test portion: the new repository_test.go adds scan/helper assertions, but it still does not exercise the required repository operations (CreateUser/FindUserByEmail, CreateProject/UpdateProject/DeleteProject, ClaimBuildJob, ClaimDeployment, CreateOperation) that caused bh-core-tests to fail in round 1.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/repository_test.go",
+        "line": 37,
+        "severity": "blocking",
+        "description": "This fix still does not add repository-level coverage for the CRUD/claim operations called out in the original failure. The new tests in repository_test.go are limited to scan helpers, interface compliance, column-count checks, and helper functions (see tests starting at lines 37, 70, 110, 156, 200, 227, 266, 288, 309, 329, and 356). A grep across *_test.go still finds no direct coverage for CreateUser/FindUserByEmail, CreateProject/UpdateProject/DeleteProject, ClaimBuildJob, ClaimDeployment, or CreateOperation, whose implementations remain in auth.go:22,32; projects.go:55,101,154; runner_execution.go:43,229; and operations.go:53. That means the round-1 bh-core-tests blocker is not actually resolved."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "Shared state still lacks guidance for how this repo expects database-backed repository methods to be tested. The worker spent time discovering there was no sqlite/sqlmock fixture and then substituted scan/helper tests, which left the blocking repository-coverage requirement unresolved.",
+      "evidence": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\worker-transcripts.jsonl line 8 (bh-scrutiny-fix-code skeleton) shows searches for `go-sqlite|mattn/go-sqlite3|modernc.org/sqlite|sqlmock` with no matches and an explicit fallback to scan/helper tests; E:\\Janus\\.factory\\library\\backend-hardening.md:3-20 documents backend state and validation commands but no repository-test harness guidance."
+    }
+  ],
+  "addressesFailureFrom": "E:\\Janus\\.factory\\validation\\backend-hardening\\scrutiny\\synthesis.json",
+  "summary": "Reviewed fix commit bbde9b789f2668949d03257366bb89f407f82ef2 against the four round-1 failures plus the worker handoff/transcript. Migration literal removal, query deduplication/indexing, method guards, and /readyz actor-check coverage are fixed, but the required repository-operation tests are still missing, so the fix review remains FAIL."
+}

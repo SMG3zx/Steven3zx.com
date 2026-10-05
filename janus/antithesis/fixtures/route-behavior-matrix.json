@@ -1,0 +1,1045 @@
+[
+  {
+    "path": "/api/v1/",
+    "handler": "APIFallback",
+    "methods": [
+      "ANY"
+    ],
+    "auth": false,
+    "method_before_auth": false,
+    "status_codes": [
+      404
+    ],
+    "error_bodies": [
+      "endpoint not found"
+    ],
+    "ownership": "public"
+  },
+  {
+    "path": "/",
+    "handler": "serveFrontend",
+    "methods": [
+      "ANY"
+    ],
+    "auth": false,
+    "method_before_auth": false,
+    "status_codes": [
+      400,
+      500
+    ],
+    "error_bodies": [],
+    "ownership": "public"
+  },
+  {
+    "path": "/healthz",
+    "handler": "Healthz",
+    "methods": [
+      "GET"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "public"
+  },
+  {
+    "path": "/readyz",
+    "handler": "Readyz",
+    "methods": [
+      "GET"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      405,
+      503
+    ],
+    "error_bodies": [],
+    "ownership": "public"
+  },
+  {
+    "path": "/metrics",
+    "handler": "PrometheusMetrics",
+    "methods": [
+      "GET"
+    ],
+    "auth": false,
+    "method_before_auth": false,
+    "status_codes": [
+      200,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "public"
+  },
+  {
+    "path": "/api/v1/auth/signup",
+    "handler": "AuthSignup",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "email and password are required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/signin",
+    "handler": "AuthSignin",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "email and password are required"
+    ],
+    "ownership": "public"
+  },
+  {
+    "path": "/api/v1/auth/signin/password",
+    "handler": "AuthSigninPassword",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "email and password are required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/magic-code/request",
+    "handler": "AuthMagicCodeRequest",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "email is required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/magic-code/verify",
+    "handler": "AuthMagicCodeVerify",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "code must be 6 digits",
+      "email and code are required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/reset-password/request",
+    "handler": "AuthResetPasswordRequest",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "email is required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/reset-password/confirm",
+    "handler": "AuthResetPasswordConfirm",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      405
+    ],
+    "error_bodies": [
+      "email, token, and newPassword are required",
+      "token is required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/session/exchange",
+    "handler": "AuthSessionExchange",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      405
+    ],
+    "error_bodies": [
+      "operationId is required"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/signout",
+    "handler": "AuthSignout",
+    "methods": [
+      "POST"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/auth/refresh",
+    "handler": "AuthRefresh",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "invalid refresh"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/auth/me",
+    "handler": "AuthMe",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "user not authenticated",
+      "user not found"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/status",
+    "handler": "MFAStatus",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/totp/enroll",
+    "handler": "MFATOTPEnroll",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/totp/verify",
+    "handler": "MFATOTPVerify",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "code is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/totp/disable",
+    "handler": "MFATOTPDisable",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/email/enroll",
+    "handler": "MFAEmailEnroll",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/email/verify",
+    "handler": "MFAEmailVerify",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "code is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/email/send",
+    "handler": "MFAEmailSend",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/email/disable",
+    "handler": "MFAEmailDisable",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/recovery/generate",
+    "handler": "MFARecoveryGenerate",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "password is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/mfa/verify",
+    "handler": "MFAVerify",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "code is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/projects",
+    "handler": "ProjectsRoute",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": false,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "invalid payload",
+      "method not allowed",
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/projects/",
+    "handler": "ProjectByIDRoute",
+    "methods": [
+      "DELETE",
+      "PATCH"
+    ],
+    "auth": true,
+    "method_before_auth": false,
+    "status_codes": [
+      400,
+      401,
+      404,
+      405
+    ],
+    "error_bodies": [
+      "invalid payload",
+      "method not allowed",
+      "project not found"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/repos/import",
+    "handler": "RepoImport",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "invalid JSON body",
+      "projectId is required",
+      "repoUrl is required",
+      "repoUrl must be a GitHub URL (github.com)",
+      "repoUrl must be a valid URL",
+      "repoUrl must use HTTPS scheme",
+      "unsupported provider"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/repos/validate",
+    "handler": "RepoValidate",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      404,
+      405
+    ],
+    "error_bodies": [
+      "project not found",
+      "projectId is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/uploads/source-bundles",
+    "handler": "SourceBundleUploadRoute",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      401,
+      405,
+      503
+    ],
+    "error_bodies": [
+      "failed to read uploaded file",
+      "failed to store source bundle",
+      "file is required",
+      "invalid file type: source bundles must be .zip, .tar.gz, or .tgz",
+      "invalid multipart form",
+      "projectId is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/uploads/artifacts",
+    "handler": "ArtifactUploadRoute",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      401,
+      405,
+      503
+    ],
+    "error_bodies": [
+      "failed to read uploaded file",
+      "failed to store artifact",
+      "file is required",
+      "invalid multipart form",
+      "projectId is required"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/operations/",
+    "handler": "OperationByIDRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": false,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      404,
+      405
+    ],
+    "error_bodies": [
+      "operation not found"
+    ],
+    "ownership": "authenticated-or-local-boundary"
+  },
+  {
+    "path": "/api/v1/builds",
+    "handler": "BuildsRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/builds/",
+    "handler": "BuildLogsRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      404,
+      405,
+      500
+    ],
+    "error_bodies": [
+      "build not found",
+      "invalid build logs path",
+      "invalid build logs stream path",
+      "streaming unsupported"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/deployments",
+    "handler": "DeploymentsRoute",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": false,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "buildJobId is required",
+      "invalid JSON body",
+      "method not allowed",
+      "projectId is required",
+      "targetType must be preview or production",
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/deployments/",
+    "handler": "DeploymentByIDRoute",
+    "methods": [
+      "DELETE",
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": false,
+    "status_codes": [
+      200,
+      401,
+      404,
+      405
+    ],
+    "error_bodies": [
+      "deployment not found",
+      "method not allowed"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/runners",
+    "handler": "RunnersRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405,
+      500
+    ],
+    "error_bodies": [
+      "failed to list runners"
+    ],
+    "ownership": "runner-token"
+  },
+  {
+    "path": "/api/v1/runners/register",
+    "handler": "RunnerRegisterRoute",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405,
+      500
+    ],
+    "error_bodies": [
+      "failed to register runner",
+      "id is required",
+      "invalid JSON body"
+    ],
+    "ownership": "runner-token"
+  },
+  {
+    "path": "/api/v1/runners/heartbeat",
+    "handler": "RunnerHeartbeatRoute",
+    "methods": [
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      400,
+      401,
+      405,
+      500
+    ],
+    "error_bodies": [
+      "failed to record runner heartbeat",
+      "invalid JSON body",
+      "runnerId is required"
+    ],
+    "ownership": "runner-token"
+  },
+  {
+    "path": "/api/v1/domains",
+    "handler": "DomainsRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/templates",
+    "handler": "TemplatesRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/backend-resources",
+    "handler": "BackendResourcesRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/logs",
+    "handler": "LogsRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/git/providers",
+    "handler": "GitProvidersRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/git/providers/github/oauth/start",
+    "handler": "GitHubOAuthStartRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      401,
+      405,
+      500
+    ],
+    "error_bodies": [
+      "GitHub OAuth is not configured",
+      "failed to generate OAuth state"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/git/providers/github/oauth/callback",
+    "handler": "GitHubOAuthCallbackRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      400,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "OAuth state mismatch",
+      "missing OAuth state cookie"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/billing",
+    "handler": "BillingRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/metrics",
+    "handler": "MetricsAPIRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/telemetry",
+    "handler": "TelemetryRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/telemetry/views",
+    "handler": "TelemetryViewsRoute",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": false,
+    "status_codes": [
+      200,
+      201,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "method not allowed"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/telemetry/stream",
+    "handler": "TelemetryStreamRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/admin/overview",
+    "handler": "AdminOverviewRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/admin/telemetry",
+    "handler": "AdminTelemetryRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/admin/telemetry/views",
+    "handler": "AdminTelemetryViewsRoute",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": true,
+    "method_before_auth": false,
+    "status_codes": [
+      200,
+      201,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "method not allowed"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/events",
+    "handler": "EventsRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [
+      "unauthorized"
+    ],
+    "ownership": "authenticated-owner"
+  },
+  {
+    "path": "/api/v1/events/stream",
+    "handler": "EventsStreamRoute",
+    "methods": [
+      "GET"
+    ],
+    "auth": true,
+    "method_before_auth": true,
+    "status_codes": [
+      200,
+      401,
+      405
+    ],
+    "error_bodies": [],
+    "ownership": "authenticated-owner"
+  }
+]

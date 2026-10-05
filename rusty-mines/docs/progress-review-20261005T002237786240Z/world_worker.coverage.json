@@ -1,0 +1,142 @@
+{
+  "requested": [
+    "queue_block_action",
+    "poll_block_action",
+    "poll_chunk_overrides",
+    "authoritative_block_state",
+    "decode_block_overrides",
+    "flush_chunk_interest",
+    "block_action_submit",
+    "block_action_snapshot",
+    "chunk_snapshot",
+    "block_actions_reconcile_rejections_confirm_commits_and_isolate_late_results",
+    "chunk_load_reconciles_snapshot_changes_during_and_after_batch_emission"
+  ],
+  "found": [
+    "authoritative_block_state",
+    "block_action_snapshot",
+    "block_action_submit",
+    "block_actions_reconcile_rejections_confirm_commits_and_isolate_late_results",
+    "chunk_load_reconciles_snapshot_changes_during_and_after_batch_emission",
+    "chunk_snapshot",
+    "decode_block_overrides",
+    "flush_chunk_interest",
+    "poll_block_action",
+    "poll_chunk_overrides",
+    "queue_block_action"
+  ],
+  "missing": [],
+  "sources": [
+    {
+      "path": "src/connection.rs",
+      "sha256": "4b029605b1429593fcae25aeda91f854bfce5bc469ae0f85601c4657e285bd08",
+      "ranges": [
+        {
+          "function": "decode_block_overrides",
+          "start_line": 192,
+          "end_line": 223
+        },
+        {
+          "function": "authoritative_block_state",
+          "start_line": 1538,
+          "end_line": 1573
+        },
+        {
+          "function": "queue_block_action",
+          "start_line": 1575,
+          "end_line": 1629
+        },
+        {
+          "function": "poll_block_action",
+          "start_line": 1631,
+          "end_line": 1680
+        },
+        {
+          "function": "poll_chunk_overrides",
+          "start_line": 1682,
+          "end_line": 1721
+        },
+        {
+          "function": "flush_chunk_interest",
+          "start_line": 2130,
+          "end_line": 2253
+        },
+        {
+          "function": "block_actions_reconcile_rejections_confirm_commits_and_isolate_late_results",
+          "start_line": 4310,
+          "end_line": 4497
+        },
+        {
+          "function": "chunk_snapshot",
+          "start_line": 4354,
+          "end_line": 4374
+        },
+        {
+          "function": "block_action_submit",
+          "start_line": 4378,
+          "end_line": 4393
+        },
+        {
+          "function": "block_action_snapshot",
+          "start_line": 4394,
+          "end_line": 4404
+        },
+        {
+          "function": "chunk_load_reconciles_snapshot_changes_during_and_after_batch_emission",
+          "start_line": 4888,
+          "end_line": 5000
+        },
+        {
+          "function": "chunk_snapshot",
+          "start_line": 4902,
+          "end_line": 4936
+        },
+        {
+          "function": "chunk_snapshot",
+          "start_line": 5017,
+          "end_line": 5038
+        }
+      ],
+      "selection": "functions",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    },
+    {
+      "path": "src/gateway.rs",
+      "sha256": "ffa42b08cb84e19a2e1f076103f2fddada9fa2448c778f381853619c11d09ea3",
+      "ranges": [
+        {
+          "function": "chunk_snapshot",
+          "start_line": 90,
+          "end_line": 97
+        },
+        {
+          "function": "block_action_submit",
+          "start_line": 99,
+          "end_line": 113
+        },
+        {
+          "function": "block_action_snapshot",
+          "start_line": 114,
+          "end_line": 119
+        },
+        {
+          "function": "chunk_snapshot",
+          "start_line": 1084,
+          "end_line": 1103
+        },
+        {
+          "function": "block_action_submit",
+          "start_line": 1105,
+          "end_line": 1145
+        },
+        {
+          "function": "block_action_snapshot",
+          "start_line": 1147,
+          "end_line": 1158
+        }
+      ],
+      "selection": "functions",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    }
+  ]
+}

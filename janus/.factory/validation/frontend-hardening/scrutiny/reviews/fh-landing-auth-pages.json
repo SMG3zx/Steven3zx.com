@@ -1,0 +1,39 @@
+{
+  "featureId": "fh-landing-auth-pages",
+  "reviewedAt": "2026-03-14T23:47:57.865769+00:00",
+  "commitId": "f38f4be",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The Tailwind migration covers the requested pages and the dashboard sign-out affordance was added, but the landing page CTA is not reliably auth-aware during session loading and the magic-code flow can auto-submit a stale OTP after the email is edited.",
+    "issues": [
+      {
+        "file": "frontend/web/app/page.tsx",
+        "line": 91,
+        "severity": "blocking",
+        "description": "`primaryCTA` is derived from `currentUser` alone while `currentUser` starts as `null` and the `/api/v1/auth/me` lookup is still in flight. On an authenticated visit the page initially renders the signed-out CTA (`/sign-up`) until the effect resolves, so the required auth-aware CTA can show the wrong label and destination if the user clicks immediately after load."
+      },
+      {
+        "file": "frontend/web/app/magic-code/page.tsx",
+        "line": 103,
+        "severity": "non_blocking",
+        "description": "The auto-submit effect keys off `codeValue` and `normalizedEmail`, but changing the email input never clears the six entered digits or rebinds them to the newly requested address. If a user edits the pre-filled email after entering a code, the stale OTP can be auto-submitted against the new email address."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The shared architecture notes still document `/janus` as the main dashboard route, while this feature's requirements and user flow point signed-in users to `/get-started`. That stale route note likely contributed to the worker validating `/janus` instead of the intended entry route.",
+      "evidence": "E:\\Janus\\.factory\\library\\architecture.md:47-50 lists `/janus` as the main dashboard; C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-14T23-14-27-939Z__fh-landing-auth-pages__7ab85cc3-cf7d-4138-af1a-6a72fa501b3d.json:53-54 records verification on `/janus dashboard`."
+    },
+    {
+      "area": "skills",
+      "observation": "The worker suggested relaxing the frontend skill's TDD step for 'pure CSS migration' work, but this feature also introduced behavior-heavy client logic (session-aware CTA selection and OTP auto-submit). The missed regressions indicate the skill guidance should stay strict rather than being loosened for similar tasks.",
+      "evidence": "The handoff marks `followedProcedure` false and suggests relaxing TDD, with no tests added; the reviewed code in frontend/web/app/page.tsx:91-125 and frontend/web/app/magic-code/page.tsx:95-133 adds auth/session and OTP behavior that would have benefited from coverage."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed. The feature largely completes the Tailwind auth-page migration, but the landing page still renders an incorrect signed-out CTA while auth status is loading, and the magic-code form can verify a stale OTP after the email changes. The mission's shared route documentation is also stale relative to the intended `/get-started` entrypoint."
+}

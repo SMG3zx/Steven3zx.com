@@ -1,0 +1,3 @@
+import { component$ } from "@builder.io/qwik";
+import { WorkspacePage } from "../../components/workspace-page";
+export default component$(() => <WorkspacePage eyebrow="WORKSPACE" title="Settings" description="Local runtime configuration for your software factory."><div class="workspace-list"><div class="workspace-list-row"><div><strong>Model</strong><small>qwen2.5:14b-instruct via Ollama</small></div><span class="run-pill running-pill">Local</span></div><div class="workspace-list-row"><div><strong>Automation mode</strong><small>Build preview runs automatically; writes require tools and approval.</small></div><span class="run-pill waiting-pill">Guarded</span></div></div></WorkspacePage>);

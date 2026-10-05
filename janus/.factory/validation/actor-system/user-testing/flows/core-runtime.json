@@ -1,0 +1,145 @@
+{
+  "groupId": "core-runtime",
+  "testedAt": "2026-03-14T22:32:10.688351Z",
+  "surface": "backend-cli",
+  "isolation": {
+    "surface": "backend-cli",
+    "repoRoot": "E:\\Janus",
+    "backendModule": "E:\\Janus\\backend\\janus-api",
+    "missionDir": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410",
+    "assertions": [
+      "VAL-AS-003"
+    ],
+    "mode": "read-only source inspection with targeted go tests under ./internal/actors"
+  },
+  "toolsUsed": [
+    "Read",
+    "Grep",
+    "go test"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-AS-003",
+      "title": "Unknown Messages Handled with ctx.Unhandled()",
+      "status": "pass",
+      "reason": "Source audit confirmed every actor/grain unknown-message branch now calls ctx.Unhandled(), no silent `ignored message` log handlers remain, and targeted unknown-message actor tests passed.",
+      "defaultCaseChecks": [
+        {
+          "handler": "commandGatewayActor.Receive",
+          "file": "control_actors.go",
+          "status": "pass",
+          "signatureLine": 43,
+          "markerLine": 67,
+          "unhandledLine": 68
+        },
+        {
+          "handler": "emailDispatchActor.Receive",
+          "file": "control_actors.go",
+          "status": "pass",
+          "signatureLine": 238,
+          "markerLine": 244,
+          "unhandledLine": 245
+        },
+        {
+          "handler": "buildNodeActor.Receive",
+          "file": "build_actors.go",
+          "status": "pass",
+          "signatureLine": 46,
+          "markerLine": 50,
+          "unhandledLine": 51
+        },
+        {
+          "handler": "runnerNodeActor.Receive",
+          "file": "runner_actors.go",
+          "status": "pass",
+          "signatureLine": 62,
+          "markerLine": 68,
+          "unhandledLine": 69
+        },
+        {
+          "handler": "buildExecutionActor.Receive",
+          "file": "runner_actors.go",
+          "status": "pass",
+          "signatureLine": 137,
+          "markerLine": 139,
+          "unhandledLine": 140
+        },
+        {
+          "handler": "deploymentExecutionActor.Receive",
+          "file": "runner_actors.go",
+          "status": "pass",
+          "signatureLine": 166,
+          "markerLine": 168,
+          "unhandledLine": 169
+        },
+        {
+          "handler": "authGrain.OnReceive",
+          "file": "grains.go",
+          "status": "pass",
+          "signatureLine": 125,
+          "markerLine": 139,
+          "unhandledLine": 140
+        },
+        {
+          "handler": "projectGrain.OnReceive",
+          "file": "grains.go",
+          "status": "pass",
+          "signatureLine": 319,
+          "markerLine": 341,
+          "unhandledLine": 342
+        },
+        {
+          "handler": "buildWorkflowGrain.OnReceive",
+          "file": "grains.go",
+          "status": "pass",
+          "signatureLine": 363,
+          "markerLine": 365,
+          "unhandledLine": 366
+        },
+        {
+          "handler": "deploymentWorkflowGrain.OnReceive",
+          "file": "grains.go",
+          "status": "pass",
+          "signatureLine": 417,
+          "markerLine": 419,
+          "unhandledLine": 420
+        },
+        {
+          "handler": "operationGrain.OnReceive",
+          "file": "operation_grain.go",
+          "status": "pass",
+          "signatureLine": 62,
+          "markerLine": 72,
+          "unhandledLine": 73
+        }
+      ],
+      "evidence": {
+        "sourceAudit": [
+          "actor-system/core-runtime/VAL-AS-003-source-audit.txt"
+        ],
+        "testOutput": [
+          "actor-system/core-runtime/VAL-AS-003-go-test.txt"
+        ],
+        "silentIgnoredMessageMatches": [],
+        "passedTests": [
+          "TestAuthGrain_UnsupportedMessage",
+          "TestProjectGrain_UnsupportedMessage",
+          "TestBuildWorkflowGrain_UnsupportedMessage",
+          "TestDeploymentWorkflowGrain_UnsupportedMessage",
+          "TestOperationGrain_UnsupportedMessage",
+          "TestEmailDispatchActor_UnknownMessage_Unhandled",
+          "TestBuildNodeActor_UnknownMessage",
+          "TestRunnerNodeActor_UnknownMessage"
+        ]
+      },
+      "commandsRun": [
+        "go test -C E:\\Janus\\backend\\janus-api -count=1 -v -run 'UnsupportedMessage|UnknownMessage|Unhandled' ./internal/actors",
+        "Source audit of E:\\Janus\\backend\\janus-api\\internal\\actors\\{control_actors.go,build_actors.go,runner_actors.go,grains.go,operation_grain.go} for ctx.Unhandled() in every Receive/OnReceive unknown-message branch",
+        "Search for /log\\.Printf.*ignored message/ across E:\\Janus\\backend\\janus-api\\internal\\actors"
+      ]
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Re-ran VAL-AS-003: pass. Audited 11 actor/grain handlers and found no silent ignored-message logging; targeted unknown-message tests exited with code 0."
+}

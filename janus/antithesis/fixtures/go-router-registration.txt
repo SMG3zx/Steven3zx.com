@@ -1,0 +1,357 @@
+package httpadapter
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/auth"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/builds"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/deployments"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/operations"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/projects"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/repos"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/runners"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/shared"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/handlers/telemetry"
+	"github.com/SMG3zx/janus/services/janus-api/internal/adapters/inbound/http/middleware"
+	"github.com/SMG3zx/janus/services/janus-api/internal/application/ports/inbound"
+	"github.com/SMG3zx/janus/services/janus-api/internal/config"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+)
+
+type Server struct {
+	state       serverState
+	jwtSecret   []byte
+	auth        *auth.Handler
+	builds      *builds.Handler
+	deployments *deployments.Handler
+	operations  *operations.Handler
+	projects    *projects.Handler
+	repos       *repos.Handler
+	runners     *runners.Handler
+	telemetry   *telemetry.Handler
+	rateLimiter *RateLimiter
+	runtime     RuntimeProvider
+}
+
+type RuntimeProvider interface {
+	ReadyChecks(ctx context.Context) (bool, map[string]string)
+	Stop(ctx context.Context) error
+}
+
+type Services struct {
+	Auth        inbound.AuthUseCase
+	Projects    inbound.ProjectUseCase
+	Builds      inbound.BuildUseCase
+	Deployments inbound.DeploymentUseCase
+	Operations  inbound.OperationUseCase
+	Repos       inbound.RepoUseCase
+	Runners     inbound.RunnerUseCase
+	Telemetry   inbound.TelemetryUseCase
+}
+
+type serverState interface {
+	ResolveDomainRuntimeEndpoint(host string) (string, bool)
+	RecordTrace(route, method string, statusCode int, duration time.Duration)
+	Ping(ctx context.Context) error
+	PingObjectStore(ctx context.Context) error
+	Close() error
+}
+
+var (
+	httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "janus_http_requests_total",
+		Help: "Total HTTP requests by route, method, and status.",
+	}, []string{"route", "method", "status"})
+	httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "janus_http_request_duration_seconds",
+		Help:    "HTTP request duration by route and method.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"route", "method"})
+)
+
+func NewServerWithDependencies(cfg config.Config, state serverState, runtime RuntimeProvider, services Services) *Server {
+	s := &Server{state: state, jwtSecret: loadJWTSecret(cfg.Environment), runtime: runtime}
+	s.initHandlers(cfg.RunnerToken, services)
+	s.rateLimiter = NewRateLimiter()
+	return s
+}
+
+func (s *Server) initHandlers(runnerToken string, services Services) {
+	base := shared.BaseDependencies{
+		Auth:        services.Auth,
+		Operations:  services.Operations,
+		JWTSecret:   s.jwtSecret,
+		RunnerToken: runnerToken,
+	}
+	s.auth = auth.New(base, services.Auth, services.Operations)
+	s.builds = builds.New(base, services.Builds)
+	s.deployments = deployments.New(base, services.Deployments)
+	s.operations = operations.New(base, services.Operations)
+	s.projects = projects.New(base, services.Projects)
+	s.repos = repos.New(base, services.Repos)
+	s.runners = runners.New(base, services.Runners)
+	s.telemetry = telemetry.New(base, services.Telemetry)
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	s.registerSystemRoutes(mux)
+	s.registerAuthRoutes(mux)
+	s.registerCoreAPIRoutes(mux)
+	s.registerTelemetryAndAdminRoutes(mux)
+	s.registerEventRoutes(mux)
+	mux.HandleFunc("/api/v1/", s.telemetry.APIFallback)
+	mux.HandleFunc("/", s.serveFrontend)
+	rateLimitedMux := s.rateLimiter.RateLimit(mux)
+	withAuth := middleware.AuthContextMiddleware(s.jwtSecret)(rateLimitedMux)
+	return otelhttp.NewHandler(cors(s.logging(s.domainProxyOrNext(withAuth))), "janus-api")
+}
+
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin != "" && isLocalDevelopmentOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Request-Id")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Add("Vary", "Origin")
+		}
+		if r.Method == http.MethodOptions && origin != "" && isLocalDevelopmentOrigin(origin) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isLocalDevelopmentOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+func (s *Server) registerSystemRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/healthz", s.auth.Healthz)
+	mux.HandleFunc("/readyz", s.Readyz)
+	mux.Handle("/metrics", promhttp.Handler())
+}
+
+func (s *Server) registerAuthRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/v1/auth/signup", s.auth.AuthSignup)
+	mux.HandleFunc("/api/v1/auth/signin", s.auth.AuthSignin)
+	mux.HandleFunc("/api/v1/auth/signin/password", s.auth.AuthSigninPassword)
+	mux.HandleFunc("/api/v1/auth/magic-code/request", s.auth.AuthMagicCodeRequest)
+	mux.HandleFunc("/api/v1/auth/magic-code/verify", s.auth.AuthMagicCodeVerify)
+	mux.HandleFunc("/api/v1/auth/reset-password/request", s.auth.AuthResetPasswordRequest)
+	mux.HandleFunc("/api/v1/auth/reset-password/confirm", s.auth.AuthResetPasswordConfirm)
+	mux.HandleFunc("/api/v1/auth/session/exchange", s.auth.AuthSessionExchange)
+	mux.HandleFunc("/api/v1/auth/signout", s.auth.AuthSignout)
+	mux.HandleFunc("/api/v1/auth/refresh", s.auth.AuthRefresh)
+	mux.HandleFunc("/api/v1/auth/me", s.auth.AuthMe)
+	mux.HandleFunc("/api/v1/mfa/status", s.auth.MFAStatus)
+	mux.HandleFunc("/api/v1/mfa/totp/enroll", s.auth.MFATOTPEnroll)
+	mux.HandleFunc("/api/v1/mfa/totp/verify", s.auth.MFATOTPVerify)
+	mux.HandleFunc("/api/v1/mfa/totp/disable", s.auth.MFATOTPDisable)
+	mux.HandleFunc("/api/v1/mfa/email/enroll", s.auth.MFAEmailEnroll)
+	mux.HandleFunc("/api/v1/mfa/email/verify", s.auth.MFAEmailVerify)
+	mux.HandleFunc("/api/v1/mfa/email/send", s.auth.MFAEmailSend)
+	mux.HandleFunc("/api/v1/mfa/email/disable", s.auth.MFAEmailDisable)
+	mux.HandleFunc("/api/v1/mfa/recovery/generate", s.auth.MFARecoveryGenerate)
+	mux.HandleFunc("/api/v1/mfa/verify", s.auth.MFAVerify)
+}
+
+func (s *Server) registerCoreAPIRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/v1/projects", s.projects.ProjectsRoute)
+	mux.HandleFunc("/api/v1/projects/", s.projects.ProjectByIDRoute)
+	mux.HandleFunc("/api/v1/repos/import", s.repos.RepoImport)
+	mux.HandleFunc("/api/v1/repos/validate", s.repos.RepoValidate)
+	mux.HandleFunc("/api/v1/uploads/source-bundles", s.builds.SourceBundleUploadRoute)
+	mux.HandleFunc("/api/v1/uploads/artifacts", s.builds.ArtifactUploadRoute)
+	mux.HandleFunc("/api/v1/operations/", s.operations.OperationByIDRoute)
+	mux.HandleFunc("/api/v1/builds", s.builds.BuildsRoute)
+	mux.HandleFunc("/api/v1/builds/", s.builds.BuildLogsRoute)
+	mux.HandleFunc("/api/v1/deployments", s.deployments.DeploymentsRoute)
+	mux.HandleFunc("/api/v1/deployments/", s.deployments.DeploymentByIDRoute)
+	mux.HandleFunc("/api/v1/runners", s.runners.RunnersRoute)
+	mux.HandleFunc("/api/v1/runners/register", s.runners.RunnerRegisterRoute)
+	mux.HandleFunc("/api/v1/runners/heartbeat", s.runners.RunnerHeartbeatRoute)
+	mux.HandleFunc("/api/v1/domains", s.deployments.DomainsRoute)
+	mux.HandleFunc("/api/v1/templates", s.projects.TemplatesRoute)
+	mux.HandleFunc("/api/v1/backend-resources", s.projects.BackendResourcesRoute)
+	mux.HandleFunc("/api/v1/logs", s.operations.LogsRoute)
+	mux.HandleFunc("/api/v1/git/providers", s.repos.GitProvidersRoute)
+	mux.HandleFunc("/api/v1/git/providers/github/oauth/start", s.repos.GitHubOAuthStartRoute)
+	mux.HandleFunc("/api/v1/git/providers/github/oauth/callback", s.repos.GitHubOAuthCallbackRoute)
+	mux.HandleFunc("/api/v1/billing", s.telemetry.BillingRoute)
+	mux.HandleFunc("/api/v1/metrics", s.telemetry.MetricsAPIRoute)
+}
+
+func (s *Server) registerTelemetryAndAdminRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/v1/telemetry", s.telemetry.TelemetryRoute)
+	mux.HandleFunc("/api/v1/telemetry/views", s.telemetry.TelemetryViewsRoute)
+	mux.HandleFunc("/api/v1/telemetry/stream", s.telemetry.TelemetryStreamRoute)
+	mux.HandleFunc("/api/v1/admin/overview", s.telemetry.AdminOverviewRoute)
+	mux.HandleFunc("/api/v1/admin/telemetry", s.telemetry.AdminTelemetryRoute)
+	mux.HandleFunc("/api/v1/admin/telemetry/views", s.telemetry.AdminTelemetryViewsRoute)
+}
+
+func (s *Server) registerEventRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/v1/events", s.telemetry.EventsRoute)
+	mux.HandleFunc("/api/v1/events/stream", s.telemetry.EventsStreamRoute)
+}
+
+func (s *Server) logging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+		if requestID == "" {
+			requestID = newRequestID()
+		}
+		rw.Header().Set("X-Request-Id", requestID)
+
+		next.ServeHTTP(rw, r)
+
+		route := canonicalRoute(r.URL.Path)
+		duration := time.Since(start)
+		status := fmt.Sprintf("%d", rw.status)
+
+		httpRequests.WithLabelValues(route, r.Method, status).Inc()
+		httpDuration.WithLabelValues(route, r.Method).Observe(duration.Seconds())
+		s.state.RecordTrace(route, r.Method, rw.status, duration)
+	})
+}
+
+func (s *Server) Readyz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "method_not_allowed", "message": "method not allowed"}})
+		return
+	}
+
+	checks := map[string]string{}
+	ready := true
+	checkCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	if err := s.state.Ping(checkCtx); err != nil {
+		ready = false
+		checks["database"] = "down"
+		log.Printf("readyz: database check failed: %v", err)
+	} else {
+		checks["database"] = "ok"
+	}
+	if err := s.state.PingObjectStore(checkCtx); err != nil {
+		ready = false
+		checks["object_store"] = "down"
+		log.Printf("readyz: object store check failed: %v", err)
+	} else {
+		checks["object_store"] = "ok"
+	}
+	if s.runtime == nil {
+		checks["runtime"] = "disabled"
+	} else {
+		runtimeReady, runtimeChecks := s.runtime.ReadyChecks(checkCtx)
+		if !runtimeReady {
+			ready = false
+		}
+		for key, value := range runtimeChecks {
+			checks["runtime."+key] = value
+		}
+	}
+
+	statusCode := http.StatusOK
+	if !ready {
+		statusCode = http.StatusServiceUnavailable
+	}
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": ready, "checks": checks, "ts": time.Now().UTC().Format(time.RFC3339Nano)})
+}
+
+func newRequestID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return hex.EncodeToString(b[:])
+	}
+	return fmt.Sprintf("req_%d", time.Now().UnixNano())
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func loadJWTSecret(environment string) []byte {
+	secret := strings.TrimSpace(os.Getenv("JANUS_JWT_SECRET"))
+	if secret != "" {
+		return []byte(secret)
+	}
+	environment = strings.ToLower(strings.TrimSpace(environment))
+	if environment == "" || environment == "dev" || environment == "local" {
+		log.Printf("warning: JANUS_JWT_SECRET is not set; generating ephemeral in-memory secret for dev mode")
+		return []byte(newRequestID() + newRequestID())
+	}
+	log.Fatalf("JANUS_JWT_SECRET must be set when JANUS_ENV=%q", environment)
+	return nil
+}
+
+func canonicalRoute(path string) string {
+	path = strings.TrimSpace(path)
+	switch {
+	case strings.HasPrefix(path, "/api/v1/operations/"):
+		return "/api/v1/operations/:id"
+	case strings.HasPrefix(path, "/api/v1/projects/"):
+		return "/api/v1/projects/:id"
+	case strings.HasPrefix(path, "/api/v1/builds/") && strings.HasSuffix(path, "/logs/stream"):
+		return "/api/v1/builds/:id/logs/stream"
+	case strings.HasPrefix(path, "/api/v1/builds/") && strings.HasSuffix(path, "/logs"):
+		return "/api/v1/builds/:id/logs"
+	case strings.HasPrefix(path, "/api/v1/deployments/"):
+		return "/api/v1/deployments/:id"
+	default:
+		return path
+	}
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s == nil || s.state == nil {
+		return nil
+	}
+	if s.runtime != nil {
+		if err := s.runtime.Stop(ctx); err != nil {
+			return err
+		}
+	}
+	return s.state.Close()
+}

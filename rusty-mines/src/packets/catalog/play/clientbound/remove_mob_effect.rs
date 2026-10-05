@@ -1,0 +1,14 @@
+//! Protocol 777 play clientbound: `remove_mob_effect` (0x4F).
+//! Metadata only; codec support and gameplay acceptance are separate.
+//! Source: https://minecraft.wiki/w/Java_Edition_protocol/Packets?oldid=3810839
+//! Inventory attribution: Minecraft Wiki contributors, CC BY-SA 3.0 Unported.
+
+use super::super::super::{Direction, PacketDescriptor, State};
+
+pub const ID: i32 = 0x4F;
+pub const DESCRIPTOR: PacketDescriptor = PacketDescriptor {
+    state: State::Play,
+    direction: Direction::Clientbound,
+    id: ID,
+    official_name: "remove_mob_effect",
+};

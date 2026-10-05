@@ -1,0 +1,107 @@
+{
+  "milestone": "backend-hardening",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd E:\\Janus\\backend\\janus-api; go test -count=1 -parallel 4 ./...",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd E:\\Janus\\backend\\janus-api; go build ./...",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd E:\\Janus\\backend\\janus-api; go vet ./...",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 1,
+    "failed": 4,
+    "failedFeatures": [
+      "bh-migration-tooling",
+      "bh-repository-implementation",
+      "bh-error-handling",
+      "bh-core-tests"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "bh-migration-tooling",
+      "severity": "blocking",
+      "description": "`backend/janus-api/internal/core/migrate_test.go` still contains literal `CREATE TABLE IF NOT EXISTS` strings outside migration files, so the feature does not satisfy VAL-BH-002's required grep condition."
+    },
+    {
+      "featureId": "bh-repository-implementation",
+      "severity": "blocking",
+      "description": "The `FROM projects WHERE id=$1` query pattern still appears in multiple repository methods/files, so SQL deduplication required by VAL-BH-008 is incomplete."
+    },
+    {
+      "featureId": "bh-repository-implementation",
+      "severity": "blocking",
+      "description": "`ResolveDomainRuntimeEndpoint` performs `LOWER(domain)` lookup without a matching expression index, leaving a hot single-entity lookup effectively unindexed and failing VAL-BH-009."
+    },
+    {
+      "featureId": "bh-error-handling",
+      "severity": "blocking",
+      "description": "Several telemetry/admin/event handlers in `internal/api/handler/telemetry_admin_events.go` do not reject unsupported HTTP methods with 405, so VAL-BH-006 remains unmet."
+    },
+    {
+      "featureId": "bh-error-handling",
+      "severity": "blocking",
+      "description": "`TemplatesRoute`, `BackendResourcesRoute`, and `LogsRoute` accept unsupported methods with 200, and `GitProvidersRoute` returns 501 instead of 405 for wrong methods."
+    },
+    {
+      "featureId": "bh-core-tests",
+      "severity": "blocking",
+      "description": "The added tests do not cover the requested core repository operations for auth, projects, builds, deployments, and operations, so the promised comprehensive core-domain coverage is still missing."
+    },
+    {
+      "featureId": "bh-core-tests",
+      "severity": "blocking",
+      "description": "`internal/api/readyz_test.go` does not verify the healthy 200 path or the `actors.actor_system` / `actors.command_gateway` checks required by VAL-BH-012."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "services.yaml",
+      "description": "Added reusable `build-backend` and `vet-backend` commands so backend scrutiny/user-testing workers can reuse the standard compile and vet validators without rediscovering them.",
+      "sourceFeature": "bh-repository-interfaces"
+    },
+    {
+      "target": "library",
+      "description": "Added `.factory/library/backend-hardening.md` documenting the current repository-interface state, embedded migration gotchas, common backend validation commands, and the `/readyz` response shape.",
+      "sourceFeature": "bh-migration-tooling"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Relax the mandatory red-first TDD instruction for refactors and enhancement work. Clarify that workers may start from a green baseline, then add or expand verification when the feature is structural rather than new behavior.",
+      "evidence": "Multiple backend-hardening reviews (bh-migration-tooling, bh-repository-implementation, bh-error-handling, bh-core-tests) found the current skill wording mismatched the actual successful workflow and led to inaccurate `followedProcedure=true` handoffs.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add an explicit backend route convention that every read-only handler must reject unsupported HTTP methods (for example via `requireMethod`), and require wrong-method coverage for any newly added route tests.",
+      "evidence": "The bh-error-handling review found multiple GET-only telemetry/admin/misc routes still accepting unsupported methods or returning 501 instead of 405, despite shared guidance already mentioning structured errors and correct status codes.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Add migration up/down commands directly to `.factory/services.yaml`.",
+      "reason": "ambiguous"
+    },
+    {
+      "observation": "Architecture-library staleness reports from bh-repository-interfaces and bh-repository-implementation.",
+      "reason": "duplicate"
+    }
+  ],
+  "previousRound": null
+}

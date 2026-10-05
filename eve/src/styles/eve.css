@@ -1,0 +1,399 @@
+:root {
+  font-family:
+    Inter,
+    Segoe UI,
+    Arial,
+    sans-serif;
+  color: #edf1e8;
+  background: #111e24;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  overflow: hidden;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  color: inherit;
+  border: 1px solid #ffffff24;
+  background: #182b31;
+  padding: 12px 16px;
+  border-radius: 5px;
+}
+button:hover {
+  background: #30484a;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #d3eaa3;
+}
+[hidden] {
+  display: none !important;
+}
+#viewport {
+  position: fixed;
+  inset: 0;
+}
+canvas {
+  display: block;
+  touch-action: none;
+}
+.hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 94px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 42px;
+  z-index: 4;
+  background: linear-gradient(#0c1b23d9, transparent);
+  pointer-events: none;
+}
+.hud > * {
+  pointer-events: auto;
+}
+.wordmark {
+  border: 0;
+  background: none !important;
+  padding: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 6px;
+}
+.wordmark span {
+  font-size: 9px;
+  color: #b8c9c4;
+  margin-left: 24px;
+}
+.feed {
+  display: flex;
+  gap: 9px;
+  font:
+    10px ui-monospace,
+    monospace;
+}
+.feed i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #edbd63;
+}
+.avatar {
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: #d2dec2;
+  color: #243a35;
+}
+.welcome {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(90deg, #0c1b24f5, #0c1b2459 58%, transparent);
+  display: flex;
+  align-items: center;
+}
+.welcome-copy {
+  margin-left: 8vw;
+  width: 540px;
+}
+.eyebrow {
+  font:
+    10px ui-monospace,
+    monospace;
+  letter-spacing: 2px;
+  color: #c2d7a5;
+}
+h1 {
+  font-size: clamp(34px, 4.2vw, 64px);
+  line-height: 1.09;
+  font-weight: 500;
+  margin: 25px 0;
+}
+p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #bac7c7;
+}
+.welcome-menu {
+  width: 310px;
+  display: grid;
+  gap: 9px;
+}
+.welcome-menu button {
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  padding: 17px 20px;
+  background: #1b3036ba;
+  font-size: 13px;
+}
+.primary {
+  background: #d1e5ac !important;
+  color: #20352e !important;
+}
+.tour-label {
+  position: absolute;
+  bottom: 42px;
+  right: 42px;
+  font:
+    10px ui-monospace,
+    monospace;
+}
+.world-toolbar {
+  position: fixed;
+  top: 106px;
+  left: 30px;
+  display: flex;
+  gap: 22px;
+  align-items: center;
+}
+.breadcrumb {
+  font:
+    10px ui-monospace,
+    monospace;
+}
+.drawer,
+.inspector {
+  position: fixed;
+  top: 165px;
+  width: 290px;
+  background: #10242bec;
+  backdrop-filter: blur(20px);
+  border: 1px solid #8faea135;
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 16px 55px #07121450;
+}
+.drawer {
+  left: 30px;
+  max-height: calc(100dvh - 285px);
+  display: flex;
+  flex-direction: column;
+}
+.inspector {
+  right: 30px;
+  max-height: calc(100dvh - 190px);
+  overflow: auto;
+}
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-heading h2 {
+  font-size: 17px;
+  font-weight: 500;
+  margin: 0;
+}
+.panel-heading button {
+  background: none;
+  border: 0;
+  padding: 0 5px;
+  font-size: 23px;
+}
+input {
+  width: 100%;
+  border: 1px solid #73968855;
+  border-radius: 5px;
+  background: #07191d70;
+  color: #edf1e8;
+  padding: 12px;
+  margin: 18px 0;
+  font-size: 12px;
+}
+.destination {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #aec0b217;
+  padding: 15px 4px;
+  text-align: left;
+  font-size: 12px;
+}
+.destination small,
+.muted {
+  font:
+    11px ui-monospace,
+    monospace;
+  color: #9db3ae;
+}
+.inspector h2 {
+  font-size: 26px;
+  font-weight: 500;
+  margin: 22px 0 0;
+}
+.asset-state {
+  text-transform: uppercase;
+  font:
+    10px ui-monospace,
+    monospace;
+  margin: 22px 0;
+}
+.inspector dl {
+  font-size: 11px;
+}
+.inspector dl div {
+  padding: 14px 0;
+  border-top: 1px solid #ffffff17;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.inspector dt {
+  color: #a0b7b0;
+}
+.inspector dd {
+  margin: 0;
+  text-align: right;
+}
+.inspector > button {
+  width: 100%;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.world-footer {
+  position: fixed;
+  bottom: 28px;
+  left: 30px;
+  right: 30px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  pointer-events: none;
+}
+.world-footer > * {
+  pointer-events: auto;
+}
+.view-switch {
+  display: flex;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #b9d1b42c;
+  border-radius: 7px;
+  background: #10242bef;
+}
+.view-switch button {
+  font-size: 11px;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+}
+
+/* 2.5D is the stable navigation mode; the legacy perspective toggles remain
+   in the markup for compatibility but are intentionally not user-selectable. */
+.view-switch button[data-view] {
+  display: none;
+}
+.view-switch::before {
+  content: '2.5D VIEW';
+  color: var(--muted, #9db0ad);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+.view-switch button.active {
+  background: #cfe1b6;
+  color: #213b34;
+}
+.view-switch > span {
+  width: 1px;
+  background: #8fae9638;
+  margin: 6px;
+}
+.scale {
+  margin-left: auto;
+  font:
+    10px ui-monospace,
+    monospace;
+  text-align: right;
+}
+.scale span {
+  display: block;
+  color: #b0c4b8;
+  font-size: 9px;
+}
+.perf-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 74px;
+  min-width: 245px;
+  padding: 12px 14px;
+  color: #d8e6df;
+  background: #102127e8;
+  border: 1px solid #6b817b;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px #0007;
+  font:
+    12px/1.55 ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+.perf-panel strong {
+  display: block;
+  color: #78d5bc;
+  font:
+    600 10px system-ui,
+    sans-serif;
+}
+.perf-panel small {
+  display: block;
+  margin-top: 6px;
+  color: #91a6a0;
+  font:
+    10px system-ui,
+    sans-serif;
+}
+#cameraHelp {
+  font:
+    10px ui-monospace,
+    monospace;
+  color: #d0ddd3;
+}
+.render-error {
+  padding: 150px 40px;
+}
+@media (max-width: 800px) {
+  .hud {
+    padding: 0 22px;
+  }
+  .wordmark span {
+    display: none;
+  }
+  .welcome-copy {
+    margin-left: 7vw;
+    width: 86vw;
+  }
+  .world-toolbar {
+    left: 16px;
+    top: 90px;
+  }
+  .drawer,
+  .inspector {
+    top: 145px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+  .world-footer {
+    left: 16px;
+    right: 16px;
+    bottom: 18px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .scale {
+    display: none;
+  }
+}

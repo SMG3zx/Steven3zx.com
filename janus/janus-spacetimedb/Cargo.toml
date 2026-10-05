@@ -1,0 +1,15 @@
+[package]
+name = "janus-spacetimedb"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bcrypt = "0.15"
+spacetimedb = "2"
+
+[lints.rust]
+unsafe_code = "forbid"

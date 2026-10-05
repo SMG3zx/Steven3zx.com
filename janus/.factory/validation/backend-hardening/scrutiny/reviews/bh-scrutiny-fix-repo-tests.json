@@ -1,0 +1,21 @@
+{
+  "featureId": "bh-scrutiny-fix-repo-tests",
+  "reviewedAt": "2026-03-14T17:45:31.893326Z",
+  "commitId": "ef259b0c35df3f3ef95290e9ceeeb7bcf9bdeee4",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "This re-run resolves the remaining blocker from bh-scrutiny-fix-code. The new state_repo_test.go suite directly exercises the previously missing repository methods on State: CreateUser/FindUserByEmail, CreateProject/UpdateProject/DeleteProject, ClaimBuildJob, ClaimDeployment, and CreateOperation. Those tests verify return values and database interactions through sqlmock, so the original bh-core-tests repository-coverage gap is now adequately closed.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "Shared state still does not document that Janus repository tests need a database/sql-compatible mock rather than pgxmock. This fix succeeded with go-sqlmock because State wraps *sql.DB, but the feature spec still asked for pgxmock, which sent the worker through extra investigation before landing on the compatible harness.",
+      "evidence": "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\features.json:1145 requires pgxmock; E:\\Janus\\backend\\janus-api\\internal\\core\\state.go:29-30 defines State.db as *sql.DB; C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\worker-transcripts.jsonl:10 shows the worker researching pgxmock vs database/sql before switching; E:\\Janus\\backend\\janus-api\\internal\\core\\state_repo_test.go:9 imports github.com/DATA-DOG/go-sqlmock."
+    }
+  ],
+  "addressesFailureFrom": "E:\\Janus\\.factory\\validation\\backend-hardening\\scrutiny\\reviews\\bh-scrutiny-fix-code.json",
+  "summary": "Pass. The repository-test blocker left open by bh-scrutiny-fix-code is now fixed: commit ef259b0 adds direct State-method coverage for the missing CRUD and claim operations, so the original bh-core-tests gap is resolved. No blocking issues remain; the only shared-state note is that future specs should describe sqlmock/database/sql compatibility instead of requesting pgxmock for this repository layer."
+}

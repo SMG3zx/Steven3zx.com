@@ -1,0 +1,26 @@
+{
+  "featureId": "as-scrutiny-fixes",
+  "reviewedAt": "2026-03-14T20:55:15.782755Z",
+  "commitId": "8aa6d7fdc7bc97a2d01e34b46d9ca64adf58f1fa",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Reviewed the fix commit against the four round-1 actor-system failures. The patch resolves all eight blockers it set out to address: emailDispatch now has the critical-actor restart supervisor, stale registry identifiers are gone, auth grains no longer depend on Ask replies for retried email dispatch, Windows bind-conflict matching covers the mission host's error forms, and the updated tests now assert heartbeat payload fields, discovery-key coverage, runner-list response fields, and rejection of invalid operation transitions.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "Shared actor-system notes still do not capture the GoAkt limitation that led this fix to replace `SpawnSingleton` with `Spawn` for the email actor: supervision options are not available on the singleton spawn path.",
+      "evidence": "E:\\Janus\\.factory\\library\\architecture.md:16-24 documents actor scheduling/TestKit notes but nothing about singleton supervision limits, while C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-14T20-49-29-001Z__as-scrutiny-fixes__2cf4035e-6e4e-4a8f-b5de-43f61004813b.json:87-89 explicitly asks for that note to be added."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared docs still do not explain the TestKit-versus-cluster nuance behind `ReadyChecks()` discovery assertions, so future workers may again write either no discovery assertion or an over-strict one.",
+      "evidence": "E:\\Janus\\.factory\\library\\architecture.md:24 only says to use GoAkt TestKit, but E:\\Janus\\backend\\janus-api\\internal\\actors\\testkit_test.go:2062-2070 had to encode the missing nuance by allowing `checks[\"discovery\"]` to be either `ok` or `down: cluster disabled`."
+    }
+  ],
+  "addressesFailureFrom": "E:\\Janus\\.factory\\validation\\actor-system\\scrutiny\\reviews\\as-dependency-injection.json; E:\\Janus\\.factory\\validation\\actor-system\\scrutiny\\reviews\\as-message-handling.json; E:\\Janus\\.factory\\validation\\actor-system\\scrutiny\\reviews\\as-grain-lifecycle.json; E:\\Janus\\.factory\\validation\\actor-system\\scrutiny\\reviews\\as-actor-tests.json",
+  "summary": "Pass. Commit 8aa6d7fdc7bc97a2d01e34b46d9ca64adf58f1fa adequately resolves the eight round-1 actor-system scrutiny blockers from as-dependency-injection, as-message-handling, as-grain-lifecycle, and as-actor-tests. No remaining blocking code-review issues were found; the only follow-up items are shared-state documentation gaps around singleton supervision limits and TestKit discovery behavior."
+}

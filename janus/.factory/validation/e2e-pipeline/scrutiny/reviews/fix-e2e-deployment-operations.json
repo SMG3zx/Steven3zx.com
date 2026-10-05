@@ -1,0 +1,39 @@
+{
+  "featureId": "fix-e2e-deployment-operations",
+  "reviewedAt": "2026-03-15T08:16:42.021643Z",
+  "commitId": "231774c",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix resolves part of the original scrutiny feedback: artifact upload now returns a 202 operation envelope, the operation-envelope table now includes both upload routes, and deployment deletion now attempts a runtime stop. However, the feature still does not fully close the blocking findings because uploaded-artifact operation results still omit buildStrategy=prebuilt_wasm and the new deployment tests remain stubbed rather than proving real runtime lifecycle behavior.",
+    "issues": [
+      {
+        "file": "backend/janus-api/internal/core/workflow_uploads.go",
+        "line": 11,
+        "severity": "blocking",
+        "description": "CreateUploadedArtifactBuild now persists StrategyPrebuiltWasm to the database, but the returned BuildJob struct still never sets BuildStrategy. buildWorkflowGrain.handleArtifactUpload returns that in-memory BuildJob directly as the operation result (backend/janus-api/internal/actors/grains.go:435), so polling a successful artifact-upload operation still omits the required buildStrategy=\"prebuilt_wasm\" payload. The new handler test stubs hardcode BuildStrategy on their fake CreateUploadedArtifactBuild responses, which masks the production gap instead of verifying it."
+      },
+      {
+        "file": "backend/janus-api/internal/api/handler/deployment_e2e_test.go",
+        "line": 732,
+        "severity": "blocking",
+        "description": "The new deployment coverage still does not verify the real end-to-end runtime lifecycle required by the original failure. TestDeploymentOperationPoll_RunningWithRuntimeEndpoint seeds store.operations with a pre-succeeded result instead of creating and polling a deployment, and TestDeploymentDelete_StatusBecomesStoppedAfterOperation only calls the stub store after DELETE; that stub DeleteDeployment implementation (lines 63-70) just flips status and never exercises core.State.DeleteDeployment or runtime.Stop. The suite still never performs an HTTP GET against a live runtimeEndpoint for a 2xx response, nor proves that the runtime becomes unreachable after deletion."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill still says API changes require manual curl.exe verification recorded in interactiveChecks, but this fix handoff again records only automated commands while marking followedProcedure=true. That makes the procedure signal unreliable for backend API/runtime work.",
+      "evidence": "E:/Janus/.factory/skills/backend-worker/SKILL.md:44-49 requires manual verification plus interactiveChecks. C:/Users/steve/.factory/missions/7c00674c-a287-44c4-9e3d-8e3492b7b410/handoffs/2026-03-15T08-10-13-618Z__fix-e2e-deployment-operations__3922aab4-873f-48f5-b26e-edd61f8490e9.json:13-18 lists only commandsRun, and lines 104-106 set skillFeedback.followedProcedure=true."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared e2e-pipeline notes still under-enumerate async mutation routes after this fix: they mention source-bundle uploads but not artifact uploads, even though ArtifactUploadRoute now also participates in the operation-envelope contract. That omission can cause future reviewers/workers to undercount required coverage again.",
+      "evidence": "E:/Janus/.factory/library/e2e-pipeline.md:7-10 lists the concrete async mutation entrypoints and ends with source-bundle uploads; the current code also submits async artifact uploads via backend/janus-api/internal/api/handler/builds_deployments.go:688-700."
+    }
+  ],
+  "addressesFailureFrom": "E:/Janus/.factory/validation/e2e-pipeline/scrutiny/reviews/e2e-deployment-access.json; E:/Janus/.factory/validation/e2e-pipeline/scrutiny/reviews/e2e-operations-logs.json",
+  "summary": "Fix review failed. The patch does resolve the original 202-envelope gap for artifact uploads and adds the previously missing upload routes to the operation-envelope suite, but it still leaves one deployment-access blocker unresolved in production (artifact-upload results omit buildStrategy prebuilt_wasm) and does not add the real runtime-access/shutdown verification that the prior deployment review required."
+}

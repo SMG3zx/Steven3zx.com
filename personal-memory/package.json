@@ -1,0 +1,33 @@
+{
+  "name": "personal-memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "mcp": "bun run src/mcp.ts",
+    "worker": "bun run src/worker.ts",
+    "backup": "bun run src/backup.ts",
+    "restore": "bun run src/restore.ts",
+    "benchmark": "bun run src/benchmark.ts",
+    "ablation": "bun run src/ablation.ts",
+    "simulate": "bun run src/simulate.ts",
+    "ux:smoke": "bun run scripts/ux-smoke.ts",
+    "mcp:smoke": "bun run scripts/mcp-smoke.ts",
+    "benchmark:longmemeval": "bun run src/run-longmemeval.ts",
+    "evaluate": "bun run benchmark && bun run ablation && bun run simulate",
+    "benchmark:seed": "bun run benchmark/seed.ts",
+    "build": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "neo4j-driver": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "latest",
+    "typescript": "latest"
+  }
+}

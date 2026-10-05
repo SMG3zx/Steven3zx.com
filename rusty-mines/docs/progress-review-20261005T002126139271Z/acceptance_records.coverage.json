@@ -1,0 +1,21 @@
+{
+  "requested": [],
+  "found": [],
+  "missing": [],
+  "sources": [
+    {
+      "path": "docs/play-implementation-plan.md",
+      "sha256": "a8c8a2d6f7c8b795402c8850c44f09dbb6a108a2a580caa174a431ad8794f80b",
+      "ranges": [],
+      "selection": "whole_file",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    },
+    {
+      "path": "src/foundation_live_tests.rs",
+      "sha256": "91408ab2a3f91de6061af99d161f3e91996585fe8d42c5b9a6c7156795cf503d",
+      "ranges": [],
+      "selection": "declarations_only",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "groupId": "dashboard-panels-round5-rerun",
+  "testedAt": "2026-03-15T06:18:12.710165Z",
+  "isolation": {
+    "appUrl": "http://localhost:3000",
+    "apiUrl": "http://localhost:8080",
+    "browserSession": "96b7fe82e5d8__u2",
+    "email": "frontend-hardening-ut+panels-round5-96b7fe82e5d8u2-03151158@example.com",
+    "projectNamePrefix": "fh-panels-round5-96b7fe82e5d8u2",
+    "projectSlugPrefix": "fh-panels-round5-96b7fe82e5d8u2",
+    "projectId": "proj_7961",
+    "projectName": "fh-panels-round5-96b7fe82e5d8u2 03151158",
+    "projectSlug": "fh-panels-round5-96b7fe82e5d8u2-03151158",
+    "fixtureFiles": [
+      "frontend-hardening/user-testing/assets/sample-source-bundle.zip",
+      "frontend-hardening/user-testing/assets/sample-app.wasm"
+    ],
+    "evidenceDir": "frontend-hardening/dashboard-panels-round5-rerun"
+  },
+  "toolsUsed": [
+    "agent-browser",
+    "curl.exe"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FH-016",
+      "title": "File uploads work for source bundles and WASM artifacts",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Submit the Source Bundle Upload form for proj_7961 with sample-source-bundle.zip and source ref fh-panels-round5-src-03151158.",
+          "expected": "The form enters an uploading state, then shows success copy, resets cleanly, and does not surface the old inline reset error.",
+          "observed": "The browser flow completed to the visible success copy 'Bundle accepted. Build bld_96edfd4307aca8573945a7c1 is in pending.'; afterward the source form reset to project='', sourceRef='main', sourceKind='zip', and neither the uploads panel text nor browser errors contained the old reset exception."
+        },
+        {
+          "action": "Submit the Prebuilt WASM Artifact form for proj_7961 with sample-app.wasm and source ref fh-panels-round5-art-03151158.",
+          "expected": "The form enters an uploading state, then shows success copy and resets cleanly without surfacing the old reset error.",
+          "observed": "The visible success copy was 'Artifact ready: bld_42c816e90b1732674a1d59e6 (wasm/wasi-command / stdout-bridge)'; afterward the artifact form reset to project='', sourceRef='upload', declaredRuntime='', and no inline reset error or console error appeared."
+        },
+        {
+          "action": "Corroborate the resulting upload builds through the API.",
+          "expected": "Both uploads persist as real build records for the isolated project.",
+          "observed": "GET /api/v1/builds?projectId=proj_7961 returned bld_96edfd4307aca8573945a7c1 as built/prebuilt_wasm for sourceRef fh-panels-round5-src-03151158 and bld_42c816e90b1732674a1d59e6 as built/uploaded_artifact for sourceRef fh-panels-round5-art-03151158."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round5-rerun/13-source-upload-form-filled.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/15-source-upload-result.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/16-artifact-upload-form-filled.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/17-artifact-upload-result.png"
+        ],
+        "consoleErrors": "none; browser errors returned {} after the successful upload checks, and the uploads panel text did not contain the old reset exception",
+        "network": "GET /api/v1/builds?projectId=proj_7961 -> bld_96edfd4307aca8573945a7c1 (built, prebuilt_wasm, provider upload, sourceKind zip, runtimeMode stdout-bridge) and bld_42c816e90b1732674a1d59e6 (built, uploaded_artifact, provider upload, runtimeMode stdout-bridge)."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FH-018",
+      "title": "Deployment creation and listing works",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Select proj_7961 and built artifact bld_96edfd4307aca8573945a7c1, then submit a preview deployment with target ref fh-panels-round5-preview-03151158 and runtime env ROUND5=1.",
+          "expected": "The deployment form shows an in-flight state and then renders a result card with deployment ID, status, domain, reachable endpoint link, and resource profile; the deployment should become reachable if runtime infrastructure is ready.",
+          "observed": "The UI rendered a Deployment Created result card for dep_0e548d8946f17ceb51483cf8 with status starting, launch mode stdout-bridge, domain fh-panels-round5-96b7fe82e5d8u2-03151158-1.janus.run, resource profile CPU 250m / RAM 512MB / Disk 1024MB, and the visible placeholder 'Waiting for runtime endpoint...'."
+        },
+        {
+          "action": "Inspect the newly listed deployment in the panel.",
+          "expected": "The new deployment appears in the list with a reachable endpoint or at least progresses toward one.",
+          "observed": "The deployment card appeared immediately with dep_0e548d8946f17ceb51483cf8, status starting, target preview / fh-panels-round5-preview-03151158, Reachable Endpoint 'Not available yet', and a View Logs action."
+        },
+        {
+          "action": "Poll the deployment and domain records through the real API to determine whether runtime access is available or still deferred.",
+          "expected": "If runtime infrastructure is ready, the deployment reaches running with a non-empty runtime endpoint; otherwise it remains runtime-blocked and should be classified blocked rather than fail.",
+          "observed": "Repeated GET /api/v1/deployments?projectId=proj_7961 and GET /api/v1/domains?projectId=proj_7961 polls over ~50 seconds kept the deployment/domain in status starting with runtimeEndpoint null/empty and no error message; the records then disappeared from both filtered listings without ever producing a reachable endpoint. This indicates the frontend form/listing path is working, but runtime access is still deferred to the dedicated e2e-deployment-access validation surface."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round5-rerun/25-deployments-panel-before-submit.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/26-deployment-form-filled.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/28-deployment-result.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/29-deployments-filtered.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/30-deployments-after-refresh.png"
+        ],
+        "consoleErrors": "none observed during deployment form submission or deployment-panel inspection",
+        "network": "UI create rendered dep_0e548d8946f17ceb51483cf8 / fh-panels-round5-96b7fe82e5d8u2-03151158-1.janus.run. API polling for ~50s: GET /api/v1/deployments?projectId=proj_7961 -> status starting with runtimeEndpoint null; GET /api/v1/domains?projectId=proj_7961 -> deploymentStatus starting with runtimeEndpoint ''. The deployment never became reachable and then disappeared from both filtered API listings, matching a runtime/infrastructure defer rather than a frontend-only regression."
+      },
+      "issues": "Blocked by runtime infrastructure: the deployment creation UI succeeded and produced a real deployment/domain shell, but runtime access never materialized, so VAL-FH-018 remains deferred to e2e-deployment-access rather than failing as a frontend regression."
+    },
+    {
+      "id": "VAL-FH-020",
+      "title": "Log modal displays, filters, and exports logs",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Open View Logs for build bld_96edfd4307aca8573945a7c1 from the project-filtered Builds panel.",
+          "expected": "A modal opens and shows the Loading logs... state before the log lines render.",
+          "observed": "The build log modal opened for 'Build Logs - bld_96edfd4307aca8573945a7c1'; a loading-state screenshot was captured before the settled modal rendered 8 visible lines and the built status summary."
+        },
+        {
+          "action": "Exercise severity filters and auto update.",
+          "expected": "All, Errors, Warnings, Info, and Success update the visible-count chip, and Auto update can be toggled off.",
+          "observed": "The Errors and Warnings filters reduced the modal to Visible: 0, Info and Success each reduced it to Visible: 1, All restored Visible: 8, and the Auto update checkbox became unchecked (false)."
+        },
+        {
+          "action": "Use Copy, Download, and Close.",
+          "expected": "Copy succeeds with user-visible confirmation, Download saves the visible logs, and Close dismisses the modal.",
+          "observed": "Clicking Copy changed the button label to 'Copied!' with no clipboard permission error, Download saved the log export, and Close dismissed the modal so [role=dialog] count returned 0."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "frontend-hardening/dashboard-panels-round5-rerun/19-log-modal-loading.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/20-log-modal-open.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/21-log-modal-errors-filter.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/22-log-modal-all-filter-auto-off.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/23-log-modal-copied.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/24-log-modal-closed.png",
+          "frontend-hardening/dashboard-panels-round5-rerun/downloads/VAL-FH-020-bld_96edfd4307aca8573945a7c1-all.log"
+        ],
+        "consoleErrors": "none; browser errors remained empty after clearing the log before Copy, and the modal reported a user-visible success state ('Copied!') instead of a clipboard denial",
+        "network": "GET /api/v1/builds/bld_96edfd4307aca8573945a7c1/logs returned 8 lines that matched the modal body; Download saved those lines to frontend-hardening/dashboard-panels-round5-rerun/downloads/VAL-FH-020-bld_96edfd4307aca8573945a7c1-all.log."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The assigned agent-browser session became unreadable after the initial authenticated redirect until the session was restarted in headed mode and the auth cookie was reapplied from the API session-exchange flow.",
+      "resolved": true,
+      "resolution": "Killed only the assigned 96b7fe82e5d8__u2 daemon, relaunched the same session in headed mode, and reused the isolated account's janus_access cookie from the local curl.exe session-exchange cookie jar.",
+      "affectedAssertions": [
+        "VAL-FH-016",
+        "VAL-FH-018",
+        "VAL-FH-020"
+      ]
+    },
+    {
+      "description": "A few screenshot reads timed out during very brief in-flight re-render windows for upload/deploy actions even though the post-submit states loaded correctly.",
+      "resolved": true,
+      "resolution": "Used the successful post-submit screenshots plus targeted text/API reads to capture the final UI state and corroborate the resulting backend records.",
+      "affectedAssertions": [
+        "VAL-FH-016",
+        "VAL-FH-018"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Runtime access for the isolated deployment never became available: dep_0e548d8946f17ceb51483cf8 stayed starting with no runtime endpoint, and its domain binding fh-panels-round5-96b7fe82e5d8u2-03151158-1.janus.run also had an empty runtimeEndpoint before both records disappeared from the filtered API listings.",
+      "affectedAssertions": [
+        "VAL-FH-018"
+      ],
+      "quickFixAttempted": "Waited/polled GET /api/v1/deployments?projectId=proj_7961 and GET /api/v1/domains?projectId=proj_7961 for ~50 seconds after UI creation; the deployment never exposed a reachable endpoint, so the blocker remains runtime-side and should stay deferred to e2e-deployment-access."
+    }
+  ],
+  "summary": "Tested 3 assigned dashboard rerun assertions: 2 passed (VAL-FH-016 uploads, VAL-FH-020 log modal) and 1 is blocked (VAL-FH-018 deployment access still depends on missing/deferred runtime infrastructure). Strongest evidence: the old upload reset error is gone while both upload flows now create built records and reset cleanly; the log modal now reaches a real 'Copied!' success state and downloads logs; deployment creation produces a real deployment/domain shell but never a reachable runtime endpoint."
+}

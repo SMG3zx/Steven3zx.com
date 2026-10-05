@@ -1,0 +1,42 @@
+{
+  "milestone": "frontend-hardening",
+  "round": 4,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 5,
+    "passed": 4,
+    "failed": 0,
+    "blocked": 1
+  },
+  "passedAssertions": [
+    "VAL-FH-009",
+    "VAL-FH-010",
+    "VAL-FH-016",
+    "VAL-FH-020"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-FH-018",
+      "blockedBy": "Deployment creation/listing UI now produces a real deployment/domain shell, but runtime access still depends on deferred runtime infrastructure. The isolated deployment stayed in starting with no runtime endpoint and then disappeared from filtered listings, so this assertion remains deferred to e2e-deployment-access."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented that local frontend-hardening magic-code validation can recover the latest 6-digit OTP from auth_magic_challenges.code_hash when no real email sender is configured, after the real browser request creates the challenge.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/frontend-hardening/user-testing/synthesis.round3.json",
+  "flowReports": [
+    ".factory/validation/frontend-hardening/user-testing/flows/auth-surface-round5-rerun.json",
+    ".factory/validation/frontend-hardening/user-testing/flows/dashboard-panels-round5-rerun.json"
+  ],
+  "orchestratorOverride": {
+    "reason": "VAL-FH-018 (deployment stuck starting) moved from fh-dashboard-panels to e2e-deployment-access in e2e-pipeline milestone. The deployment runtime requires infrastructure not yet built (resource profiles, wasmtime in runner container, runner poll loop). All other 4 rerun assertions (VAL-FH-009, VAL-FH-010, VAL-FH-016, VAL-FH-020) passed in round 4. VAL-FH-018 reset to pending in validation-state.json for e2e-pipeline pickup.",
+    "deferredAssertions": ["VAL-FH-018"],
+    "deferredTo": "e2e-deployment-access",
+    "overriddenAt": "2026-03-15T06:30:00Z"
+  }
+}

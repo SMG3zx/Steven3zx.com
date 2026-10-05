@@ -1,0 +1,148 @@
+{
+  "groupId": "language-matrix-round2",
+  "testedAt": "2026-03-15T10:49:30.293664+00:00",
+  "isolation": {
+    "baseUrl": "http://localhost:8080",
+    "email": "e2e-pipeline-ut+lang-r2-20260315t104902z@example.com",
+    "projectSlug": "e2e-pipeline-ut-lang-r2-20260315t104902z",
+    "projectId": "proj_7984",
+    "uniqueTestIdentityPrefix": "e2e-pipeline-ut+lang-r2-",
+    "uniqueProjectSlugPrefix": "e2e-pipeline-ut-lang-r2-"
+  },
+  "toolsUsed": [
+    "curl.exe"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-E2E-010",
+      "title": "WASM language support matrix succeeds for all 8 supported languages",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Create isolated auth session and one project for the matrix",
+          "expected": "Authenticated cookie and project available for sequential uploads",
+          "observed": "projectId=proj_7984"
+        },
+        {
+          "action": "Upload each prepared language bundle sequentially via POST /api/v1/uploads/source-bundles",
+          "expected": "Each upload enqueues one build",
+          "observed": "Executed 8 sequential uploads with waits for terminal build state between attempts"
+        },
+        {
+          "action": "Poll each build to a terminal state and compare buildStrategy against the expected matrix",
+          "expected": "All 8 builds finish with status built and expected strategy names",
+          "observed": "1 of 8 matched the expected strategy matrix"
+        }
+      ],
+      "evidence": {
+        "healthFile": "e2e-pipeline/builds-runtime-round2/language-matrix/stack-health.json",
+        "bootstrapFile": "e2e-pipeline/builds-runtime-round2/language-matrix/auth-project-bootstrap.json",
+        "matrixFile": "e2e-pipeline/builds-runtime-round2/language-matrix/matrix-summary.json",
+        "network": [
+          "POST /api/v1/uploads/source-bundles (Rust wasip1) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (Rust wasip1) -> failed strategy=rust_wasip1",
+          "POST /api/v1/uploads/source-bundles (Rust wasip2/component) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (Rust wasip2/component) -> failed strategy=rust_wasip1",
+          "POST /api/v1/uploads/source-bundles (Go wasip1) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (Go wasip1) -> built strategy=go_wasip1",
+          "POST /api/v1/uploads/source-bundles (TinyGo wasip2) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (TinyGo wasip2) -> failed strategy=tinygo_wasip2",
+          "POST /api/v1/uploads/source-bundles (C/C++ wasi-sdk) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (C/C++ wasi-sdk) -> failed strategy=c_wasi_sdk",
+          "POST /api/v1/uploads/source-bundles (Python componentize-py) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (Python componentize-py) -> failed strategy=python_componentize",
+          "POST /api/v1/uploads/source-bundles (JS/TS jco) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (JS/TS jco) -> failed strategy=js_componentize",
+          "POST /api/v1/uploads/source-bundles (C#/.NET componentize-dotnet) -> 202",
+          "GET /api/v1/builds?projectId=proj_7984 (C#/.NET componentize-dotnet) -> failed strategy=dotnet_componentize"
+        ],
+        "perLanguage": [
+          {
+            "language": "Rust wasip1",
+            "expectedStrategy": "rust_wasip1",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "rust_wasip1",
+            "errorSnippet": "build rust wasm artifact: stream command cargo: start: exec: \"cargo\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_aa04c36a772d4eccde54d583",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/rust_wasip1.json"
+          },
+          {
+            "language": "Rust wasip2/component",
+            "expectedStrategy": "rust_wasip2_component",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "rust_wasip1",
+            "errorSnippet": "build rust wasm artifact: stream command cargo: start: exec: \"cargo\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_1612827f8511aa5554f39514",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/rust_wasip2_component.json"
+          },
+          {
+            "language": "Go wasip1",
+            "expectedStrategy": "go_wasip1",
+            "observedTerminalStatus": "built",
+            "observedBuildStrategy": "go_wasip1",
+            "errorSnippet": "",
+            "status": "pass",
+            "buildId": "bld_6c60c2c125a0cbf6261d3be3",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/go_wasip1.json"
+          },
+          {
+            "language": "TinyGo wasip2",
+            "expectedStrategy": "tinygo_wasip2",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "tinygo_wasip2",
+            "errorSnippet": "build tinygo wasm artifact: stream command tinygo: start: exec: \"tinygo\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_50a659c28c0e985a12f1acbf",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/tinygo_wasip2.json"
+          },
+          {
+            "language": "C/C++ wasi-sdk",
+            "expectedStrategy": "c_wasi_sdk",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "c_wasi_sdk",
+            "errorSnippet": "build c/c++ wasm artifact: stream command clang: start: exec: \"clang\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_9817bbf20c77bbdbd76c119b",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/c_wasi_sdk.json"
+          },
+          {
+            "language": "Python componentize-py",
+            "expectedStrategy": "python_componentize",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "python_componentize",
+            "errorSnippet": "build python wasm artifact: stream command componentize-py: start: exec: \"componentize-py\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_c1280875899dcff5d9c94018",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/python_componentize.json"
+          },
+          {
+            "language": "JS/TS jco",
+            "expectedStrategy": "js_componentize",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "js_componentize",
+            "errorSnippet": "install js dependencies: stream command npm: start: exec: \"npm\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_2ab82cc56a8f8ce08462cb0d",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/js_componentize.json"
+          },
+          {
+            "language": "C#/.NET componentize-dotnet",
+            "expectedStrategy": "dotnet_componentize",
+            "observedTerminalStatus": "failed",
+            "observedBuildStrategy": "dotnet_componentize",
+            "errorSnippet": "build dotnet project: stream command dotnet: start: exec: \"dotnet\": executable file not found in $PATH",
+            "status": "fail",
+            "buildId": "bld_9236d4084b21891fa827a2aa",
+            "evidenceFile": "e2e-pipeline/builds-runtime-round2/language-matrix/dotnet_componentize.json"
+          }
+        ]
+      },
+      "issues": "Only 1 of 8 language builds reached built with the expected strategy names."
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "VAL-E2E-010 fail. Rust wasip1: fail (failed/rust_wasip1); Rust wasip2/component: fail (failed/rust_wasip1); Go wasip1: pass (built/go_wasip1); TinyGo wasip2: fail (failed/tinygo_wasip2); C/C++ wasi-sdk: fail (failed/c_wasi_sdk); Python componentize-py: fail (failed/python_componentize); JS/TS jco: fail (failed/js_componentize); C#/.NET componentize-dotnet: fail (failed/dotnet_componentize)"
+}

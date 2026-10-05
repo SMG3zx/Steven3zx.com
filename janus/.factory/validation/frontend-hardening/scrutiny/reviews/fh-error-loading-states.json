@@ -1,0 +1,45 @@
+{
+  "featureId": "fh-error-loading-states",
+  "reviewedAt": "2026-03-14T23:48:16Z",
+  "commitId": "a64fd5d47a4c3f2215d3aaf5d6ffc14fbedfa9b4",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds the requested error-boundary scaffolding, loading affordances, shell pages, and tests, but the billing and monitoring shells are wired to API routes that do not exist anywhere else in the repository, so those pages fall straight into the error state in the actual app instead of exercising the advertised empty/loaded flows.",
+    "issues": [
+      {
+        "file": "frontend/web/app/billing/page.tsx",
+        "line": 22,
+        "severity": "blocking",
+        "description": "`/billing` fetches `/api/v1/billing`, but a repo-wide search only finds that route in this page. There is no matching backend handler or documented API contract, so the real page will always 404 through the Next.js rewrite and settle in the error state instead of reaching the promised empty/loaded billing shells."
+      },
+      {
+        "file": "frontend/web/app/monitoring/page.tsx",
+        "line": 32,
+        "severity": "blocking",
+        "description": "`/monitoring` fetches `/api/v1/monitoring/metrics`, and that path is likewise absent everywhere else in the repo. It also diverges from the validation contract's documented metrics API example (`GET /api/deployments/:id/metrics`), so the shipped page cannot render real monitoring data or an empty state against the current codebase."
+      },
+      {
+        "file": "frontend/web/app/components/ErrorBoundary.tsx",
+        "line": 51,
+        "severity": "non_blocking",
+        "description": "The fallback UI renders `this.state.error.message` directly to end users (and logs the full error in `componentDidCatch`), which conflicts with AGENTS.md's security guidance to sanitize error messages. For a user-friendly boundary, the UI should stick to the curated fallback copy rather than exposing raw exception text."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The `frontend-worker` skill requires manual verification via `npm run dev`, browser checks, and `interactiveChecks`, but this worker session did none of those while the handoff still reported `skillFeedback.followedProcedure: true`. The skill or validator should enforce that requirement more explicitly.",
+      "evidence": "For worker session `6faa9501-8a68-4272-8684-184fbf5fae18`, the transcript skeleton contains no `npm run dev`, `agent-browser`, or `interactiveChecks`, while the handoff JSON at `C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\handoffs\\2026-03-14T23-43-45-682Z__fh-error-loading-states__6faa9501-8a68-4272-8684-184fbf5fae18.json` sets `skillFeedback.followedProcedure` to true."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared state does not currently document what temporary frontend contract billing/monitoring shells should use before the backend milestone lands. That gap let the worker invent new routes for the shell pages instead of aligning with an existing API contract.",
+      "evidence": "`validation-contract.md:644` documents the monitoring example route as `GET /api/deployments/:id/metrics`, while repo-wide searches for `/api/v1/monitoring/metrics` and `/api/v1/billing` only return `frontend/web/app/monitoring/page.tsx` and `frontend/web/app/billing/page.tsx`. No matching backend routes or library notes exist in `.factory/library/` or `.factory/services.yaml`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed: the new shell pages are styled and tested, but both depend on nonexistent/undocumented API routes, so they do not fully satisfy the feature in the real application. I also noted a non-blocking raw-error exposure in the new ErrorBoundary and a skill-enforcement gap around skipped manual verification."
+}

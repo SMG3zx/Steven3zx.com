@@ -1,0 +1,548 @@
+{
+  "groupId": "contracts-oauth-round2",
+  "testedAt": "2026-03-15T10:18:21.812773+00:00",
+  "isolation": {
+    "baseUrl": "http://localhost:8080",
+    "emailPrefix": "e2e-pipeline-ut+contracts-r2-",
+    "projectSlugPrefix": "e2e-pipeline-ut-contracts-r2-",
+    "email": "e2e-pipeline-ut+contracts-r2-20260315t101819z@example.com",
+    "projectSlug": "e2e-pipeline-ut-contracts-r2-20260315t101819z",
+    "userId": "usr_0b13be64c5e2bfa0a362e391",
+    "projectId": "proj_7972",
+    "artifactBuildId": "bld_b63868196f847267d72e05f6",
+    "deploymentId": null
+  },
+  "toolsUsed": [
+    "curl.exe",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-CROSS-004",
+      "title": "Auth gates all protected resources",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "GET /api/v1/projects without auth",
+          "expected": "401",
+          "observed": "401"
+        },
+        {
+          "action": "GET /api/v1/builds without auth",
+          "expected": "401",
+          "observed": "401"
+        },
+        {
+          "action": "GET /api/v1/deployments without auth",
+          "expected": "401",
+          "observed": "401"
+        },
+        {
+          "action": "GET /api/v1/billing without auth",
+          "expected": "401",
+          "observed": "401"
+        },
+        {
+          "action": "GET /api/v1/domains without auth",
+          "expected": "401",
+          "observed": "401"
+        },
+        {
+          "action": "GET /api/v1/metrics without auth",
+          "expected": "401",
+          "observed": "401"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-CROSS-004.json"
+        ],
+        "network": [
+          "GET /api/v1/projects -> 401",
+          "GET /api/v1/builds -> 401",
+          "GET /api/v1/deployments -> 401",
+          "GET /api/v1/billing -> 401",
+          "GET /api/v1/domains -> 401",
+          "GET /api/v1/metrics -> 401"
+        ],
+        "cookies": "none",
+        "headers": "captured in evidence file"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-015",
+      "title": "Operation polling envelope contract",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Submit auth.signup",
+          "expected": "202 with operationId/pollUrl",
+          "observed": "HTTP 202 with status pending"
+        },
+        {
+          "action": "Poll auth.signup",
+          "expected": "allowed operation statuses",
+          "observed": "Observed statuses: ['running', 'succeeded']"
+        },
+        {
+          "action": "Submit auth.signin.password",
+          "expected": "202 with operationId/pollUrl",
+          "observed": "HTTP 202 with status pending"
+        },
+        {
+          "action": "Submit project.create",
+          "expected": "202 with operationId/pollUrl",
+          "observed": "HTTP 202 with status pending"
+        },
+        {
+          "action": "Submit build.enqueue via source upload",
+          "expected": "202 with operationId/pollUrl",
+          "observed": "HTTP 202 with status pending"
+        },
+        {
+          "action": "Submit deploy.create",
+          "expected": "202 with operationId/pollUrl",
+          "observed": "HTTP 202 with status pending"
+        },
+        {
+          "action": "Poll failed duplicate project.create",
+          "expected": "failure object with code/message/retryable",
+          "observed": "{\"code\": \"conflict\", \"message\": \"a project with this slug already exists\", \"requestId\": \"\", \"retryable\": true}"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-E2E-015.json"
+        ],
+        "network": [
+          "POST /api/v1/auth/signup -> 202",
+          "POST /api/v1/auth/signin/password -> 202",
+          "POST /api/v1/projects -> 202",
+          "POST /api/v1/uploads/source-bundles -> 202",
+          "POST /api/v1/deployments -> 202"
+        ],
+        "pollResults": {
+          "signup": [
+            "running",
+            "succeeded"
+          ],
+          "signin": [
+            "running",
+            "succeeded"
+          ],
+          "project.create": [
+            "succeeded"
+          ],
+          "build.enqueue": [
+            "succeeded"
+          ],
+          "deploy.create": [
+            "failed"
+          ],
+          "project.create.duplicate": [
+            "failed"
+          ]
+        },
+        "cookies": "janus_access set during session exchange (redacted in evidence)"
+      },
+      "issues": "Observed statuses=['running', 'succeeded', 'running', 'succeeded', 'succeeded', 'succeeded', 'failed', 'failed']; failure object={'code': 'conflict', 'message': 'a project with this slug already exists', 'requestId': '', 'retryable': True}"
+    },
+    {
+      "id": "VAL-E2E-021",
+      "title": "Source bundle upload API",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Upload valid zip source bundle",
+          "expected": "202 with operation envelope",
+          "observed": "HTTP 202"
+        },
+        {
+          "action": "Poll valid source upload",
+          "expected": "succeeded with result.buildJob",
+          "observed": "{\"buildStrategy\": \"unknown\", \"createdAt\": 1773569901.146566, \"finishedAt\": null, \"id\": \"bld_c280bc23027c3463813c73c2\", \"logsUrl\": \"/api/v1/builds/bld_c280bc23027c3463813c73c2/logs\", \"projectId\": \"proj_7972\", \"provider\": \"upload\", \"repoUrl\": \"\", \"sourceBucket\": \"janus-artifacts\", \"sourceKey\": \"source-bundles/proj_7972/1773569901100633414-source-bundle-valid.zip\", \"sourceKind\": \"zip\", \"sourceRef\": \"contracts-r2-source-20260315t101819z\", \"startedAt\": null, \"status\": \"pending\", \"updatedAt\": 1773569901.146566}"
+        },
+        {
+          "action": "Upload invalid txt file",
+          "expected": "400",
+          "observed": "HTTP 400 body={'error': {'code': 'bad_request', 'message': 'invalid file type: source bundles must be .zip, .tar.gz, or .tgz', 'requestId': '37396a8a21e2baf771164735'}}"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-E2E-021.json"
+        ],
+        "network": [
+          "POST /api/v1/uploads/source-bundles(valid) -> 202",
+          "GET /api/v1/operations/op_28dd4b5ddd49bf949223474d -> 200",
+          "POST /api/v1/uploads/source-bundles(invalid) -> 400"
+        ],
+        "pollResults": {
+          "pollUrl": "/api/v1/operations/op_28dd4b5ddd49bf949223474d",
+          "attempts": [
+            {
+              "timestamp": "2026-03-15T10:18:21.197711+00:00",
+              "statusCode": 200,
+              "operationStatus": "succeeded",
+              "bodyJson": {
+                "correlationId": "corr_91138c01a4b810bb",
+                "kind": "build.enqueue",
+                "operationId": "op_28dd4b5ddd49bf949223474d",
+                "pollUrl": "/api/v1/operations/op_28dd4b5ddd49bf949223474d",
+                "result": {
+                  "buildJob": {
+                    "buildStrategy": "unknown",
+                    "createdAt": 1773569901.146566,
+                    "finishedAt": null,
+                    "id": "bld_c280bc23027c3463813c73c2",
+                    "logsUrl": "/api/v1/builds/bld_c280bc23027c3463813c73c2/logs",
+                    "projectId": "proj_7972",
+                    "provider": "upload",
+                    "repoUrl": "",
+                    "sourceBucket": "janus-artifacts",
+                    "sourceKey": "source-bundles/proj_7972/1773569901100633414-source-bundle-valid.zip",
+                    "sourceKind": "zip",
+                    "sourceRef": "contracts-r2-source-20260315t101819z",
+                    "startedAt": null,
+                    "status": "pending",
+                    "updatedAt": 1773569901.146566
+                  },
+                  "scheduled": {
+                    "buildId": "bld_c280bc23027c3463813c73c2",
+                    "executor": "build_execution_actor",
+                    "mode": "runner_actor_poll",
+                    "queuedFor": "runner-local execution actor",
+                    "runnerId": ""
+                  }
+                },
+                "status": "succeeded",
+                "submittedAt": "2026-03-15T10:18:21.141590659Z",
+                "updatedAt": "2026-03-15T10:18:21.16436353Z"
+              },
+              "location": null,
+              "stderr": ""
+            }
+          ],
+          "final": {
+            "timestamp": "2026-03-15T10:18:21.197711+00:00",
+            "statusCode": 200,
+            "operationStatus": "succeeded",
+            "bodyJson": {
+              "correlationId": "corr_91138c01a4b810bb",
+              "kind": "build.enqueue",
+              "operationId": "op_28dd4b5ddd49bf949223474d",
+              "pollUrl": "/api/v1/operations/op_28dd4b5ddd49bf949223474d",
+              "result": {
+                "buildJob": {
+                  "buildStrategy": "unknown",
+                  "createdAt": 1773569901.146566,
+                  "finishedAt": null,
+                  "id": "bld_c280bc23027c3463813c73c2",
+                  "logsUrl": "/api/v1/builds/bld_c280bc23027c3463813c73c2/logs",
+                  "projectId": "proj_7972",
+                  "provider": "upload",
+                  "repoUrl": "",
+                  "sourceBucket": "janus-artifacts",
+                  "sourceKey": "source-bundles/proj_7972/1773569901100633414-source-bundle-valid.zip",
+                  "sourceKind": "zip",
+                  "sourceRef": "contracts-r2-source-20260315t101819z",
+                  "startedAt": null,
+                  "status": "pending",
+                  "updatedAt": 1773569901.146566
+                },
+                "scheduled": {
+                  "buildId": "bld_c280bc23027c3463813c73c2",
+                  "executor": "build_execution_actor",
+                  "mode": "runner_actor_poll",
+                  "queuedFor": "runner-local execution actor",
+                  "runnerId": ""
+                }
+              },
+              "status": "succeeded",
+              "submittedAt": "2026-03-15T10:18:21.141590659Z",
+              "updatedAt": "2026-03-15T10:18:21.16436353Z"
+            },
+            "location": null,
+            "stderr": ""
+          }
+        }
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-022",
+      "title": "WASM artifact upload API",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Upload valid .wasm artifact",
+          "expected": "202 with operation envelope",
+          "observed": "HTTP 202"
+        },
+        {
+          "action": "Poll artifact upload operation",
+          "expected": "succeeded with buildStrategy prebuilt_wasm",
+          "observed": "{\"artifactBucket\": \"janus-artifacts\", \"artifactKey\": \"artifacts/proj_7972/1773569901255947861-artifact-valid.wasm\", \"artifactRuntime\": \"wasm/wasi-command\", \"buildStrategy\": \"prebuilt_wasm\", \"createdAt\": 1773569901.268277, \"finishedAt\": null, \"id\": \"bld_b63868196f847267d72e05f6\", \"logsUrl\": \"/api/v1/builds/bld_b63868196f847267d72e05f6/logs\", \"projectId\": \"proj_7972\", \"provider\": \"upload\", \"repoUrl\": \"\", \"runtimeMode\": \"stdout-bridge\", \"sourceRef\": \"contracts-r2-artifact-20260315t101819z\", \"startedAt\": null, \"status\": \"built\", \"updatedAt\": 1773569901.268277}"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-E2E-022.json"
+        ],
+        "network": [
+          "POST /api/v1/uploads/artifacts -> 202",
+          "GET /api/v1/operations/op_c3d8f5a9fa5960a14f39b095 -> 200"
+        ],
+        "pollResults": {
+          "pollUrl": "/api/v1/operations/op_c3d8f5a9fa5960a14f39b095",
+          "attempts": [
+            {
+              "timestamp": "2026-03-15T10:18:21.315709+00:00",
+              "statusCode": 200,
+              "operationStatus": "succeeded",
+              "bodyJson": {
+                "correlationId": "corr_8c5865f9b895d4c4",
+                "kind": "artifact.upload",
+                "operationId": "op_c3d8f5a9fa5960a14f39b095",
+                "pollUrl": "/api/v1/operations/op_c3d8f5a9fa5960a14f39b095",
+                "result": {
+                  "buildJob": {
+                    "artifactBucket": "janus-artifacts",
+                    "artifactKey": "artifacts/proj_7972/1773569901255947861-artifact-valid.wasm",
+                    "artifactRuntime": "wasm/wasi-command",
+                    "buildStrategy": "prebuilt_wasm",
+                    "createdAt": 1773569901.268277,
+                    "finishedAt": null,
+                    "id": "bld_b63868196f847267d72e05f6",
+                    "logsUrl": "/api/v1/builds/bld_b63868196f847267d72e05f6/logs",
+                    "projectId": "proj_7972",
+                    "provider": "upload",
+                    "repoUrl": "",
+                    "runtimeMode": "stdout-bridge",
+                    "sourceRef": "contracts-r2-artifact-20260315t101819z",
+                    "startedAt": null,
+                    "status": "built",
+                    "updatedAt": 1773569901.268277
+                  }
+                },
+                "status": "succeeded",
+                "submittedAt": "2026-03-15T10:18:21.264024886Z",
+                "updatedAt": "2026-03-15T10:18:21.274519736Z"
+              },
+              "location": null,
+              "stderr": ""
+            }
+          ],
+          "final": {
+            "timestamp": "2026-03-15T10:18:21.315709+00:00",
+            "statusCode": 200,
+            "operationStatus": "succeeded",
+            "bodyJson": {
+              "correlationId": "corr_8c5865f9b895d4c4",
+              "kind": "artifact.upload",
+              "operationId": "op_c3d8f5a9fa5960a14f39b095",
+              "pollUrl": "/api/v1/operations/op_c3d8f5a9fa5960a14f39b095",
+              "result": {
+                "buildJob": {
+                  "artifactBucket": "janus-artifacts",
+                  "artifactKey": "artifacts/proj_7972/1773569901255947861-artifact-valid.wasm",
+                  "artifactRuntime": "wasm/wasi-command",
+                  "buildStrategy": "prebuilt_wasm",
+                  "createdAt": 1773569901.268277,
+                  "finishedAt": null,
+                  "id": "bld_b63868196f847267d72e05f6",
+                  "logsUrl": "/api/v1/builds/bld_b63868196f847267d72e05f6/logs",
+                  "projectId": "proj_7972",
+                  "provider": "upload",
+                  "repoUrl": "",
+                  "runtimeMode": "stdout-bridge",
+                  "sourceRef": "contracts-r2-artifact-20260315t101819z",
+                  "startedAt": null,
+                  "status": "built",
+                  "updatedAt": 1773569901.268277
+                }
+              },
+              "status": "succeeded",
+              "submittedAt": "2026-03-15T10:18:21.264024886Z",
+              "updatedAt": "2026-03-15T10:18:21.274519736Z"
+            },
+            "location": null,
+            "stderr": ""
+          }
+        }
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-027",
+      "title": "Duplicate project slug rejected",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Create initial project",
+          "expected": "succeeds",
+          "observed": "projectId=proj_7972"
+        },
+        {
+          "action": "Create second project with same slug",
+          "expected": "failed operation",
+          "observed": "submit HTTP 202 final=failed"
+        },
+        {
+          "action": "List projects after duplicate attempt",
+          "expected": "only one matching slug remains",
+          "observed": "matchingProjectCount=1"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-E2E-027.json"
+        ],
+        "network": [
+          "POST /api/v1/projects -> 202",
+          "POST /api/v1/projects (duplicate slug) -> 202",
+          "GET /api/v1/projects -> 200"
+        ],
+        "pollResults": {
+          "pollUrl": "/api/v1/operations/op_e80a31da35ae3e1e0a288acc",
+          "attempts": [
+            {
+              "timestamp": "2026-03-15T10:18:21.030832+00:00",
+              "statusCode": 200,
+              "operationStatus": "failed",
+              "bodyJson": {
+                "correlationId": "corr_63e2cc7303079ff5",
+                "failure": {
+                  "code": "conflict",
+                  "message": "a project with this slug already exists",
+                  "requestId": "",
+                  "retryable": true
+                },
+                "kind": "project.create",
+                "operationId": "op_e80a31da35ae3e1e0a288acc",
+                "pollUrl": "/api/v1/operations/op_e80a31da35ae3e1e0a288acc",
+                "status": "failed",
+                "submittedAt": "2026-03-15T10:18:20.973548472Z",
+                "updatedAt": "2026-03-15T10:18:20.980513072Z"
+              },
+              "location": null,
+              "stderr": ""
+            }
+          ],
+          "final": {
+            "timestamp": "2026-03-15T10:18:21.030832+00:00",
+            "statusCode": 200,
+            "operationStatus": "failed",
+            "bodyJson": {
+              "correlationId": "corr_63e2cc7303079ff5",
+              "failure": {
+                "code": "conflict",
+                "message": "a project with this slug already exists",
+                "requestId": "",
+                "retryable": true
+              },
+              "kind": "project.create",
+              "operationId": "op_e80a31da35ae3e1e0a288acc",
+              "pollUrl": "/api/v1/operations/op_e80a31da35ae3e1e0a288acc",
+              "status": "failed",
+              "submittedAt": "2026-03-15T10:18:20.973548472Z",
+              "updatedAt": "2026-03-15T10:18:20.980513072Z"
+            },
+            "location": null,
+            "stderr": ""
+          }
+        }
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-029",
+      "title": "GitHub OAuth start redirects correctly",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "GET /api/v1/git/providers/github/oauth/start with auth",
+          "expected": "302 to GitHub authorize",
+          "observed": "HTTP 302 location=https://github.com/login/oauth/authorize?client_id=placeholder_client_id&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fv1%2Fgit%2Fproviders%2Fgithub%2Foauth%2Fcallback&scope=repo+read%3Auser+user%3Aemail&state=f47e0781f8f925ae18af5a5523c25a26"
+        },
+        {
+          "action": "Inspect redirect params",
+          "expected": "client_id, redirect_uri, scope, state present",
+          "observed": "{\"client_id\": \"placeholder_client_id\", \"redirect_uri\": \"http://localhost:8080/api/v1/git/providers/github/oauth/callback\", \"scope\": \"repo read:user user:email\", \"state\": \"f47e0781f8f925ae18af5a5523c25a26\"}"
+        },
+        {
+          "action": "Inspect state cookie",
+          "expected": "github_oauth_state cookie matches state param",
+          "observed": "{\"name\": \"github_oauth_state\", \"valuePreview\": \"f47e0781f8...\", \"attributes\": [\"Path=/\", \"Max-Age=600\", \"HttpOnly\", \"SameSite=Lax\"]}"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-E2E-029.json"
+        ],
+        "network": [
+          "GET /api/v1/git/providers/github/oauth/start -> 302"
+        ],
+        "cookies": {
+          "name": "github_oauth_state",
+          "valuePreview": "f47e0781f8...",
+          "attributes": [
+            "Path=/",
+            "Max-Age=600",
+            "HttpOnly",
+            "SameSite=Lax"
+          ]
+        },
+        "headers": "Location=https://github.com/login/oauth/authorize?client_id=placeholder_client_id&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fv1%2Fgit%2Fproviders%2Fgithub%2Foauth%2Fcallback&scope=repo+read%3Auser+user%3Aemail&state=f47e0781f8f925ae18af5a5523c25a26"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-E2E-030",
+      "title": "GitHub OAuth callback exchanges code",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Prepare callback precondition via OAuth start",
+          "expected": "state cookie + redirect params available",
+          "observed": "start HTTP 302 location=https://github.com/login/oauth/authorize?client_id=placeholder_client_id&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fv1%2Fgit%2Fproviders%2Fgithub%2Foauth%2Fcallback&scope=repo+read%3Auser+user%3Aemail&state=f47e0781f8f925ae18af5a5523c25a26"
+        },
+        {
+          "action": "Invoke callback path",
+          "expected": "valid code exchanged and credential stored",
+          "observed": "{\"statusCode\": 302, \"location\": \"http://localhost:8080/janus?git=error&message=failed+to+exchange+authorization+code\"}"
+        },
+        {
+          "action": "Check Git provider connection state",
+          "expected": "github connected=true after successful callback",
+          "observed": "{\"providers\": [{\"connected\": false, \"githubStartUrl\": \"http://localhost:8080/api/v1/git/providers/github/oauth/start\", \"id\": \"github\", \"name\": \"GitHub\"}]}"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "e2e-pipeline/contracts-oauth-round2/VAL-E2E-030.json"
+        ],
+        "network": [
+          "GET /api/v1/git/providers/github/oauth/start -> 302",
+          "GET /api/v1/git/providers/github/oauth/callback?code=... -> 302",
+          "GET /api/v1/git/providers -> 200"
+        ],
+        "cookies": "state cookie reused from OAuth start; values redacted",
+        "headers": "callbackLocation=http://localhost:8080/janus?git=error&message=failed+to+exchange+authorization+code"
+      },
+      "issues": "OAuth start reached GitHub authorize with a state cookie, but contract completion still requires a legitimate GitHub authorization code from the configured OAuth app; the curl-only rerun could only verify that a fake code redirects to an exchange failure path."
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "description": "OAuth start reached GitHub authorize with a state cookie, but contract completion still requires a legitimate GitHub authorization code from the configured OAuth app; the curl-only rerun could only verify that a fake code redirects to an exchange failure path.",
+      "affectedAssertions": [
+        "VAL-E2E-030"
+      ],
+      "quickFixAttempted": "Authenticated OAuth start was exercised first; then a callback with the observed state and a fake code was attempted only when start produced a GitHub authorize redirect."
+    }
+  ],
+  "summary": "Tested 7 assertions: 5 passed, 1 failed, 1 blocked."
+}

@@ -1,0 +1,42 @@
+{
+  "groupId": "deploy-browser-ui",
+  "overallStatus": "fail",
+  "assertions": [
+    {
+      "id": "VAL-FH-018",
+      "status": "fail",
+      "reason": "The browser-reachable /get-started deployment workspace rendered as signed out with zero projects/builds/deployments, so the deployment form could not be completed against a real built artifact and no deployment result card or log modal was reached.",
+      "evidence": [
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\get-started-manual.png",
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\dashboard-body.txt",
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\deployment-after-submit.png"
+      ]
+    },
+    {
+      "id": "VAL-E2E-014",
+      "status": "fail",
+      "reason": "No successful deployment endpoint link was surfaced in the browser flow because the authenticated deployment workflow never reached a usable deployment result state.",
+      "evidence": [
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\dashboard-body.txt",
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\deployment-after-submit.png"
+      ]
+    },
+    {
+      "id": "VAL-CROSS-007",
+      "status": "pass",
+      "reason": "A backend-originated invalid-credentials failure was surfaced inline on the sign-in page as 'invalid credentials', confirming the frontend displays a user-visible error for a failed backend auth operation.",
+      "evidence": [
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\signin-error-inline.png",
+        "C:\\Users\\steve\\.factory\\missions\\7c00674c-a287-44c4-9e3d-8e3492b7b410\\evidence\\e2e-pipeline\\deploy-browser-ui\\signin-error-body.txt"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "Replaying an authenticated browser session against /get-started was unstable: the page either rendered 'Signed out' with empty data sets or stalled after manual cookie injection, preventing a clean end-to-end deployment UI run."
+  ],
+  "blockers": [],
+  "appliedUpdates": []
+}
