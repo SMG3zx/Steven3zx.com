@@ -1,0 +1,109 @@
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    container_name: janus-jaeger
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16686:16686"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    container_name: janus-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:9464:9464"
+    depends_on:
+      - jaeger
+      - loki
+      - tempo
+
+  loki:
+    image: grafana/loki:3.6.4
+    container_name: janus-loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ./observability/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.9.0
+    container_name: janus-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "127.0.0.1:3200:3200"
+
+  pyroscope-init:
+    image: busybox:1.37
+    container_name: janus-pyroscope-init
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 10001:10001 /var/lib/pyroscope"]
+    restart: "no"
+    volumes:
+      - pyroscope-data:/var/lib/pyroscope
+
+  pyroscope:
+    image: grafana/pyroscope:2.3.1
+    container_name: janus-pyroscope
+    command: ["-storage.filesystem.dir=/var/lib/pyroscope"]
+    restart: unless-stopped
+    depends_on:
+      pyroscope-init:
+        condition: service_completed_successfully
+    volumes:
+      - pyroscope-data:/var/lib/pyroscope
+    ports:
+      - "127.0.0.1:4040:4040"
+
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    container_name: janus-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9091:9090"
+
+  grafana:
+    image: grafana/grafana:12.4.11
+    container_name: janus-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-before-sharing}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://janus.steven3zx.com/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - loki
+      - tempo
+      - pyroscope
+      - prometheus
+
+volumes:
+  grafana-data:
+  loki-data:
+  prometheus-data:
+  tempo-data:
+  pyroscope-data:

@@ -22,3 +22,17 @@ Top-level folders can also contain local infrastructure, archived material, or g
 - Fetch from `origin` before integrating remote changes, then push the intended bookmark with `jj git push --remote origin --bookmark <bookmark>`.
 - Do not force-update a remote bookmark unless explicitly asked.
 - Keep commits focused on the requested work. Do not include local secrets, environment files, build outputs, or unrelated project changes.
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown: issues live as files under `.scratch/<feature>/` at the repo root. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context per project: `janus/janus-go/` has its own `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
