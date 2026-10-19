@@ -61,3 +61,4 @@ GITEA/data/
 GITEA/gitea-repositories/
 GITEA/log/
 GITEA/*.db
+janus/janus-go/.gocache
