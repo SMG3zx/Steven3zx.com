@@ -23,6 +23,20 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  ddns:
+    image: favonia/cloudflare-ddns:1
+    restart: unless-stopped
+    env_file: .env
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      IP4_DOMAINS: www.steven3zx.com,steven3zx.com,janus.steven3zx.com,ssh.steven3zx.com
+      IP6_PROVIDER: none
+      PROXIED: is(www.steven3zx.com,steven3zx.com,janus.steven3zx.com)
+
 volumes:
   caddy_data:
   caddy_config:
