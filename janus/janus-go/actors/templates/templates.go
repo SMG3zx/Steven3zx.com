@@ -12,7 +12,8 @@ const (
 	DefaultFuel uint64 = 100_000_000
 	// ScriptFuel is the fuel limit for JavaScript and TypeScript templates. They
 	// run inside a QuickJS interpreter, which spends about 770 fuel per simple
-	// loop iteration, so the default would stop a modest script early.
+	// loop iteration and 9 to 17 billion fuel per second, so this is roughly the
+	// fuel of a full DefaultTimeout run and the timeout ends a run first.
 	ScriptFuel         uint64 = 2_000_000_000
 	DefaultMemoryBytes        = 128 << 20
 	DefaultTimeout            = 10 * time.Second
