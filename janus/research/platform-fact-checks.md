@@ -141,3 +141,25 @@ Targets: `wasm32-wasip1`, like Rust. Entry file: the Entrypoint the Account conf
 **Still not done:** a builder image that has Bun, esbuild, and Javy in it, and the builder actor and template change that call it. Javy's license and how the pinned `javy` release is delivered into the isolated builder also need deciding.
 
 Also note for the template spec: users with `fs`, `http`, or npm-heavy projects will see a build failure with this approach, so the Scan should warn before the Owner confirms the Entrypoint.
+
+## Overhead of Javy against native JavaScript
+
+Measured 2026-10-19 on the machine used for the fuel table (AMD Ryzen 5 7600X, Windows 11). Five workloads ran as the same JavaScript in three places: Node v26.7.0 and Bun 1.4.2 on the host, and a Javy 9.1.0 module (QuickJS interpreter) run through `ExecuteWASIWith` with fuel and epoch interruption on. Javy figures are the median of 5 runs of the call; native figures are the median of 7 runs in one process ("warm") and one run per process ("cold"), which is closer to a deployment that runs a script once. The workloads are in `workloads.js` and were not committed; their sizes were: 3M-iteration loop, `fib(30)`, a 1M-element array map/filter/reduce, 500k string concatenations, and a 50k-object JSON round trip.
+
+| Workload | Node cold | Bun cold | Javy call | Javy vs Node cold | Javy vs Bun cold | Javy fuel |
+|---|---|---|---|---|---|---|
+| Tight loop (`t += i % 7`) | 3.0 ms | 3.2 ms | 258 ms | 87x | 80x | 2.3 B |
+| Recursion (`fib(30)`) | 5.3 ms | 4.0 ms | 195 ms | 36x | 49x | 2.0 B |
+| Array map/filter/reduce | 32.6 ms | 16.5 ms | 250 ms | 7.7x | 15x | 4.3 B |
+| String build/split/join | 35.7 ms | 27.2 ms | 249 ms | 7.0x | 9.2x | 2.8 B |
+| JSON stringify/parse | 17.5 ms | 17.2 ms | 218 ms | 12x | 13x | 2.3 B |
+
+**What it shows**
+- Javy runs the same script about **7x to 90x slower** than Node or Bun. The tight loop and recursion are worst, because V8 and JavaScriptCore compile them to machine code and QuickJS interprets them. Work that spends its time in built-in functions (arrays, strings, JSON) is closest, at 7x to 15x, since QuickJS's built-ins are native code too.
+- Javy CPU time tracks its wall time (187 to 250 ms CPU for 195 to 258 ms of call), so the CPU layer bills these runs at the slower pace. A JavaScript deployment will use several times the CPU seconds of the same code on Node, and it costs the Account proportionally more. This should go in the pricing page, and it is a reason to prefer Go or Rust for compute-heavy work.
+- Fuel runs between 8.9 and 17 billion per second for these workloads, consistent with the earlier fuel table. A 2 billion fuel limit stops all five workloads except the loop at roughly 0.1 to 0.25 seconds of work. The loop (2.3 B) and the array workload (4.3 B) would trap under the 2 billion `ScriptFuel` limit, which means the limit is too low for anything past a short script. Raise it, or derive it from the run's timeout, before shipping.
+
+**A fixed cost the call time hides**
+- An empty Javy module takes about 400 ms in `ExecuteWASIWith` from start to finish, although its `_start` call takes under 1 ms. Almost all of that is compiling the 1.3 MB module with Cranelift on every run. It is not billed (the CPU clock covers only the call) but each run costs the node about 0.4 CPU seconds. Wasmtime can serialize a compiled module and load it again, so compiling once per Artifact and caching the result would remove it. This also applies to Go and Rust Artifacts, which was not measured here.
+
+**Caveats:** one machine, one operating system, synthetic workloads, and Windows' 15.6 ms CPU tick. Re-run on the Linux nodes that will serve runs. Javy's other mode (dynamic linking, a shared QuickJS module) was not tried and would shrink modules but not change interpreter speed.
