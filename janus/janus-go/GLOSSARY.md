@@ -110,6 +110,12 @@ _Avoid_: Preview URL, subdomain
 **Deploy target**:
 The Agent a Deploy goes to. The Owner picks it at Deploy time: preselected when exactly one Agent is enrolled, otherwise the last used. A Deployment is pinned to that Agent. Deploy is refused if the Account has no enrolled, online Agent.
 
+**Deploy gating**:
+Deploy is disabled while the Check for that WASM Build is running. A Check that itself errors (container crash, timeout) counts as failed, keeps its error, and can be re-run; "deploy anyway" is then available. A Project has one in-flight Deploy: a second one is refused until the first is healthy or failed. The Owner can stop the in-flight one (stopped, reason removed), and the live Deployment keeps serving throughout.
+
+**Removing an Agent or expiry**:
+Removing an Agent stops every Deployment pinned to it (reason removed), and the domain answers 503 until the next Deploy. Expiry stops the live Deployment (reason expired) and retires the name. Neither deletes the Artifact or Usage. The UI warns the Owner one day before expiry.
+
 **Failed Deployment**:
 A Deployment that ended in an error, kept with its message. It is not resumed. If the control plane restarts mid-Deploy, it reconciles with the Agent and marks the Deployment healthy or failed. The Owner starts a new Deploy from the same WASM Build, and the previous live Deployment keeps serving meanwhile.
 
