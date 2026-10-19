@@ -174,12 +174,9 @@ func (a *Actor) register(c *web.Context) any {
 		return internalError()
 	}
 	userID := newUserID()
-	response, err := a.ask(ctx, a.dependencies.Persistence, &persistence.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
+	err = a.dependencies.Store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
 	if err != nil {
-		return internalError()
-	}
-	if created, ok := response.(*persistence.LocalUserCreated); !ok || created.Err != nil {
-		if ok && isConflict(created.Err) {
+		if isConflict(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
 		}
 		return internalError()
@@ -202,12 +199,8 @@ func (a *Actor) login(c *web.Context) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "login is disabled"})
 	}
-	response, err := a.ask(ctx, a.dependencies.Persistence, &persistence.FindLocalUser{Email: input.Email})
+	user, err := a.dependencies.Store.FindLocalUser(ctx, input.Email)
 	if err != nil {
-		return internalError()
-	}
-	user, ok := response.(*persistence.LocalUserFound)
-	if !ok || user.Err != nil {
 		return internalError()
 	}
 	if !user.Found {
@@ -247,12 +240,8 @@ func (a *Actor) me(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(ctx, a.dependencies.Persistence, &persistence.FindUser{ID: subject})
+	user, err := a.dependencies.Store.FindUser(ctx, subject)
 	if err != nil {
-		return internalError()
-	}
-	user, ok := response.(*persistence.UserFound)
-	if !ok || user.Err != nil {
 		return internalError()
 	}
 	if !user.Found {
@@ -312,12 +301,8 @@ func (a *Actor) googleCallback(c *web.Context) any {
 		a.log(ctx, "warn", "auth.google.callback.denied", map[string]string{"reason": "provider_authentication_failed"})
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "Google sign-in failed"})
 	}
-	response, err := a.ask(ctx, a.dependencies.Persistence, &persistence.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
+	identity, err := a.dependencies.Store.ResolveGoogleIdentity(ctx, persistence.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
 	if err != nil {
-		return internalError()
-	}
-	identity, ok := response.(*persistence.GoogleIdentityResolved)
-	if !ok || identity.Err != nil {
 		return internalError()
 	}
 	issued := a.issueCookie(ctx, identity.ID, http.StatusTemporaryRedirect, nil)
@@ -345,12 +330,8 @@ func (a *Actor) subject(ctx context.Context, request *http.Request) (string, boo
 		return "", false
 	}
 	// Sessions are stateless tokens, so an Account that was deleted is rejected here.
-	found, err := a.ask(ctx, a.dependencies.Persistence, &persistence.FindUser{ID: subject})
-	if err != nil {
-		return "", false
-	}
-	user, ok := found.(*persistence.UserFound)
-	return subject, ok && user.Found && user.Err == nil
+	found, err := a.dependencies.Store.FindUser(ctx, subject)
+	return subject, err == nil && found.Found
 }
 
 func (a *Actor) issueCookie(ctx context.Context, subject string, status int, body any) any {

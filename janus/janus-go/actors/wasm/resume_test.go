@@ -53,7 +53,7 @@ func newBuildFixture(t *testing.T, language string, runner builder.Builder) *bui
 	f := &buildFixture{t: t, ctx: ctx, db: db, system: system}
 	f.ask(&persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"})
 	f.importProject("project", language)
-	f.builds, err = system.Spawn(ctx, "wasm", New(db, nil, runner))
+	f.builds, err = system.Spawn(ctx, "wasm", New(persistence.NewClient(db, 5*time.Second), nil, runner))
 	if err != nil {
 		t.Fatal(err)
 	}

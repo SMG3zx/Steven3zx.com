@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -82,18 +81,11 @@ func (s *stagedImport) pending() []manifestEntry {
 }
 
 func (a *Actor) resumeImports(ctx context.Context, system goakt.ActorSystem) (int, error) {
-	response, err := a.ask(ctx, &persistence.ListResumableImports{})
+	jobs, err := a.store.ListResumableImports(ctx)
 	if err != nil {
 		return 0, err
 	}
-	listed, ok := response.(*persistence.ResumableImportsListed)
-	if !ok {
-		return 0, fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if listed.Err != nil {
-		return 0, listed.Err
-	}
-	for _, job := range listed.Jobs {
+	for _, job := range jobs {
 		msg, err := a.resumedImportRun(ctx, job)
 		if err != nil {
 			a.failResumedImport(ctx, job.JobID, err)
@@ -101,20 +93,20 @@ func (a *Actor) resumeImports(ctx context.Context, system goakt.ActorSystem) (in
 		}
 		a.queueImport(ctx, system, msg)
 	}
-	return len(listed.Jobs), nil
+	return len(jobs), nil
 }
 
 // resumedImportRun prepares the run message for an interrupted import. The
 // repository is read again from GitHub, because the job stores only its name.
 func (a *Actor) resumedImportRun(ctx context.Context, job persistence.ResumableImport) (*RunImport, error) {
-	token, connected, err := a.token(ctx, job.OwnerID)
+	token, connected, err := a.github.Token(ctx, job.OwnerID)
 	if err != nil {
 		return nil, err
 	}
 	if !connected {
 		return nil, errors.New("reconnect GitHub to resume this import")
 	}
-	repository, err := a.github.Repository(ctx, token, job.Repository)
+	repository, err := a.github.API.Repository(ctx, token, job.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +115,13 @@ func (a *Actor) resumedImportRun(ctx context.Context, job persistence.ResumableI
 
 func (a *Actor) failResumedImport(ctx context.Context, jobID string, cause error) {
 	_ = a.updateJob(ctx, jobID, "failed", 100, "resume failed: "+cause.Error())
-	_ = discardStaging(ctx, a.persistence, jobID)
+	_ = a.store.DiscardJobStaging(ctx, jobID)
 }
 
 // queueImport starts msg once an import slot is free, so resumed imports never
 // exceed the concurrency limit. It does not block the caller.
 func (a *Actor) queueImport(ctx context.Context, system goakt.ActorSystem, msg *RunImport) {
-	worker := &ImportWorker{persistence: a.persistence, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
+	worker := &ImportWorker{store: a.store, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
 	a.runner.Queue(ctx, system, importWorkerName(msg.JobID), worker, msg, func(err error) { a.failResumedImport(ctx, msg.JobID, err) })
 }
 
@@ -139,47 +131,25 @@ func importWorkerName(jobID string) string {
 
 func (a *Actor) retryImport(rctx *goakt.ReceiveContext, msg *RetryImport) (string, error) {
 	ctx := rctx.Context()
-	response, err := a.ask(ctx, &persistence.FindImportJob{ID: msg.JobID, OwnerID: msg.OwnerID})
+	job, found, err := a.store.FindImportJob(ctx, msg.JobID, msg.OwnerID)
 	if err != nil {
 		return "", err
 	}
-	found, ok := response.(*persistence.ImportJobFound)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if found.Err != nil {
-		return "", found.Err
-	}
-	if !found.Found {
+	if !found {
 		return "", errors.New("import job not found")
 	}
-	if found.Job.Status != "failed" {
+	if job.Status != "failed" {
 		return "", errors.New("only a failed import can be retried")
 	}
-	return a.startImport(rctx, &RequestImport{OwnerID: msg.OwnerID, ProjectID: found.Job.ProjectID, Repository: found.Job.Repository, Branch: found.Job.Branch, Commit: found.Job.Commit})
+	return a.startImport(rctx, &RequestImport{OwnerID: msg.OwnerID, ProjectID: job.ProjectID, Repository: job.Repository, Branch: job.Branch, Commit: job.Commit})
 }
 
 func (a *Actor) deleteAccount(ctx context.Context, msg *DeleteAccount) (AccountDeleted, error) {
-	response, err := a.ask(ctx, &persistence.DeleteAccount{UserID: msg.OwnerID, CancelActiveJobs: msg.CancelActiveJobs})
-	if err != nil {
+	result, err := a.store.DeleteAccount(ctx, msg.OwnerID, msg.CancelActiveJobs)
+	if err != nil && !persistence.IsReply(err) {
 		return AccountDeleted{}, err
 	}
-	result, ok := response.(*persistence.AccountDeleted)
-	if !ok {
-		return AccountDeleted{}, fmt.Errorf("unexpected persistence response %T", response)
-	}
-	return AccountDeleted{Deleted: result.Deleted, ActiveJobs: result.ActiveJobs, Err: result.Err}, nil
-}
-
-func discardStaging(ctx context.Context, persistencePID *goakt.PID, jobID string) error {
-	response, err := askPersistence(ctx, persistencePID, &persistence.DiscardJobStaging{JobID: jobID})
-	if err != nil {
-		return err
-	}
-	if result, ok := response.(*persistence.JobStagingDiscarded); ok {
-		return result.Err
-	}
-	return fmt.Errorf("unexpected persistence response %T", response)
+	return AccountDeleted{Deleted: result.Deleted, ActiveJobs: result.ActiveJobs, Err: err}, nil
 }
 
 // findStaging returns the Staging Snapshot of an interrupted import when it has
@@ -187,16 +157,9 @@ func discardStaging(ctx context.Context, persistencePID *goakt.PID, jobID string
 // hash. Any other Staging Snapshot is corrupt, or was interrupted before its
 // scan finished, so it is discarded and nil is returned.
 func (a *ImportWorker) findStaging(ctx context.Context, msg *RunImport) (*stagedImport, error) {
-	response, err := a.ask(ctx, &persistence.FindStagingSnapshot{JobID: msg.JobID})
+	found, err := a.store.FindStagingSnapshot(ctx, msg.JobID)
 	if err != nil {
 		return nil, err
-	}
-	found, ok := response.(*persistence.StagingSnapshotFound)
-	if !ok {
-		return nil, fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if found.Err != nil {
-		return nil, found.Err
 	}
 	if !found.Found {
 		return nil, nil
@@ -209,7 +172,7 @@ func (a *ImportWorker) findStaging(ctx context.Context, msg *RunImport) (*staged
 		}
 		return &stagedImport{snapshotID: found.SnapshotID, manifest: manifest, stored: stored}, nil
 	}
-	if err = discardStaging(ctx, a.persistence, msg.JobID); err != nil {
+	if err = a.store.DiscardJobStaging(ctx, msg.JobID); err != nil {
 		return nil, err
 	}
 	return nil, nil
@@ -285,7 +248,7 @@ func (a *ImportWorker) runImport(parent context.Context, msg *RunImport) error {
 		if !errors.Is(err, errStagingCorrupt) {
 			return err
 		}
-		if err = discardStaging(ctx, a.persistence, msg.JobID); err != nil {
+		if err = a.store.DiscardJobStaging(ctx, msg.JobID); err != nil {
 			return a.fail(ctx, msg, "snapshot could not be initialized", err)
 		}
 	}
@@ -406,16 +369,9 @@ func (a *ImportWorker) cloneCommit(ctx context.Context, msg *RunImport) (*object
 // beginStaging starts a Staging Snapshot for the commit and returns its ID.
 func (a *ImportWorker) beginStaging(ctx context.Context, msg *RunImport, scan ScanResult, metadata, manifest []byte) (string, error) {
 	snapshotID := uuid.NewString()
-	begin, err := a.ask(ctx, &persistence.BeginSnapshot{ID: snapshotID, JobID: msg.JobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, RepositoryID: msg.Repository.ID, Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, DefaultBranch: msg.Repository.DefaultBranch, Language: dominantLanguage(scan.Languages), Runtime: scan.Runtime, Stars: msg.Repository.Stars, Forks: msg.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
+	err := a.store.BeginSnapshot(ctx, persistence.BeginSnapshot{ID: snapshotID, JobID: msg.JobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, RepositoryID: msg.Repository.ID, Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, DefaultBranch: msg.Repository.DefaultBranch, Language: dominantLanguage(scan.Languages), Runtime: scan.Runtime, Stars: msg.Repository.Stars, Forks: msg.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
 	if err != nil {
 		return "", err
-	}
-	result, ok := begin.(*persistence.BeginSnapshotResult)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", begin)
-	}
-	if result.Err != nil {
-		return "", result.Err
 	}
 	return snapshotID, nil
 }
@@ -428,14 +384,7 @@ func (a *ImportWorker) storeFiles(ctx context.Context, msg *RunImport, snapshotI
 		for _, file := range files[start:end] {
 			batch = append(batch, persistence.SnapshotFile{Path: file.path, Mode: file.mode, Content: file.content, Hash: file.hash})
 		}
-		response, saveErr := a.ask(ctx, &persistence.AddSnapshotFiles{SnapshotID: snapshotID, Files: batch})
-		if saveErr == nil {
-			if result, ok := response.(*persistence.SnapshotFilesAdded); ok {
-				saveErr = result.Err
-			} else {
-				saveErr = fmt.Errorf("unexpected persistence response %T", response)
-			}
-		}
+		saveErr := a.store.AddSnapshotFiles(ctx, snapshotID, batch)
 		if saveErr != nil {
 			return a.fail(ctx, msg, "snapshot storage failed", saveErr)
 		}
@@ -452,14 +401,7 @@ func (a *ImportWorker) completeImport(ctx context.Context, msg *RunImport, snaps
 	for _, entry := range manifest {
 		total += entry.Size
 	}
-	response, err := a.ask(ctx, &persistence.CompleteSnapshot{SnapshotID: snapshotID, JobID: msg.JobID, FileCount: len(manifest), TotalBytes: total})
-	if err == nil {
-		if result, ok := response.(*persistence.SnapshotCompleted); ok {
-			err = result.Err
-		} else {
-			err = fmt.Errorf("unexpected persistence response %T", response)
-		}
-	}
+	err := a.store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: snapshotID, JobID: msg.JobID, FileCount: len(manifest), TotalBytes: total})
 	if err != nil {
 		return a.fail(ctx, msg, "snapshot finalization failed", err)
 	}
@@ -477,10 +419,4 @@ func dominantLanguage(languages map[string]int) string {
 		}
 	}
 	return best
-}
-
-func askPersistence(ctx context.Context, persistencePID *goakt.PID, message any) (any, error) {
-	c, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return goakt.Ask(c, persistencePID, message, 30*time.Second)
 }

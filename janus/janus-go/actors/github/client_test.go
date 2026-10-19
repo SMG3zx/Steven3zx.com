@@ -1,4 +1,4 @@
-package projects
+package github
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestGitHubClientListsReposBranchesAndRecentCommits(t *testing.T) {
+func TestClientListsReposBranchesAndRecentCommits(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("authorization header = %q", r.Header.Get("Authorization"))
@@ -26,7 +26,7 @@ func TestGitHubClientListsReposBranchesAndRecentCommits(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := NewGitHubClient()
+	client := NewClient()
 	client.BaseURL = server.URL
 	repos, err := client.Repositories(context.Background(), "test-token")
 	if err != nil || len(repos) != 1 || repos[0].ID != 7 || !repos[0].Private {
@@ -42,13 +42,13 @@ func TestGitHubClientListsReposBranchesAndRecentCommits(t *testing.T) {
 	}
 }
 
-func TestGitHubClientDoesNotLeakTokenInAPIError(t *testing.T) {
+func TestClientDoesNotLeakTokenInAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, "invalid token")
 	}))
 	defer server.Close()
-	client := NewGitHubClient()
+	client := NewClient()
 	client.BaseURL = server.URL
 	_, err := client.Repositories(context.Background(), "sensitive-token-value")
 	if err == nil || strings.Contains(err.Error(), "sensitive-token-value") {

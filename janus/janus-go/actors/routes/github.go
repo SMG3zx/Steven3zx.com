@@ -19,7 +19,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"janus/actors/persistence"
-	projectactor "janus/actors/projects"
 	actortrace "janus/actors/telemetry"
 	"janus/web"
 )
@@ -175,29 +174,17 @@ func (a *Actor) githubCallback(c *web.Context) any {
 		if !ok || current != owner {
 			return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "sign in to the same Janus account and reconnect GitHub"})
 		}
-		response, askErr := a.ask(ctx, a.dependencies.Persistence, &persistence.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken})
-		if askErr != nil {
+		if connectErr := a.dependencies.Store.ConnectGitHub(ctx, persistence.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
+			if persistence.IsReply(connectErr) {
+				return jsonResponse(http.StatusConflict, map[string]string{"error": connectErr.Error()})
+			}
 			return internalError()
-		}
-		connected, ok := response.(*persistence.GitHubConnected)
-		if !ok {
-			return internalError()
-		}
-		if connected.Err != nil {
-			return jsonResponse(http.StatusConflict, map[string]string{"error": connected.Err.Error()})
 		}
 		a.log(ctx, "info", "github.connected", map[string]string{"user_id": owner})
 		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects?github=connected"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
-	response, askErr := a.ask(ctx, a.dependencies.Persistence, &persistence.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
-	if askErr != nil {
-		return internalError()
-	}
-	identity, ok := response.(*persistence.GitHubLoginResolved)
-	if !ok {
-		return internalError()
-	}
-	if identity.Err != nil {
+	identity, resolveErr := a.dependencies.Store.ResolveGitHubLogin(ctx, persistence.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
+	if resolveErr != nil {
 		return internalError()
 	}
 	if identity.EmailInUse {
@@ -240,15 +227,7 @@ func (a *Actor) githubDisconnect(c *web.Context) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
-	response, err := a.ask(ctx, a.dependencies.Projects, &projectactor.Disconnect{OwnerID: owner})
-	if err != nil {
-		return internalError()
-	}
-	result, ok := response.(*projectactor.Disconnected)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
+	if err := a.dependencies.GitHub.Disconnect(ctx, owner); err != nil {
 		return internalError()
 	}
 	a.log(ctx, "info", "github.disconnected", map[string]string{"user_id": owner})

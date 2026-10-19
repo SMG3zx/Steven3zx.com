@@ -13,16 +13,16 @@ import (
 )
 
 type Actor struct {
-	persistence *actor.PID
-	runs        map[string]Run
-	slots       chan struct{}
-	draining    bool
+	store    persistence.Store
+	runs     map[string]Run
+	slots    chan struct{}
+	draining bool
 }
 
 var _ actor.Actor = (*Actor)(nil)
 
-func New(p *actor.PID) *Actor {
-	return &Actor{persistence: p, runs: map[string]Run{}, slots: make(chan struct{}, 2)}
+func New(store persistence.Store) *Actor {
+	return &Actor{store: store, runs: map[string]Run{}, slots: make(chan struct{}, 2)}
 }
 func (*Actor) PreStart(*actor.Context) error { return nil }
 
@@ -83,35 +83,33 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 	default:
 		return &RunRequested{Err: errors.New("two WASM runs are already active")}
 	}
-	resp, err := actor.Ask(ctx.Context(), a.persistence, &persistence.FindWASMBuild{ID: m.BuildID, OwnerID: m.OwnerID}, 5*time.Second)
-	if err != nil {
+	build, found, err := a.store.FindWASMBuild(ctx.Context(), m.BuildID, m.OwnerID)
+	if err != nil && !persistence.IsReply(err) {
 		<-a.slots
 		return &RunRequested{Err: err}
 	}
-	b, ok := resp.(*persistence.WASMBuildFound)
-	if !ok || b.Err != nil || !b.Found {
+	if err != nil || !found {
 		<-a.slots
 		return &RunRequested{Err: errors.New("completed WASM build not found")}
 	}
-	if b.Build.Status != "complete" {
+	if build.Status != "complete" {
 		<-a.slots
 		return &RunRequested{Err: errors.New("WASM build is not complete")}
 	}
-	if b.Build.Target != "wasm32-wasip1" && b.Build.Target != "wasip1-wasm" {
+	if build.Target != "wasm32-wasip1" && build.Target != "wasip1-wasm" {
 		<-a.slots
 		return &RunRequested{Err: errors.New("only WASI WebAssembly targets can run")}
 	}
-	ar, err := actor.Ask(ctx.Context(), a.persistence, &persistence.FindWASMBuildArtifact{ID: m.BuildID, OwnerID: m.OwnerID}, 5*time.Second)
-	if err != nil {
+	stored, err := a.store.FindWASMBuildArtifact(ctx.Context(), m.BuildID, m.OwnerID)
+	if err != nil && !persistence.IsReply(err) {
 		<-a.slots
 		return &RunRequested{Err: err}
 	}
-	artifact, ok := ar.(*persistence.WASMBuildArtifact)
-	if !ok || artifact.Err != nil || !artifact.Found {
+	if err != nil || !stored.Found {
 		<-a.slots
 		return &RunRequested{Err: errors.New("WASM artifact not found")}
 	}
-	limits := a.limitsFor(ctx.Context(), m.OwnerID, b.Build)
+	limits := a.limitsFor(ctx.Context(), m.OwnerID, build)
 	id := uuid.NewString()
 	if len(a.runs) >= 100 {
 		var oldest string
@@ -127,11 +125,11 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 	run := Run{ID: id, BuildID: m.BuildID, Status: "running", CreatedAt: now, UpdatedAt: now, ownerID: m.OwnerID}
 	a.runs[id] = run
 	// Copy request data before returning to the HTTP caller.
-	data := append([]byte(nil), artifact.Data...)
+	data := append([]byte(nil), stored.Data...)
 	args := append([]string(nil), m.Args...)
 	self := ctx.Self()
 	go func() {
-		module, name, e := artifactpkg.Module(data, artifact.Name)
+		module, name, e := artifactpkg.Module(data, stored.Name)
 		var out, stderr []byte
 		var usage Usage
 		if e == nil {
@@ -146,15 +144,11 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 // the defaults when its Snapshot cannot be found.
 func (a *Actor) limitsFor(ctx context.Context, ownerID string, build persistence.WASMBuild) templates.Resources {
 	limits := templates.Resources{Fuel: templates.DefaultFuel, MemoryBytes: templates.DefaultMemoryBytes, Timeout: templates.DefaultTimeout}
-	response, err := actor.Ask(ctx, a.persistence, &persistence.ListSnapshots{OwnerID: ownerID, ProjectID: build.ProjectID}, 5*time.Second)
+	snapshots, err := a.store.ListSnapshots(ctx, ownerID, build.ProjectID)
 	if err != nil {
 		return limits
 	}
-	listed, ok := response.(*persistence.SnapshotsListed)
-	if !ok || listed.Err != nil {
-		return limits
-	}
-	for _, snapshot := range listed.Snapshots {
+	for _, snapshot := range snapshots {
 		if snapshot.ID != build.SnapshotID {
 			continue
 		}

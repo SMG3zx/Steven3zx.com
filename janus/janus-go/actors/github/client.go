@@ -1,4 +1,4 @@
-package projects
+package github
 
 import (
 	"context"
@@ -43,18 +43,18 @@ type Commit struct {
 	Date    time.Time `json:"date"`
 }
 
-// GitHubClient reads repository metadata from the GitHub API using a caller's token.
-type GitHubClient struct {
+// Client reads repository metadata from the GitHub API using a caller's token.
+type Client struct {
 	HTTP    *http.Client
 	BaseURL string
 }
 
-// NewGitHubClient creates a client with the default GitHub API configuration.
-func NewGitHubClient() *GitHubClient {
-	return &GitHubClient{HTTP: &http.Client{Timeout: 15 * time.Second}, BaseURL: githubAPI}
+// NewClient creates a client with the default GitHub API configuration.
+func NewClient() *Client {
+	return &Client{HTTP: &http.Client{Timeout: 15 * time.Second}, BaseURL: githubAPI}
 }
 
-func (g *GitHubClient) request(ctx context.Context, token, path string, out any) error {
+func (g *Client) request(ctx context.Context, token, path string, out any) error {
 	base := strings.TrimRight(g.BaseURL, "/")
 	u, err := url.Parse(base + path)
 	if err != nil {
@@ -89,7 +89,7 @@ func (g *GitHubClient) request(ctx context.Context, token, path string, out any)
 	return nil
 }
 
-func (g *GitHubClient) Repositories(ctx context.Context, token string) ([]Repository, error) {
+func (g *Client) Repositories(ctx context.Context, token string) ([]Repository, error) {
 	all := make([]Repository, 0)
 	for page := 1; page <= 10; page++ {
 		var batch []Repository
@@ -105,7 +105,7 @@ func (g *GitHubClient) Repositories(ctx context.Context, token string) ([]Reposi
 	return all, nil
 }
 
-func (g *GitHubClient) Branches(ctx context.Context, token, fullName string) ([]Branch, error) {
+func (g *Client) Branches(ctx context.Context, token, fullName string) ([]Branch, error) {
 	owner, repo, ok := strings.Cut(fullName, "/")
 	if !ok || owner == "" || repo == "" || strings.Contains(repo, "/") {
 		return nil, fmt.Errorf("invalid repository")
@@ -115,7 +115,7 @@ func (g *GitHubClient) Branches(ctx context.Context, token, fullName string) ([]
 	return result, err
 }
 
-func (g *GitHubClient) Commits(ctx context.Context, token, fullName, branch string) ([]Commit, error) {
+func (g *Client) Commits(ctx context.Context, token, fullName, branch string) ([]Commit, error) {
 	owner, repo, ok := strings.Cut(fullName, "/")
 	if !ok || owner == "" || repo == "" || strings.Contains(repo, "/") {
 		return nil, fmt.Errorf("invalid repository")
@@ -141,7 +141,7 @@ func (g *GitHubClient) Commits(ctx context.Context, token, fullName, branch stri
 	return commits, nil
 }
 
-func (g *GitHubClient) Repository(ctx context.Context, token, fullName string) (Repository, error) {
+func (g *Client) Repository(ctx context.Context, token, fullName string) (Repository, error) {
 	owner, repo, ok := strings.Cut(fullName, "/")
 	if !ok || owner == "" || repo == "" || strings.Contains(repo, "/") {
 		return Repository{}, fmt.Errorf("invalid repository")

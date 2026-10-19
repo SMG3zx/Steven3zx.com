@@ -34,18 +34,18 @@ const (
 // Actor coordinates build jobs, delegates compilation to a builder, and stores
 // artifacts.
 type Actor struct {
-	persistence *actor.PID
-	accounting  *actor.PID
-	builder     builder.Builder
-	jobs        *jobrunner.Runner
+	store      persistence.Store
+	accounting *actor.PID
+	builder    builder.Builder
+	jobs       *jobrunner.Runner
 }
 
 var _ actor.Actor = (*Actor)(nil)
 
 // New creates a build actor that compiles with b. Each build runs on a worker
 // actor the job runner starts, so this actor stays responsive.
-func New(persistencePID, accountingPID *actor.PID, b builder.Builder) *Actor {
-	return &Actor{persistence: persistencePID, accounting: accountingPID, builder: b, jobs: jobrunner.New(maxConcurrentBuilds)}
+func New(store persistence.Store, accountingPID *actor.PID, b builder.Builder) *Actor {
+	return &Actor{store: store, accounting: accountingPID, builder: b, jobs: jobrunner.New(maxConcurrentBuilds)}
 }
 
 func (a *Actor) PreStart(*actor.Context) error { return nil }
@@ -64,17 +64,8 @@ func (a *Actor) Receive(rctx *actor.ReceiveContext) {
 		}
 		rctx.Response(&BuildRequested{JobID: jobID, Err: err})
 	case *Build:
-		response, err := a.ask(ctx, &persistence.FindWASMBuild{ID: msg.JobID, OwnerID: msg.OwnerID})
-		if err != nil {
-			rctx.Response(&BuildFound{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.WASMBuildFound)
-		if !ok {
-			rctx.Response(&BuildFound{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&BuildFound{Build: result.Build, Found: result.Found, Err: result.Err})
+		build, found, err := a.store.FindWASMBuild(ctx, msg.JobID, msg.OwnerID)
+		rctx.Response(&BuildFound{Build: build, Found: found, Err: err})
 	case *ResumeBuilds:
 		count, err := a.resumeBuilds(ctx, rctx.ActorSystem())
 		rctx.Response(&BuildsResumed{Count: count, Err: err})
@@ -143,21 +134,14 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	if msg.OwnerID == "" || msg.ProjectID == "" {
 		return "", errors.New("project is required")
 	}
-	projectResponse, err := a.ask(rctx.Context(), &persistence.GetProject{ID: msg.ProjectID, OwnerID: msg.OwnerID})
+	project, found, err := a.store.GetProject(rctx.Context(), msg.ProjectID, msg.OwnerID)
 	if err != nil {
 		return "", err
 	}
-	project, ok := projectResponse.(*persistence.ProjectFound)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", projectResponse)
-	}
-	if project.Err != nil {
-		return "", project.Err
-	}
-	if !project.Found {
+	if !found {
 		return "", errors.New("project not found")
 	}
-	snapshotID, source, err := a.buildSource(rctx.Context(), msg, project.Project)
+	snapshotID, source, err := a.buildSource(rctx.Context(), msg, project)
 	if err != nil {
 		return "", err
 	}
@@ -170,16 +154,8 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	}
 	language := strings.ToLower(template.Language)
 	jobID := uuid.NewString()
-	response, err := a.ask(rctx.Context(), &persistence.CreateWASMBuild{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, Target: msg.Target})
-	if err != nil {
+	if err = a.store.CreateWASMBuild(rctx.Context(), persistence.CreateWASMBuild{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, Target: msg.Target}); err != nil {
 		return "", err
-	}
-	created, ok := response.(*persistence.WASMBuildCreated)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if created.Err != nil {
-		return "", created.Err
 	}
 	run := &RunBuild{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: msg.Target, Language: language}
 	if err = a.jobs.Start(rctx.Context(), rctx.ActorSystem(), buildWorkerName(jobID), a.worker(), run); err != nil {
@@ -207,23 +183,16 @@ func (a *Actor) run(parent context.Context, msg *RunBuild) error {
 	}
 	defer os.RemoveAll(workspace)
 	for offset := 0; ; offset += pageSize {
-		response, askErr := a.ask(ctx, &persistence.ListProjectFiles{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, Offset: offset, Limit: pageSize})
-		if askErr != nil {
-			return a.fail(ctx, msg.JobID, "could not read the imported source snapshot", askErr)
+		files, listErr := a.store.ListProjectFiles(ctx, persistence.ListProjectFiles{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, Offset: offset, Limit: pageSize})
+		if listErr != nil {
+			return a.fail(ctx, msg.JobID, "could not read the imported source snapshot", listErr)
 		}
-		page, ok := response.(*persistence.ProjectFilesListed)
-		if !ok {
-			return a.fail(ctx, msg.JobID, "could not read the imported source snapshot", fmt.Errorf("unexpected persistence response %T", response))
-		}
-		if page.Err != nil {
-			return a.fail(ctx, msg.JobID, "could not read the imported source snapshot", page.Err)
-		}
-		for _, file := range page.Files {
+		for _, file := range files {
 			if err = writeSourceFile(workspace, file); err != nil {
 				return a.fail(ctx, msg.JobID, "imported source contains an unsafe path", err)
 			}
 		}
-		if len(page.Files) < pageSize {
+		if len(files) < pageSize {
 			break
 		}
 		if err = a.update(ctx, msg.JobID, "building", min(30, 5+offset/pageSize), ""); err != nil {
@@ -248,14 +217,7 @@ func (a *Actor) run(parent context.Context, msg *RunBuild) error {
 	if len(data) == 0 || len(data) > artifact.MaxBytes {
 		return a.failWithLog(ctx, msg.JobID, "WASM artifact is empty or exceeds the 128 MiB limit", log, errors.New("artifact size limit exceeded"))
 	}
-	response, err := a.ask(ctx, &persistence.CompleteWASMBuild{ID: msg.JobID, ArtifactName: name, Artifact: data, Log: log})
-	if err == nil {
-		if result, ok := response.(*persistence.WASMBuildCreated); ok {
-			err = result.Err
-		} else {
-			err = fmt.Errorf("unexpected persistence response %T", response)
-		}
-	}
+	err = a.store.CompleteWASMBuild(ctx, persistence.CompleteWASMBuild{ID: msg.JobID, ArtifactName: name, Artifact: data, Log: log})
 	if err != nil {
 		return a.failWithLog(ctx, msg.JobID, "WASM artifact could not be stored", log, err)
 	}
@@ -290,8 +252,7 @@ func (a *Actor) update(ctx context.Context, id, status string, progress int, rea
 }
 
 func (a *Actor) updateWithLog(ctx context.Context, id, status string, progress int, reason string, log []byte) error {
-	_, err := a.ask(ctx, &persistence.UpdateWASMBuild{ID: id, Status: status, Progress: progress, Error: reason, Log: string(log)})
-	return err
+	return a.store.UpdateWASMBuild(ctx, persistence.UpdateWASMBuild{ID: id, Status: status, Progress: progress, Error: reason, Log: string(log)})
 }
 
 func (a *Actor) fail(ctx context.Context, id, reason string, cause error) error {
@@ -308,12 +269,6 @@ func (a *Actor) failWithLog(ctx context.Context, id, reason string, log []byte, 
 	}
 	_ = a.updateWithLog(ctx, id, "failed", 100, reason, log)
 	return fmt.Errorf("%s: %w", reason, cause)
-}
-
-func (a *Actor) ask(ctx context.Context, message any) (any, error) {
-	c, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return actor.Ask(c, a.persistence, message, 30*time.Second)
 }
 
 func (a *Actor) audit(ctx context.Context, level, name string, fields map[string]string) {

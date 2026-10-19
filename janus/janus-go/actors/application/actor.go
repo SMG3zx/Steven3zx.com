@@ -16,6 +16,7 @@ import (
 	"janus/actors/builder"
 	configactor "janus/actors/config"
 	dockeractor "janus/actors/docker"
+	githubactor "janus/actors/github"
 	httpserver "janus/actors/httpserver"
 	persistenceactor "janus/actors/persistence"
 	projectsactor "janus/actors/projects"
@@ -35,6 +36,8 @@ type Actor struct {
 	authentication *authactor.Service
 	authorization  *authzactor.Policy
 	persistence    *goakt.PID
+	store          persistenceactor.Store
+	github         *githubactor.Service
 	projects       *goakt.PID
 	wasmBuilds     *goakt.PID
 	wasmRuntime    *goakt.PID
@@ -123,12 +126,14 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn persistence actor: %w", err)
 	}
+	a.store = persistenceactor.NewClient(a.persistence, 30*time.Second)
+	a.github = githubactor.NewService(a.store)
 	a.authentication = authactor.New([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry)
 	a.authorization, err = authzactor.New(startupCtx)
 	if err != nil {
 		return err
 	}
-	a.projects, err = a.system.Spawn(startupCtx, "projects", projectsactor.New(a.persistence, a.accounting))
+	a.projects, err = a.system.Spawn(startupCtx, "projects", projectsactor.New(a.store, a.github, a.accounting))
 	if err != nil {
 		return fmt.Errorf("spawn projects actor: %w", err)
 	}
@@ -166,11 +171,11 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
 	builds := builder.NewDocker(builder.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage})
-	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.New(a.persistence, a.accounting, builds))
+	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.New(a.store, a.accounting, builds))
 	if err != nil {
 		return fmt.Errorf("spawn WASM build actor: %w", err)
 	}
-	a.wasmRuntime, err = a.system.Spawn(startupCtx, "wasm-runtime", wasmruntime.New(a.persistence))
+	a.wasmRuntime, err = a.system.Spawn(startupCtx, "wasm-runtime", wasmruntime.New(a.store))
 	if err != nil {
 		return fmt.Errorf("spawn WASM runtime actor: %w", err)
 	}
@@ -180,7 +185,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	}
 	a.routes, err = a.system.Spawn(startupCtx, "routes", routesactor.New(routesactor.Dependencies{
 		System: a.system, Authentication: a.authentication, Authorization: a.authorization,
-		Accounting: a.accounting, Persistence: a.persistence, Projects: a.projects, WASMBuilds: a.wasmBuilds, WASMRuntime: a.wasmRuntime, JWTExpiry: config.JWTExpiry,
+		Accounting: a.accounting, Store: a.store, GitHub: a.github, Projects: a.projects, WASMBuilds: a.wasmBuilds, WASMRuntime: a.wasmRuntime, JWTExpiry: config.JWTExpiry,
 		CookieSecure: config.CookieSecure, GoogleEnabled: config.GoogleEnabled,
 		GoogleClientID: config.GoogleClientID, GoogleSecret: config.GoogleSecret,
 		GoogleCallback: config.GoogleCallback, JWTSecret: config.JWTSecret,

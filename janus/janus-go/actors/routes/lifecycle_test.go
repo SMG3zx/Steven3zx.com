@@ -16,6 +16,7 @@ import (
 	"janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
+	"janus/actors/github"
 	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 	wasmactor "janus/actors/wasm"
@@ -50,11 +51,13 @@ func newLifecycleApp(t *testing.T) (http.Handler, *actor.PID) {
 		defer closeCancel()
 		_, _ = actor.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
 	})
-	projectsPID, err := system.Spawn(ctx, "projects-lifecycle", projectactor.New(persistencePID, accountingPID))
+	store := persistence.NewClient(persistencePID, 5*time.Second)
+	gh := github.NewService(store)
+	projectsPID, err := system.Spawn(ctx, "projects-lifecycle", projectactor.New(store, gh, accountingPID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	wasmPID, err := system.Spawn(ctx, "wasm-lifecycle", wasmactor.New(persistencePID, accountingPID, nil))
+	wasmPID, err := system.Spawn(ctx, "wasm-lifecycle", wasmactor.New(store, accountingPID, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +67,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, *actor.PID) {
 		t.Fatal(err)
 	}
 	routesPID, err := system.Spawn(ctx, "routes-lifecycle", New(Dependencies{
-		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID, WASMBuilds: wasmPID,
+		System: system, Accounting: accountingPID, Store: store, GitHub: gh, Projects: projectsPID, WASMBuilds: wasmPID,
 		Authentication: authentication, Authorization: authorization, CookieSecure: true,
 	}))
 	if err != nil {

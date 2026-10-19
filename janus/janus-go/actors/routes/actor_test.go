@@ -18,6 +18,7 @@ import (
 	"janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
+	"janus/actors/github"
 	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 )
@@ -46,7 +47,9 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectsPID, err := system.Spawn(ctx, "projects-test", projectactor.New(persistencePID))
+	store := persistence.NewClient(persistencePID, 5*time.Second)
+	gh := github.NewService(store)
+	projectsPID, err := system.Spawn(ctx, "projects-test", projectactor.New(store, gh))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +64,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 	routesPID, err := system.Spawn(ctx, "routes-test-actor", New(Dependencies{
-		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID,
+		System: system, Accounting: accountingPID, Store: store, GitHub: gh, Projects: projectsPID,
 		Authentication: authentication, Authorization: authorization, CookieSecure: true,
 	}))
 	if err != nil {

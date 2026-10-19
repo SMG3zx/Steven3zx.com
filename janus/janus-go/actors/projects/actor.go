@@ -6,9 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
@@ -18,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"janus/actors/accounting"
+	"janus/actors/github"
 	"janus/actors/jobrunner"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
@@ -31,23 +30,24 @@ const (
 	githubCloneBase        = "https://github.com/"
 )
 
-// Actor coordinates project operations and delegates durable state to the
-// persistence actor.
+// Actor starts and resumes repository imports and owns Snapshot activation and
+// Entrypoints. Plain project operations and GitHub access are not here: callers
+// use the persistence Store and the github module directly.
 type Actor struct {
-	cloneBase   string
-	persistence *goakt.PID
-	accounting  *goakt.PID
-	github      *GitHubClient
-	runner      *jobrunner.Runner
+	cloneBase  string
+	store      persistence.Store
+	accounting *goakt.PID
+	github     *github.Service
+	runner     *jobrunner.Runner
 }
 
 // ImportWorker owns the long-running clone, scan, and snapshot persistence
 // workflow for one repository import job.
 type ImportWorker struct {
-	cloneBase   string
-	persistence *goakt.PID
-	accounting  *goakt.PID
-	runner      *jobrunner.Runner
+	cloneBase  string
+	store      persistence.Store
+	accounting *goakt.PID
+	runner     *jobrunner.Runner
 }
 
 var _ goakt.Actor = (*ImportWorker)(nil)
@@ -55,34 +55,57 @@ var _ goakt.Actor = (*ImportWorker)(nil)
 func (*ImportWorker) PreStart(*goakt.Context) error { return nil }
 
 func (a *ImportWorker) Receive(rctx *goakt.ReceiveContext) {
-	msg, ok := rctx.Message().(*RunImport)
-	if !ok {
+	switch msg := rctx.Message().(type) {
+	case *RunImport:
+		// An import clones and stores a whole repository, which takes minutes.
+		// It runs off the mailbox thread so it never holds one of the dispatcher's
+		// few workers; the outcome returns as an importFinished message.
+		self := rctx.Self()
+		task := func() (result any, err error) {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					result = &importFinished{Import: msg, Err: fmt.Errorf("repository import panicked: %v", recovered)}
+				}
+			}()
+			return &importFinished{Import: msg, Err: a.runImport(context.Background(), msg)}, nil
+		}
+		if err := self.PipeTo(context.WithoutCancel(rctx.Context()), self, task); err != nil {
+			a.finish(rctx.Context(), &importFinished{Import: msg, Err: fmt.Errorf("repository import could not start: %w", err)})
+			rctx.Shutdown()
+		}
+	case *importFinished:
+		a.finish(rctx.Context(), msg)
+		rctx.Shutdown()
+	default:
 		rctx.Unhandled()
-		return
 	}
-	ctx, span := actortrace.StartSpan(rctx.Context(), "actor.project_import.receive", trace.WithSpanKind(trace.SpanKindInternal))
-	defer span.End()
-	defer rctx.Shutdown()
+}
+
+// finish records how an import ended and frees its slot. It runs once per import.
+func (a *ImportWorker) finish(ctx context.Context, done *importFinished) {
 	if a.runner != nil {
 		defer a.runner.Finish()
 	}
-	if err := a.runImport(ctx, msg); err != nil {
+	_, span := actortrace.StartSpan(ctx, "actor.project_import.finish", trace.WithSpanKind(trace.SpanKindInternal))
+	defer span.End()
+	msg := done.Import
+	if done.Err != nil {
 		span.SetStatus(codes.Error, "repository import failed")
-		actortrace.RecordError(span, err)
+		actortrace.RecordError(span, done.Err)
 		a.audit(ctx, "error", "project.import.failed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "reason": "import_failed"})
-	} else {
-		a.audit(ctx, "info", "project.import.completed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "repository": msg.Repository.FullName, "commit": msg.Commit})
+		return
 	}
+	a.audit(ctx, "info", "project.import.completed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "repository": msg.Repository.FullName, "commit": msg.Commit})
 }
 
 func (*ImportWorker) PostStop(*goakt.Context) error { return nil }
 
 var _ goakt.Actor = (*Actor)(nil)
 
-// New creates a project actor backed by persistencePID. If provided, the first
-// accountingPID receives project audit events.
-func New(persistencePID *goakt.PID, accountingPID ...*goakt.PID) *Actor {
-	a := &Actor{persistence: persistencePID, github: NewGitHubClient(), cloneBase: githubCloneBase, runner: jobrunner.New(2)}
+// New creates a project actor backed by store, reading GitHub through gh. If
+// provided, the first accountingPID receives project audit events.
+func New(store persistence.Store, gh *github.Service, accountingPID ...*goakt.PID) *Actor {
+	a := &Actor{store: store, github: gh, cloneBase: githubCloneBase, runner: jobrunner.New(2)}
 	if len(accountingPID) > 0 {
 		a.accounting = accountingPID[0]
 	}
@@ -95,107 +118,6 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 	defer span.End()
 	span.SetAttributes(attribute.String("actor.message.type", fmt.Sprintf("%T", rctx.Message())))
 	switch msg := rctx.Message().(type) {
-	case *Create:
-		response, err := a.ask(ctx, &msg.Project)
-		if err != nil {
-			rctx.Response(&Created{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.ProjectCreated)
-		if !ok {
-			rctx.Response(&Created{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&Created{Project: result.Project, Err: result.Err})
-	case *UpdateProject:
-		response, err := a.ask(ctx, &persistence.UpdateProject{ID: msg.ProjectID, OwnerID: msg.OwnerID, Name: msg.Name, Description: msg.Description})
-		if err != nil {
-			rctx.Response(&Updated{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.ProjectUpdated)
-		if !ok {
-			rctx.Response(&Updated{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&Updated{Project: result.Project, Err: result.Err})
-	case *DeleteProject:
-		response, err := a.ask(ctx, &persistence.DeleteProject{ID: msg.ProjectID, OwnerID: msg.OwnerID})
-		if err != nil {
-			rctx.Response(&Deleted{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.ProjectDeleted)
-		if !ok {
-			rctx.Response(&Deleted{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&Deleted{Deleted: result.Deleted, Err: result.Err})
-	case *List:
-		response, err := a.ask(ctx, &persistence.ListProjects{OwnerID: msg.OwnerID})
-		if err != nil {
-			rctx.Response(&Listed{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.ProjectsListed)
-		if !ok {
-			rctx.Response(&Listed{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&Listed{Projects: result.Projects, Err: result.Err})
-	case *Get:
-		response, err := a.ask(ctx, &persistence.GetProject{ID: msg.ProjectID, OwnerID: msg.OwnerID})
-		if err != nil {
-			rctx.Response(&Found{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.ProjectFound)
-		if !ok {
-			rctx.Response(&Found{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&Found{Project: result.Project, Exists: result.Found, Err: result.Err})
-	case *ListRepositories:
-		token, connected, err := a.token(ctx, msg.OwnerID)
-		if err != nil || !connected {
-			rctx.Response(&RepositoriesListed{Connected: connected, Err: err})
-			return
-		}
-		repos, err := a.github.Repositories(ctx, token)
-		span.SetAttributes(attribute.Int("github.repositories.count", len(repos)))
-		actortrace.RecordError(span, err)
-		rctx.Response(&RepositoriesListed{Repositories: repos, Connected: true, Err: err})
-	case *ListBranches:
-		token, connected, err := a.token(ctx, msg.OwnerID)
-		if err == nil && !connected {
-			err = errors.New("connect GitHub before importing a repository")
-		}
-		var branches []Branch
-		if err == nil {
-			var repository Repository
-			repository, err = a.github.Repository(ctx, token, msg.Repository)
-			if err == nil {
-				branches, err = a.github.Branches(ctx, token, msg.Repository)
-			}
-			if err == nil {
-				sort.SliceStable(branches, func(i, j int) bool {
-					return branches[i].Name == repository.DefaultBranch && branches[j].Name != repository.DefaultBranch
-				})
-			}
-		}
-		actortrace.RecordError(span, err)
-		rctx.Response(&BranchesListed{Branches: branches, Err: err})
-	case *ListCommits:
-		token, connected, err := a.token(ctx, msg.OwnerID)
-		if err == nil && !connected {
-			err = errors.New("connect GitHub before importing a repository")
-		}
-		var commits []Commit
-		if err == nil {
-			commits, err = a.github.Commits(ctx, token, msg.Repository, msg.Branch)
-		}
-		actortrace.RecordError(span, err)
-		rctx.Response(&CommitsListed{Commits: commits, Err: err})
 	case *RequestImport:
 		span.SetAttributes(
 			attribute.String("project.id", msg.ProjectID),
@@ -211,29 +133,6 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 			a.audit(ctx, "info", "project.import.queued", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": jobID, "repository": msg.Repository})
 		}
 		rctx.Response(&ImportRequested{JobID: jobID, Err: err})
-	case *Job:
-		response, err := a.ask(ctx, &persistence.FindImportJob{ID: msg.JobID, OwnerID: msg.OwnerID})
-		if err != nil {
-			rctx.Response(&JobFound{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.ImportJobFound)
-		if !ok {
-			rctx.Response(&JobFound{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&JobFound{Job: result.Job, Exists: result.Found, Err: result.Err})
-	case *Disconnect:
-		response, err := a.ask(ctx, &persistence.DisconnectGitHub{UserID: msg.OwnerID})
-		if err == nil {
-			result, ok := response.(*persistence.GitHubDisconnected)
-			if !ok {
-				err = fmt.Errorf("unexpected persistence response %T", response)
-			} else {
-				err = result.Err
-			}
-		}
-		rctx.Response(&Disconnected{Err: err})
 	case *Drain:
 		a.runner.StopAccepting()
 		rctx.Response(&Drained{Pending: a.runner.Pending()})
@@ -242,43 +141,9 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 			attribute.String("project.id", msg.ProjectID),
 			attribute.String("project.snapshot.id", msg.SnapshotID),
 		)
-		response, err := a.ask(ctx, &persistence.GetProject{ID: msg.ProjectID, OwnerID: msg.OwnerID})
-		if err == nil {
-			project, ok := response.(*persistence.ProjectFound)
-			if !ok {
-				err = fmt.Errorf("unexpected persistence response %T", response)
-			} else if !project.Found {
-				err = errors.New("project not found")
-			} else if project.Project.SnapshotID != msg.SnapshotID {
-				err = errors.New("entrypoint selection must target the latest snapshot")
-			} else {
-				err = validateEntrypoint(project.Project.MetadataJSON, msg.EntryPoint)
-			}
-		}
-		if err == nil {
-			response, err = a.ask(ctx, &persistence.SetProjectEntryPoint{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, EntryPoint: msg.EntryPoint})
-			if err == nil {
-				if result, ok := response.(*persistence.ProjectEntryPointSet); ok {
-					err = result.Err
-				} else {
-					err = fmt.Errorf("unexpected persistence response %T", response)
-				}
-			}
-		}
+		err := a.setEntryPoint(ctx, msg)
 		actortrace.RecordError(span, err)
 		rctx.Response(&EntryPointSet{Err: err})
-	case *History:
-		response, err := a.ask(ctx, &persistence.ListSnapshots{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID})
-		if err != nil {
-			rctx.Response(&HistoryListed{Err: err})
-			return
-		}
-		result, ok := response.(*persistence.SnapshotsListed)
-		if !ok {
-			rctx.Response(&HistoryListed{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&HistoryListed{Snapshots: result.Snapshots, Err: result.Err})
 	case *ResumeImports:
 		count, err := a.resumeImports(ctx, rctx.ActorSystem())
 		rctx.Response(&ImportsResumed{Count: count, Err: err})
@@ -287,51 +152,36 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 		rctx.Response(&ImportRequested{JobID: jobID, Err: err})
 	case *DeleteAccount:
 		result, err := a.deleteAccount(ctx, msg)
-		result.Err = err
-		rctx.Response(&result)
-	case *ActivateSnapshot:
-		response, err := a.ask(ctx, &persistence.ActivateSnapshot{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID})
 		if err != nil {
-			rctx.Response(&SnapshotActivated{Err: err})
-			return
+			result.Err = err
 		}
-		result, ok := response.(*persistence.SnapshotActivated)
-		if !ok {
-			rctx.Response(&SnapshotActivated{Err: fmt.Errorf("unexpected persistence response %T", response)})
-			return
-		}
-		rctx.Response(&SnapshotActivated{Activated: result.Activated, Err: result.Err})
+		rctx.Response(&result)
 	default:
 		rctx.Unhandled()
 	}
 }
 
-func (a *Actor) ask(ctx context.Context, message any) (any, error) {
-	c, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return goakt.Ask(c, a.persistence, message, 30*time.Second)
-}
-func (a *Actor) token(ctx context.Context, owner string) (string, bool, error) {
-	response, err := a.ask(ctx, &persistence.FindGitHubToken{UserID: owner})
-	if err != nil {
-		return "", false, err
-	}
-	found, ok := response.(*persistence.GitHubTokenFound)
-	if !ok {
-		return "", false, fmt.Errorf("unexpected persistence response %T", response)
-	}
-	return found.Token, found.Connected, found.Err
-}
-
-func (a *Actor) updateJob(ctx context.Context, id, status string, progress int, reason string) error {
-	response, err := a.ask(ctx, &persistence.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
+// setEntryPoint records the Entrypoint the Account confirmed for the project's
+// latest Snapshot, when it is one of the candidates the Scan found.
+func (a *Actor) setEntryPoint(ctx context.Context, msg *SetEntryPoint) error {
+	project, found, err := a.store.GetProject(ctx, msg.ProjectID, msg.OwnerID)
 	if err != nil {
 		return err
 	}
-	if result, ok := response.(*persistence.ImportJobCreated); ok {
-		return result.Err
+	switch {
+	case !found:
+		return errors.New("project not found")
+	case project.SnapshotID != msg.SnapshotID:
+		return errors.New("entrypoint selection must target the latest snapshot")
 	}
-	return fmt.Errorf("unexpected persistence response %T", response)
+	if err = validateEntrypoint(project.MetadataJSON, msg.EntryPoint); err != nil {
+		return err
+	}
+	return a.store.SetProjectEntryPoint(ctx, persistence.SetProjectEntryPoint{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, EntryPoint: msg.EntryPoint})
+}
+
+func (a *Actor) updateJob(ctx context.Context, id, status string, progress int, reason string) error {
+	return a.store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
 }
 
 func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (string, error) {
@@ -341,32 +191,28 @@ func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (str
 	if msg.OwnerID == "" || msg.ProjectID == "" || msg.Repository == "" || msg.Branch == "" || len(msg.Commit) != 40 {
 		return "", errors.New("project, repository, branch and full commit SHA are required")
 	}
-	projectResponse, err := a.ask(rctx.Context(), &persistence.GetProject{ID: msg.ProjectID, OwnerID: msg.OwnerID})
+	_, found, err := a.store.GetProject(rctx.Context(), msg.ProjectID, msg.OwnerID)
 	if err != nil {
 		return "", err
 	}
-	project, ok := projectResponse.(*persistence.ProjectFound)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", projectResponse)
-	}
-	if !project.Found {
+	if !found {
 		return "", errors.New("project not found")
 	}
-	token, connected, err := a.token(rctx.Context(), msg.OwnerID)
+	token, connected, err := a.github.Token(rctx.Context(), msg.OwnerID)
 	if err != nil {
 		return "", err
 	}
 	if !connected {
 		return "", errors.New("connect GitHub before importing a repository")
 	}
-	repository, err := a.github.Repository(rctx.Context(), token, msg.Repository)
+	repository, err := a.github.API.Repository(rctx.Context(), token, msg.Repository)
 	if err != nil {
 		return "", err
 	}
 	if repository.FullName != msg.Repository {
 		return "", errors.New("GitHub returned a different repository")
 	}
-	branches, err := a.github.Branches(rctx.Context(), token, msg.Repository)
+	branches, err := a.github.API.Branches(rctx.Context(), token, msg.Repository)
 	if err != nil {
 		return "", err
 	}
@@ -380,7 +226,7 @@ func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (str
 	if !branchFound {
 		return "", errors.New("selected branch does not belong to this repository")
 	}
-	commits, err := a.github.Commits(rctx.Context(), token, msg.Repository, msg.Branch)
+	commits, err := a.github.API.Commits(rctx.Context(), token, msg.Repository, msg.Branch)
 	if err != nil {
 		return "", err
 	}
@@ -395,18 +241,10 @@ func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (str
 		return "", errors.New("selected commit is not among the branch's 50 most recent commits")
 	}
 	jobID := uuid.NewString()
-	response, err := a.ask(rctx.Context(), &persistence.CreateImportJob{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository.FullName, Branch: msg.Branch, Commit: msg.Commit})
-	if err != nil {
+	if err = a.store.CreateImportJob(rctx.Context(), persistence.CreateImportJob{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository.FullName, Branch: msg.Branch, Commit: msg.Commit}); err != nil {
 		return "", err
 	}
-	created, ok := response.(*persistence.ImportJobCreated)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if created.Err != nil {
-		return "", created.Err
-	}
-	worker := &ImportWorker{persistence: a.persistence, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
+	worker := &ImportWorker{store: a.store, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
 	run := &RunImport{JobID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository, Branch: msg.Branch, Commit: msg.Commit, Token: token}
 	if err = a.runner.Start(rctx.Context(), rctx.ActorSystem(), importWorkerName(jobID), worker, run); err != nil {
 		if errors.Is(err, jobrunner.ErrBusy) {
@@ -425,8 +263,8 @@ type fileData struct {
 	hash       string
 }
 type snapshotMetadata struct {
-	Repository Repository `json:"repository"`
-	Scan       ScanResult `json:"scan"`
+	Repository github.Repository `json:"repository"`
+	Scan       ScanResult        `json:"scan"`
 }
 
 func readSnapshotTree(tree *object.Tree) ([]fileData, int64, error) {
@@ -476,25 +314,12 @@ func readTreeFiles(tree *object.Tree, want map[string]bool) ([]fileData, int64, 
 }
 
 func (a *ImportWorker) updateJob(ctx context.Context, id, status string, progress int, reason string) error {
-	response, err := a.ask(ctx, &persistence.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
-	if err != nil {
-		return err
-	}
-	if result, ok := response.(*persistence.ImportJobCreated); ok {
-		return result.Err
-	}
-	return fmt.Errorf("unexpected persistence response %T", response)
+	return a.store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
 }
 func (a *ImportWorker) fail(ctx context.Context, msg *RunImport, public string, err error) error {
 	_ = a.updateJob(ctx, msg.JobID, "failed", 100, public)
-	_ = discardStaging(ctx, a.persistence, msg.JobID)
+	_ = a.store.DiscardJobStaging(ctx, msg.JobID)
 	return fmt.Errorf("%s: %w", public, err)
-}
-
-func (a *ImportWorker) ask(ctx context.Context, message any) (any, error) {
-	c, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return goakt.Ask(c, a.persistence, message, 30*time.Second)
 }
 
 func (a *ImportWorker) audit(ctx context.Context, level, name string, fields map[string]string) {

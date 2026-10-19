@@ -24,6 +24,7 @@ import (
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
 	"janus/actors/builder"
+	"janus/actors/github"
 	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
@@ -359,10 +360,12 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (*acto
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}
-	projectsPID := spawn("projects", projectactor.New(persistencePID, accountingPID))
-	wasmBuildsPID := spawn("wasm-builds", wasmactor.New(persistencePID, accountingPID, b))
+	store := persistence.NewClient(persistencePID, 5*time.Second)
+	gh := github.NewService(store)
+	projectsPID := spawn("projects", projectactor.New(store, gh, accountingPID))
+	wasmBuildsPID := spawn("wasm-builds", wasmactor.New(store, accountingPID, b))
 	routesPID := spawn("routes", routesactor.New(routesactor.Dependencies{
-		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID, WASMBuilds: wasmBuildsPID,
+		System: system, Accounting: accountingPID, Store: store, GitHub: gh, Projects: projectsPID, WASMBuilds: wasmBuildsPID,
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,

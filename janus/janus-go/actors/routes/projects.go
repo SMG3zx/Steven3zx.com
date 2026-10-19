@@ -47,23 +47,16 @@ func (a *Actor) projectsPage(c *web.Context) any {
 	if !ok {
 		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.List{OwnerID: owner})
+	projects, err := a.dependencies.Store.ListProjects(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
-	result, ok := response.(*projectactor.Listed)
-	if !ok || result.Err != nil {
-		return internalError()
-	}
-	connected := false
-	tokenResponse, err := a.ask(c.Request.Context(), a.dependencies.Persistence, &persistence.FindGitHubToken{UserID: owner})
-	if err == nil {
-		if token, ok := tokenResponse.(*persistence.GitHubTokenFound); ok {
-			connected = token.Connected
-		}
+	_, connected, tokenErr := a.dependencies.GitHub.Token(c.Request.Context(), owner)
+	if tokenErr != nil {
+		connected = false
 	}
 	var body strings.Builder
-	if err = projectsListTemplate.Execute(&body, projectsPageData{Projects: result.Projects, GitHubConnected: connected, GitHubEnabled: a.dependencies.GitHubEnabled}); err != nil {
+	if err = projectsListTemplate.Execute(&body, projectsPageData{Projects: projects, GitHubConnected: connected, GitHubEnabled: a.dependencies.GitHubEnabled}); err != nil {
 		return internalError()
 	}
 	return web.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: body.String()}
@@ -84,15 +77,11 @@ func (a *Actor) repoImportPage(c *web.Context) any {
 	if !a.dependencies.GitHubEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "GitHub OAuth is not configured"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Persistence, &persistence.FindGitHubToken{UserID: owner})
+	_, connected, err := a.dependencies.GitHub.Token(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
-	token, ok := response.(*persistence.GitHubTokenFound)
-	if !ok {
-		return internalError()
-	}
-	if !token.Connected {
+	if !connected {
 		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/auth/github/connect"}}}
 	}
 	var out strings.Builder
@@ -121,8 +110,8 @@ func (a *Actor) createProjectPage(c *web.Context) any {
 	if response, ok := created.(web.Response); ok && response.StatusCode >= 400 {
 		return response
 	}
-	if project, ok := created.(*projectactor.Created); ok && project.Err == nil {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects/" + project.Project.ID}}}
+	if project, ok := created.(persistence.Project); ok {
+		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects/" + project.ID}}}
 	}
 	return internalError()
 }
@@ -132,15 +121,11 @@ func (a *Actor) listProjects(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.List{OwnerID: owner})
+	projects, err := a.dependencies.Store.ListProjects(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
-	result, ok := response.(*projectactor.Listed)
-	if !ok || result.Err != nil {
-		return internalError()
-	}
-	return result.Projects
+	return projects
 }
 
 type createProjectInput struct {
@@ -164,29 +149,25 @@ func (a *Actor) createProjectAPI(c *web.Context) any {
 	if failure, ok := created.(web.Response); ok {
 		return failure
 	}
-	result, ok := created.(*projectactor.Created)
+	project, ok := created.(persistence.Project)
 	if !ok {
 		return internalError()
 	}
-	return web.Response{StatusCode: http.StatusCreated, Body: result.Project}
+	return web.Response{StatusCode: http.StatusCreated, Body: project}
 }
 
 func (a *Actor) createProject(c *web.Context, owner, name, description string) any {
 	if strings.TrimSpace(name) == "" || len(name) > 120 || len(description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.Create{Project: persistence.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)}})
+	project, err := a.dependencies.Store.CreateProject(c.Request.Context(), persistence.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
 	if err != nil {
+		if persistence.IsReply(err) {
+			return jsonResponse(http.StatusConflict, map[string]string{"error": "project could not be created"})
+		}
 		return internalError()
 	}
-	result, ok := response.(*projectactor.Created)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusConflict, map[string]string{"error": "project could not be created"})
-	}
-	return result
+	return project
 }
 
 func (a *Actor) getProjectAPI(c *web.Context) any {
@@ -194,18 +175,14 @@ func (a *Actor) getProjectAPI(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.Get{OwnerID: owner, ProjectID: c.Param("id")})
+	project, found, err := a.dependencies.Store.GetProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
-	found, ok := response.(*projectactor.Found)
-	if !ok || found.Err != nil {
-		return internalError()
-	}
-	if !found.Exists {
+	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 	}
-	return found.Project
+	return project
 }
 
 func (a *Actor) listProjectSnapshots(c *web.Context) any {
@@ -213,18 +190,14 @@ func (a *Actor) listProjectSnapshots(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.History{OwnerID: owner, ProjectID: c.Param("id")})
+	snapshots, err := a.dependencies.Store.ListSnapshots(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
+		if persistence.IsReply(err) {
+			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
+		}
 		return internalError()
 	}
-	result, ok := response.(*projectactor.HistoryListed)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
-	}
-	return result.Snapshots
+	return snapshots
 }
 
 func (a *Actor) activateProjectSnapshot(c *web.Context) any {
@@ -232,18 +205,11 @@ func (a *Actor) activateProjectSnapshot(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.ActivateSnapshot{OwnerID: owner, ProjectID: c.Param("id"), SnapshotID: c.Param("snapshot")})
+	activated, err := a.dependencies.Store.ActivateSnapshot(c.Request.Context(), owner, c.Param("id"), c.Param("snapshot"))
 	if err != nil {
 		return internalError()
 	}
-	result, ok := response.(*projectactor.SnapshotActivated)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return internalError()
-	}
-	if !result.Activated {
+	if !activated {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "snapshot not found"})
 	}
 	a.log(c.Request.Context(), "info", "project.snapshot.activated", map[string]string{"user_id": owner, "project_id": c.Param("id"), "snapshot_id": c.Param("snapshot")})
@@ -262,21 +228,14 @@ func (a *Actor) updateProjectAPI(c *web.Context) any {
 	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 120 || len(input.Description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.UpdateProject{OwnerID: owner, ProjectID: c.Param("id"), Name: input.Name, Description: input.Description})
+	project, err := a.dependencies.Store.UpdateProject(c.Request.Context(), persistence.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
 	if err != nil {
-		return internalError()
-	}
-	result, ok := response.(*projectactor.Updated)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		if result.Err.Error() == "project not found" {
+		if err.Error() == "project not found" {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 		}
 		return internalError()
 	}
-	return result.Project
+	return project
 }
 
 func (a *Actor) deleteProjectAPI(c *web.Context) any {
@@ -284,18 +243,14 @@ func (a *Actor) deleteProjectAPI(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.DeleteProject{OwnerID: owner, ProjectID: c.Param("id")})
+	deleted, err := a.dependencies.Store.DeleteProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
+		if persistence.IsReply(err) {
+			return jsonResponse(http.StatusConflict, map[string]string{"error": err.Error()})
+		}
 		return internalError()
 	}
-	result, ok := response.(*projectactor.Deleted)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusConflict, map[string]string{"error": result.Err.Error()})
-	}
-	if !result.Deleted {
+	if !deleted {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 	}
 	return web.Response{StatusCode: http.StatusNoContent}
@@ -306,54 +261,33 @@ func (a *Actor) listGitHubRepos(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.ListRepositories{OwnerID: owner})
+	list, err := a.dependencies.GitHub.Repositories(c.Request.Context(), owner)
 	if err != nil {
-		return internalError()
+		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*projectactor.RepositoriesListed)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusBadGateway, map[string]string{"error": result.Err.Error()})
-	}
-	return result
+	return list
 }
 func (a *Actor) listGitHubBranches(c *web.Context) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.ListBranches{OwnerID: owner, Repository: c.Query.Get("repository")})
+	branches, err := a.dependencies.GitHub.Branches(c.Request.Context(), owner, c.Query.Get("repository"))
 	if err != nil {
-		return internalError()
+		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*projectactor.BranchesListed)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusBadGateway, map[string]string{"error": result.Err.Error()})
-	}
-	return result.Branches
+	return branches
 }
 func (a *Actor) listGitHubCommits(c *web.Context) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.ListCommits{OwnerID: owner, Repository: c.Query.Get("repository"), Branch: c.Query.Get("branch")})
+	commits, err := a.dependencies.GitHub.Commits(c.Request.Context(), owner, c.Query.Get("repository"), c.Query.Get("branch"))
 	if err != nil {
-		return internalError()
+		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*projectactor.CommitsListed)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusBadGateway, map[string]string{"error": result.Err.Error()})
-	}
-	return result.Commits
+	return commits
 }
 
 type importInput struct {
@@ -393,18 +327,14 @@ func (a *Actor) getImportStatus(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.Job{OwnerID: owner, JobID: c.Param("id")})
+	job, found, err := a.dependencies.Store.FindImportJob(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
-	result, ok := response.(*projectactor.JobFound)
-	if !ok || result.Err != nil {
-		return internalError()
-	}
-	if !result.Exists {
+	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "import job not found"})
 	}
-	return result.Job
+	return job
 }
 
 type wasmBuildInput struct {
@@ -479,12 +409,8 @@ func (a *Actor) getWASMArtifact(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Persistence, &persistence.FindWASMBuildArtifact{ID: c.Param("id"), OwnerID: owner})
+	artifact, err := a.dependencies.Store.FindWASMBuildArtifact(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
-		return internalError()
-	}
-	artifact, ok := response.(*persistence.WASMBuildArtifact)
-	if !ok || artifact.Err != nil {
 		return internalError()
 	}
 	if !artifact.Found {
@@ -587,36 +513,24 @@ func (a *Actor) projectPage(c *web.Context) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.Get{OwnerID: owner, ProjectID: c.Param("id")})
+	project, found, err := a.dependencies.Store.GetProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
-	found, ok := response.(*projectactor.Found)
-	if !ok || found.Err != nil {
-		return internalError()
-	}
-	if !found.Exists {
+	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 	}
-	tokenResponse, err := a.ask(c.Request.Context(), a.dependencies.Persistence, &persistence.FindGitHubToken{UserID: owner})
-	if err != nil {
-		return internalError()
-	}
-	connected := false
-	if token, ok := tokenResponse.(*persistence.GitHubTokenFound); ok {
-		connected = token.Connected
+	_, connected, tokenErr := a.dependencies.GitHub.Token(c.Request.Context(), owner)
+	if tokenErr != nil {
+		connected = false
 	}
 	var metadata projectMetadata
-	_ = json.Unmarshal([]byte(found.Project.MetadataJSON), &metadata)
-	historyResponse, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.History{OwnerID: owner, ProjectID: found.Project.ID})
+	_ = json.Unmarshal([]byte(project.MetadataJSON), &metadata)
+	snapshots, err := a.dependencies.Store.ListSnapshots(c.Request.Context(), owner, project.ID)
 	if err != nil {
 		return internalError()
 	}
-	history, ok := historyResponse.(*projectactor.HistoryListed)
-	if !ok || history.Err != nil {
-		return internalError()
-	}
-	buildTemplate, canBuildWASM := templates.Buildable(found.Project.Language)
+	buildTemplate, canBuildWASM := templates.Buildable(project.Language)
 	if !canBuildWASM {
 		for _, candidate := range metadata.Scan.Candidates {
 			if tpl, ok := templates.Buildable(candidate.Ecosystem); ok && tpl.ID == "rust" {
@@ -625,7 +539,7 @@ func (a *Actor) projectPage(c *web.Context) any {
 			}
 		}
 	}
-	data := projectPageData{Project: found.Project, GitHubConnected: connected, GitHubEnabled: a.dependencies.GitHubEnabled, CanBuildWASM: canBuildWASM, BuildTargets: buildTemplate.Targets, Candidates: metadata.Scan.Candidates, Snapshots: history.Snapshots}
+	data := projectPageData{Project: project, GitHubConnected: connected, GitHubEnabled: a.dependencies.GitHubEnabled, CanBuildWASM: canBuildWASM, BuildTargets: buildTemplate.Targets, Candidates: metadata.Scan.Candidates, Snapshots: snapshots}
 	var page strings.Builder
 	if err = projectTemplate.Execute(&page, data); err != nil {
 		return internalError()

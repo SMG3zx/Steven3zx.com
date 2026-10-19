@@ -18,6 +18,7 @@ import (
 	goakt "github.com/tochemey/goakt/v4/actor"
 	golog "github.com/tochemey/goakt/v4/log"
 
+	"janus/actors/github"
 	"janus/actors/persistence"
 )
 
@@ -43,7 +44,7 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 	repoDir := filepath.Join(root, "alice", "repo.git")
 	commit, blob := writeFixtureRepository(t, repoDir)
 
-	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	githubServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/repos/alice/repo":
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": 42, "full_name": "alice/repo", "default_branch": "main", "language": "Go", "stargazers_count": 3, "forks_count": 1})
@@ -55,7 +56,7 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 			http.NotFound(w, r)
 		}
 	}))
-	t.Cleanup(github.Close)
+	t.Cleanup(githubServer.Close)
 
 	system, err := goakt.NewActorSystem("projects-resume-test", goakt.WithLogger(golog.DiscardLogger))
 	if err != nil {
@@ -79,8 +80,10 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 		_, _ = goakt.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
 	})
 
-	actor := New(persistencePID)
-	actor.github = &GitHubClient{HTTP: github.Client(), BaseURL: github.URL}
+	store := persistence.NewClient(persistencePID, 5*time.Second)
+	gh := github.NewService(store)
+	gh.API = &github.Client{HTTP: githubServer.Client(), BaseURL: githubServer.URL}
+	actor := New(store, gh)
 	actor.cloneBase = filepath.ToSlash(root) + "/"
 	projectsPID, err := system.Spawn(ctx, "projects", actor)
 	if err != nil {

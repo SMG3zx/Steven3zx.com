@@ -86,7 +86,7 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 		t.Fatal(got.Err)
 	}
 	runner := &fakeBuilder{}
-	buildPID, err := system.Spawn(ctx, "wasm", New(dbPID, nil, runner))
+	buildPID, err := system.Spawn(ctx, "wasm", New(persistence.NewClient(dbPID, 5*time.Second), nil, runner))
 	if err != nil {
 		t.Fatal(err)
 	}

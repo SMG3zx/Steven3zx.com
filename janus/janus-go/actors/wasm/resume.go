@@ -28,18 +28,11 @@ func (a *Actor) buildSource(ctx context.Context, msg *RequestBuild, project pers
 		}
 		return project.SnapshotID, project.Language, nil
 	}
-	response, err := a.ask(ctx, &persistence.ListSnapshots{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID})
+	snapshots, err := a.store.ListSnapshots(ctx, msg.OwnerID, msg.ProjectID)
 	if err != nil {
 		return "", "", err
 	}
-	listed, ok := response.(*persistence.SnapshotsListed)
-	if !ok {
-		return "", "", fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if listed.Err != nil {
-		return "", "", listed.Err
-	}
-	for _, snapshot := range listed.Snapshots {
+	for _, snapshot := range snapshots {
 		if snapshot.ID == msg.SnapshotID {
 			return snapshot.ID, snapshot.Language, nil
 		}
@@ -50,39 +43,28 @@ func (a *Actor) buildSource(ctx context.Context, msg *RequestBuild, project pers
 // resumeBuilds starts every build that was interrupted by the previous shutdown.
 // A build whose Snapshot is no longer buildable fails instead of starting.
 func (a *Actor) resumeBuilds(ctx context.Context, system actor.ActorSystem) (int, error) {
-	response, err := a.ask(ctx, &persistence.ListResumableBuilds{})
+	builds, err := a.store.ListResumableBuilds(ctx)
 	if err != nil {
 		return 0, err
 	}
-	listed, ok := response.(*persistence.ResumableBuildsListed)
-	if !ok {
-		return 0, fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if listed.Err != nil {
-		return 0, listed.Err
-	}
-	for _, build := range listed.Builds {
+	for _, build := range builds {
 		if _, ok := templates.Buildable(build.Language); !ok {
 			_ = a.update(ctx, build.JobID, "failed", 100, unbuildableLanguageError(build.Language).Error())
 			continue
 		}
 		a.queueBuild(ctx, system, &RunBuild{OwnerID: build.OwnerID, ProjectID: build.ProjectID, SnapshotID: build.SnapshotID, JobID: build.JobID, Target: build.Target, Language: build.Language})
 	}
-	return len(listed.Builds), nil
+	return len(builds), nil
 }
 
 // snapshotEntrypoint returns the Entrypoint the Account confirmed for the
 // build's Snapshot, or "" when there is none or it cannot be read.
 func (a *Actor) snapshotEntrypoint(ctx context.Context, msg *RunBuild) string {
-	response, err := a.ask(ctx, &persistence.ListSnapshots{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID})
+	snapshots, err := a.store.ListSnapshots(ctx, msg.OwnerID, msg.ProjectID)
 	if err != nil {
 		return ""
 	}
-	listed, ok := response.(*persistence.SnapshotsListed)
-	if !ok || listed.Err != nil {
-		return ""
-	}
-	for _, snapshot := range listed.Snapshots {
+	for _, snapshot := range snapshots {
 		if snapshot.ID == msg.SnapshotID {
 			return snapshot.EntryPoint
 		}
@@ -99,7 +81,7 @@ func (a *Actor) queueBuild(ctx context.Context, system actor.ActorSystem, msg *R
 
 // worker returns a new build worker that shares this actor's collaborators.
 func (a *Actor) worker() *Actor {
-	return &Actor{persistence: a.persistence, accounting: a.accounting, builder: a.builder, jobs: a.jobs}
+	return &Actor{store: a.store, accounting: a.accounting, builder: a.builder, jobs: a.jobs}
 }
 
 func buildWorkerName(jobID string) string {
@@ -108,22 +90,15 @@ func buildWorkerName(jobID string) string {
 
 // retryBuild starts a new build of the failed build's Snapshot.
 func (a *Actor) retryBuild(rctx *actor.ReceiveContext, msg *RetryBuild) (string, error) {
-	response, err := a.ask(rctx.Context(), &persistence.FindWASMBuild{ID: msg.JobID, OwnerID: msg.OwnerID})
+	build, found, err := a.store.FindWASMBuild(rctx.Context(), msg.JobID, msg.OwnerID)
 	if err != nil {
 		return "", err
 	}
-	found, ok := response.(*persistence.WASMBuildFound)
-	if !ok {
-		return "", fmt.Errorf("unexpected persistence response %T", response)
-	}
-	if found.Err != nil {
-		return "", found.Err
-	}
-	if !found.Found {
+	if !found {
 		return "", errors.New("WASM build not found")
 	}
-	if found.Build.Status != "failed" {
+	if build.Status != "failed" {
 		return "", errors.New("only a failed WASM build can be retried")
 	}
-	return a.start(rctx, &RequestBuild{OwnerID: msg.OwnerID, ProjectID: found.Build.ProjectID, Target: found.Build.Target, SnapshotID: found.Build.SnapshotID})
+	return a.start(rctx, &RequestBuild{OwnerID: msg.OwnerID, ProjectID: build.ProjectID, Target: build.Target, SnapshotID: build.SnapshotID})
 }
