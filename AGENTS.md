@@ -18,7 +18,7 @@ Top-level folders can also contain local infrastructure, archived material, or g
 - Use **Git** for repository operations: inspect history, stage, commit, fetch, and push with `git`.
 - `origin` is the canonical remote: `https://github.com/SMG3zx/Steven3zx.com.git`.
 - Check `git status`, `git diff`, and `git log` before and after making changes.
-- Once a focused, coherent change exceeds 100 changed lines, commit it with a descriptive message, then sync it to `origin`. Do not combine incomplete or unrelated changes in one commit. Stage only the paths that belong to the change.
+- At the end of agent work, before handing back to the human, commit the work with a descriptive message. Do not leave finished changes uncommitted in the working tree. Do not combine incomplete or unrelated changes in one commit; split them into focused commits. Stage only the paths that belong to each change.
 - Fetch from `origin` before integrating remote changes, then push the intended branch with `git push origin <branch>`.
 - Do not force-push a remote branch unless explicitly asked.
 - Keep commits focused on the requested work. Do not include local secrets, environment files, build outputs, or unrelated project changes.
