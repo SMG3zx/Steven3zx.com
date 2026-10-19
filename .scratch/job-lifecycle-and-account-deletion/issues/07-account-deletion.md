@@ -11,7 +11,8 @@
 - [x] Deleting the Account removes all of its Provider Identities.
 - [x] Deleting the Account removes its GitHub Connection (`TestDeleteAccountRemovesGitHubConnection`).
 - [x] Deleting the Account ends all of its Sessions, so a signed-in browser can no longer act for it.
-- [x] Another Account's Projects are unaffected (`TestDeleteAccountLeavesOtherAccountsUntouched`). Provider Identities of another Account are not yet asserted.
+- [x] Another Account's Projects are unaffected (`TestDeleteAccountLeavesOtherAccountsUntouched`).
+- [x] Another Account's Provider Identities are unaffected (`TestDeleteAccountLeavesOtherAccountsProviderIdentitiesUntouched`).
 - [x] Tested through the projects actor's message interface, with a real persistence actor on a temporary SQLite file.
 
 **Decided:** the deletion runs in one transaction, so no partial deletion is visible. Active jobs block it unless the Owner chooses to cancel them.

@@ -287,6 +287,27 @@ func TestDeleteAccountLeavesOtherAccountsUntouched(t *testing.T) {
 	}
 }
 
+func TestDeleteAccountLeavesOtherAccountsProviderIdentitiesUntouched(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pid, stop := startPersistence(t, filepath.Join(t.TempDir(), "identity-isolation.db"))
+	defer stop()
+	kept := askPersistence(t, ctx, pid, &ResolveGoogleIdentity{Subject: "google-gina", Email: "gina@example.com", DisplayName: "Gina"}).(*GoogleIdentityResolved)
+	doomed := askPersistence(t, ctx, pid, &ResolveGoogleIdentity{Subject: "google-hal", Email: "hal@example.com", DisplayName: "Hal"}).(*GoogleIdentityResolved)
+	if kept.ID == "" || doomed.ID == "" || kept.ID == doomed.ID {
+		t.Fatalf("expected two separate accounts, got %#v and %#v", kept, doomed)
+	}
+
+	deleted := askPersistence(t, ctx, pid, &DeleteAccount{UserID: doomed.ID}).(*AccountDeleted)
+	if !deleted.Deleted {
+		t.Fatalf("delete account: %#v", deleted)
+	}
+	again := askPersistence(t, ctx, pid, &ResolveGoogleIdentity{Subject: "google-gina", Email: "gina@example.com", DisplayName: "Gina"}).(*GoogleIdentityResolved)
+	if again.ID != kept.ID {
+		t.Fatalf("another account's identity changed after deletion: got %q, want %q", again.ID, kept.ID)
+	}
+}
+
 func TestMigrationAddsResumeColumnsToExistingDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy-jobs.db")
 	db, err := sql.Open("sqlite", path)

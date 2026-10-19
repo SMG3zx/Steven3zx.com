@@ -95,8 +95,8 @@ Every scanned Language is recorded on its Snapshot. A WASM Build is only allowed
 
 ## Further Notes
 
-- **Undecided, needs an answer before implementation:**
-  - Is Account deletion a single transaction, so that no partial deletion is ever visible?
-  - Does a job that was queued but never started count as interrupted on restart?
+- **Decided:**
+  - Account deletion is a single transaction, so no partial deletion is ever visible. Active jobs block it unless the Owner cancels them (see issue 07).
+  - A job that was queued but never started counts as interrupted on restart and uses one resume, as the Restart detection decision above states. `recoverJobTable` in `actors/persistence/jobs.go` includes `queued`.
 - **Current behaviour being replaced:** startup currently marks every queued or running import and WASM build as failed, and deletes incomplete Staging Snapshots. This spec replaces that.
 - **Related decisions:** `janus/janus-go/docs/adr/0001-identity-matching-by-provider-id.md` records that sign-in identities are matched by provider ID, never by email. That bears on Account deletion, because deleting an Account removes its Provider Identities.
