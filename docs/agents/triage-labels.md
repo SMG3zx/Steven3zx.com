@@ -12,4 +12,4 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-With the local markdown tracker, write the label string as the value of the `Status:` line in the issue file.
+With Linear, apply the label string as a Linear label on the issue. Create the label in the `Engineering` team the first time it is needed.

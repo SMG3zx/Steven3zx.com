@@ -27,7 +27,7 @@ Top-level folders can also contain local infrastructure, archived material, or g
 
 ### Issue tracker
 
-Local markdown: issues live as files under `.scratch/<feature>/` at the repo root. See `docs/agents/issue-tracker.md`.
+Linear: issues live in the Engineering team (`ENG`) under the Janus project (`P-ENG-7`). Older local markdown specs under `.scratch/` are history. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
