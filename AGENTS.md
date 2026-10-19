@@ -6,13 +6,12 @@ This repository is a monorepo: it contains multiple independent projects and too
 
 Some of the main project directories are:
 
-- `janus/` and `janus-web/` — Janus services and web client, with nested Rust and SpacetimeDB projects under `janus/`.
+- `janus/` — Janus services, including `janus/janus-go` (control plane and web UI), with nested Rust and SpacetimeDB projects under `janus/`.
 - `rusty-mines/` — Rust Minecraft server and protocol work, including nested crates and tools.
 - `eve/`, `qwik/`, `skill-level-up-platform/`, and `mein-factory/` — web and application projects.
 - `personal-memory/`, `tcp-typescript/`, `meingrad/`, and `zig-invaders/` — other standalone projects and utilities.
 
 Top-level folders can also contain local infrastructure, archived material, or generated data. Follow `.gitignore` and the relevant project documentation; do not assume every folder is a buildable application.
-
 ## Version control: Git and `origin`
 
 - Use **Git** for repository operations: inspect history, stage, commit, fetch, and push with `git`.
