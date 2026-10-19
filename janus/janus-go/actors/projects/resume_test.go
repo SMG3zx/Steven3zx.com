@@ -3,6 +3,7 @@ package projects
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,6 +32,7 @@ type resumeFixture struct {
 	projects    *goakt.PID
 	commit      string
 	blob        string
+	repoDir     string
 }
 
 func newResumeFixture(t *testing.T) *resumeFixture {
@@ -38,7 +40,8 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
 	root := t.TempDir()
-	commit, blob := writeFixtureRepository(t, filepath.Join(root, "alice", "repo.git"))
+	repoDir := filepath.Join(root, "alice", "repo.git")
+	commit, blob := writeFixtureRepository(t, repoDir)
 
 	github := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -84,7 +87,7 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 		t.Fatal(err)
 	}
 
-	f := &resumeFixture{t: t, ctx: ctx, persistence: persistencePID, projects: projectsPID, commit: commit, blob: blob}
+	f := &resumeFixture{t: t, ctx: ctx, persistence: persistencePID, projects: projectsPID, commit: commit, blob: blob, repoDir: repoDir}
 	f.ask(&persistence.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"})
 	f.ask(&persistence.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Project"})
 	f.ask(&persistence.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"})
@@ -100,15 +103,22 @@ func (f *resumeFixture) ask(message any) any {
 	return response
 }
 
+// manifestFor returns the scan manifest of the fixture repository, with main.go
+// recorded under hash.
+func (f *resumeFixture) manifestFor(hash string) string {
+	return fmt.Sprintf(`[{"path":"main.go","mode":"-rw-r--r--","hash":%q,"size":%d}]`, hash, len(resumeMainGo))
+}
+
 // interruptedImport leaves an import job queued, with a Staging Snapshot that
-// already holds stored files, as a restart would find it.
-func (f *resumeFixture) interruptedImport(job, staging string, stored map[string]string) {
+// already holds stored files, as a restart would find it. An empty manifest
+// stands for a Staging Snapshot that was interrupted before its scan finished.
+func (f *resumeFixture) interruptedImport(job, staging string, stored map[string]string, manifest string) {
 	f.t.Helper()
 	f.ask(&persistence.CreateImportJob{ID: job, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit})
 	for _, status := range []string{"cloning", "scanning", "storing"} {
 		f.ask(&persistence.UpdateImportJob{ID: job, Status: status, Progress: 50})
 	}
-	f.ask(&persistence.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}"})
+	f.ask(&persistence.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}", Manifest: manifest})
 	var files []persistence.SnapshotFile
 	for path, hash := range stored {
 		files = append(files, persistence.SnapshotFile{Path: path, Mode: "100644", Content: []byte(resumeMainGo), Hash: hash})
@@ -180,7 +190,7 @@ func writeFixtureRepository(t *testing.T, dir string) (string, string) {
 
 func TestResumedImportReusesItsStagingSnapshot(t *testing.T) {
 	f := newResumeFixture(t)
-	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob})
+	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob}, f.manifestFor(f.blob))
 
 	f.resume()
 	job := f.waitForImport("job-1")
@@ -199,7 +209,7 @@ func TestResumedImportReusesItsStagingSnapshot(t *testing.T) {
 
 func TestResumeDiscardsStagingThatDoesNotMatchTheCommit(t *testing.T) {
 	f := newResumeFixture(t)
-	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": "not-the-blob-hash"})
+	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": "not-the-blob-hash"}, f.manifestFor(f.blob))
 
 	f.resume()
 	job := f.waitForImport("job-1")
@@ -218,7 +228,7 @@ func TestResumeDiscardsStagingThatDoesNotMatchTheCommit(t *testing.T) {
 
 func TestResumeWithoutGitHubConnectionFailsAndDiscardsStaging(t *testing.T) {
 	f := newResumeFixture(t)
-	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob})
+	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob}, f.manifestFor(f.blob))
 	f.ask(&persistence.DisconnectGitHub{UserID: "alice"})
 
 	f.resume()
@@ -229,6 +239,73 @@ func TestResumeWithoutGitHubConnectionFailsAndDiscardsStaging(t *testing.T) {
 	}
 	if staging := f.ask(&persistence.FindStagingSnapshot{JobID: "job-1"}).(*persistence.StagingSnapshotFound); staging.Found {
 		t.Fatal("failed resume kept its staging snapshot")
+	}
+}
+
+func TestResumeWithEveryFileStoredDoesNotCloneTheRepository(t *testing.T) {
+	f := newResumeFixture(t)
+	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob}, f.manifestFor(f.blob))
+	if err := os.RemoveAll(f.repoDir); err != nil {
+		t.Fatal(err)
+	}
+
+	f.resume()
+	job := f.waitForImport("job-1")
+
+	if job.Status != "complete" {
+		t.Fatalf("status = %q (%s), want complete without the clone", job.Status, job.Error)
+	}
+	snapshots := f.snapshots()
+	if len(snapshots) != 1 || snapshots[0].ID != "staging-1" || snapshots[0].FileCount != 1 {
+		t.Fatalf("resumed import should complete the staging snapshot from its manifest, got %#v", snapshots)
+	}
+}
+
+func TestResumeStoresTheFilesNotYetStoredFromTheClone(t *testing.T) {
+	f := newResumeFixture(t)
+	f.interruptedImport("job-1", "staging-1", nil, f.manifestFor(f.blob))
+
+	f.resume()
+	job := f.waitForImport("job-1")
+
+	if job.Status != "complete" {
+		t.Fatalf("status = %q (%s), want complete", job.Status, job.Error)
+	}
+	snapshots := f.snapshots()
+	if len(snapshots) != 1 || snapshots[0].ID != "staging-1" || snapshots[0].FileCount != 1 {
+		t.Fatalf("resumed import should store the missing file into the staging snapshot, got %#v", snapshots)
+	}
+}
+
+func TestResumeWithoutManifestRestartsFromTheClone(t *testing.T) {
+	f := newResumeFixture(t)
+	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob}, "")
+
+	f.resume()
+	job := f.waitForImport("job-1")
+
+	if job.Status != "complete" {
+		t.Fatalf("status = %q (%s), want complete", job.Status, job.Error)
+	}
+	snapshots := f.snapshots()
+	if len(snapshots) != 1 || snapshots[0].ID == "staging-1" {
+		t.Fatalf("staging snapshot without a manifest was reused: %#v", snapshots)
+	}
+}
+
+func TestResumeRestartsFromTheCloneWhenTheManifestDoesNotMatchTheRepository(t *testing.T) {
+	f := newResumeFixture(t)
+	f.interruptedImport("job-1", "staging-1", nil, f.manifestFor("not-the-blob-hash"))
+
+	f.resume()
+	job := f.waitForImport("job-1")
+
+	if job.Status != "complete" {
+		t.Fatalf("status = %q (%s), want complete", job.Status, job.Error)
+	}
+	snapshots := f.snapshots()
+	if len(snapshots) != 1 || snapshots[0].ID == "staging-1" {
+		t.Fatalf("staging snapshot with a mismatched manifest was reused: %#v", snapshots)
 	}
 }
 
@@ -284,17 +361,17 @@ func TestDominantLanguagePicksTheMostFrequentLanguage(t *testing.T) {
 }
 
 func TestStoredFilesMatchRequiresEveryStoredFileToMatchTheCommit(t *testing.T) {
-	files := []fileData{{path: "a.go", hash: "h-a"}, {path: "b.go", hash: "h-b"}}
-	if !storedFilesMatch(map[string]string{}, files) {
+	manifest := []manifestEntry{{Path: "a.go", Hash: "h-a"}, {Path: "b.go", Hash: "h-b"}}
+	if !storedFilesMatch(map[string]string{}, manifest) {
 		t.Fatal("empty staging should match")
 	}
-	if !storedFilesMatch(map[string]string{"a.go": "h-a"}, files) {
+	if !storedFilesMatch(map[string]string{"a.go": "h-a"}, manifest) {
 		t.Fatal("matching stored file should match")
 	}
-	if storedFilesMatch(map[string]string{"a.go": "other"}, files) {
+	if storedFilesMatch(map[string]string{"a.go": "other"}, manifest) {
 		t.Fatal("hash mismatch should not match")
 	}
-	if storedFilesMatch(map[string]string{"gone.go": "h-a"}, files) {
+	if storedFilesMatch(map[string]string{"gone.go": "h-a"}, manifest) {
 		t.Fatal("file not in the commit should not match")
 	}
 }

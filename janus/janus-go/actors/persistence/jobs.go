@@ -15,10 +15,12 @@ const MaxResumes = 3
 
 // importTransitions is the state machine for repository import jobs. A job that
 // was interrupted returns to queued so that it can resume; terminal statuses
-// (complete, failed, cancelled) have no outgoing transitions.
+// (complete, failed, cancelled) have no outgoing transitions. A resumed import
+// whose Staging Snapshot already lists every file skips straight to storing,
+// and one that needs only some files skips scanning.
 var importTransitions = map[string][]string{
-	"queued":   {"cloning", "failed", "cancelled"},
-	"cloning":  {"scanning", "queued", "failed", "cancelled"},
+	"queued":   {"cloning", "storing", "failed", "cancelled"},
+	"cloning":  {"scanning", "storing", "queued", "failed", "cancelled"},
 	"scanning": {"storing", "queued", "failed", "cancelled"},
 	"storing":  {"complete", "queued", "failed", "cancelled"},
 }
@@ -115,6 +117,7 @@ func transitionJob(ctx context.Context, db *sql.DB, table string, transitions ma
 func migrateAndRecoverJobs(db *sql.DB) error {
 	columns := []struct{ table, column, definition string }{
 		{"project_snapshots", "job_id", "TEXT NOT NULL DEFAULT ''"},
+		{"project_snapshots", "manifest_json", "TEXT NOT NULL DEFAULT ''"},
 		{"project_import_jobs", "resume_count", "INTEGER NOT NULL DEFAULT 0"},
 		{"project_wasm_builds", "resume_count", "INTEGER NOT NULL DEFAULT 0"},
 	}
@@ -271,11 +274,11 @@ func (a *Actor) listResumableBuilds(ctx context.Context) ([]ResumableBuild, erro
 	return builds, rows.Err()
 }
 
-// findStagingSnapshot returns the Staging Snapshot an import job is writing and
-// the path and hash of each file already stored in it.
+// findStagingSnapshot returns the Staging Snapshot an import job is writing, its
+// manifest, and the path and hash of each file already stored in it.
 func (a *Actor) findStagingSnapshot(ctx context.Context, jobID string) (StagingSnapshotFound, error) {
 	var result StagingSnapshotFound
-	err := a.db.QueryRowContext(ctx, `SELECT id FROM project_snapshots WHERE job_id=? AND state='staging' LIMIT 1`, jobID).Scan(&result.SnapshotID)
+	err := a.db.QueryRowContext(ctx, `SELECT id,manifest_json FROM project_snapshots WHERE job_id=? AND state='staging' LIMIT 1`, jobID).Scan(&result.SnapshotID, &result.Manifest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return result, nil
 	}

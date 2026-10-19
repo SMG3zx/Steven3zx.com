@@ -300,7 +300,7 @@ func (a *Actor) findImportJob(ctx context.Context, id, owner string) (ImportJobF
 }
 
 func (a *Actor) beginSnapshot(ctx context.Context, msg *BeginSnapshot) error {
-	_, err := a.db.ExecContext(ctx, `INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,default_branch,language,stars,forks,metadata_json,job_id,state) SELECT ?,p.id,p.owner_id,?,?,?,?,?,?,?,?,?,?,'staging' FROM projects p WHERE p.id=? AND p.owner_id=?`, msg.ID, msg.RepositoryID, msg.Repository, msg.Branch, msg.Commit, msg.DefaultBranch, msg.Language, msg.Stars, msg.Forks, msg.MetadataJSON, msg.JobID, msg.ProjectID, msg.OwnerID)
+	_, err := a.db.ExecContext(ctx, `INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,default_branch,language,stars,forks,metadata_json,manifest_json,job_id,state) SELECT ?,p.id,p.owner_id,?,?,?,?,?,?,?,?,?,?,?,'staging' FROM projects p WHERE p.id=? AND p.owner_id=?`, msg.ID, msg.RepositoryID, msg.Repository, msg.Branch, msg.Commit, msg.DefaultBranch, msg.Language, msg.Stars, msg.Forks, msg.MetadataJSON, msg.Manifest, msg.JobID, msg.ProjectID, msg.OwnerID)
 	if err != nil {
 		return err
 	}

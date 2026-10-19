@@ -168,6 +168,9 @@ type BeginSnapshot struct {
 	DefaultBranch, Language       string
 	Stars, Forks                  int
 	MetadataJSON                  string
+	// Manifest lists every file of the commit, so that a resumed import can
+	// finish without scanning or cloning the repository again.
+	Manifest string
 }
 
 type BeginSnapshotResult struct{ Err error }
@@ -333,13 +336,14 @@ type ResumableBuildsListed struct {
 	Err    error
 }
 
-// FindStagingSnapshot returns the Staging Snapshot an import job is writing and
-// the hash of each file already stored in it, keyed by path.
+// FindStagingSnapshot returns the Staging Snapshot an import job is writing, the
+// hash of each file already stored in it keyed by path, and its manifest.
 type FindStagingSnapshot struct{ JobID string }
 type StagingSnapshotFound struct {
 	SnapshotID string
 	Found      bool
 	Files      map[string]string
+	Manifest   string
 	Err        error
 }
 

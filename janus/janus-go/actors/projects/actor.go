@@ -460,12 +460,21 @@ type snapshotMetadata struct {
 }
 
 func readSnapshotTree(tree *object.Tree) ([]fileData, int64, error) {
+	return readTreeFiles(tree, nil)
+}
+
+// readTreeFiles reads the files of tree. When want is not nil, only the files
+// whose paths it lists are read and the others are skipped.
+func readTreeFiles(tree *object.Tree, want map[string]bool) ([]fileData, int64, error) {
 	files := make([]fileData, 0)
 	var total int64
 	err := tree.Files().ForEach(func(file *object.File) error {
 		name := path.Clean(file.Name)
 		if name == "." || strings.HasPrefix(name, "../") || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") {
 			return errors.New("repository contains an unsafe file path")
+		}
+		if want != nil && !want[name] {
+			return nil
 		}
 		if len(files)+1 > maxSnapshotFiles {
 			return errors.New("repository exceeds the 50,000 file snapshot limit")
