@@ -117,6 +117,7 @@ func transitionJob(ctx context.Context, db *sql.DB, table string, transitions ma
 func migrateAndRecoverJobs(db *sql.DB) error {
 	columns := []struct{ table, column, definition string }{
 		{"project_snapshots", "job_id", "TEXT NOT NULL DEFAULT ''"},
+		{"project_snapshots", "runtime", "TEXT NOT NULL DEFAULT ''"},
 		{"project_snapshots", "manifest_json", "TEXT NOT NULL DEFAULT ''"},
 		{"project_import_jobs", "resume_count", "INTEGER NOT NULL DEFAULT 0"},
 		{"project_wasm_builds", "resume_count", "INTEGER NOT NULL DEFAULT 0"},

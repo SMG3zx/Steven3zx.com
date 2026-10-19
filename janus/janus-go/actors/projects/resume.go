@@ -424,7 +424,7 @@ func (a *ImportWorker) cloneCommit(ctx context.Context, msg *RunImport) (*object
 // beginStaging starts a Staging Snapshot for the commit and returns its ID.
 func (a *ImportWorker) beginStaging(ctx context.Context, msg *RunImport, scan ScanResult, metadata, manifest []byte) (string, error) {
 	snapshotID := uuid.NewString()
-	begin, err := a.ask(ctx, &persistence.BeginSnapshot{ID: snapshotID, JobID: msg.JobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, RepositoryID: msg.Repository.ID, Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, DefaultBranch: msg.Repository.DefaultBranch, Language: dominantLanguage(scan.Languages), Stars: msg.Repository.Stars, Forks: msg.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
+	begin, err := a.ask(ctx, &persistence.BeginSnapshot{ID: snapshotID, JobID: msg.JobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, RepositoryID: msg.Repository.ID, Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, DefaultBranch: msg.Repository.DefaultBranch, Language: dominantLanguage(scan.Languages), Runtime: scan.Runtime, Stars: msg.Repository.Stars, Forks: msg.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
 	if err != nil {
 		return "", err
 	}

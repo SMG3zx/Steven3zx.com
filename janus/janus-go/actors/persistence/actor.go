@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS project_snapshots (
 	 commit_sha TEXT NOT NULL,
 	 default_branch TEXT NOT NULL DEFAULT '',
 	 language TEXT NOT NULL DEFAULT '',
+	 runtime TEXT NOT NULL DEFAULT '',
 	 stars INTEGER NOT NULL DEFAULT 0,
 	 forks INTEGER NOT NULL DEFAULT 0,
 	 metadata_json TEXT NOT NULL DEFAULT '{}',

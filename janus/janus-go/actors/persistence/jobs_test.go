@@ -308,6 +308,30 @@ func TestDeleteAccountLeavesOtherAccountsProviderIdentitiesUntouched(t *testing.
 	}
 }
 
+func TestSnapshotStoresRuntimeAndReturnsItToReaders(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pid, stop := startPersistence(t, filepath.Join(t.TempDir(), "runtime.db"))
+	defer stop()
+	seedAccountAndProject(t, ctx, pid, "ivy", "ivy-project")
+	commit := strings.Repeat("d", 40)
+	askPersistence(t, ctx, pid, &CreateImportJob{ID: "ivy-job", OwnerID: "ivy", ProjectID: "ivy-project", Repository: "ivy/app", Branch: "main", Commit: commit})
+	for _, next := range []string{"cloning", "scanning", "storing"} {
+		askPersistence(t, ctx, pid, &UpdateImportJob{ID: "ivy-job", Status: next, Progress: 50})
+	}
+	askPersistence(t, ctx, pid, &BeginSnapshot{ID: "ivy-snapshot", JobID: "ivy-job", OwnerID: "ivy", ProjectID: "ivy-project", RepositoryID: 1, Repository: "ivy/app", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "JavaScript/TypeScript", Runtime: "Bun"})
+	askPersistence(t, ctx, pid, &CompleteSnapshot{SnapshotID: "ivy-snapshot", JobID: "ivy-job", FileCount: 1, TotalBytes: 3})
+
+	project := askPersistence(t, ctx, pid, &GetProject{ID: "ivy-project", OwnerID: "ivy"}).(*ProjectFound)
+	if !project.Found || project.Project.Language != "JavaScript/TypeScript" || project.Project.Runtime != "Bun" {
+		t.Fatalf("project did not return its language and runtime: %#v", project.Project)
+	}
+	listed := askPersistence(t, ctx, pid, &ListSnapshots{OwnerID: "ivy", ProjectID: "ivy-project"}).(*SnapshotsListed)
+	if listed.Err != nil || len(listed.Snapshots) != 1 || listed.Snapshots[0].Runtime != "Bun" {
+		t.Fatalf("snapshot list did not return the runtime: %#v", listed)
+	}
+}
+
 func TestMigrationAddsResumeColumnsToExistingDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy-jobs.db")
 	db, err := sql.Open("turso", path)

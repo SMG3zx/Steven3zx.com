@@ -18,10 +18,43 @@ type Candidate struct {
 type ScanResult struct {
 	Candidates []Candidate    `json:"entrypoint_candidates"`
 	Languages  map[string]int `json:"languages"`
+	// Runtime is "Node" or "Bun" for a JavaScript project, or "" when neither is detected.
+	Runtime string `json:"runtime"`
+}
+
+// detectRuntime labels a repository's JavaScript runtime from root-level files
+// only. A Bun signal wins over everything else. Without a root package.json there
+// is no runtime, so version pins such as .nvmrc are ignored.
+func detectRuntime(files []fileData) string {
+	var packageJSON []byte
+	hasPackageJSON, hasBunLockfile := false, false
+	for _, file := range files {
+		name := path.Clean(strings.TrimPrefix(file.path, "./"))
+		if path.Dir(name) != "." {
+			continue
+		}
+		switch name {
+		case "package.json":
+			hasPackageJSON, packageJSON = true, file.content
+		case "bun.lock", "bun.lockb":
+			hasBunLockfile = true
+		}
+	}
+	if !hasPackageJSON {
+		return ""
+	}
+	var manifest struct {
+		PackageManager string `json:"packageManager"`
+	}
+	_ = json.Unmarshal(packageJSON, &manifest)
+	if hasBunLockfile || strings.HasPrefix(manifest.PackageManager, "bun@") {
+		return "Bun"
+	}
+	return "Node"
 }
 
 func scanFiles(files []fileData) ScanResult {
-	result := ScanResult{Candidates: make([]Candidate, 0), Languages: make(map[string]int)}
+	result := ScanResult{Candidates: make([]Candidate, 0), Languages: make(map[string]int), Runtime: detectRuntime(files)}
 	seen := make(map[string]struct{})
 	tracked := make(map[string]struct{}, len(files))
 	for _, file := range files {

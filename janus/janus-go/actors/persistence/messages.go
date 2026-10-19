@@ -78,6 +78,7 @@ type Project struct {
 	Commit        string `json:"commit,omitempty"`
 	EntryPoint    string `json:"entry_point,omitempty"`
 	Language      string `json:"language,omitempty"`
+	Runtime       string `json:"runtime"`
 	Stars         int    `json:"stars,omitempty"`
 	Forks         int    `json:"forks,omitempty"`
 	FileCount     int    `json:"file_count,omitempty"`
@@ -166,6 +167,7 @@ type BeginSnapshot struct {
 	RepositoryID                  int64
 	Branch, Commit                string
 	DefaultBranch, Language       string
+	Runtime                       string
 	Stars, Forks                  int
 	MetadataJSON                  string
 	// Manifest lists every file of the commit, so that a resumed import can
@@ -262,6 +264,7 @@ type ProjectSnapshot struct {
 	Commit        string `json:"commit"`
 	EntryPoint    string `json:"entry_point,omitempty"`
 	Language      string `json:"language,omitempty"`
+	Runtime       string `json:"runtime"`
 	DefaultBranch string `json:"default_branch"`
 	Stars         int    `json:"stars"`
 	Forks         int    `json:"forks"`

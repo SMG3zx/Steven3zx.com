@@ -239,13 +239,13 @@ func (a *Actor) deleteProject(ctx context.Context, msg *DeleteProject) (bool, er
 }
 
 const projectSelect = `SELECT p.id,p.owner_id,p.name,p.description,p.created_at,p.updated_at,COALESCE(s.id,''),
-COALESCE(s.repository_id,0),COALESCE(s.repository,''),COALESCE(s.default_branch,''),COALESCE(s.branch,''),COALESCE(s.commit_sha,''),COALESCE(s.entry_point,''),COALESCE(s.language,''),COALESCE(s.stars,0),COALESCE(s.forks,0),COALESCE(s.file_count,0),COALESCE(s.total_bytes,0),COALESCE(s.metadata_json,'{}'),
+COALESCE(s.repository_id,0),COALESCE(s.repository,''),COALESCE(s.default_branch,''),COALESCE(s.branch,''),COALESCE(s.commit_sha,''),COALESCE(s.entry_point,''),COALESCE(s.language,''),COALESCE(s.runtime,''),COALESCE(s.stars,0),COALESCE(s.forks,0),COALESCE(s.file_count,0),COALESCE(s.total_bytes,0),COALESCE(s.metadata_json,'{}'),
 (SELECT COUNT(*) FROM project_snapshots all_s WHERE all_s.project_id=p.id AND all_s.state='ready')
 FROM projects p LEFT JOIN project_snapshots s ON s.id=(SELECT id FROM project_snapshots WHERE project_id=p.id AND state='ready' AND is_active=1 LIMIT 1)`
 
 func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 	var p Project
-	err := row.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt, &p.SnapshotID, &p.RepositoryID, &p.Repository, &p.DefaultBranch, &p.Branch, &p.Commit, &p.EntryPoint, &p.Language, &p.Stars, &p.Forks, &p.FileCount, &p.TotalBytes, &p.MetadataJSON, &p.SnapshotCount)
+	err := row.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt, &p.SnapshotID, &p.RepositoryID, &p.Repository, &p.DefaultBranch, &p.Branch, &p.Commit, &p.EntryPoint, &p.Language, &p.Runtime, &p.Stars, &p.Forks, &p.FileCount, &p.TotalBytes, &p.MetadataJSON, &p.SnapshotCount)
 	return p, err
 }
 
@@ -300,7 +300,7 @@ func (a *Actor) findImportJob(ctx context.Context, id, owner string) (ImportJobF
 }
 
 func (a *Actor) beginSnapshot(ctx context.Context, msg *BeginSnapshot) error {
-	_, err := a.db.ExecContext(ctx, `INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,default_branch,language,stars,forks,metadata_json,manifest_json,job_id,state) SELECT ?,p.id,p.owner_id,?,?,?,?,?,?,?,?,?,?,?,'staging' FROM projects p WHERE p.id=? AND p.owner_id=?`, msg.ID, msg.RepositoryID, msg.Repository, msg.Branch, msg.Commit, msg.DefaultBranch, msg.Language, msg.Stars, msg.Forks, msg.MetadataJSON, msg.Manifest, msg.JobID, msg.ProjectID, msg.OwnerID)
+	_, err := a.db.ExecContext(ctx, `INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,default_branch,language,runtime,stars,forks,metadata_json,manifest_json,job_id,state) SELECT ?,p.id,p.owner_id,?,?,?,?,?,?,?,?,?,?,?,?,'staging' FROM projects p WHERE p.id=? AND p.owner_id=?`, msg.ID, msg.RepositoryID, msg.Repository, msg.Branch, msg.Commit, msg.DefaultBranch, msg.Language, msg.Runtime, msg.Stars, msg.Forks, msg.MetadataJSON, msg.Manifest, msg.JobID, msg.ProjectID, msg.OwnerID)
 	if err != nil {
 		return err
 	}
@@ -372,7 +372,7 @@ func (a *Actor) listSnapshots(ctx context.Context, msg *ListSnapshots) ([]Projec
 	if !project.Found {
 		return nil, errors.New("project not found")
 	}
-	rows, err := a.db.QueryContext(ctx, `SELECT id,repository,branch,commit_sha,entry_point,language,default_branch,stars,forks,file_count,total_bytes,created_at,is_active FROM project_snapshots WHERE project_id=? AND owner_id=? AND state='ready' ORDER BY created_at DESC,id DESC`, msg.ProjectID, msg.OwnerID)
+	rows, err := a.db.QueryContext(ctx, `SELECT id,repository,branch,commit_sha,entry_point,language,runtime,default_branch,stars,forks,file_count,total_bytes,created_at,is_active FROM project_snapshots WHERE project_id=? AND owner_id=? AND state='ready' ORDER BY created_at DESC,id DESC`, msg.ProjectID, msg.OwnerID)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func (a *Actor) listSnapshots(ctx context.Context, msg *ListSnapshots) ([]Projec
 	for rows.Next() {
 		var s ProjectSnapshot
 		var active int
-		if err = rows.Scan(&s.ID, &s.Repository, &s.Branch, &s.Commit, &s.EntryPoint, &s.Language, &s.DefaultBranch, &s.Stars, &s.Forks, &s.FileCount, &s.TotalBytes, &s.CreatedAt, &active); err != nil {
+		if err = rows.Scan(&s.ID, &s.Repository, &s.Branch, &s.Commit, &s.EntryPoint, &s.Language, &s.Runtime, &s.DefaultBranch, &s.Stars, &s.Forks, &s.FileCount, &s.TotalBytes, &s.CreatedAt, &active); err != nil {
 			return nil, err
 		}
 		s.Active = active != 0
