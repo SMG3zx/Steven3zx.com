@@ -109,3 +109,12 @@ Recommended: leave it. It is outside this work.
 **E3. Janus Go commits are not pushed.**
 Several commits on `Janus-Go` exist only locally. Push them to `origin`?
 Recommended: yes, push when you are ready. I will not push without your say.
+
+## Answers (2026-10-19)
+
+Everything above was accepted as recommended, except:
+
+- **C3:** replace `janus-web` and remove it from the repo. Done.
+- **C5:** apex domains are parked in `janus/cold-storage/`, which agents do not scan unless asked.
+- **E2:** commit the deletion of `LINEAR_TEAM_OVERVIEW_ANALYSIS.md`. Done.
+- **E3:** push the `Janus-Go` commits.
