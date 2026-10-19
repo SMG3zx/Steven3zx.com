@@ -119,9 +119,25 @@ Researched 2026-10-19 for the two unbuildable templates in `janus/janus-go/actor
 
 Targets: `wasm32-wasip1`, like Rust. Entry file: the Entrypoint the Account confirmed.
 
-**Open before building (a spike answers all three):**
-- Does `javy build` output export `_start` and run under the runner's Wasmtime with fuel and epoch interruption on? The README does not say.
-- Does the 128 MiB memory limit leave room for QuickJS plus a typical bundle?
-- Fuel per second for QuickJS code, which will be far from the numbers in the fuel table above. CPU billing uses active CPU time, so billing is unaffected.
+**Spike results (2026-10-19).** Javy 9.1.0 (`javy-x86_64-windows-v9.1.0.gz`, 11.3 MB, SHA-256 matched the published file) was downloaded to a scratch directory and its output run through the real `ExecuteWASI` with fuel and epoch interruption on, on Windows. Bun 1.4.2 did the bundling.
+
+| Check | Result |
+|---|---|
+| Does the output export `_start` and run under the runner? | Yes. A `console.log` script runs to completion and its stdout reaches the runner. `console.error` reaches stderr. |
+| Module size | About 1.36 MB per module, statically linked, whatever the script. |
+| Memory | Peak linear memory is 1.44 MB, far below the 128 MiB limit. |
+| Fixed fuel cost | About 0.42 million fuel to start QuickJS and print one line. |
+| Fuel per loop iteration | About 770 fuel for `t += i % 7` (38.9 million for 50,000 iterations). The 100 million default fuel limit therefore stops a simple loop at roughly 130,000 iterations. |
+| TypeScript with imports | `bun build main.ts --outfile bundle.js` then `javy build` works. A two-file TypeScript project printed `fib(20)=6765` using 17 million fuel. |
+| `import fs from "node:fs"` | Fails at `javy build` time with "could not load module 'node:fs'". The build fails, not the run. |
+| Globals | `fetch`, `process`, `require`, and `setTimeout` are all undefined by default. |
+
+**What the spike means:**
+- The proposal holds: bundle with Bun or esbuild, then `javy build`. Output runs on the existing runner with no component support.
+- QuickJS costs about 770 fuel per simple iteration, so a JavaScript template needs a much larger fuel limit than the 100 million default, or its runs trap early. Fuel is a limit and a statistic, not the billing meter, so raising it does not change billing. A starting value of 2 billion for the two JavaScript templates is reasonable and should be checked on the node hardware.
+- Importing a Node-only module fails the build, so the Scan can warn about `node:` imports before the Owner confirms the Entrypoint.
+- `CPUTimeMicros` read 0 for these sub-millisecond runs on Windows, as the 15.6 ms tick predicts.
+
+**Still not done:** a builder image that has Bun, esbuild, and Javy in it, and the builder actor and template change that call it. Javy's license and how the pinned `javy` release is delivered into the isolated builder also need deciding.
 
 Also note for the template spec: users with `fs`, `http`, or npm-heavy projects will see a build failure with this approach, so the Scan should warn before the Owner confirms the Entrypoint.
