@@ -12,6 +12,8 @@ Some of the main project directories are:
 - `personal-memory/`, `tcp-typescript/`, `meingrad/`, and `zig-invaders/` — other standalone projects and utilities.
 
 Top-level folders can also contain local infrastructure, archived material, or generated data. Follow `.gitignore` and the relevant project documentation; do not assume every folder is a buildable application.
+
+Any folder named `cold-storage` holds ideas for much later. Do not read, search, or scan it unless the user explicitly asks you to. See `janus/cold-storage/README.md`.
 ## Version control: Git and `origin`
 
 - Use **Git** for repository operations: inspect history, stage, commit, fetch, and push with `git`.
