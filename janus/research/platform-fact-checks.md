@@ -4,6 +4,8 @@ Checked on 2026-10-19 for the Janus platform map (Linear ENG-44). Each item says
 
 ## Storage prices (replaces the $0.15/GiB-month placeholder)
 
+**Decided 2026-10-19: Janus charges $0.03 per GiB-month for storage.**
+
 | Provider | Storage | Operations | Egress | Source |
 |---|---|---|---|---|
 | Cloudflare R2 Standard | $0.015 per GB-month | Class A $4.50 per million, Class B $0.36 per million | none | [Cloudflare R2 pricing](https://developers.cloudflare.com/r2/pricing) (official, via search result) |
