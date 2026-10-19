@@ -73,7 +73,7 @@ One execution of a WASM Build's Artifact. It records its Usage.
 _Avoid_: Execution
 
 **Usage**:
-What a WASM Run consumed: the fuel it spent, the peak size of its linear memory, and how long it ran, measured by the host. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent.
+What a WASM Run consumed, measured by the host: the fuel it spent, the peak size of its linear memory, how long it ran, and the active CPU time it used. Active CPU time leaves out time spent waiting, and it is what the CPU layer bills. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent.
 _Avoid_: Metrics, billing
 
 ## Jobs

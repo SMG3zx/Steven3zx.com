@@ -76,9 +76,12 @@ func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdo
 		return nil, nil, Usage{}, errors.New("WASM module does not export the WASI _start function")
 	}
 	timer := time.AfterFunc(timeout, engine.IncrementEpoch)
-	began := time.Now()
-	_, err = start.Call(store)
-	usage.DurationMS = time.Since(began).Milliseconds()
+	wall, cpu, err := measureCall(func() error {
+		_, callErr := start.Call(store)
+		return callErr
+	})
+	usage.DurationMS = wall.Milliseconds()
+	usage.CPUTimeMicros = cpu.Microseconds()
 	timer.Stop()
 	// Read the meters before the deferred store.Close releases the store.
 	usage.Fuel = fuelConsumed(store)

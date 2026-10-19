@@ -18,7 +18,7 @@ const measureFuel uint64 = 1 << 40
 // ExecuteWASI (fuel metering and epoch interruption on) but a far larger fuel
 // budget, so a run lasts long enough for the host clock to time it accurately.
 // A real run is capped at fuelLimit and finishes in a few milliseconds.
-func measuredRun(t *testing.T, module []byte) (fuel uint64, elapsed time.Duration) {
+func measuredRun(t *testing.T, module []byte) (fuel uint64, elapsed, cpu time.Duration) {
 	t.Helper()
 	cfg := wasmtime.NewConfig()
 	cfg.SetConsumeFuel(true)
@@ -41,16 +41,18 @@ func measuredRun(t *testing.T, module []byte) (fuel uint64, elapsed time.Duratio
 		t.Fatalf("instantiate: %v", err)
 	}
 	start := instance.GetFunc(store, "_start")
-	began := time.Now()
-	if _, err = start.Call(store); err != nil {
+	elapsed, cpu, err = measureCall(func() error {
+		_, callErr := start.Call(store)
+		return callErr
+	})
+	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	elapsed = time.Since(began)
 	left, err := store.GetFuel()
 	if err != nil {
 		t.Fatalf("get fuel: %v", err)
 	}
-	return measureFuel - left, elapsed
+	return measureFuel - left, elapsed, cpu
 }
 
 // TestMeasureFuelPerSecond reports how much Wasmtime fuel a run spends per second
@@ -102,18 +104,20 @@ func TestMeasureFuelPerSecond(t *testing.T) {
 	const repeats = 7
 	for _, w := range workloads {
 		module := compileWAT(t, w.wat)
-		var rates []float64
+		var rates, cpuShare []float64
 		var fuel uint64
 		for i := 0; i < repeats; i++ {
-			spent, elapsed := measuredRun(t, module)
+			spent, elapsed, cpu := measuredRun(t, module)
 			if elapsed < 100*time.Millisecond {
 				t.Fatalf("%s: run took %v, grow the workload so the clock can time it", w.name, elapsed)
 			}
 			fuel = spent
 			rates = append(rates, float64(spent)/elapsed.Seconds())
+			cpuShare = append(cpuShare, cpu.Seconds()/elapsed.Seconds())
 		}
 		sort.Float64s(rates)
-		t.Logf("%-24s fuel/run %6.2fG  fuel/second: min %.2fG  median %.2fG  max %.2fG", w.name, float64(fuel)/1e9,
-			rates[0]/1e9, rates[len(rates)/2]/1e9, rates[len(rates)-1]/1e9)
+		sort.Float64s(cpuShare)
+		t.Logf("%-24s fuel/run %6.2fG  fuel/second: min %.2fG  median %.2fG  max %.2fG  cpu/wall: median %.3f", w.name, float64(fuel)/1e9,
+			rates[0]/1e9, rates[len(rates)/2]/1e9, rates[len(rates)-1]/1e9, cpuShare[len(cpuShare)/2])
 	}
 }

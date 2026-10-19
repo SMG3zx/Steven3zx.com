@@ -183,7 +183,7 @@ The HTTP edge accepts the routes below. Unless a route is described as a redirec
 | `GET /api/wasm-builds/{id}` | Authenticated session | `200` owner-scoped status, progress, bounded compiler log and artifact name | `401` missing/invalid session; `404` not found or not owned; `503` builder unavailable |
 | `GET /api/wasm-builds/{id}/artifact` | Authenticated session and completed build ID | `200` downloadable `.zip.zst` (Zstandard-compressed ZIP of generated `.wasm` files) | `401` missing/invalid session; `404` artifact not found or not owned |
 | `POST /api/wasm-builds/{id}/runs` | `{"args":["optional","arguments"]}`; args may be omitted | `202` `{"run_id":"...","status":"running"}` | `400` invalid request; `401` missing/invalid session; `404` build/snapshot missing; `409` runtime limit/conflict; `503` runtime unavailable |
-| `GET /api/wasm-runs/{id}` | Authenticated session | `200` owner-scoped run status, captured output, and `usage` (`fuel`, `peak_memory_bytes`, `duration_ms`) | `401` missing/invalid session; `404` run not found or not owned; `503` runtime unavailable |
+| `GET /api/wasm-runs/{id}` | Authenticated session | `200` owner-scoped run status, captured output, and `usage` (`fuel`, `peak_memory_bytes`, `duration_ms`, `cpu_time_us`) | `401` missing/invalid session; `404` run not found or not owned; `503` runtime unavailable |
 | `GET /` | Optional session cookie | `200` HTML homepage, signed-in identity shown when valid; missing/invalid session shows the public homepage | `500` internal failure when profile lookup fails for a valid session |
 
 Example local registration:

@@ -115,3 +115,25 @@ func TestExecuteWASIMeasuresWallTimeOnTheHost(t *testing.T) {
 		t.Fatalf("duration = %d ms, longer than the %d ms the whole call took", usage.DurationMS, elapsed.Milliseconds())
 	}
 }
+
+func TestExecuteWASIReportsCPUTimeForACPUBoundRun(t *testing.T) {
+	if _, ok := threadCPUTime(); !ok {
+		t.Skip("thread CPU time is not available on this platform")
+	}
+	module := compileWAT(t, `(module
+  (memory (export "memory") 1)
+  (func (export "_start")
+    (loop $forever (br $forever))))`)
+	_, _, usage, err := ExecuteWASI(module, nil, 30*time.Second)
+	if err == nil {
+		t.Fatal("run succeeded, want a trap when fuel runs out")
+	}
+	// One thread cannot use more CPU than the wall time it ran for. Windows reads
+	// CPU time in 15.6 ms ticks and a fuel-limited run lasts tens of milliseconds,
+	// so allow two ticks. TestMeasureFuelPerSecond checks the other direction on
+	// runs long enough to read accurately.
+	wall := usage.DurationMS * 1000
+	if usage.CPUTimeMicros > wall+32_000 {
+		t.Fatalf("cpu = %d us, more than the %d us of wall time", usage.CPUTimeMicros, wall)
+	}
+}

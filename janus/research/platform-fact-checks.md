@@ -67,3 +67,17 @@ Searched 2026-10-19. Figures come from search results and vendor docs; confirm o
 - **Blockchains pair gas with benchmarks.** Polkadot's Substrate derives each operation's "weight" by benchmarking on a published [reference machine](https://docs.substrate.io/test/benchmark). A 2024 polkadot-sdk change found the reference numbers had drifted 10 to 30 percent from the machine used to generate weights, so the calibration needs maintenance.
 
 **What it means for Janus:** the usual way to bill CPU is host-measured active CPU time. Fuel-based billing would be unusual, and as measured it is off by up to ten times between workload types. Benchmark calibration has a precedent, but it is done on the platform against a reference machine, not per application.
+
+## Active CPU time measurement (prototype)
+
+Built 2026-10-19 in `janus/janus-go/actors/wasmruntime` (`cputime*.go`). Each run is pinned to one OS thread and the thread's CPU clock is read before and after the module's `_start` call. Linux reads `CLOCK_THREAD_CPUTIME_ID` (nanosecond resolution). Windows reads `GetThreadTimes`, which advances by scheduler tick (about 15.6 ms). Other platforms report no CPU time.
+
+Checks that passed on Windows with clang:
+- A thread that spins for 300 ms reports at least 150 ms of CPU time and never more than its wall time.
+- A thread that sleeps for 300 ms reports under 100 ms, so waiting is not counted.
+- CPU-bound Wasm workloads (0.2 to 2 seconds each) report a median CPU time of 0.93 to 0.99 of wall time.
+
+**Not covered yet:**
+- The Linux code compiles (`GOOS=linux go vet`) but has not run. Production nodes need it run there.
+- A long-running instance needs a periodic reading from inside its thread, because one call covers the whole life of the instance. The 60-second usage report from the Distributed Network design depends on this.
+- A thread CPU clock counts only the thread the module runs on. Work the module hands to other threads would not appear. The current runtime has none.
