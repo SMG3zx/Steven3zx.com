@@ -9,12 +9,8 @@ import (
 	"github.com/tochemey/goakt/v4/actor"
 
 	"janus/actors/persistence"
+	"janus/actors/templates"
 )
-
-// buildableLanguages are the languages that have a WASM builder. A Snapshot in
-// any other language can still be imported and recorded; it just cannot be
-// built yet.
-var buildableLanguages = map[string]bool{"rust": true, "go": true}
 
 func unbuildableLanguageError(language string) error {
 	if language == "" {
@@ -66,7 +62,7 @@ func (a *Actor) resumeBuilds(ctx context.Context, system actor.ActorSystem) (int
 		return 0, listed.Err
 	}
 	for _, build := range listed.Builds {
-		if !buildableLanguages[strings.ToLower(build.Language)] {
+		if _, ok := templates.Buildable(build.Language); !ok {
 			_ = a.update(ctx, build.JobID, "failed", 100, unbuildableLanguageError(build.Language).Error())
 			continue
 		}

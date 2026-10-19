@@ -56,6 +56,10 @@ _Avoid_: Entry point, main
 
 ## Builds and runs
 
+**Template**:
+A premade recipe for one kind of Project. It names the Language and runtime it covers, the manifest file that marks it, the Targets and build command, how its Entrypoint is found, and the resource limits a WASM Run starts with. Four ship first: Go, Rust, JavaScript/TypeScript on Node, and JavaScript/TypeScript on Bun. Go and Rust are buildable; the two JavaScript templates are detected by the Scan but have no WASM builder yet.
+_Avoid_: Preset, starter
+
 **WASM Build**:
 A job that compiles one Snapshot to an Artifact. It records the Snapshot it compiled.
 _Avoid_: Compile job

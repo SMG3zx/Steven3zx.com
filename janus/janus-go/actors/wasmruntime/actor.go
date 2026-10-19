@@ -15,6 +15,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	actor "github.com/tochemey/goakt/v4/actor"
 	"janus/actors/persistence"
+	"janus/actors/templates"
 )
 
 const maxArchiveSize = 128 << 20
@@ -141,7 +142,7 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 		var out, stderr []byte
 		var usage Usage
 		if e == nil {
-			out, stderr, usage, e = ExecuteWASI(module, args, 10*time.Second)
+			out, stderr, usage, e = ExecuteWASI(module, args, templates.DefaultTimeout)
 		}
 		_ = actor.Tell(context.Background(), self, &completed{ID: id, Module: name, Stdout: out, Stderr: stderr, Usage: usage, Err: e})
 	}()

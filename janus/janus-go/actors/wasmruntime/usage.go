@@ -1,8 +1,10 @@
 package wasmruntime
 
+import "janus/actors/templates"
+
 // fuelLimit is the Wasmtime fuel a single run starts with. A run that spends all
 // of it traps, so it is also the most fuel one run can consume.
-const fuelLimit uint64 = 100_000_000
+const fuelLimit = templates.DefaultFuel
 
 // Usage is what one WASM Run consumed, measured by the host.
 //

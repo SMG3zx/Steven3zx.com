@@ -10,6 +10,8 @@ import (
 	"time"
 
 	wasmtime "github.com/bytecodealliance/wasmtime-go/v49"
+
+	"janus/actors/templates"
 )
 
 const maxOutput = 64 << 10
@@ -40,7 +42,7 @@ func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdo
 	defer engine.Close()
 	store := wasmtime.NewStore(engine)
 	defer store.Close()
-	store.Limiter(128<<20, 10000, 1, 1, 1)
+	store.Limiter(templates.DefaultMemoryBytes, 10000, 1, 1, 1)
 	if err = store.SetFuel(fuelLimit); err != nil {
 		return nil, nil, Usage{}, err
 	}

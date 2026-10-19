@@ -29,6 +29,7 @@ import (
 	"janus/actors/jobrunner"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
+	"janus/actors/templates"
 	"janus/actors/wasmbuilder"
 )
 
@@ -40,11 +41,6 @@ const (
 )
 
 var validDockerImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
-
-var validTarget = map[string]bool{
-	"wasm32-unknown-unknown": true,
-	"wasm32-wasip1":          true,
-}
 
 // Runner is the narrow seam used by the actor to execute a build in a sandbox.
 // Implementations return a ZIP containing one or more .wasm outputs.
@@ -154,7 +150,7 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	if a.runner == nil && a.rustBuilder == nil && a.goBuilder == nil {
 		return "", errors.New("WASM build runner is not configured")
 	}
-	if !validTarget[msg.Target] && msg.Target != "wasip1-wasm" {
+	if !templates.KnownTarget(msg.Target) {
 		return "", errors.New("unsupported WASM target")
 	}
 	if msg.OwnerID == "" || msg.ProjectID == "" {
@@ -178,16 +174,14 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	if err != nil {
 		return "", err
 	}
-	language := strings.ToLower(source)
-	if !buildableLanguages[language] {
+	template, ok := templates.Buildable(source)
+	if !ok {
 		return "", unbuildableLanguageError(source)
 	}
-	if language == "rust" && msg.Target == "wasip1-wasm" {
-		return "", errors.New("unsupported Rust WASM target")
+	if err = template.CheckTarget(msg.Target); err != nil {
+		return "", err
 	}
-	if language == "go" && msg.Target != "wasip1-wasm" {
-		return "", errors.New("Go WASM builds require target wasip1-wasm")
-	}
+	language := strings.ToLower(template.Language)
 	jobID := uuid.NewString()
 	response, err := a.ask(rctx.Context(), &persistence.CreateWASMBuild{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, Target: msg.Target})
 	if err != nil {
@@ -395,7 +389,7 @@ type dockerRunner struct {
 }
 
 func (d dockerRunner) Build(ctx context.Context, workspace, target string) (string, []byte, []byte, error) {
-	if !validTarget[target] {
+	if rust, _ := templates.Buildable("Rust"); rust.CheckTarget(target) != nil {
 		return "", nil, nil, errors.New("unsupported WASM target")
 	}
 	if !validDockerImage.MatchString(d.image) {
