@@ -1,0 +1,46 @@
+{
+  "acceptance_records.request": [
+    {
+      "path": "docs/play-implementation-plan.md",
+      "sha256": "8c419f953f20b60d01c125f6e9aab65e6c69e6a02403f11064d274fcd8c4f7e2"
+    },
+    {
+      "path": "docs/play-packet-roadmap.md",
+      "sha256": "2b6550a61bcdc44ded40ac66db6af3f5bbc2005ab50d4f1c11f0be12b708823a"
+    },
+    {
+      "path": "src/foundation_live_tests.rs",
+      "sha256": "047f8b8117a099e6c5952a9d7d4e42051b84b8df87f1c4d75c9ce58cba7091f0"
+    }
+  ],
+  "player_state.request": [
+    {
+      "path": "src/connection.rs",
+      "sha256": "9eee49c7645920b3bf5627aa2c7bd0c81c1180d16bdda3c52086193842af6e04"
+    },
+    {
+      "path": "spacetimedb/src/world.rs",
+      "sha256": "db74ff1d89b231dae06399cd9c63596bb745b1bbf815a9c12278160a2484adb0"
+    }
+  ],
+  "world_backend.request": [
+    {
+      "path": "spacetimedb/src/world.rs",
+      "sha256": "db74ff1d89b231dae06399cd9c63596bb745b1bbf815a9c12278160a2484adb0"
+    },
+    {
+      "path": "spacetimedb/src/policy.rs",
+      "sha256": "6b775eb83f595e00549721c9a5c6d20a3c71ae6f350c8bac85ffacb02f562fb2"
+    }
+  ],
+  "world_worker.request": [
+    {
+      "path": "src/connection.rs",
+      "sha256": "9eee49c7645920b3bf5627aa2c7bd0c81c1180d16bdda3c52086193842af6e04"
+    },
+    {
+      "path": "src/gateway.rs",
+      "sha256": "ab4c0468e871da8b803e1f2f1237bcceb18f814851945bfc4edb3ce9386ce85e"
+    }
+  ]
+}

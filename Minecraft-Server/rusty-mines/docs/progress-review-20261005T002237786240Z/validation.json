@@ -1,0 +1,203 @@
+[
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--all-targets"
+    ],
+    "exit_code": 0,
+    "log": "validation-1.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "log": "validation-2.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "log": "validation-3.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "inventory-core/Cargo.toml",
+      "--all-targets"
+    ],
+    "exit_code": 0,
+    "log": "validation-4.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "inventory-core/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "log": "validation-5.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "inventory-core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "log": "validation-6.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "spacetimedb/Cargo.toml",
+      "--all-targets"
+    ],
+    "exit_code": 0,
+    "log": "validation-7.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "spacetimedb/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 101,
+    "log": "validation-8.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "spacetimedb/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "log": "validation-9.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "tools/jev/Cargo.toml",
+      "--all-targets"
+    ],
+    "exit_code": 0,
+    "log": "validation-10.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "tools/jev/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "log": "validation-11.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "tools/jev/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "log": "validation-12.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "cargo",
+      "check",
+      "--manifest-path",
+      "spacetimedb/Cargo.toml",
+      "--target",
+      "wasm32-unknown-unknown"
+    ],
+    "exit_code": 0,
+    "log": "validation-13.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  },
+  {
+    "command": [
+      "C:\\Users\\nerfs\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools/jev",
+      "-p",
+      "test_progress_review.py",
+      "-v"
+    ],
+    "exit_code": 0,
+    "log": "validation-14.log",
+    "snapshot_ref": "manifest.json#/source_sha256",
+    "fresh": true
+  }
+]

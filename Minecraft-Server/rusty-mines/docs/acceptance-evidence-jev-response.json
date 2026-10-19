@@ -1,0 +1,89 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "codec_acceptance": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.93,
+        "insufficient_evidence": 0.07,
+        "supports": 0.0
+      },
+      "confidence": 0.89
+    },
+    "live_acceptance": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.99,
+        "insufficient_evidence": 0.01,
+        "supports": 0.0
+      },
+      "confidence": 0.99
+    },
+    "m6_atomic_inventory": {
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.06,
+        "insufficient_evidence": 0.81,
+        "supports": 0.13
+      },
+      "confidence": 0.71
+    },
+    "m6_commit_confirmation": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.34,
+        "insufficient_evidence": 0.13,
+        "supports": 0.53
+      },
+      "confidence": 0.29
+    },
+    "m6_reload_persistence": {
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.44,
+        "insufficient_evidence": 0.56,
+        "supports": 0.0
+      },
+      "confidence": 0.33
+    },
+    "m7_acceptance": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.94,
+        "insufficient_evidence": 0.06,
+        "supports": 0.0
+      },
+      "confidence": 0.91
+    },
+    "plan_current_baseline": {
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.15,
+        "insufficient_evidence": 0.46,
+        "supports": 0.39
+      },
+      "confidence": 0.18
+    },
+    "roadmap_current_baseline": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.15,
+        "insufficient_evidence": 0.41,
+        "supports": 0.44
+      },
+      "confidence": 0.15
+    }
+  },
+  "usage": {
+    "input_tokens": 17605,
+    "output_tokens": 403
+  }
+}

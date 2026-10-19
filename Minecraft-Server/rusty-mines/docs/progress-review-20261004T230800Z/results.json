@@ -1,0 +1,337 @@
+{
+  "checks": [
+    {
+      "id": "current_backpressure_pass",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.04,
+        "insufficient_evidence": 0.76,
+        "supports": 0.2
+      },
+      "confidence": 0.64
+    },
+    {
+      "id": "current_component_review",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.87,
+        "insufficient_evidence": 0.13,
+        "supports": 0.0
+      },
+      "confidence": 0.8
+    },
+    {
+      "id": "current_live_mutation_pass",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.96,
+        "insufficient_evidence": 0.04,
+        "supports": 0.0
+      },
+      "confidence": 0.94
+    },
+    {
+      "id": "current_m7_acceptance",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.79,
+        "insufficient_evidence": 0.21,
+        "supports": 0.0
+      },
+      "confidence": 0.67
+    },
+    {
+      "id": "current_race_pass",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.69,
+        "insufficient_evidence": 0.31,
+        "supports": 0.0
+      },
+      "confidence": 0.53
+    },
+    {
+      "id": "current_restart_pass",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.58,
+        "insufficient_evidence": 0.42,
+        "supports": 0.0
+      },
+      "confidence": 0.37
+    },
+    {
+      "id": "current_rollback_pass",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.39,
+        "insufficient_evidence": 0.61,
+        "supports": 0.0
+      },
+      "confidence": 0.41
+    },
+    {
+      "id": "current_two_client_pass",
+      "batch": "acceptance_records.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.8,
+        "insufficient_evidence": 0.2,
+        "supports": 0.0
+      },
+      "confidence": 0.7
+    },
+    {
+      "id": "persistent_reconnect",
+      "batch": "persistent_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.1,
+        "supports": 0.89
+      },
+      "confidence": 0.84
+    },
+    {
+      "id": "persistent_respawn",
+      "batch": "persistent_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.04,
+        "supports": 0.95
+      },
+      "confidence": 0.93
+    },
+    {
+      "id": "persistent_vitals_owner",
+      "batch": "persistent_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.01,
+        "supports": 0.99
+      },
+      "confidence": 0.99
+    },
+    {
+      "id": "death_respawn_protocol",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.02,
+        "insufficient_evidence": 0.06,
+        "supports": 0.92
+      },
+      "confidence": 0.87
+    },
+    {
+      "id": "edited_terrain_collision",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.23,
+        "insufficient_evidence": 0.76,
+        "supports": 0.01
+      },
+      "confidence": 0.65
+    },
+    {
+      "id": "flight_authority",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.0,
+        "supports": 0.99
+      },
+      "confidence": 0.98
+    },
+    {
+      "id": "gravity_authority",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 1.0
+    },
+    {
+      "id": "mode_wire_sync",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.6,
+        "insufficient_evidence": 0.16,
+        "supports": 0.24
+      },
+      "confidence": 0.4
+    },
+    {
+      "id": "simulation_catchup",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.13,
+        "supports": 0.86
+      },
+      "confidence": 0.79
+    },
+    {
+      "id": "sprint_food",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.04,
+        "supports": 0.95
+      },
+      "confidence": 0.93
+    },
+    {
+      "id": "vitals_persistence",
+      "batch": "player_state.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.02,
+        "insufficient_evidence": 0.32,
+        "supports": 0.66
+      },
+      "confidence": 0.49
+    },
+    {
+      "id": "edit_inventory_atomic",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.1,
+        "supports": 0.9
+      },
+      "confidence": 0.84
+    },
+    {
+      "id": "edit_lease_phase",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 1.0
+    },
+    {
+      "id": "edit_mode_policy",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.02,
+        "supports": 0.97
+      },
+      "confidence": 0.95
+    },
+    {
+      "id": "edit_ownership",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.05,
+        "insufficient_evidence": 0.02,
+        "supports": 0.93
+      },
+      "confidence": 0.89
+    },
+    {
+      "id": "edit_reach_interest",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 1.0
+    },
+    {
+      "id": "edit_retry_conflict",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.08,
+        "supports": 0.91
+      },
+      "confidence": 0.87
+    },
+    {
+      "id": "edit_storage_caps",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 0.99
+    },
+    {
+      "id": "mode_grant_authority",
+      "batch": "world_backend.response",
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.02,
+        "supports": 0.98
+      },
+      "confidence": 0.97
+    }
+  ],
+  "usage": {
+    "input_tokens": 68242,
+    "output_tokens": 1290
+  },
+  "verdict_counts": {
+    "insufficient_evidence": 3,
+    "contradicts": 7,
+    "supports": 17
+  }
+}

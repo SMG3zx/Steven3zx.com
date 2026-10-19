@@ -1,0 +1,89 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "death_respawn_protocol": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.02,
+        "insufficient_evidence": 0.06,
+        "supports": 0.92
+      },
+      "confidence": 0.87
+    },
+    "edited_terrain_collision": {
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.23,
+        "insufficient_evidence": 0.76,
+        "supports": 0.01
+      },
+      "confidence": 0.65
+    },
+    "flight_authority": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.0,
+        "supports": 0.99
+      },
+      "confidence": 0.98
+    },
+    "gravity_authority": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 1.0
+    },
+    "mode_wire_sync": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.6,
+        "insufficient_evidence": 0.16,
+        "supports": 0.24
+      },
+      "confidence": 0.4
+    },
+    "simulation_catchup": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.13,
+        "supports": 0.86
+      },
+      "confidence": 0.79
+    },
+    "sprint_food": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.04,
+        "supports": 0.95
+      },
+      "confidence": 0.93
+    },
+    "vitals_persistence": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.02,
+        "insufficient_evidence": 0.32,
+        "supports": 0.66
+      },
+      "confidence": 0.49
+    }
+  },
+  "usage": {
+    "input_tokens": 28092,
+    "output_tokens": 380
+  }
+}

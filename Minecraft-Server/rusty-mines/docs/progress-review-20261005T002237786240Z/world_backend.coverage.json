@@ -1,0 +1,21 @@
+{
+  "requested": [],
+  "found": [],
+  "missing": [],
+  "sources": [
+    {
+      "path": "spacetimedb/src/world.rs",
+      "sha256": "a6c337d32d5934fa82b47072267ab565d14974da6b2ab93c24bd149a0389d765",
+      "ranges": [],
+      "selection": "whole_file",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    },
+    {
+      "path": "spacetimedb/src/policy.rs",
+      "sha256": "6b775eb83f595e00549721c9a5c6d20a3c71ae6f350c8bac85ffacb02f562fb2",
+      "ranges": [],
+      "selection": "whole_file",
+      "limitations": "Indentation-based extraction, not a Rust parser; dependencies outside selected ranges may be omitted."
+    }
+  ]
+}

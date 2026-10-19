@@ -1,0 +1,39 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "persistent_reconnect": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.1,
+        "supports": 0.89
+      },
+      "confidence": 0.84
+    },
+    "persistent_respawn": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.04,
+        "supports": 0.95
+      },
+      "confidence": 0.93
+    },
+    "persistent_vitals_owner": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.01,
+        "supports": 0.99
+      },
+      "confidence": 0.99
+    }
+  },
+  "usage": {
+    "input_tokens": 9904,
+    "output_tokens": 140
+  }
+}

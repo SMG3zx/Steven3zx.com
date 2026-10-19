@@ -1,0 +1,89 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "current_backpressure_pass": {
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.04,
+        "insufficient_evidence": 0.76,
+        "supports": 0.2
+      },
+      "confidence": 0.64
+    },
+    "current_component_review": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.87,
+        "insufficient_evidence": 0.13,
+        "supports": 0.0
+      },
+      "confidence": 0.8
+    },
+    "current_live_mutation_pass": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.96,
+        "insufficient_evidence": 0.04,
+        "supports": 0.0
+      },
+      "confidence": 0.94
+    },
+    "current_m7_acceptance": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.79,
+        "insufficient_evidence": 0.21,
+        "supports": 0.0
+      },
+      "confidence": 0.67
+    },
+    "current_race_pass": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.69,
+        "insufficient_evidence": 0.31,
+        "supports": 0.0
+      },
+      "confidence": 0.53
+    },
+    "current_restart_pass": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.58,
+        "insufficient_evidence": 0.42,
+        "supports": 0.0
+      },
+      "confidence": 0.37
+    },
+    "current_rollback_pass": {
+      "type": "choice",
+      "choice": "insufficient_evidence",
+      "probabilities": {
+        "contradicts": 0.39,
+        "insufficient_evidence": 0.61,
+        "supports": 0.0
+      },
+      "confidence": 0.41
+    },
+    "current_two_client_pass": {
+      "type": "choice",
+      "choice": "contradicts",
+      "probabilities": {
+        "contradicts": 0.8,
+        "insufficient_evidence": 0.2,
+        "supports": 0.0
+      },
+      "confidence": 0.7
+    }
+  },
+  "usage": {
+    "input_tokens": 16659,
+    "output_tokens": 399
+  }
+}

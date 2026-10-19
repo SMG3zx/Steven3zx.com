@@ -1,0 +1,89 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "edit_inventory_atomic": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.1,
+        "supports": 0.9
+      },
+      "confidence": 0.84
+    },
+    "edit_lease_phase": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 1.0
+    },
+    "edit_mode_policy": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.02,
+        "supports": 0.97
+      },
+      "confidence": 0.95
+    },
+    "edit_ownership": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.05,
+        "insufficient_evidence": 0.02,
+        "supports": 0.93
+      },
+      "confidence": 0.89
+    },
+    "edit_reach_interest": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 1.0
+    },
+    "edit_retry_conflict": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.01,
+        "insufficient_evidence": 0.08,
+        "supports": 0.91
+      },
+      "confidence": 0.87
+    },
+    "edit_storage_caps": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.0,
+        "supports": 1.0
+      },
+      "confidence": 0.99
+    },
+    "mode_grant_authority": {
+      "type": "choice",
+      "choice": "supports",
+      "probabilities": {
+        "contradicts": 0.0,
+        "insufficient_evidence": 0.02,
+        "supports": 0.98
+      },
+      "confidence": 0.97
+    }
+  },
+  "usage": {
+    "input_tokens": 13587,
+    "output_tokens": 371
+  }
+}

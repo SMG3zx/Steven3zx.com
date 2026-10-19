@@ -1,0 +1,464 @@
+{
+  "checks": [
+    {
+      "id": "current_live_mutation_pass",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_live_mutation_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_rollback_pass",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_rollback_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_restart_pass",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_restart_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_two_client_pass",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_two_client_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_race_pass",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_race_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_backpressure_pass",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_backpressure_pass",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_component_review",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_component_review",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "current_m7_acceptance",
+      "batch": "acceptance_records",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_execution",
+      "stale": false,
+      "evidence_refs": [
+        "acceptance_records.request.json#/questions/current_m7_acceptance",
+        "acceptance_records.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "local_edit_test_design",
+      "batch": "local_test_design",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "local_test_design.request.json#/questions/local_edit_test_design",
+        "local_test_design.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "local_chunk_test_design",
+      "batch": "local_test_design",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "local_test_design.request.json#/questions/local_chunk_test_design",
+        "local_test_design.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "local_respawn_test_design",
+      "batch": "local_test_design",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "local_test_design.request.json#/questions/local_respawn_test_design",
+        "local_test_design.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "flight_authority",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/flight_authority",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "mode_wire_sync",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/mode_wire_sync",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "gravity_authority",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/gravity_authority",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "simulation_catchup",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/simulation_catchup",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "sprint_food",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/sprint_food",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "vitals_persistence",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/vitals_persistence",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "death_respawn_protocol",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/death_respawn_protocol",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edited_terrain_collision",
+      "batch": "player_state",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "player_state.request.json#/questions/edited_terrain_collision",
+        "player_state.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_ownership",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_ownership",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_lease_phase",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_lease_phase",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_reach_interest",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_reach_interest",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_mode_policy",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_mode_policy",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_inventory_atomic",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_inventory_atomic",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_retry_conflict",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_retry_conflict",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_storage_caps",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/edit_storage_caps",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "mode_grant_authority",
+      "batch": "world_backend",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_backend.request.json#/questions/mode_grant_authority",
+        "world_backend.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_one_pending",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_one_pending",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_success_callback",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_success_callback",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_success_subscription",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_success_subscription",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_reject_reconcile",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_reject_reconcile",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "edit_deadline",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/edit_deadline",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "override_decoder_bounds",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/override_decoder_bounds",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "override_revision_order",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/override_revision_order",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    },
+    {
+      "id": "chunk_reload_overlays",
+      "batch": "world_worker",
+      "verdict": "not_assessed",
+      "confidence": null,
+      "category": "missing_evidence",
+      "stale": false,
+      "evidence_refs": [
+        "world_worker.request.json#/questions/chunk_reload_overlays",
+        "world_worker.coverage.json",
+        "manifest.json"
+      ]
+    }
+  ],
+  "usage": {},
+  "verdict_counts": {
+    "not_assessed": 35
+  },
+  "stale_files": []
+}

@@ -1,0 +1,65 @@
+{
+  "jev_status": "succeeded",
+  "manifest": [
+    {
+      "bytes": 60300,
+      "fingerprint": "fnv1a64:3e121c93ef207271",
+      "path": "docs/play-implementation-plan.md"
+    },
+    {
+      "bytes": 41618,
+      "fingerprint": "fnv1a64:1b2719e409116f42",
+      "path": "docs/play-packet-roadmap.md"
+    },
+    {
+      "bytes": 172984,
+      "fingerprint": "fnv1a64:96696d155fa46843",
+      "path": "src/connection.rs"
+    },
+    {
+      "bytes": 58770,
+      "fingerprint": "fnv1a64:44eca7530ce80bf6",
+      "path": "src/gateway.rs"
+    },
+    {
+      "bytes": 51418,
+      "fingerprint": "fnv1a64:a499bbac6adbd2fb",
+      "path": "src/packets/play.rs"
+    },
+    {
+      "bytes": 25147,
+      "fingerprint": "fnv1a64:38edc13bda2d47e5",
+      "path": "spacetimedb/src/world.rs"
+    },
+    {
+      "bytes": 33763,
+      "fingerprint": "fnv1a64:63178a560da23d3d",
+      "path": "spacetimedb/src/foundation.rs"
+    },
+    {
+      "bytes": 34555,
+      "fingerprint": "fnv1a64:f87d42ff4ca73fd0",
+      "path": "src/foundation_live_tests.rs"
+    }
+  ],
+  "roadmap": {
+    "counts": {
+      "CB": {
+        "-": 113,
+        "I": 21,
+        "P": 10
+      },
+      "SB": {
+        "-": 37,
+        "I": 4,
+        "P": 28
+      }
+    },
+    "duplicate_keys": [],
+    "unique_packets": 213
+  },
+  "test_execution": "not_run",
+  "model": "jev-1.13.0",
+  "request_sha256": "82b54ec1eff6e584b14d99ea02fd0424f97fc6d421b44697b0a6a6ad4c1be389",
+  "selection": "Bounded line-numbered excerpts; full-file fingerprints do not imply full-file model coverage"
+}
