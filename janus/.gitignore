@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.staging
 report-task.txt
 .sonar_lock
 .vscode/settings.json
@@ -64,3 +65,4 @@ pytest-cache-files-*/
 spacetime.local.json
 spacetime.*.local.json
 janus-rust/src/module_bindings/
+janus-spacetimedb/coverage/
