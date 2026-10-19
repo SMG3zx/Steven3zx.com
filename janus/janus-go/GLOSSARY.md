@@ -6,7 +6,7 @@ Janus Go is the Go application behind Janus: it lets an Account import repositor
 
 **Account**:
 A person's place in Janus, where they keep all their projects. Sign-in methods attach to an Account. Deleting an Account also deletes its Projects, Provider Identities, and GitHub Connection, and its Sessions stop working. Deletion is refused while the Account has unfinished imports or WASM builds, unless the Owner chooses to cancel them first.
-_Avoid_: User, profile, owner (as a noun for a person)
+_Avoid_: User, profile
 
 **Provider Identity**:
 A sign-in method attached to an Account. Each one names its provider: local, Google, or GitHub. Only the local identity carries a password.
@@ -65,7 +65,7 @@ The WebAssembly target a WASM Build compiles for: `wasm32-unknown-unknown`, `was
 _Avoid_: Platform, triple
 
 **Artifact**:
-The stored output of a WASM Build: a compressed archive containing the `.wasm` module. A WASM Run executes an Artifact.
+The compiled `.wasm` module that a WASM Build produced, kept so it can be run. A WASM Run executes an Artifact.
 _Avoid_: Output, binary
 
 **WASM Run**:
