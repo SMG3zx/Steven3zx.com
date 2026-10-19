@@ -1,0 +1,3 @@
+# Serve a Deployment by starting its module for each request
+
+A deployed module is not a long-running server. For each HTTP request the Agent starts the module, passes the request in through environment and stdin, and reads the response from stdout. We chose this because our Targets are WASI preview 1, which has no listening sockets, and because per-request runs fit the Usage we already measure (fuel, memory, time). The cost is a start-up per request and no in-memory state between requests. Long-running modules on wasi-http would be a later addition for the Distributed Network, and would need new Targets, so this decision is hard to reverse once users write to it.

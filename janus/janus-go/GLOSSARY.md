@@ -80,6 +80,23 @@ _Avoid_: Execution
 What a WASM Run consumed, measured by the host: the fuel it spent, the peak size of its linear memory, how long it ran, and the active CPU time it used. Active CPU time leaves out time spent waiting, and it is what the CPU layer bills. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent.
 _Avoid_: Metrics, billing
 
+## Deployments
+
+**Check**:
+The result of running a Template's check and test commands against one WASM Build, automatically after the build succeeds, in the same isolated builder containers. Owners cannot edit the commands. A Project with no tests passes on the compile-level check alone, and its Check records "no tests found". A new Snapshot or WASM Build has no Check until its own run finishes.
+_Avoid_: Test run, CI
+
+**Deploy**:
+The Owner's action that creates a Deployment from a WASM Build whose latest Check passed. If the Check failed, the Owner can choose "deploy anyway", which is recorded on the Deployment and as an Audit Event.
+_Avoid_: Release, publish
+
+**Deployment**:
+One Artifact running on one target, the Owner's machine through the Janus Agent in M1. A Project has one live Deployment. A redeploy creates a new Deployment that replaces the live one once it is healthy; the live one keeps serving until then. A Project keeps its last five stopped Deployments for rollback. Rollback deploys one of those Artifacts as a new Deployment, and never revives the old record. A Deployment is served per request: the Agent starts the module for each HTTP request, passes the request in through environment and stdin, and reads the response from stdout. Stopping a Deployment keeps its record and Usage, keeps its Artifact while its WASM Build exists, and retires its Temporary Domain for good.
+_Avoid_: Release, instance, rollout
+
+**Failed Deployment**:
+A Deployment that ended in an error, kept with its message. It is not resumed. If the control plane restarts mid-Deploy, it reconciles with the Agent and marks the Deployment healthy or failed. The Owner starts a new Deploy from the same WASM Build, and the previous live Deployment keeps serving meanwhile.
+
 ## Jobs
 
 **Resume**:
