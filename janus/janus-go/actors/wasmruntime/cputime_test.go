@@ -1,6 +1,7 @@
 package wasmruntime
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -56,3 +57,32 @@ func TestMeasureCallReturnsTheCallsError(t *testing.T) {
 type errTest string
 
 func (e errTest) Error() string { return string(e) }
+
+func TestMeasureCallSampledReportsGrowingCPUTimeWhileRunning(t *testing.T) {
+	if _, ok := threadCPUTime(); !ok {
+		t.Skip("thread CPU time is not available on this platform")
+	}
+	var mu sync.Mutex
+	var samples []time.Duration
+	_, cpu, err := measureCallSampled(100*time.Millisecond, func(d time.Duration) {
+		mu.Lock()
+		samples = append(samples, d)
+		mu.Unlock()
+	}, func() error { return spin(600 * time.Millisecond) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(samples) < 3 {
+		t.Fatalf("got %d samples during a 600ms run sampled every 100ms, want at least 3", len(samples))
+	}
+	for i := 1; i < len(samples); i++ {
+		if samples[i] < samples[i-1] {
+			t.Fatalf("samples went backwards: %v", samples)
+		}
+	}
+	if last := samples[len(samples)-1]; last > cpu {
+		t.Fatalf("last sample %v exceeds final cpu %v", last, cpu)
+	}
+}

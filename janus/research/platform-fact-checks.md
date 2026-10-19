@@ -77,7 +77,9 @@ Checks that passed on Windows with clang:
 - A thread that sleeps for 300 ms reports under 100 ms, so waiting is not counted.
 - CPU-bound Wasm workloads (0.2 to 2 seconds each) report a median CPU time of 0.93 to 0.99 of wall time.
 
+**Periodic reading (added 2026-10-19):** `measureCallSampled` runs a sampler goroutine that reads the pinned thread's CPU clock every interval and hands the running total to a callback, so a long-running instance can feed the 60-second usage report. The thread's clock is reached from another thread by id: on Linux through the per-thread clock id built from the thread id, on Windows through a thread handle from `OpenThread`. Both the one-shot and sampled tests pass on Windows and on Linux (WSL2 kernel 6.18, test binary cross-compiled and run there). Samples never decrease and never exceed the final reading.
+
 **Not covered yet:**
-- The Linux code compiles (`GOOS=linux go vet`) but has not run. Production nodes need it run there.
-- A long-running instance needs a periodic reading from inside its thread, because one call covers the whole life of the instance. The 60-second usage report from the Distributed Network design depends on this.
+- Linux has run only under WSL2, not on real node hardware. Check CPU time against wall time on an actual node before billing on it.
+- The sampler is not yet wired into a long-running instance. The current runtime only has `_start` runs bounded by a timeout.
 - A thread CPU clock counts only the thread the module runs on. Work the module hands to other threads would not appear. The current runtime has none.
