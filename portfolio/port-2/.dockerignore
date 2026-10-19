@@ -1,0 +1,4 @@
+*.exe
+*.excalidraw
+Dockerfile
+.dockerignore
