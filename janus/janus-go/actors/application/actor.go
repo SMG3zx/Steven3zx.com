@@ -28,13 +28,12 @@ import (
 // Actor starts and stops the configured Janus services.
 type Actor struct {
 	system         goakt.ActorSystem
-	configActor    *goakt.PID
 	routes         *goakt.PID
-	telemetry      *goakt.PID
+	telemetry      *telemetryactor.Telemetry
 	httpServer     *goakt.PID
 	accounting     *goakt.PID
-	authentication *goakt.PID
-	authorization  *goakt.PID
+	authentication *authactor.Service
+	authorization  *authzactor.Policy
 	persistence    *goakt.PID
 	projects       *goakt.PID
 	wasmBuilds     *goakt.PID
@@ -89,35 +88,13 @@ func (a *Actor) Receive(ctx *goakt.ReceiveContext) {
 
 func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	a.system = ctx.ActorSystem()
-	var err error
-	a.configActor, err = a.system.Spawn(ctx.Context(), "config", configactor.New())
-	if err != nil {
-		return fmt.Errorf("spawn config actor: %w", err)
-	}
-	environmentResponse, err := goakt.Ask(ctx.Context(), a.configActor, &configactor.LoadEnvironment{}, StartupTimeout)
-	if err != nil {
+	if err := configactor.LoadEnvironment(); err != nil {
 		return fmt.Errorf("load environment: %w", err)
 	}
-	environmentLoaded, ok := environmentResponse.(*configactor.EnvironmentLoaded)
-	if !ok {
-		return fmt.Errorf("load environment: unexpected response %T", environmentResponse)
-	}
-	if environmentLoaded.Err != nil {
-		return fmt.Errorf("load environment: %w", environmentLoaded.Err)
-	}
-
-	loadedResponse, err := goakt.Ask(ctx.Context(), a.configActor, &configactor.Load{}, StartupTimeout)
+	config, err := configactor.Load(ctx.Context())
 	if err != nil {
-		return fmt.Errorf("request config: %w", err)
+		return fmt.Errorf("load config: %w", err)
 	}
-	loaded, ok := loadedResponse.(*configactor.Loaded)
-	if !ok {
-		return fmt.Errorf("load config: unexpected response %T", loadedResponse)
-	}
-	if loaded.Err != nil {
-		return fmt.Errorf("load config: %w", loaded.Err)
-	}
-	config := loaded.Config
 
 	if a.logger == nil {
 		a.logger = zap.NewNop()
@@ -126,23 +103,12 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn accounting actor: %w", err)
 	}
-	a.telemetry, err = a.system.Spawn(ctx.Context(), "telemetry", telemetryactor.New())
+	accountingPID := a.accounting
+	a.telemetry, err = telemetryactor.Start(ctx.Context(), config.PyroscopeServerAddress, func(level, message string) {
+		_ = goakt.Tell(context.Background(), accountingPID, &accountingactor.Event{Level: level, Name: "pyroscope.sdk", Fields: map[string]string{"message": message}})
+	})
 	if err != nil {
-		return fmt.Errorf("spawn telemetry actor: %w", err)
-	}
-	telemetryResponse, err := goakt.Ask(ctx.Context(), a.telemetry, &telemetryactor.Setup{
-		PyroscopeServerAddress: config.PyroscopeServerAddress,
-		Accounting:             a.accounting,
-	}, StartupTimeout)
-	if err != nil {
-		return fmt.Errorf("send telemetry setup: %w", err)
-	}
-	telemetryReady, ok := telemetryResponse.(*telemetryactor.Ready)
-	if !ok {
-		return fmt.Errorf("initialize telemetry: unexpected response %T", telemetryResponse)
-	}
-	if telemetryReady.Err != nil {
-		return fmt.Errorf("initialize telemetry: %w", telemetryReady.Err)
+		return fmt.Errorf("initialize telemetry: %w", err)
 	}
 	a.account(ctx.Context(), "info", "pyroscope.profiling.started", map[string]string{"application": "janus-go"})
 
@@ -157,13 +123,10 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn persistence actor: %w", err)
 	}
-	a.authentication, err = a.system.Spawn(startupCtx, "authentication", authactor.New([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry))
+	a.authentication = authactor.New([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry)
+	a.authorization, err = authzactor.New(startupCtx)
 	if err != nil {
-		return fmt.Errorf("spawn authentication actor: %w", err)
-	}
-	a.authorization, err = a.system.Spawn(startupCtx, "authorization", authzactor.New())
-	if err != nil {
-		return fmt.Errorf("spawn authorization actor: %w", err)
+		return err
 	}
 	a.projects, err = a.system.Spawn(startupCtx, "projects", projectsactor.New(a.persistence, a.accounting))
 	if err != nil {
@@ -313,17 +276,8 @@ func (a *Actor) stop(ctx context.Context) error {
 	if a.telemetry != nil {
 		// End before shutting down the provider so its batch processor flushes this span.
 		endSpan()
-		response, err := goakt.Ask(shutdownCtx, a.telemetry, &telemetryactor.Shutdown{Context: shutdownCtx}, ShutdownTimeout)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else if result, ok := response.(*telemetryactor.Stopped); !ok {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("shutdown telemetry: unexpected response %T", response)
-			}
-		} else if result.Err != nil && firstErr == nil {
-			firstErr = result.Err
+		if err := a.telemetry.Stop(shutdownCtx); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
 	return firstErr

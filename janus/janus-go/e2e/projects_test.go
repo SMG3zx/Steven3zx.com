@@ -354,13 +354,16 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (*acto
 	}
 	accountingPID := spawn("accounting", accounting.New(zap.NewNop()))
 	persistencePID := spawn("persistence", persistence.New(path.Join(t.TempDir(), "e2e.sqlite"), jwtSecret))
-	authenticationPID := spawn("authentication", authactor.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute))
-	authorizationPID := spawn("authorization", authzactor.New())
+	authentication := authactor.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
+	authorization, err := authzactor.New(ctx)
+	if err != nil {
+		t.Fatalf("prepare authorization: %v", err)
+	}
 	projectsPID := spawn("projects", projectactor.New(persistencePID, accountingPID))
 	wasmBuildsPID := spawn("wasm-builds", wasmactor.New(persistencePID, accountingPID, b))
 	routesPID := spawn("routes", routesactor.New(routesactor.Dependencies{
 		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID, WASMBuilds: wasmBuildsPID,
-		Authentication: authenticationPID, Authorization: authorizationPID,
+		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
 	}))

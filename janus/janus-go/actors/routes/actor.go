@@ -25,8 +25,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"janus/actors/accounting"
-	authactor "janus/actors/authentication"
-	authzactor "janus/actors/authorization"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
 	"janus/web"
@@ -171,16 +169,12 @@ func (a *Actor) register(c *web.Context) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "registration is disabled"})
 	}
-	response, err := a.ask(ctx, a.dependencies.Authentication, &authactor.HashPassword{Password: input.Password})
+	encoded, err := a.dependencies.Authentication.HashPassword(ctx, input.Password)
 	if err != nil {
 		return internalError()
 	}
-	hashed, ok := response.(*authactor.PasswordHashed)
-	if !ok || hashed.Err != nil {
-		return internalError()
-	}
 	userID := newUserID()
-	response, err = a.ask(ctx, a.dependencies.Persistence, &persistence.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: hashed.Encoded})
+	response, err := a.ask(ctx, a.dependencies.Persistence, &persistence.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
 	if err != nil {
 		return internalError()
 	}
@@ -220,15 +214,11 @@ func (a *Actor) login(c *web.Context) any {
 		a.log(ctx, "warn", "auth.login.denied", map[string]string{"provider": "local", "reason": "invalid_credentials"})
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "invalid email or password"})
 	}
-	response, err = a.ask(ctx, a.dependencies.Authentication, &authactor.VerifyPassword{Password: input.Password, Encoded: user.PasswordHash})
+	valid, err := a.dependencies.Authentication.VerifyPassword(ctx, input.Password, user.PasswordHash)
 	if err != nil {
 		return internalError()
 	}
-	verified, ok := response.(*authactor.PasswordVerified)
-	if !ok || verified.Err != nil {
-		return internalError()
-	}
-	if !verified.Valid {
+	if !valid {
 		a.log(ctx, "warn", "auth.login.denied", map[string]string{"provider": "local", "reason": "invalid_credentials"})
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "invalid email or password"})
 	}
@@ -240,10 +230,8 @@ func (a *Actor) logout(c *web.Context) any {
 	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.logout", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	if cookie, err := c.Request.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
-		if response, askErr := a.ask(ctx, a.dependencies.Authentication, &authactor.ValidateToken{Token: cookie.Value}); askErr == nil {
-			if validated, ok := response.(*authactor.TokenValidated); ok && validated.Valid {
-				a.log(ctx, "info", "auth.logout", map[string]string{"user_id": validated.Subject})
-			}
+		if subject, valid := a.dependencies.Authentication.ValidateToken(ctx, cookie.Value); valid {
+			a.log(ctx, "info", "auth.logout", map[string]string{"user_id": subject})
 		}
 	}
 	return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{
@@ -352,34 +340,26 @@ func (a *Actor) subject(ctx context.Context, request *http.Request) (string, boo
 	if err != nil || cookie.Value == "" {
 		return "", false
 	}
-	response, err := a.ask(ctx, a.dependencies.Authentication, &authactor.ValidateToken{Token: cookie.Value})
-	if err != nil {
-		return "", false
-	}
-	validated, ok := response.(*authactor.TokenValidated)
-	if !ok || !validated.Valid {
+	subject, valid := a.dependencies.Authentication.ValidateToken(ctx, cookie.Value)
+	if !valid {
 		return "", false
 	}
 	// Sessions are stateless tokens, so an Account that was deleted is rejected here.
-	found, err := a.ask(ctx, a.dependencies.Persistence, &persistence.FindUser{ID: validated.Subject})
+	found, err := a.ask(ctx, a.dependencies.Persistence, &persistence.FindUser{ID: subject})
 	if err != nil {
 		return "", false
 	}
 	user, ok := found.(*persistence.UserFound)
-	return validated.Subject, ok && user.Found && user.Err == nil
+	return subject, ok && user.Found && user.Err == nil
 }
 
 func (a *Actor) issueCookie(ctx context.Context, subject string, status int, body any) any {
-	response, err := a.ask(ctx, a.dependencies.Authentication, &authactor.IssueToken{Subject: subject})
+	issued, err := a.dependencies.Authentication.IssueToken(ctx, subject)
 	if err != nil {
 		return internalError()
 	}
-	issued, ok := response.(*authactor.TokenIssued)
-	if !ok || issued.Err != nil {
-		return internalError()
-	}
 	maxAge := int(time.Until(time.Unix(issued.ExpiresAt, 0)).Seconds())
-	cookie := a.cookie(issued.Token, maxAge)
+	cookie := a.cookie(issued.Value, maxAge)
 	return web.Response{StatusCode: status, Header: http.Header{"Set-Cookie": {cookie.String()}}, Body: body}
 }
 
@@ -388,15 +368,7 @@ func (a *Actor) cookie(value string, maxAge int) *http.Cookie {
 }
 
 func (a *Actor) allowed(ctx context.Context, subject, action string, resource map[string]any) (bool, error) {
-	response, err := a.ask(ctx, a.dependencies.Authorization, &authzactor.Check{Subject: subject, Action: action, Resource: resource})
-	if err != nil {
-		return false, err
-	}
-	decision, ok := response.(*authzactor.Decision)
-	if !ok {
-		return false, errors.New("unexpected authorization response")
-	}
-	return decision.Allowed, decision.Err
+	return a.dependencies.Authorization.Allowed(ctx, subject, action, resource)
 }
 
 func (a *Actor) ask(ctx context.Context, pid *goakt.PID, message any) (any, error) {

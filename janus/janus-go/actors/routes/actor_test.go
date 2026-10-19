@@ -55,17 +55,14 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		defer closeCancel()
 		_, _ = actor.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
 	})
-	authenticationPID, err := system.Spawn(ctx, "authentication-test", authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
-	authorizationPID, err := system.Spawn(ctx, "authorization-test", authzactor.New())
+	authentication := authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute)
+	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	routesPID, err := system.Spawn(ctx, "routes-test-actor", New(Dependencies{
 		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID,
-		Authentication: authenticationPID, Authorization: authorizationPID, CookieSecure: true,
+		Authentication: authentication, Authorization: authorization, CookieSecure: true,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -149,12 +146,8 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	if authenticatedHome.Code != http.StatusOK || !strings.Contains(authenticatedHome.Body.String(), "Signed in as") || !strings.Contains(authenticatedHome.Body.String(), "alice@example.com") || !strings.Contains(authenticatedHome.Body.String(), `action="/auth/logout"`) {
 		t.Fatalf("authenticated homepage status = %d, body = %s", authenticatedHome.Code, authenticatedHome.Body.String())
 	}
-	deniedDecision, err := actor.Ask(ctx, authorizationPID, &authzactor.Check{Subject: "different-user", Action: "profile.read", Resource: map[string]any{"subject": "alice"}}, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if deniedDecision.(*authzactor.Decision).Allowed {
-		t.Fatal("OPA permitted a user to read another subject's profile")
+	if allowed, err := authorization.Allowed(ctx, "different-user", "profile.read", map[string]any{"subject": "alice"}); err != nil || allowed {
+		t.Fatalf("OPA permitted a user to read another subject's profile: allowed=%v err=%v", allowed, err)
 	}
 	unauthorized := perform(app, http.MethodGet, "/api/me", "", nil)
 	if unauthorized.Code != http.StatusUnauthorized {

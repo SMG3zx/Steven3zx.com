@@ -6,6 +6,9 @@ import (
 	"time"
 
 	goakt "github.com/tochemey/goakt/v4/actor"
+
+	"janus/actors/authentication"
+	"janus/actors/authorization"
 )
 
 // Build requests construction of the HTTP application. The actor replies with
@@ -19,8 +22,8 @@ type Built struct{ App *web.App }
 // to construct the route handlers.
 type Dependencies struct {
 	System         goakt.ActorSystem
-	Authentication *goakt.PID
-	Authorization  *goakt.PID
+	Authentication *authentication.Service
+	Authorization  *authorization.Policy
 	Accounting     *goakt.PID
 	Persistence    *goakt.PID
 	Projects       *goakt.PID

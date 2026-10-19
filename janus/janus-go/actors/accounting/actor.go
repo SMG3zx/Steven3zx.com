@@ -46,16 +46,6 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 			}
 			a.logger.Info(msg.Name, fields...)
 		}
-	case *actortrace.SDKLog:
-		field := zap.String("message", msg.Message)
-		switch msg.Level {
-		case "error":
-			a.logger.Error("pyroscope.sdk", field)
-		case "debug":
-			a.logger.Debug("pyroscope.sdk", field)
-		default:
-			a.logger.Info("pyroscope.sdk", field)
-		}
 	default:
 		rctx.Unhandled()
 	}

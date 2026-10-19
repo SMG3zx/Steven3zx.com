@@ -29,7 +29,7 @@ func TestGitHubOAuthUsesSeparateIdentityAndRepositoryScopesAndChecksState(t *tes
 		defer c()
 		_ = system.Stop(stop)
 	})
-	authorization, err := system.Spawn(ctx, "authorization", authzactor.New())
+	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

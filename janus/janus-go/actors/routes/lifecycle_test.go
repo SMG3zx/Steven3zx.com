@@ -58,17 +58,14 @@ func newLifecycleApp(t *testing.T) (http.Handler, *actor.PID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	authenticationPID, err := system.Spawn(ctx, "authentication-lifecycle", authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
-	authorizationPID, err := system.Spawn(ctx, "authorization-lifecycle", authzactor.New())
+	authentication := authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute)
+	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	routesPID, err := system.Spawn(ctx, "routes-lifecycle", New(Dependencies{
 		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID, WASMBuilds: wasmPID,
-		Authentication: authenticationPID, Authorization: authorizationPID, CookieSecure: true,
+		Authentication: authentication, Authorization: authorization, CookieSecure: true,
 	}))
 	if err != nil {
 		t.Fatal(err)
