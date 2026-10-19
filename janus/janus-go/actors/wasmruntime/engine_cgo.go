@@ -4,6 +4,7 @@ package wasmruntime
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -72,7 +73,7 @@ func ExecuteWASIWith(moduleBytes []byte, args []string, limits templates.Resourc
 	if err = linker.DefineWasi(); err != nil {
 		return nil, nil, Usage{}, err
 	}
-	module, err := wasmtime.NewModule(engine, moduleBytes)
+	module, err := loadModule(engine, moduleBytes)
 	if err != nil {
 		return nil, nil, Usage{}, err
 	}
@@ -90,6 +91,7 @@ func ExecuteWASIWith(moduleBytes []byte, args []string, limits templates.Resourc
 		_, callErr := start.Call(store)
 		return callErr
 	})
+	err = normalizeExit(err)
 	usage.DurationMS = wall.Milliseconds()
 	usage.CPUTimeMicros = cpu.Microseconds()
 	timer.Stop()
@@ -99,6 +101,26 @@ func ExecuteWASIWith(moduleBytes []byte, args []string, limits templates.Resourc
 	stdout, _ = readBounded(outPath, maxOutput)
 	stderr, _ = readBounded(errPath, maxOutput)
 	return stdout, stderr, usage, err
+}
+
+// normalizeExit turns a WASI proc_exit into the outcome it means. Wasmtime
+// reports every proc_exit as an error, including exit status 0, which is how Go
+// programs finish: their runtime calls proc_exit(0) after main returns. Status 0
+// is a success; any other status is a failure that names the status.
+func normalizeExit(err error) error {
+	var wasmErr *wasmtime.Error
+	if !errors.As(err, &wasmErr) {
+		return err
+	}
+	status, ok := wasmErr.ExitStatus()
+	switch {
+	case !ok:
+		return err
+	case status == 0:
+		return nil
+	default:
+		return fmt.Errorf("program exited with status %d", status)
+	}
 }
 
 // fuelConsumed returns the fuel the store has spent since SetFuel(limit).

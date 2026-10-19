@@ -3,6 +3,8 @@
 package wasmruntime
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,5 +137,29 @@ func TestExecuteWASIReportsCPUTimeForACPUBoundRun(t *testing.T) {
 	wall := usage.DurationMS * 1000
 	if usage.CPUTimeMicros > wall+32_000 {
 		t.Fatalf("cpu = %d us, more than the %d us of wall time", usage.CPUTimeMicros, wall)
+	}
+}
+
+func exitModule(status int) string {
+	return fmt.Sprintf(`(module
+  (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32)))
+  (memory (export "memory") 1)
+  (func (export "_start") (call $exit (i32.const %d))))`, status)
+}
+
+func TestExitStatusZeroIsASuccess(t *testing.T) {
+	_, _, _, err := ExecuteWASI(compileWAT(t, exitModule(0)), nil, 5*time.Second)
+	if err != nil {
+		t.Fatalf("a program that exits with status 0 failed: %v", err)
+	}
+}
+
+func TestNonzeroExitStatusIsAFailureThatNamesTheStatus(t *testing.T) {
+	_, _, usage, err := ExecuteWASI(compileWAT(t, exitModule(3)), nil, 5*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "status 3") {
+		t.Fatalf("err = %v, want a failure naming status 3", err)
+	}
+	if usage.Fuel == 0 {
+		t.Fatal("a program that exited non-zero still reports the fuel it spent")
 	}
 }

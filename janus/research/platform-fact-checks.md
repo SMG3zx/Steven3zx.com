@@ -163,3 +163,20 @@ Measured 2026-10-19 on the machine used for the fuel table (AMD Ryzen 5 7600X, W
 - An empty Javy module takes about 400 ms in `ExecuteWASIWith` from start to finish, although its `_start` call takes under 1 ms. Almost all of that is compiling the 1.3 MB module with Cranelift on every run. It is not billed (the CPU clock covers only the call) but each run costs the node about 0.4 CPU seconds. Wasmtime can serialize a compiled module and load it again, so compiling once per Artifact and caching the result would remove it. This also applies to Go and Rust Artifacts, which was not measured here.
 
 **Caveats:** one machine, one operating system, synthetic workloads, and Windows' 15.6 ms CPU tick. Re-run on the Linux nodes that will serve runs. Javy's other mode (dynamic linking, a shared QuickJS module) was not tried and would shrink modules but not change interpreter speed.
+
+## Compiled-module cache (2026-10-19)
+
+The runner compiled the module on every run. `modulecache_cgo.go` in `janus/janus-go/actors/wasmruntime` now keeps Wasmtime's compiled form of each module in memory, keyed by the SHA-256 of the `.wasm` bytes, and loads it with `NewModuleDeserialize`. The cache holds at most 256 MiB and evicts the least recently used module first. A cached copy that fails to load is dropped and the module is compiled again.
+
+Measured through `ExecuteWASI` end to end (module load, instantiate, run, tear down), same machine as above, 6 runs of each module in one process:
+
+| Module | .wasm size | First run (compile) | Later runs (cached) | Saving | Compiled form |
+|---|---|---|---|---|---|
+| Javy, `console.log(1)` | 1.3 MB | 374 ms | 2.7 ms | 140x | 4.9 MB |
+| Go `wasip1` hello world | 2.4 MB | 245 ms | 4.3 ms | 57x | 7.0 MB |
+
+Deserializing alone took 0.5 ms (Javy) and 1.0 ms (Go), against 365 ms and 242 ms to compile. Rust modules were not measured because the `wasm32-wasip1` target is not installed here. Fuel for a cached and an uncached run is identical (tested).
+
+**Limits of the result:** the cache lives in one process and is empty after a restart, so the first run of each Artifact after a restart still pays the compile. It does not help an Artifact that runs once. A multi-node pool would give each node its own cache; sharing compiled modules between nodes would need the same Wasmtime version and CPU features on every node, since a compiled module only loads on a matching host. The 256 MiB bound holds about 35 Go-sized or 50 Javy-sized modules.
+
+**A bug found on the way:** Go programs end by calling `proc_exit(0)`, and Wasmtime reports every `proc_exit` as an error. The runner treated that as a failed run, so every normal Go run was recorded as failed. It now treats status 0 as success and any other status as a failure that names it (`program exited with status N`). Tests cover both.
