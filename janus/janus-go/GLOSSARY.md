@@ -94,6 +94,22 @@ _Avoid_: Release, publish
 One Artifact running on one target, the Owner's machine through the Janus Agent in M1. A Project has one live Deployment. A redeploy creates a new Deployment that replaces the live one once it is healthy; the live one keeps serving until then. A Project keeps its last five stopped Deployments for rollback. Rollback deploys one of those Artifacts as a new Deployment, and never revives the old record. A Deployment is served per request: the Agent starts the module for each HTTP request, passes the request in through environment and stdin, and reads the response from stdout. Stopping a Deployment keeps its record and Usage, keeps its Artifact while its WASM Build exists, and retires its Temporary Domain for good.
 _Avoid_: Release, instance, rollout
 
+**Deployment states**:
+`queued`, `starting`, `healthy`, `failed`, `stopped`. A Deployment moves queued to starting to healthy to stopped; queued and starting can also move to failed, and a failed Deployment never becomes healthy. A stopped Deployment carries a reason: replaced, removed, rolled back, expired, or account deleted. "Agent offline" is not a state: the Deployment stays healthy, the edge answers 503, and the UI shows the Agent offline.
+
+**Healthy**:
+A Deployment is healthy once its Agent has fetched the Artifact, verified its hash, compiled it, and one probe invocation (`GET /`) ends without a trap, timeout, or running out of fuel. The HTTP status the module returns is not judged.
+
+**Request limits**:
+Each request starts with the Template's fuel, memory and stack limits and a 30-second wall-clock timeout. An Agent runs up to 16 requests at once; beyond that the edge answers 503. Request and response bodies are capped at 10 MiB. A limit hit returns a 5xx and still records Usage. These are starting values.
+
+**Temporary Domain**:
+The public name of a Project's live Deployment: a random 8-character label under `steven3zx.com`. The Project gets one at its first Deploy, and it moves to each new Deployment once that one is healthy, so the URL stays stable across redeploys and rollbacks. It expires 7 days after the last successful Deploy. When it expires or the Deployment is removed, the name is retired and never reissued, and the next Deploy gets a new one. While a first Deployment is starting, the domain answers 503 with a short "deploying" page.
+_Avoid_: Preview URL, subdomain
+
+**Deploy target**:
+The Agent a Deploy goes to. The Owner picks it at Deploy time: preselected when exactly one Agent is enrolled, otherwise the last used. A Deployment is pinned to that Agent. Deploy is refused if the Account has no enrolled, online Agent.
+
 **Failed Deployment**:
 A Deployment that ended in an error, kept with its message. It is not resumed. If the control plane restarts mid-Deploy, it reconciles with the Agent and marks the Deployment healthy or failed. The Owner starts a new Deploy from the same WASM Build, and the previous live Deployment keeps serving meanwhile.
 
