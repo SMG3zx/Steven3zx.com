@@ -26,6 +26,7 @@ type Run struct {
 	Stdout    string    `json:"stdout,omitempty"`
 	Stderr    string    `json:"stderr,omitempty"`
 	Error     string    `json:"error,omitempty"`
+	Usage     Usage     `json:"usage"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	ownerID   string
@@ -33,5 +34,6 @@ type Run struct {
 type completed struct {
 	ID, Module     string
 	Stdout, Stderr []byte
+	Usage          Usage
 	Err            error
 }

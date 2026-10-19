@@ -51,6 +51,7 @@ func (a *Actor) Receive(ctx *actor.ReceiveContext) {
 		r.Stdout = string(m.Stdout)
 		r.Stderr = string(m.Stderr)
 		r.Module = m.Module
+		r.Usage = m.Usage
 		if m.Err != nil {
 			r.Status = "failed"
 			r.Error = m.Err.Error()
@@ -138,10 +139,11 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 	go func() {
 		module, name, e := extract(data, artifact.Name)
 		var out, stderr []byte
+		var usage Usage
 		if e == nil {
-			out, stderr, e = ExecuteWASI(module, args, 10*time.Second)
+			out, stderr, usage, e = ExecuteWASI(module, args, 10*time.Second)
 		}
-		_ = actor.Tell(context.Background(), self, &completed{ID: id, Module: name, Stdout: out, Stderr: stderr, Err: e})
+		_ = actor.Tell(context.Background(), self, &completed{ID: id, Module: name, Stdout: out, Stderr: stderr, Usage: usage, Err: e})
 	}()
 	return &RunRequested{RunID: id}
 }

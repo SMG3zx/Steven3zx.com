@@ -1,0 +1,17 @@
+package wasmruntime
+
+// fuelLimit is the Wasmtime fuel a single run starts with. A run that spends all
+// of it traps, so it is also the most fuel one run can consume.
+const fuelLimit uint64 = 100_000_000
+
+// Usage is what one WASM Run consumed, measured by the host.
+//
+// Fuel is exact and repeatable for the same module and input. PeakMemoryBytes is
+// the size of the module's exported linear memory when the run ended, which is
+// its peak because linear memory never shrinks. It is zero when the module
+// exports no memory. DurationMS is wall time measured by the host clock.
+type Usage struct {
+	Fuel            uint64 `json:"fuel"`
+	PeakMemoryBytes uint64 `json:"peak_memory_bytes"`
+	DurationMS      int64  `json:"duration_ms"`
+}

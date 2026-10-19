@@ -26,7 +26,7 @@ The `DockerControllerActor` is the application's single owner for Docker daemon 
 
 The compression experiment can be rerun with `go run ./build/compression-exp/experiment.go`. On a 2,471,305-byte Go WASI hello-world sample, Zstandard level 19 took about 70 ms and produced 657,000 bytes; level 3 took about 10 ms and produced 723,292 bytes. Deflate best-compression produced 725,455 bytes in about 165 ms; zlib best-compression produced 725,325 bytes in about 164 ms. The production compressor uses only Zstandard level 19. Results depend on the compiled module and machine.
 
-WASI artifacts can be run by the Wasmtime runtime actor. `POST /api/wasm-builds/:id/runs` accepts an optional JSON `args` array and returns a run ID; poll `GET /api/wasm-runs/:id` for status and captured output. Runs are owner-scoped, limited to two concurrent executions, and use Wasmtime fuel, memory, stack, and time limits. The Wasmtime Go binding requires CGO and a supported native toolchain; CGO-disabled builds report the runner as unavailable.
+WASI artifacts can be run by the Wasmtime runtime actor. `POST /api/wasm-builds/:id/runs` accepts an optional JSON `args` array and returns a run ID; poll `GET /api/wasm-runs/:id` for status, captured output, and `usage` (`fuel`, `peak_memory_bytes`, and `duration_ms`). Runs are owner-scoped, limited to two concurrent executions, and use Wasmtime fuel, memory, stack, and time limits. The Wasmtime Go binding requires CGO and a supported native toolchain; CGO-disabled builds report the runner as unavailable.
 
 ## Authentication endpoints
 
