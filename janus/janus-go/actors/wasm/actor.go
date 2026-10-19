@@ -55,6 +55,7 @@ type Actor struct {
 	runner      Runner
 	rustBuilder *actor.PID
 	goBuilder   *actor.PID
+	jsBuilder   *actor.PID
 	docker      *actor.PID
 	compressor  *actor.PID
 	jobs        *jobrunner.Runner
@@ -74,10 +75,10 @@ func NewWithRunner(persistencePID, accountingPID *actor.PID, runner Runner) *Act
 	return &Actor{persistence: persistencePID, accounting: accountingPID, runner: runner, jobs: jobrunner.New(2)}
 }
 
-// NewWithBuilders creates a build actor that delegates to the Rust, Go, and
-// compressor actors.
-func NewWithBuilders(persistencePID, accountingPID, rustBuilderPID, goBuilderPID, compressorPID *actor.PID) *Actor {
-	return &Actor{persistence: persistencePID, accounting: accountingPID, rustBuilder: rustBuilderPID, goBuilder: goBuilderPID, compressor: compressorPID, jobs: jobrunner.New(2)}
+// NewWithBuilders creates a build actor that delegates to the Rust, Go,
+// JavaScript, and compressor actors.
+func NewWithBuilders(persistencePID, accountingPID, rustBuilderPID, goBuilderPID, jsBuilderPID, compressorPID *actor.PID) *Actor {
+	return &Actor{persistence: persistencePID, accounting: accountingPID, rustBuilder: rustBuilderPID, goBuilder: goBuilderPID, jsBuilder: jsBuilderPID, compressor: compressorPID, jobs: jobrunner.New(2)}
 }
 
 // NewWithDocker creates a build actor with an explicit Docker controller PID.
@@ -147,7 +148,7 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	if !a.jobs.Accepting() {
 		return "", errors.New("WASM builds are shutting down")
 	}
-	if a.runner == nil && a.rustBuilder == nil && a.goBuilder == nil {
+	if a.runner == nil && a.rustBuilder == nil && a.goBuilder == nil && a.jsBuilder == nil {
 		return "", errors.New("WASM build runner is not configured")
 	}
 	if !templates.KnownTarget(msg.Target) {
@@ -258,6 +259,19 @@ func (a *Actor) run(parent context.Context, msg *RunBuild) error {
 		} else {
 			name, artifact, log, err = result.Name, result.Artifact, result.Log, result.Err
 		}
+	} else if strings.EqualFold(msg.Language, "JavaScript/TypeScript") {
+		if a.jsBuilder == nil {
+			return a.fail(ctx, msg.JobID, "JavaScript/TypeScript WASM builder is not configured", errors.New("builder unavailable"))
+		}
+		build := &wasmbuilder.Build{Workspace: workspace, Target: msg.Target, Entrypoint: a.snapshotEntrypoint(ctx, msg)}
+		response, askErr := actor.Ask(ctx, a.jsBuilder, build, buildTimeout)
+		if askErr != nil {
+			err = askErr
+		} else if result, ok := response.(*wasmbuilder.Built); !ok {
+			err = fmt.Errorf("unexpected JavaScript builder response %T", response)
+		} else {
+			name, artifact, log, err = result.Name, result.Artifact, result.Log, result.Err
+		}
 	} else if a.rustBuilder != nil {
 		if _, err = os.Stat(filepath.Join(workspace, "Cargo.toml")); err != nil {
 			return a.fail(ctx, msg.JobID, "Rust WASM builds require a Cargo.toml at the repository root", err)
@@ -278,8 +292,11 @@ func (a *Actor) run(parent context.Context, msg *RunBuild) error {
 	}
 	if err != nil {
 		label := "Rust"
-		if strings.EqualFold(msg.Language, "Go") {
+		switch {
+		case strings.EqualFold(msg.Language, "Go"):
 			label = "Go"
+		case strings.EqualFold(msg.Language, "JavaScript/TypeScript"):
+			label = "JavaScript/TypeScript"
 		}
 		reason := label + " WASM build failed: " + err.Error()
 		_ = a.updateWithLog(ctx, msg.JobID, "failed", 100, reason, log)

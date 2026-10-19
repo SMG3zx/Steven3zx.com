@@ -24,6 +24,14 @@ func Available() bool { return true }
 // is bounded. Usage is filled in whenever the module started running, including
 // when it traps, so a run that exhausts its fuel still reports the fuel spent.
 func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdout, stderr []byte, usage Usage, err error) {
+	limits := templates.Resources{Fuel: fuelLimit, MemoryBytes: templates.DefaultMemoryBytes, Timeout: timeout}
+	return ExecuteWASIWith(moduleBytes, args, limits)
+}
+
+// ExecuteWASIWith is ExecuteWASI with the fuel, memory, and time limits of a
+// template's Resources.
+func ExecuteWASIWith(moduleBytes []byte, args []string, limits templates.Resources) (stdout, stderr []byte, usage Usage, err error) {
+	timeout := limits.Timeout
 	dir, err := os.MkdirTemp("", "janus-wasm-run-")
 	if err != nil {
 		return nil, nil, Usage{}, err
@@ -42,8 +50,8 @@ func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdo
 	defer engine.Close()
 	store := wasmtime.NewStore(engine)
 	defer store.Close()
-	store.Limiter(templates.DefaultMemoryBytes, 10000, 1, 1, 1)
-	if err = store.SetFuel(fuelLimit); err != nil {
+	store.Limiter(limits.MemoryBytes, 10000, 1, 1, 1)
+	if err = store.SetFuel(limits.Fuel); err != nil {
 		return nil, nil, Usage{}, err
 	}
 	store.SetEpochDeadline(1)
@@ -86,20 +94,20 @@ func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdo
 	usage.CPUTimeMicros = cpu.Microseconds()
 	timer.Stop()
 	// Read the meters before the deferred store.Close releases the store.
-	usage.Fuel = fuelConsumed(store)
+	usage.Fuel = fuelConsumed(store, limits.Fuel)
 	usage.PeakMemoryBytes = memoryBytes(instance, store)
 	stdout, _ = readBounded(outPath, maxOutput)
 	stderr, _ = readBounded(errPath, maxOutput)
 	return stdout, stderr, usage, err
 }
 
-// fuelConsumed returns the fuel the store has spent since SetFuel(fuelLimit).
-func fuelConsumed(store *wasmtime.Store) uint64 {
+// fuelConsumed returns the fuel the store has spent since SetFuel(limit).
+func fuelConsumed(store *wasmtime.Store, limit uint64) uint64 {
 	left, err := store.GetFuel()
-	if err != nil || left > fuelLimit {
+	if err != nil || left > limit {
 		return 0
 	}
-	return fuelLimit - left
+	return limit - left
 }
 
 // memoryBytes returns the current size of the instance's exported linear memory.

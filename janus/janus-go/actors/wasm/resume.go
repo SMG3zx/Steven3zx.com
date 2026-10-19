@@ -71,6 +71,25 @@ func (a *Actor) resumeBuilds(ctx context.Context, system actor.ActorSystem) (int
 	return len(listed.Builds), nil
 }
 
+// snapshotEntrypoint returns the Entrypoint the Account confirmed for the
+// build's Snapshot, or "" when there is none or it cannot be read.
+func (a *Actor) snapshotEntrypoint(ctx context.Context, msg *RunBuild) string {
+	response, err := a.ask(ctx, &persistence.ListSnapshots{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID})
+	if err != nil {
+		return ""
+	}
+	listed, ok := response.(*persistence.SnapshotsListed)
+	if !ok || listed.Err != nil {
+		return ""
+	}
+	for _, snapshot := range listed.Snapshots {
+		if snapshot.ID == msg.SnapshotID {
+			return snapshot.EntryPoint
+		}
+	}
+	return ""
+}
+
 // queueBuild starts msg once a build slot is free. It does not block the caller.
 func (a *Actor) queueBuild(ctx context.Context, system actor.ActorSystem, msg *RunBuild) {
 	a.jobs.Queue(ctx, system, buildWorkerName(msg.JobID), a.worker(), msg, func(error) {
@@ -80,7 +99,7 @@ func (a *Actor) queueBuild(ctx context.Context, system actor.ActorSystem, msg *R
 
 // worker returns a new build worker that shares this actor's collaborators.
 func (a *Actor) worker() *Actor {
-	return &Actor{persistence: a.persistence, accounting: a.accounting, runner: a.runner, jobs: a.jobs, rustBuilder: a.rustBuilder, goBuilder: a.goBuilder, compressor: a.compressor}
+	return &Actor{persistence: a.persistence, accounting: a.accounting, runner: a.runner, jobs: a.jobs, rustBuilder: a.rustBuilder, goBuilder: a.goBuilder, jsBuilder: a.jsBuilder, compressor: a.compressor}
 }
 
 func buildWorkerName(jobID string) string {

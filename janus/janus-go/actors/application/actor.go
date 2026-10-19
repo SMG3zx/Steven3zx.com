@@ -18,6 +18,7 @@ import (
 	dockeractor "janus/actors/docker"
 	"janus/actors/gobuilder"
 	httpserver "janus/actors/httpserver"
+	"janus/actors/jsbuilder"
 	persistenceactor "janus/actors/persistence"
 	projectsactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
@@ -43,6 +44,7 @@ type Actor struct {
 	wasmRuntime    *goakt.PID
 	rustBuilder    *goakt.PID
 	goBuilder      *goakt.PID
+	jsBuilder      *goakt.PID
 	docker         *goakt.PID
 	logger         *zap.Logger
 	processErrors  chan error
@@ -191,7 +193,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		a.logger.Info("Docker daemon is ready")
 	}
 	imagesResponse, err := goakt.Ask(startupCtx, a.docker, &dockeractor.PrepareWASMBuilders{
-		RustImage: config.WASMBuilderImage, GoImage: config.GoWASMBuilderImage,
+		RustImage: config.WASMBuilderImage, GoImage: config.GoWASMBuilderImage, JSImage: config.JSWASMBuilderImage,
 	}, 10*time.Minute)
 	if err != nil {
 		return fmt.Errorf("prepare WASM builder images: %w", err)
@@ -214,11 +216,15 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn Go WASM builder actor: %w", err)
 	}
+	a.jsBuilder, err = a.system.Spawn(startupCtx, "js-wasm-builder", jsbuilder.New(config.JSWASMBuilderImage, a.docker))
+	if err != nil {
+		return fmt.Errorf("spawn JavaScript WASM builder actor: %w", err)
+	}
 	compressorPID, err := a.system.Spawn(startupCtx, "artifact-compressor", compressor.New())
 	if err != nil {
 		return fmt.Errorf("spawn artifact compressor actor: %w", err)
 	}
-	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.NewWithBuilders(a.persistence, a.accounting, a.rustBuilder, a.goBuilder, compressorPID))
+	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.NewWithBuilders(a.persistence, a.accounting, a.rustBuilder, a.goBuilder, a.jsBuilder, compressorPID))
 	if err != nil {
 		return fmt.Errorf("spawn WASM build actor: %w", err)
 	}

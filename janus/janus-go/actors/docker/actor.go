@@ -32,7 +32,7 @@ func (*Actor) Receive(ctx *actor.ReceiveContext) {
 	case *EnsureRunning:
 		ctx.Response(&Healthy{Err: ensureRunning(ctx.Context())})
 	case *PrepareWASMBuilders:
-		built, err := prepareWASMBuilders(ctx.Context(), msg.RustImage, msg.GoImage)
+		built, err := prepareWASMBuilders(ctx.Context(), msg.RustImage, msg.GoImage, msg.JSImage)
 		ctx.Response(&WASMBuildersReady{BuiltImages: built, Err: err})
 	case *Run:
 		ctx.Response(run(ctx, msg))
@@ -41,15 +41,16 @@ func (*Actor) Receive(ctx *actor.ReceiveContext) {
 	}
 }
 
-func prepareWASMBuilders(ctx context.Context, rustImage, goImage string) ([]string, error) {
+func prepareWASMBuilders(ctx context.Context, rustImage, goImage, jsImage string) ([]string, error) {
 	root, err := findProjectRoot()
 	if err != nil {
 		return nil, err
 	}
-	built := make([]string, 0, 2)
+	built := make([]string, 0, 3)
 	for _, builder := range []struct{ name, image, dockerfile string }{
 		{name: "Rust", image: rustImage, dockerfile: "Dockerfile.wasm-rust"},
 		{name: "Go", image: goImage, dockerfile: "Dockerfile.wasm-go"},
+		{name: "JavaScript/TypeScript", image: jsImage, dockerfile: "Dockerfile.wasm-js"},
 	} {
 		path := filepath.Join(root, "build", builder.dockerfile)
 		if _, err := os.Stat(path); err != nil {

@@ -365,6 +365,7 @@ At startup, Janus loads `.env` from the process working directory, then reads th
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL` | No | Empty | Set all three to enable GitHub login and linked repository imports. Linking requests `repo` access. |
 | `JANUS_WASM_BUILDER_IMAGE` | No | `janus-rust-wasm-builder:local` | Rust builder image name. |
 | `JANUS_GO_WASM_BUILDER_IMAGE` | No | `janus-go-wasm-builder:local` | Go builder image name. Build images from `build/Dockerfile.wasm-rust` and `build/Dockerfile.wasm-go`. |
+| `JANUS_JS_WASM_BUILDER_IMAGE` | No | `janus-js-wasm-builder:local` | JavaScript/TypeScript builder image name (Bun and Javy). Built from `build/Dockerfile.wasm-js`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | `http://localhost:4318` | OTLP/HTTP endpoint used for traces, metrics, and logs. |
 | `PYROSCOPE_SERVER_ADDRESS` | No | `http://localhost:4040` | Go runtime profile destination. |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | Compose only | `admin` / `change-me-before-sharing` in the example | Local Grafana credentials. Change before sharing or exposing the observability stack. |

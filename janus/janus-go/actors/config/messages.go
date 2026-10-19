@@ -31,5 +31,6 @@ type Config struct {
 	GitHubEnabled          bool
 	WASMBuilderImage       string
 	GoWASMBuilderImage     string
+	JSWASMBuilderImage     string
 	PyroscopeServerAddress string
 }

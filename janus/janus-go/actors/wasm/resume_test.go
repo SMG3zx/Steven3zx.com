@@ -11,6 +11,7 @@ import (
 	golog "github.com/tochemey/goakt/v4/log"
 
 	"janus/actors/persistence"
+	"janus/actors/wasmbuilder"
 )
 
 // buildFixture is a persistence actor holding one owner and one project whose
@@ -128,14 +129,14 @@ func TestResumedBuildRestartsFromScratchAndCompletes(t *testing.T) {
 
 func TestBuildForAnUnbuildableLanguageIsRejectedAndNothingIsQueued(t *testing.T) {
 	runner := &fakeRunner{}
-	f := newBuildFixture(t, "JavaScript/TypeScript", runner)
+	f := newBuildFixture(t, "Python", runner)
 
 	response, err := actor.Ask(f.ctx, f.builds, &RequestBuild{OwnerID: "owner", ProjectID: "project", Target: "wasm32-unknown-unknown"}, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 	requested := response.(*BuildRequested)
-	if requested.Err == nil || !strings.Contains(requested.Err.Error(), "not available for JavaScript/TypeScript projects yet") {
+	if requested.Err == nil || !strings.Contains(requested.Err.Error(), "not available for Python projects yet") {
 		t.Fatalf("build request = %#v, want an unbuildable-language rejection", requested)
 	}
 	if runner.calls != 0 {
@@ -177,5 +178,67 @@ func TestRetryBuildRejectsABuildThatHasNotFailed(t *testing.T) {
 	}
 	if requested := response.(*BuildRequested); requested.Err == nil || !strings.Contains(requested.Err.Error(), "only a failed WASM build") {
 		t.Fatalf("retry of a queued build = %#v, want rejection", requested)
+	}
+}
+
+// recordingBuilder answers every build with a fixed module and remembers the
+// request it received.
+type recordingBuilder struct{ got chan *wasmbuilder.Build }
+
+func (*recordingBuilder) PreStart(*actor.Context) error { return nil }
+func (*recordingBuilder) PostStop(*actor.Context) error { return nil }
+func (b *recordingBuilder) Receive(ctx *actor.ReceiveContext) {
+	m, ok := ctx.Message().(*wasmbuilder.Build)
+	if !ok {
+		ctx.Unhandled()
+		return
+	}
+	b.got <- m
+	ctx.Response(&wasmbuilder.Built{Name: "wasm-artifacts.zip", Artifact: []byte("zip fixture"), Log: []byte("bundled and compiled")})
+}
+
+func TestJavaScriptSnapshotIsBuiltByTheJavaScriptBuilder(t *testing.T) {
+	f := newBuildFixture(t, "JavaScript/TypeScript", &fakeRunner{})
+	js := &recordingBuilder{got: make(chan *wasmbuilder.Build, 1)}
+	jsPID, err := f.system.Spawn(f.ctx, "js-builder", js)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := NewWithRunner(f.db, nil, &fakeRunner{})
+	worker.jsBuilder = jsPID
+	builds, err := f.system.Spawn(f.ctx, "wasm-js", worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := actor.Ask(f.ctx, builds, &RequestBuild{OwnerID: "owner", ProjectID: "project", Target: "wasm32-wasip1"}, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requested := response.(*BuildRequested)
+	if requested.Err != nil {
+		t.Fatal(requested.Err)
+	}
+	select {
+	case got := <-js.got:
+		if got.Target != "wasm32-wasip1" || got.Workspace == "" {
+			t.Fatalf("builder asked for %+v", got)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the JavaScript builder was never asked")
+	}
+	if build := f.waitForBuild(requested.JobID); build.Status != "complete" {
+		t.Fatalf("build status = %q (%s)", build.Status, build.Error)
+	}
+}
+
+func TestJavaScriptSnapshotRejectsAGoOrRustTarget(t *testing.T) {
+	f := newBuildFixture(t, "JavaScript/TypeScript", &fakeRunner{})
+	response, err := actor.Ask(f.ctx, f.builds, &RequestBuild{OwnerID: "owner", ProjectID: "project", Target: "wasip1-wasm"}, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested := response.(*BuildRequested); requested.Err == nil || !strings.Contains(requested.Err.Error(), "require target wasm32-wasip1") {
+		t.Fatalf("build request = %#v, want a target rejection", requested)
 	}
 }

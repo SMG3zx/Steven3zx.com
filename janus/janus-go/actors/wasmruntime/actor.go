@@ -119,6 +119,7 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 		<-a.slots
 		return &RunRequested{Err: errors.New("WASM artifact not found")}
 	}
+	limits := a.limitsFor(ctx.Context(), m.OwnerID, b.Build)
 	id := uuid.NewString()
 	if len(a.runs) >= 100 {
 		var oldest string
@@ -142,11 +143,34 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 		var out, stderr []byte
 		var usage Usage
 		if e == nil {
-			out, stderr, usage, e = ExecuteWASI(module, args, templates.DefaultTimeout)
+			out, stderr, usage, e = ExecuteWASIWith(module, args, limits)
 		}
 		_ = actor.Tell(context.Background(), self, &completed{ID: id, Module: name, Stdout: out, Stderr: stderr, Usage: usage, Err: e})
 	}()
 	return &RunRequested{RunID: id}
+}
+
+// limitsFor returns the resource limits of the template that built build, or
+// the defaults when its Snapshot cannot be found.
+func (a *Actor) limitsFor(ctx context.Context, ownerID string, build persistence.WASMBuild) templates.Resources {
+	limits := templates.Resources{Fuel: templates.DefaultFuel, MemoryBytes: templates.DefaultMemoryBytes, Timeout: templates.DefaultTimeout}
+	response, err := actor.Ask(ctx, a.persistence, &persistence.ListSnapshots{OwnerID: ownerID, ProjectID: build.ProjectID}, 5*time.Second)
+	if err != nil {
+		return limits
+	}
+	listed, ok := response.(*persistence.SnapshotsListed)
+	if !ok || listed.Err != nil {
+		return limits
+	}
+	for _, snapshot := range listed.Snapshots {
+		if snapshot.ID != build.SnapshotID {
+			continue
+		}
+		if template, found := templates.Find(snapshot.Language, snapshot.Runtime); found {
+			return template.Resources
+		}
+	}
+	return limits
 }
 
 func extract(data []byte, name string) ([]byte, string, error) {

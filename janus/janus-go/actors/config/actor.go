@@ -97,6 +97,10 @@ func (*Actor) Receive(ctx *goakt.ReceiveContext) {
 		if goWASMBuilderImage == "" {
 			goWASMBuilderImage = "janus-go-wasm-builder:local"
 		}
+		jsWASMBuilderImage := strings.TrimSpace(os.Getenv("JANUS_JS_WASM_BUILDER_IMAGE"))
+		if jsWASMBuilderImage == "" {
+			jsWASMBuilderImage = "janus-js-wasm-builder:local"
+		}
 		githubEnabled := githubID != "" && githubSecret != "" && githubCallback != ""
 		if (githubID != "" || githubSecret != "" || githubCallback != "") && !githubEnabled {
 			ctx.Response(&Loaded{Err: errors.New("GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and GITHUB_CALLBACK_URL must all be set")})
@@ -115,7 +119,7 @@ func (*Actor) Receive(ctx *goakt.ReceiveContext) {
 			JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 			GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 			GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
-			WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage,
+			WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage, JSWASMBuilderImage: jsWASMBuilderImage,
 			PyroscopeServerAddress: pyroscopeAddress,
 		}})
 	default:

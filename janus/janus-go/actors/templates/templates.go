@@ -9,7 +9,11 @@ import (
 
 // Default resource limits for a WASM Run. Every template starts from these.
 const (
-	DefaultFuel        uint64 = 100_000_000
+	DefaultFuel uint64 = 100_000_000
+	// ScriptFuel is the fuel limit for JavaScript and TypeScript templates. They
+	// run inside a QuickJS interpreter, which spends about 770 fuel per simple
+	// loop iteration, so the default would stop a modest script early.
+	ScriptFuel         uint64 = 2_000_000_000
 	DefaultMemoryBytes        = 128 << 20
 	DefaultTimeout            = 10 * time.Second
 )
@@ -61,18 +65,26 @@ var all = []Template{
 	},
 	{
 		ID: "js-node", Name: "JavaScript/TypeScript on Node", Language: "JavaScript/TypeScript", Runtime: "Node", Manifest: "package.json",
-		Entrypoint: "the package.json main field or start script",
+		Targets:      []string{"wasm32-wasip1"},
+		BuildCommand: "bun build <entry> --target=browser | javy build",
+		Entrypoint:   "the Entrypoint the Account confirmed, else package.json main, else index.ts or index.js",
 	},
 	{
 		ID: "js-bun", Name: "JavaScript/TypeScript on Bun", Language: "JavaScript/TypeScript", Runtime: "Bun", Manifest: "package.json",
-		Entrypoint: "the package.json main field or start script",
+		Targets:      []string{"wasm32-wasip1"},
+		BuildCommand: "bun build <entry> --target=browser | javy build",
+		Entrypoint:   "the Entrypoint the Account confirmed, else package.json main, else index.ts or index.js",
 	},
 }
 
 func init() {
 	for i := range all {
 		all[i].Buildable = len(all[i].Targets) > 0
-		all[i].Resources = Resources{Fuel: DefaultFuel, MemoryBytes: DefaultMemoryBytes, Timeout: DefaultTimeout}
+		fuel := DefaultFuel
+		if all[i].Language == "JavaScript/TypeScript" {
+			fuel = ScriptFuel
+		}
+		all[i].Resources = Resources{Fuel: fuel, MemoryBytes: DefaultMemoryBytes, Timeout: DefaultTimeout}
 	}
 }
 

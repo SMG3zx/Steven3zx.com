@@ -36,18 +36,14 @@ func TestFindPicksTheTemplateForALanguageAndRuntime(t *testing.T) {
 	}
 }
 
-func TestOnlyGoAndRustAreBuildable(t *testing.T) {
+func TestEveryTemplateIsBuildable(t *testing.T) {
 	for _, tpl := range All() {
-		want := tpl.ID == "go" || tpl.ID == "rust"
-		if tpl.Buildable != want {
-			t.Errorf("%s Buildable = %v, want %v", tpl.ID, tpl.Buildable, want)
-		}
-		if (tpl.DefaultTarget() != "") != want {
-			t.Errorf("%s DefaultTarget = %q", tpl.ID, tpl.DefaultTarget())
+		if !tpl.Buildable || tpl.DefaultTarget() == "" || tpl.BuildCommand == "" {
+			t.Errorf("%s Buildable = %v, DefaultTarget = %q, BuildCommand = %q", tpl.ID, tpl.Buildable, tpl.DefaultTarget(), tpl.BuildCommand)
 		}
 	}
-	if _, ok := Buildable("JavaScript/TypeScript"); ok {
-		t.Error("JavaScript/TypeScript should not be buildable yet")
+	if tpl, ok := Buildable("JavaScript/TypeScript"); !ok || tpl.DefaultTarget() != "wasm32-wasip1" {
+		t.Errorf("Buildable(JavaScript/TypeScript) = %q, %v", tpl.ID, ok)
 	}
 	if tpl, ok := Buildable("rust"); !ok || tpl.ID != "rust" {
 		t.Errorf("Buildable(rust) = %v, %v", tpl.ID, ok)
@@ -68,7 +64,9 @@ func TestCheckTarget(t *testing.T) {
 		{rustTpl, "wasm32-wasip1", ""},
 		{rustTpl, "wasm32-unknown-unknown", ""},
 		{rustTpl, "wasip1-wasm", "unsupported Rust WASM target"},
-		{node, "wasm32-wasip1", "not available for JavaScript/TypeScript projects yet"},
+		{node, "wasm32-wasip1", ""},
+		{node, "wasip1-wasm", "JavaScript/TypeScript WASM builds require target wasm32-wasip1"},
+		{Template{Language: "Python"}, "wasm32-wasip1", "not available for Python projects yet"},
 	}
 	for _, tc := range tests {
 		err := tc.tpl.CheckTarget(tc.target)
@@ -84,7 +82,11 @@ func TestCheckTarget(t *testing.T) {
 func TestEveryTemplateStartsFromTheDefaultLimits(t *testing.T) {
 	for _, tpl := range All() {
 		r := tpl.Resources
-		if r.Fuel != DefaultFuel || r.MemoryBytes != DefaultMemoryBytes || r.Timeout != DefaultTimeout {
+		wantFuel := DefaultFuel
+		if tpl.Language == "JavaScript/TypeScript" {
+			wantFuel = ScriptFuel
+		}
+		if r.Fuel != wantFuel || r.MemoryBytes != DefaultMemoryBytes || r.Timeout != DefaultTimeout {
 			t.Errorf("%s resources = %+v", tpl.ID, r)
 		}
 		if tpl.Manifest == "" || tpl.Entrypoint == "" {
