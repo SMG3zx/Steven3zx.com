@@ -23,6 +23,7 @@ import (
 	"janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
+	"janus/actors/builder"
 	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
@@ -36,16 +37,17 @@ const (
 	entrypointPath = "cmd/server/main.go"
 )
 
-type e2eWASMRunner struct{}
+// e2eWASMBuilder builds any Rust workspace into a fixed Artifact.
+type e2eWASMBuilder struct{}
 
-func (e2eWASMRunner) Build(_ context.Context, workspace, target string) (string, []byte, []byte, error) {
-	if target != "wasm32-unknown-unknown" {
-		return "", nil, nil, fmt.Errorf("unexpected target %q", target)
+func (e2eWASMBuilder) Build(_ context.Context, _ string, request builder.Request) (builder.Result, error) {
+	if request.Target != "wasm32-unknown-unknown" {
+		return builder.Result{}, fmt.Errorf("unexpected target %q", request.Target)
 	}
-	if _, err := os.Stat(path.Join(workspace, "Cargo.toml")); err != nil {
-		return "", nil, nil, err
+	if _, err := os.Stat(path.Join(request.Workspace, "Cargo.toml")); err != nil {
+		return builder.Result{}, err
 	}
-	return "wasm-artifacts.zip", []byte("playwright-wasm-archive"), []byte("Finished release build"), nil
+	return builder.Result{Name: "wasm-artifacts.zip", Artifact: []byte("playwright-wasm-archive"), Log: []byte("Finished release build")}, nil
 }
 
 func TestProjectBrowserActions(t *testing.T) {
@@ -322,6 +324,14 @@ func TestProjectBrowserActions(t *testing.T) {
 
 func startJanus(t *testing.T, ctx context.Context) (*actor.PID, http.Handler) {
 	t.Helper()
+	persistencePID, _, app := startJanusWith(t, ctx, e2eWASMBuilder{})
+	return persistencePID, app
+}
+
+// startJanusWith starts the application in-process with b as its WASM builder.
+// It returns the persistence and WASM build actors and the HTTP handler.
+func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (*actor.PID, *actor.PID, http.Handler) {
+	t.Helper()
 	system, err := actor.NewActorSystem("playwright-e2e", actor.WithLogger(golog.DiscardLogger))
 	if err != nil {
 		t.Fatal(err)
@@ -347,7 +357,7 @@ func startJanus(t *testing.T, ctx context.Context) (*actor.PID, http.Handler) {
 	authenticationPID := spawn("authentication", authactor.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute))
 	authorizationPID := spawn("authorization", authzactor.New())
 	projectsPID := spawn("projects", projectactor.New(persistencePID, accountingPID))
-	wasmBuildsPID := spawn("wasm-builds", wasmactor.NewWithRunner(persistencePID, accountingPID, e2eWASMRunner{}))
+	wasmBuildsPID := spawn("wasm-builds", wasmactor.New(persistencePID, accountingPID, b))
 	routesPID := spawn("routes", routesactor.New(routesactor.Dependencies{
 		System: system, Accounting: accountingPID, Persistence: persistencePID, Projects: projectsPID, WASMBuilds: wasmBuildsPID,
 		Authentication: authenticationPID, Authorization: authorizationPID,
@@ -363,7 +373,7 @@ func startJanus(t *testing.T, ctx context.Context) (*actor.PID, http.Handler) {
 		defer cancel()
 		_, _ = actor.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
 	})
-	return persistencePID, built.(*routesactor.Built).App
+	return persistencePID, wasmBuildsPID, built.(*routesactor.Built).App
 }
 
 func registerUser(t *testing.T, baseURL string) (string, string) {
@@ -404,13 +414,22 @@ func connectGitHub(t *testing.T, ctx context.Context, persistencePID *actor.PID,
 }
 
 func seedSnapshot(ctx context.Context, persistencePID *actor.PID, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
+	return seedLanguageSnapshot(ctx, persistencePID, ownerID, projectID, jobID, snapshotID, commit, metadata, "Rust", "Cargo.toml", "[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n")
+}
+
+// seedLanguageSnapshot stores a completed Snapshot of language whose manifest
+// file is manifest with the given content.
+func seedLanguageSnapshot(ctx context.Context, persistencePID *actor.PID, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
 	for _, message := range []any{
 		&persistence.CreateImportJob{ID: jobID, OwnerID: ownerID, ProjectID: projectID, Repository: "SMG3zx/demo", Branch: "main", Commit: commit},
-		&persistence.BeginSnapshot{ID: snapshotID, JobID: jobID, OwnerID: ownerID, ProjectID: projectID, RepositoryID: 42, Repository: "SMG3zx/demo", Branch: "main", Commit: commit, DefaultBranch: "main", Language: "Rust", Stars: 3, Forks: 1, MetadataJSON: metadata},
+		&persistence.BeginSnapshot{ID: snapshotID, JobID: jobID, OwnerID: ownerID, ProjectID: projectID, RepositoryID: 42, Repository: "SMG3zx/demo", Branch: "main", Commit: commit, DefaultBranch: "main", Language: language, Stars: 3, Forks: 1, MetadataJSON: metadata},
 		&persistence.AddSnapshotFiles{SnapshotID: snapshotID, Files: []persistence.SnapshotFile{
 			{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
-			{Path: "Cargo.toml", Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte("[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n")},
+			{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
 		}},
+		&persistence.UpdateImportJob{ID: jobID, Status: "cloning", Progress: 20},
+		&persistence.UpdateImportJob{ID: jobID, Status: "scanning", Progress: 50},
+		&persistence.UpdateImportJob{ID: jobID, Status: "storing", Progress: 80},
 		&persistence.CompleteSnapshot{SnapshotID: snapshotID, JobID: jobID, FileCount: 2, TotalBytes: 1_234_567},
 	} {
 		response, err := actor.Ask(ctx, persistencePID, message, 5*time.Second)

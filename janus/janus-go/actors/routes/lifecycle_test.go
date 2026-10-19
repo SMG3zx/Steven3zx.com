@@ -54,7 +54,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, *actor.PID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wasmPID, err := system.Spawn(ctx, "wasm-lifecycle", wasmactor.NewWithRunner(persistencePID, accountingPID, nil))
+	wasmPID, err := system.Spawn(ctx, "wasm-lifecycle", wasmactor.New(persistencePID, accountingPID, nil))
 	if err != nil {
 		t.Fatal(err)
 	}

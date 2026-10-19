@@ -1,24 +1,16 @@
 package wasmruntime
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/klauspost/compress/zstd"
 	actor "github.com/tochemey/goakt/v4/actor"
+	artifactpkg "janus/actors/artifact"
 	"janus/actors/persistence"
 	"janus/actors/templates"
 )
-
-const maxArchiveSize = 128 << 20
 
 type Actor struct {
 	persistence *actor.PID
@@ -139,7 +131,7 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 	args := append([]string(nil), m.Args...)
 	self := ctx.Self()
 	go func() {
-		module, name, e := extract(data, artifact.Name)
+		module, name, e := artifactpkg.Module(data, artifact.Name)
 		var out, stderr []byte
 		var usage Usage
 		if e == nil {
@@ -171,57 +163,6 @@ func (a *Actor) limitsFor(ctx context.Context, ownerID string, build persistence
 		}
 	}
 	return limits
-}
-
-func extract(data []byte, name string) ([]byte, string, error) {
-	if strings.HasSuffix(strings.ToLower(name), ".zst") {
-		d, e := zstd.NewReader(bytes.NewReader(data))
-		if e != nil {
-			return nil, "", e
-		}
-		defer d.Close()
-		data, e = io.ReadAll(io.LimitReader(d, maxArchiveSize+1))
-		if e != nil {
-			return nil, "", e
-		}
-		if len(data) > maxArchiveSize {
-			return nil, "", errors.New("WASM archive exceeds 128 MiB")
-		}
-	}
-	if len(data) > maxArchiveSize {
-		return nil, "", errors.New("WASM archive exceeds 128 MiB")
-	}
-	zr, e := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if e != nil {
-		return nil, "", fmt.Errorf("open WASM archive: %w", e)
-	}
-	files := make([]*zip.File, 0)
-	for _, f := range zr.File {
-		if !f.FileInfo().IsDir() && strings.HasSuffix(strings.ToLower(f.Name), ".wasm") {
-			files = append(files, f)
-		}
-	}
-	if len(files) == 0 {
-		return nil, "", errors.New("artifact contains no WASM module")
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
-	f := files[0]
-	if f.UncompressedSize64 > maxArchiveSize {
-		return nil, "", errors.New("WASM module exceeds 128 MiB")
-	}
-	r, e := f.Open()
-	if e != nil {
-		return nil, "", e
-	}
-	defer r.Close()
-	module, e := io.ReadAll(io.LimitReader(r, maxArchiveSize+1))
-	if e != nil {
-		return nil, "", e
-	}
-	if len(module) > maxArchiveSize {
-		return nil, "", errors.New("WASM module exceeds 128 MiB")
-	}
-	return module, f.Name, nil
 }
 
 func (*Actor) PostStop(*actor.Context) error { return nil }

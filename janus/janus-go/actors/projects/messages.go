@@ -1,6 +1,15 @@
 package projects
 
-import "janus/actors/persistence"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	goakt "github.com/tochemey/goakt/v4/actor"
+
+	"janus/actors/jobrunner"
+	"janus/actors/persistence"
+)
 
 type ListRepositories struct{ OwnerID string }
 type RepositoriesListed struct {
@@ -27,8 +36,30 @@ type ImportRequested struct {
 }
 type Disconnect struct{ OwnerID string }
 type Disconnected struct{ Err error }
+
+// Drain makes the projects actor refuse new imports and reports how many are
+// still running. Send it again until Pending is zero, or call WaitDrained.
 type Drain struct{}
-type Drained struct{ Err error }
+type Drained struct {
+	Err     error
+	Pending int
+}
+
+// WaitDrained stops new imports on the projects actor at pid and waits for the
+// running ones to finish, or until ctx ends.
+func WaitDrained(ctx context.Context, pid *goakt.PID) error {
+	return jobrunner.Await(ctx, 50*time.Millisecond, func(ctx context.Context) (int, error) {
+		response, err := goakt.Ask(ctx, pid, &Drain{}, 5*time.Second)
+		if err != nil {
+			return 0, err
+		}
+		drained, ok := response.(*Drained)
+		if !ok {
+			return 0, fmt.Errorf("unexpected projects actor response %T", response)
+		}
+		return drained.Pending, drained.Err
+	})
+}
 
 type Create struct{ Project persistence.CreateProject }
 type Created struct {

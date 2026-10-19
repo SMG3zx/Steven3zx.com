@@ -1,4 +1,4 @@
-package jsbuilder
+package builder
 
 import (
 	"encoding/json"

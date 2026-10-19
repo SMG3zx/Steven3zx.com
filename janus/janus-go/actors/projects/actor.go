@@ -235,7 +235,8 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 		}
 		rctx.Response(&Disconnected{Err: err})
 	case *Drain:
-		rctx.Response(&Drained{Err: a.runner.Drain(ctx)})
+		a.runner.StopAccepting()
+		rctx.Response(&Drained{Pending: a.runner.Pending()})
 	case *SetEntryPoint:
 		span.SetAttributes(
 			attribute.String("project.id", msg.ProjectID),

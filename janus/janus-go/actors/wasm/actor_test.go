@@ -1,11 +1,7 @@
 package wasm
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"bytes"
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,20 +10,22 @@ import (
 
 	"github.com/tochemey/goakt/v4/actor"
 	golog "github.com/tochemey/goakt/v4/log"
+	"janus/actors/builder"
 	"janus/actors/persistence"
 )
 
-type fakeRunner struct{ calls int }
+// fakeBuilder builds any Rust workspace into a fixed Artifact.
+type fakeBuilder struct{ calls int }
 
-func (r *fakeRunner) Build(_ context.Context, workspace, target string) (string, []byte, []byte, error) {
-	r.calls++
-	if target != "wasm32-unknown-unknown" {
-		return "", nil, nil, os.ErrInvalid
+func (b *fakeBuilder) Build(_ context.Context, _ string, request builder.Request) (builder.Result, error) {
+	b.calls++
+	if request.Target != "wasm32-unknown-unknown" {
+		return builder.Result{}, os.ErrInvalid
 	}
-	if _, err := os.Stat(filepath.Join(workspace, "Cargo.toml")); err != nil {
-		return "", nil, nil, err
+	if _, err := os.Stat(filepath.Join(request.Workspace, "Cargo.toml")); err != nil {
+		return builder.Result{}, err
 	}
-	return "wasm-artifacts.zip", []byte("zip fixture"), []byte("Finished release build"), nil
+	return builder.Result{Name: "wasm-artifacts.zip", Artifact: []byte("zip fixture"), Log: []byte("Finished release build")}, nil
 }
 
 func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing.T) {
@@ -87,8 +85,8 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 	if got := ask(&persistence.CompleteSnapshot{SnapshotID: "snapshot", JobID: "import", FileCount: 2, TotalBytes: 70}).(*persistence.SnapshotCompleted); got.Err != nil {
 		t.Fatal(got.Err)
 	}
-	runner := &fakeRunner{}
-	buildPID, err := system.Spawn(ctx, "wasm", NewWithRunner(dbPID, nil, runner))
+	runner := &fakeBuilder{}
+	buildPID, err := system.Spawn(ctx, "wasm", New(dbPID, nil, runner))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,134 +145,5 @@ func TestWriteSourceFileRejectsTraversal(t *testing.T) {
 				t.Fatalf("accepted unsafe source path %q", name)
 			}
 		})
-	}
-}
-
-func TestDockerRunnerRequiresConfiguredTrustedImageAndKnownTarget(t *testing.T) {
-	runner := dockerRunner{}
-	if _, _, _, err := runner.Build(context.Background(), t.TempDir(), "wasm32-unknown-unknown"); err == nil || !strings.Contains(err.Error(), "JANUS_WASM_BUILDER_IMAGE") {
-		t.Fatalf("unconfigured builder image error = %v", err)
-	}
-	runner.image = "rust:stable; malicious"
-	if _, _, _, err := runner.Build(context.Background(), t.TempDir(), "wasm32-unknown-unknown"); err == nil || !strings.Contains(err.Error(), "trusted") {
-		t.Fatalf("invalid builder image error = %v", err)
-	}
-	runner.image = "rust:stable"
-	if _, _, _, err := runner.Build(context.Background(), t.TempDir(), "--privileged"); err == nil || !strings.Contains(err.Error(), "unsupported") {
-		t.Fatalf("invalid target error = %v", err)
-	}
-}
-
-func TestDockerRunnerCompilesRustWASM(t *testing.T) {
-	image := os.Getenv("JANUS_WASM_BUILDER_IMAGE")
-	if image == "" {
-		t.Skip("set JANUS_WASM_BUILDER_IMAGE to run the Docker integration test")
-	}
-	workspace := t.TempDir()
-	for name, content := range map[string]string{
-		"Cargo.toml": "[package]\nname = \"wasm_fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[lib]\ncrate-type = [\"cdylib\"]\n",
-		"Cargo.lock": "version = 4\n\n[[package]]\nname = \"wasm_fixture\"\nversion = \"0.1.0\"\n",
-		"src/lib.rs": "#![no_std]\n#[panic_handler]\nfn panic(_: &core::panic::PanicInfo) -> ! { loop {} }\n#[no_mangle]\npub extern \"C\" fn sum(a: i32, b: i32) -> i32 { a + b }\n",
-	} {
-		fullPath := filepath.Join(workspace, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(fullPath, []byte(content), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	name, archive, log, err := (dockerRunner{image: image}).Build(context.Background(), workspace, "wasm32-unknown-unknown")
-	if err != nil {
-		t.Fatalf("Docker Rust WASM build failed: %v\n%s", err, log)
-	}
-	if name != "wasm-artifacts.zip" {
-		t.Fatalf("artifact name=%q", name)
-	}
-	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(reader.File) == 0 {
-		t.Fatalf("archive entries=%v", reader.File)
-	}
-	foundModule := false
-	for _, file := range reader.File {
-		if strings.HasSuffix(file.Name, "wasm_fixture.wasm") {
-			foundModule = true
-		}
-	}
-	if !foundModule {
-		t.Fatalf("compiled crate WASM module missing from archive: %v", reader.File)
-	}
-}
-
-func TestZipWASMArtifactsBundlesOutputs(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "target", "release")
-	if err := os.MkdirAll(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	for name, content := range map[string]string{"app.wasm": "module", "nested/worker.wasm": "worker", "not-wasm.txt": "ignored"} {
-		fullPath := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(fullPath, []byte(content), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	bundle, err := zipWASMArtifacts(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reader, err := zip.NewReader(bytes.NewReader(bundle), int64(len(bundle)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(reader.File) != 2 {
-		t.Fatalf("archive file count=%d; want 2", len(reader.File))
-	}
-	file, err := reader.File[0].Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := io.ReadAll(file)
-	_ = file.Close()
-	if err != nil || !bytes.Contains(data, []byte("module")) {
-		t.Fatalf("archive content=%q, err=%v", data, err)
-	}
-	if _, err = zipWASMArtifacts(filepath.Join(t.TempDir(), "missing")); err == nil {
-		t.Fatal("missing output directory should fail")
-	}
-	empty := t.TempDir()
-	if _, err = zipWASMArtifacts(empty); err == nil || !strings.Contains(err.Error(), "without producing") {
-		t.Fatalf("empty output directory error=%v", err)
-	}
-}
-
-func TestLimitedBufferKeepsOnlyConfiguredBytes(t *testing.T) {
-	buffer := &limitedBuffer{limit: 4}
-	if written, err := buffer.Write([]byte("abcdefgh")); err != nil || written != 8 {
-		t.Fatalf("limited writer returned written=%d err=%v", written, err)
-	}
-	if string(buffer.Bytes()) != "abcd" {
-		t.Fatalf("bounded output=%q; want %q", buffer.Bytes(), "abcd")
-	}
-}
-
-func TestWASMArtifactTarRejectsUnsafePath(t *testing.T) {
-	var buffer bytes.Buffer
-	writer := tar.NewWriter(&buffer)
-	if err := writer.WriteHeader(&tar.Header{Name: "../escape.wasm", Mode: 0600, Size: 3, Typeflag: tar.TypeReg}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := writer.Write([]byte("was")); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := zipWASMArtifactsFromTar(buffer.Bytes()); err == nil || !strings.Contains(err.Error(), "unsafe path") {
-		t.Fatalf("unsafe artifact path error=%v", err)
 	}
 }

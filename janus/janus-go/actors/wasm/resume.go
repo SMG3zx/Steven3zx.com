@@ -99,7 +99,7 @@ func (a *Actor) queueBuild(ctx context.Context, system actor.ActorSystem, msg *R
 
 // worker returns a new build worker that shares this actor's collaborators.
 func (a *Actor) worker() *Actor {
-	return &Actor{persistence: a.persistence, accounting: a.accounting, runner: a.runner, jobs: a.jobs, rustBuilder: a.rustBuilder, goBuilder: a.goBuilder, jsBuilder: a.jsBuilder, compressor: a.compressor}
+	return &Actor{persistence: a.persistence, accounting: a.accounting, builder: a.builder, jobs: a.jobs}
 }
 
 func buildWorkerName(jobID string) string {

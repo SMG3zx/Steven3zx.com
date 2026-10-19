@@ -16,7 +16,8 @@ import (
 
 var validImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 
-// Actor owns Docker health checks, image preparation, and isolated executions.
+// Actor owns Docker health checks and image preparation. Isolated executions
+// are plain calls to Execute, so they never queue behind this mailbox.
 type Actor struct{}
 
 var _ actor.Actor = (*Actor)(nil)
@@ -34,8 +35,6 @@ func (*Actor) Receive(ctx *actor.ReceiveContext) {
 	case *PrepareWASMBuilders:
 		built, err := prepareWASMBuilders(ctx.Context(), msg.RustImage, msg.GoImage, msg.JSImage)
 		ctx.Response(&WASMBuildersReady{BuiltImages: built, Err: err})
-	case *Run:
-		ctx.Response(run(ctx, msg))
 	default:
 		ctx.Unhandled()
 	}
@@ -146,52 +145,4 @@ func checkEngine(ctx context.Context) error {
 	return nil
 }
 
-func run(ctx *actor.ReceiveContext, msg *Run) *Ran {
-	if !validImage.MatchString(msg.Image) {
-		return &Ran{Err: errors.New("configure a trusted, pre-provisioned Docker image")}
-	}
-	if msg.Workspace == "" || msg.Command == "" {
-		return &Ran{Err: errors.New("Docker workspace and command are required")}
-	}
-	maxLog, maxOutput := msg.MaxLog, msg.MaxOutput
-	if maxLog <= 0 || maxLog > 64<<10 {
-		maxLog = 64 << 10
-	}
-	if maxOutput <= 0 || maxOutput > 129<<20 {
-		maxOutput = 129 << 20
-	}
-	args := []string{"run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=2g", "--cpus=2", "--tmpfs=/tmp:rw,noexec,nosuid,size=256m", "--tmpfs=/workspace:rw,exec,nosuid,size=1g", "--mount", "type=bind,source=" + msg.Workspace + ",target=/src,readonly", "--workdir=/workspace", "--entrypoint=sh", msg.Image, "-c", msg.Command}
-	cmd := exec.CommandContext(ctx.Context(), "docker", args...)
-	stdout, stderr := &limitedBuffer{limit: maxOutput}, &limitedBuffer{limit: maxLog}
-	cmd.Stdout, cmd.Stderr = stdout, stderr
-	err := cmd.Run()
-	if err == nil && stdout.truncated {
-		err = errors.New("Docker output stream exceeds the configured limit")
-	}
-	return &Ran{Stdout: stdout.Bytes(), Stderr: stderr.Bytes(), Err: err}
-}
-
 func (*Actor) PostStop(*actor.Context) error { return nil }
-
-type limitedBuffer struct {
-	data      []byte
-	limit     int
-	truncated bool
-}
-
-func (b *limitedBuffer) Write(p []byte) (int, error) {
-	n := len(p)
-	remaining := b.limit - len(b.data)
-	if remaining > 0 {
-		if len(p) > remaining {
-			b.truncated = true
-			p = p[:remaining]
-		}
-		b.data = append(b.data, p...)
-	} else if n > 0 {
-		b.truncated = true
-	}
-	return n, nil
-}
-
-func (b *limitedBuffer) Bytes() []byte { return b.data }

@@ -1,4 +1,4 @@
-package jsbuilder
+package builder
 
 import (
 	"os"
@@ -56,7 +56,7 @@ func TestResolveEntry(t *testing.T) {
 }
 
 func TestCommandBundlesThenCompilesAndStreamsTheModule(t *testing.T) {
-	command := Command("src/index.ts")
+	command := JavaScriptCommand("src/index.ts")
 	for _, part := range []string{"bun build ./src/index.ts", "--target=browser", "javy build /workspace/out/bundle.js", "tar -cf - main.wasm"} {
 		if !strings.Contains(command, part) {
 			t.Errorf("command is missing %q: %s", part, command)

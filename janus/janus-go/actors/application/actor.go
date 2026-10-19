@@ -13,16 +13,13 @@ import (
 	accountingactor "janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
-	"janus/actors/compressor"
+	"janus/actors/builder"
 	configactor "janus/actors/config"
 	dockeractor "janus/actors/docker"
-	"janus/actors/gobuilder"
 	httpserver "janus/actors/httpserver"
-	"janus/actors/jsbuilder"
 	persistenceactor "janus/actors/persistence"
 	projectsactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
-	"janus/actors/rustbuilder"
 	telemetryactor "janus/actors/telemetry"
 	wasmactor "janus/actors/wasm"
 	wasmruntime "janus/actors/wasmruntime"
@@ -42,9 +39,6 @@ type Actor struct {
 	projects       *goakt.PID
 	wasmBuilds     *goakt.PID
 	wasmRuntime    *goakt.PID
-	rustBuilder    *goakt.PID
-	goBuilder      *goakt.PID
-	jsBuilder      *goakt.PID
 	docker         *goakt.PID
 	logger         *zap.Logger
 	processErrors  chan error
@@ -208,23 +202,8 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	for _, image := range imagesReady.BuiltImages {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
-	a.rustBuilder, err = a.system.Spawn(startupCtx, "rust-wasm-builder", rustbuilder.New(config.WASMBuilderImage, a.docker))
-	if err != nil {
-		return fmt.Errorf("spawn Rust WASM builder actor: %w", err)
-	}
-	a.goBuilder, err = a.system.Spawn(startupCtx, "go-wasm-builder", gobuilder.New(config.GoWASMBuilderImage, a.docker))
-	if err != nil {
-		return fmt.Errorf("spawn Go WASM builder actor: %w", err)
-	}
-	a.jsBuilder, err = a.system.Spawn(startupCtx, "js-wasm-builder", jsbuilder.New(config.JSWASMBuilderImage, a.docker))
-	if err != nil {
-		return fmt.Errorf("spawn JavaScript WASM builder actor: %w", err)
-	}
-	compressorPID, err := a.system.Spawn(startupCtx, "artifact-compressor", compressor.New())
-	if err != nil {
-		return fmt.Errorf("spawn artifact compressor actor: %w", err)
-	}
-	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.NewWithBuilders(a.persistence, a.accounting, a.rustBuilder, a.goBuilder, a.jsBuilder, compressorPID))
+	builds := builder.NewDocker(builder.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage})
+	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.New(a.persistence, a.accounting, builds))
 	if err != nil {
 		return fmt.Errorf("spawn WASM build actor: %w", err)
 	}
@@ -293,23 +272,13 @@ func (a *Actor) stop(ctx context.Context) error {
 		}
 	}
 	if a.projects != nil {
-		response, err := goakt.Ask(shutdownCtx, a.projects, &projectsactor.Drain{}, ShutdownTimeout)
-		if err != nil && firstErr == nil {
+		if err := projectsactor.WaitDrained(shutdownCtx, a.projects); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("drain project imports: %w", err)
-		} else if result, ok := response.(*projectsactor.Drained); !ok && err == nil && firstErr == nil {
-			firstErr = fmt.Errorf("drain project imports: unexpected response %T", response)
-		} else if ok && result.Err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("drain project imports: %w", result.Err)
 		}
 	}
 	if a.wasmBuilds != nil {
-		response, err := goakt.Ask(shutdownCtx, a.wasmBuilds, &wasmactor.Drain{}, ShutdownTimeout)
-		if err != nil && firstErr == nil {
+		if err := wasmactor.WaitDrained(shutdownCtx, a.wasmBuilds); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("drain WASM builds: %w", err)
-		} else if result, ok := response.(*wasmactor.Drained); !ok && err == nil && firstErr == nil {
-			firstErr = fmt.Errorf("drain WASM builds: unexpected response %T", response)
-		} else if ok && result.Err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("drain WASM builds: %w", result.Err)
 		}
 	}
 	if a.wasmRuntime != nil {

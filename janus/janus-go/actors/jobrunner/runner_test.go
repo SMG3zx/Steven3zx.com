@@ -145,3 +145,25 @@ func TestDrainStopsAcceptingAndWaitsForRunningJobs(t *testing.T) {
 		t.Fatalf("Drain after the job ended = %v", err)
 	}
 }
+
+func TestCancelOwnerCancelsOnlyThatOwnersTrackedJobs(t *testing.T) {
+	r := New(2)
+	mine, releaseMine := r.Track(context.Background(), "alice")
+	other, releaseOther := r.Track(context.Background(), "bob")
+	defer releaseMine()
+	defer releaseOther()
+
+	if got := r.CancelOwner("alice"); got != 1 {
+		t.Fatalf("CancelOwner cancelled %d jobs, want 1", got)
+	}
+	if mine.Err() == nil {
+		t.Error("alice's job was not cancelled")
+	}
+	if other.Err() != nil {
+		t.Error("bob's job was cancelled")
+	}
+	releaseMine()
+	if got := r.CancelOwner("alice"); got != 0 {
+		t.Errorf("a released job was cancelled again: %d", got)
+	}
+}
