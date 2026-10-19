@@ -13,14 +13,14 @@ Some of the main project directories are:
 
 Top-level folders can also contain local infrastructure, archived material, or generated data. Follow `.gitignore` and the relevant project documentation; do not assume every folder is a buildable application.
 
-## Version control: Jujutsu and `origin`
+## Version control: Git and `origin`
 
-- Use **Jujutsu (`jj`)** for repository operations. This checkout is colocated with Git for interoperability; use `jj` commands instead of Git commands to inspect history, describe changes, manage bookmarks, fetch, and push.
+- Use **Git** for repository operations: inspect history, stage, commit, fetch, and push with `git`.
 - `origin` is the canonical remote: `https://github.com/SMG3zx/Steven3zx.com.git`.
-- Check `jj status`, `jj diff`, and `jj log` before and after making changes. Jujutsu snapshots working-copy edits automatically; there is no separate staging step.
-- Once a focused, coherent change exceeds 100 changed lines, create a named Jujutsu commit describing that work, then sync it to `origin`. Do not combine incomplete or unrelated working-copy changes in the commit. Describe the change with `jj describe -m "..."`; use `jj new` when you want to start a separate change on top.
-- Fetch from `origin` before integrating remote changes, then push the intended bookmark with `jj git push --remote origin --bookmark <bookmark>`.
-- Do not force-update a remote bookmark unless explicitly asked.
+- Check `git status`, `git diff`, and `git log` before and after making changes.
+- Once a focused, coherent change exceeds 100 changed lines, commit it with a descriptive message, then sync it to `origin`. Do not combine incomplete or unrelated changes in one commit. Stage only the paths that belong to the change.
+- Fetch from `origin` before integrating remote changes, then push the intended branch with `git push origin <branch>`.
+- Do not force-push a remote branch unless explicitly asked.
 - Keep commits focused on the requested work. Do not include local secrets, environment files, build outputs, or unrelated project changes.
 
 ## Agent skills
