@@ -129,30 +129,12 @@ func (a *Actor) failResumedImport(ctx context.Context, jobID string, cause error
 // queueImport starts msg once an import slot is free, so resumed imports never
 // exceed the concurrency limit. It does not block the caller.
 func (a *Actor) queueImport(ctx context.Context, system goakt.ActorSystem, msg *RunImport) {
-	go func() {
-		a.slots <- struct{}{}
-		if err := a.spawnImport(context.WithoutCancel(ctx), system, msg); err != nil {
-			<-a.slots
-			a.failResumedImport(ctx, msg.JobID, err)
-		}
-	}()
+	worker := &ImportWorker{persistence: a.persistence, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
+	a.runner.Queue(ctx, system, importWorkerName(msg.JobID), worker, msg, func(err error) { a.failResumedImport(ctx, msg.JobID, err) })
 }
 
-// spawnImport starts an import worker for msg. The caller must already hold an
-// import slot; the worker releases it when it finishes.
-func (a *Actor) spawnImport(ctx context.Context, system goakt.ActorSystem, msg *RunImport) error {
-	a.jobs.Add(1)
-	worker := &ImportWorker{persistence: a.persistence, accounting: a.accounting, jobs: a.jobs, slots: a.slots, cloneBase: a.cloneBase}
-	pid, err := system.Spawn(ctx, "project-import-"+strings.ReplaceAll(msg.JobID, "-", ""), worker)
-	if err != nil {
-		a.jobs.Done()
-		return err
-	}
-	if err = goakt.Tell(context.WithoutCancel(ctx), pid, msg); err != nil {
-		a.jobs.Done()
-		return err
-	}
-	return nil
+func importWorkerName(jobID string) string {
+	return "project-import-" + strings.ReplaceAll(jobID, "-", "")
 }
 
 func (a *Actor) retryImport(rctx *goakt.ReceiveContext, msg *RetryImport) (string, error) {

@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,6 +26,7 @@ import (
 	"janus/actors/accounting"
 	"janus/actors/compressor"
 	dockeractor "janus/actors/docker"
+	"janus/actors/jobrunner"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
 	"janus/actors/wasmbuilder"
@@ -61,9 +61,7 @@ type Actor struct {
 	goBuilder   *actor.PID
 	docker      *actor.PID
 	compressor  *actor.PID
-	jobs        *sync.WaitGroup
-	slots       chan struct{}
-	accepting   bool
+	jobs        *jobrunner.Runner
 }
 
 var _ actor.Actor = (*Actor)(nil)
@@ -77,13 +75,13 @@ func New(persistencePID, accountingPID *actor.PID, image string) *Actor {
 // NewWithRunner creates a build actor using runner, which is useful for custom
 // builder integrations and tests.
 func NewWithRunner(persistencePID, accountingPID *actor.PID, runner Runner) *Actor {
-	return &Actor{persistence: persistencePID, accounting: accountingPID, runner: runner, jobs: &sync.WaitGroup{}, slots: make(chan struct{}, 2)}
+	return &Actor{persistence: persistencePID, accounting: accountingPID, runner: runner, jobs: jobrunner.New(2)}
 }
 
 // NewWithBuilders creates a build actor that delegates to the Rust, Go, and
 // compressor actors.
 func NewWithBuilders(persistencePID, accountingPID, rustBuilderPID, goBuilderPID, compressorPID *actor.PID) *Actor {
-	return &Actor{persistence: persistencePID, accounting: accountingPID, rustBuilder: rustBuilderPID, goBuilder: goBuilderPID, compressor: compressorPID, jobs: &sync.WaitGroup{}, slots: make(chan struct{}, 2)}
+	return &Actor{persistence: persistencePID, accounting: accountingPID, rustBuilder: rustBuilderPID, goBuilder: goBuilderPID, compressor: compressorPID, jobs: jobrunner.New(2)}
 }
 
 // NewWithDocker creates a build actor with an explicit Docker controller PID.
@@ -94,7 +92,7 @@ func NewWithDocker(persistencePID, accountingPID, dockerPID *actor.PID, image st
 	return a
 }
 
-func (a *Actor) PreStart(*actor.Context) error { a.accepting = true; return nil }
+func (a *Actor) PreStart(*actor.Context) error { return nil }
 
 func (a *Actor) Receive(rctx *actor.ReceiveContext) {
 	ctx, span := actortrace.StartSpan(rctx.Context(), "actor.wasm.receive", trace.WithSpanKind(trace.SpanKindInternal))
@@ -128,23 +126,14 @@ func (a *Actor) Receive(rctx *actor.ReceiveContext) {
 		jobID, err := a.retryBuild(rctx, msg)
 		rctx.Response(&BuildRequested{JobID: jobID, Err: err})
 	case *Drain:
-		a.accepting = false
-		done := make(chan struct{})
-		go func() { a.jobs.Wait(); close(done) }()
-		select {
-		case <-done:
-			rctx.Response(&Drained{})
-		case <-ctx.Done():
-			rctx.Response(&Drained{Err: ctx.Err()})
-		}
+		rctx.Response(&Drained{Err: a.jobs.Drain(ctx)})
 	case *RunBuild:
 		span.SetAttributes(
 			attribute.String("project.id", msg.ProjectID),
 			attribute.String("project.snapshot.id", msg.SnapshotID),
 			attribute.String("wasm.target", msg.Target),
 		)
-		defer a.jobs.Done()
-		defer func() { <-a.slots }()
+		defer a.jobs.Finish()
 		if err := a.run(ctx, msg); err != nil {
 			actortrace.RecordError(span, err)
 			span.SetStatus(codes.Error, "WASM build failed")
@@ -159,7 +148,7 @@ func (a *Actor) Receive(rctx *actor.ReceiveContext) {
 }
 
 func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, error) {
-	if !a.accepting {
+	if !a.jobs.Accepting() {
 		return "", errors.New("WASM builds are shutting down")
 	}
 	if a.runner == nil && a.rustBuilder == nil && a.goBuilder == nil {
@@ -211,32 +200,15 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	if created.Err != nil {
 		return "", created.Err
 	}
-	select {
-	case a.slots <- struct{}{}:
-	default:
-		_ = a.update(rctx.Context(), jobID, "failed", 100, "two WASM builds are already running")
-		return "", errors.New("two WASM builds are already running; retry when one finishes")
-	}
-	reserved := true
-	defer func() {
-		if reserved {
-			<-a.slots
+	run := &RunBuild{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: msg.Target, Language: language}
+	if err = a.jobs.Start(rctx.Context(), rctx.ActorSystem(), buildWorkerName(jobID), a.worker(), run); err != nil {
+		if errors.Is(err, jobrunner.ErrBusy) {
+			_ = a.update(rctx.Context(), jobID, "failed", 100, "two WASM builds are already running")
+			return "", errors.New("two WASM builds are already running; retry when one finishes")
 		}
-	}()
-	a.jobs.Add(1)
-	worker := &Actor{persistence: a.persistence, accounting: a.accounting, runner: a.runner, rustBuilder: a.rustBuilder, goBuilder: a.goBuilder, compressor: a.compressor, jobs: a.jobs, slots: a.slots}
-	pid, err := rctx.ActorSystem().Spawn(rctx.Context(), "wasm-build-"+strings.ReplaceAll(jobID, "-", ""), worker)
-	if err != nil {
-		a.jobs.Done()
 		_ = a.update(rctx.Context(), jobID, "failed", 100, "WASM build worker could not start")
 		return "", err
 	}
-	if err = actor.Tell(context.WithoutCancel(rctx.Context()), pid, &RunBuild{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: msg.Target, Language: language}); err != nil {
-		a.jobs.Done()
-		_ = a.update(rctx.Context(), jobID, "failed", 100, "WASM build worker could not start")
-		return "", err
-	}
-	reserved = false
 	return jobID, nil
 }
 

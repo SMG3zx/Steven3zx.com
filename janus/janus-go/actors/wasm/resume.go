@@ -77,30 +77,18 @@ func (a *Actor) resumeBuilds(ctx context.Context, system actor.ActorSystem) (int
 
 // queueBuild starts msg once a build slot is free. It does not block the caller.
 func (a *Actor) queueBuild(ctx context.Context, system actor.ActorSystem, msg *RunBuild) {
-	go func() {
-		a.slots <- struct{}{}
-		if err := a.spawnBuild(context.WithoutCancel(ctx), system, msg); err != nil {
-			<-a.slots
-			_ = a.update(ctx, msg.JobID, "failed", 100, "WASM build worker could not start")
-		}
-	}()
+	a.jobs.Queue(ctx, system, buildWorkerName(msg.JobID), a.worker(), msg, func(error) {
+		_ = a.update(ctx, msg.JobID, "failed", 100, "WASM build worker could not start")
+	})
 }
 
-// spawnBuild starts a build worker for msg. The caller must already hold a build
-// slot; the worker releases it when it finishes.
-func (a *Actor) spawnBuild(ctx context.Context, system actor.ActorSystem, msg *RunBuild) error {
-	a.jobs.Add(1)
-	worker := &Actor{persistence: a.persistence, accounting: a.accounting, runner: a.runner, rustBuilder: a.rustBuilder, goBuilder: a.goBuilder, compressor: a.compressor, jobs: a.jobs, slots: a.slots}
-	pid, err := system.Spawn(ctx, "wasm-build-"+strings.ReplaceAll(msg.JobID, "-", ""), worker)
-	if err != nil {
-		a.jobs.Done()
-		return err
-	}
-	if err = actor.Tell(context.WithoutCancel(ctx), pid, msg); err != nil {
-		a.jobs.Done()
-		return err
-	}
-	return nil
+// worker returns a new build worker that shares this actor's collaborators.
+func (a *Actor) worker() *Actor {
+	return &Actor{persistence: a.persistence, accounting: a.accounting, runner: a.runner, jobs: a.jobs, rustBuilder: a.rustBuilder, goBuilder: a.goBuilder, compressor: a.compressor}
+}
+
+func buildWorkerName(jobID string) string {
+	return "wasm-build-" + strings.ReplaceAll(jobID, "-", "")
 }
 
 // retryBuild starts a new build of the failed build's Snapshot.

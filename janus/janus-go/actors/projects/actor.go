@@ -8,7 +8,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -19,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"janus/actors/accounting"
+	"janus/actors/jobrunner"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
 )
@@ -38,9 +38,7 @@ type Actor struct {
 	persistence *goakt.PID
 	accounting  *goakt.PID
 	github      *GitHubClient
-	jobs        *sync.WaitGroup
-	slots       chan struct{}
-	accepting   bool
+	runner      *jobrunner.Runner
 }
 
 // ImportWorker owns the long-running clone, scan, and snapshot persistence
@@ -49,8 +47,7 @@ type ImportWorker struct {
 	cloneBase   string
 	persistence *goakt.PID
 	accounting  *goakt.PID
-	jobs        *sync.WaitGroup
-	slots       chan struct{}
+	runner      *jobrunner.Runner
 }
 
 var _ goakt.Actor = (*ImportWorker)(nil)
@@ -66,11 +63,8 @@ func (a *ImportWorker) Receive(rctx *goakt.ReceiveContext) {
 	ctx, span := actortrace.StartSpan(rctx.Context(), "actor.project_import.receive", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	defer rctx.Shutdown()
-	if a.jobs != nil {
-		defer a.jobs.Done()
-	}
-	if a.slots != nil {
-		defer func() { <-a.slots }()
+	if a.runner != nil {
+		defer a.runner.Finish()
 	}
 	if err := a.runImport(ctx, msg); err != nil {
 		span.SetStatus(codes.Error, "repository import failed")
@@ -88,13 +82,13 @@ var _ goakt.Actor = (*Actor)(nil)
 // New creates a project actor backed by persistencePID. If provided, the first
 // accountingPID receives project audit events.
 func New(persistencePID *goakt.PID, accountingPID ...*goakt.PID) *Actor {
-	a := &Actor{persistence: persistencePID, github: NewGitHubClient(), cloneBase: githubCloneBase, jobs: &sync.WaitGroup{}, slots: make(chan struct{}, 2)}
+	a := &Actor{persistence: persistencePID, github: NewGitHubClient(), cloneBase: githubCloneBase, runner: jobrunner.New(2)}
 	if len(accountingPID) > 0 {
 		a.accounting = accountingPID[0]
 	}
 	return a
 }
-func (a *Actor) PreStart(*goakt.Context) error { a.accepting = true; return nil }
+func (a *Actor) PreStart(*goakt.Context) error { return nil }
 
 func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 	ctx, span := actortrace.StartSpan(rctx.Context(), "actor.projects.receive", trace.WithSpanKind(trace.SpanKindInternal))
@@ -241,15 +235,7 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 		}
 		rctx.Response(&Disconnected{Err: err})
 	case *Drain:
-		a.accepting = false
-		done := make(chan struct{})
-		go func() { a.jobs.Wait(); close(done) }()
-		select {
-		case <-done:
-			rctx.Response(&Drained{})
-		case <-ctx.Done():
-			rctx.Response(&Drained{Err: ctx.Err()})
-		}
+		rctx.Response(&Drained{Err: a.runner.Drain(ctx)})
 	case *SetEntryPoint:
 		span.SetAttributes(
 			attribute.String("project.id", msg.ProjectID),
@@ -348,7 +334,7 @@ func (a *Actor) updateJob(ctx context.Context, id, status string, progress int, 
 }
 
 func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (string, error) {
-	if !a.accepting {
+	if !a.runner.Accepting() {
 		return "", errors.New("project imports are shutting down")
 	}
 	if msg.OwnerID == "" || msg.ProjectID == "" || msg.Repository == "" || msg.Branch == "" || len(msg.Commit) != 40 {
@@ -419,33 +405,16 @@ func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (str
 	if created.Err != nil {
 		return "", created.Err
 	}
-	select {
-	case a.slots <- struct{}{}:
-	default:
-		_ = a.updateJob(rctx.Context(), jobID, "failed", 100, "too many imports are already running")
-		return "", errors.New("two repository imports are already running; retry when one finishes")
-	}
-	reserved := true
-	defer func() {
-		if reserved {
-			<-a.slots
+	worker := &ImportWorker{persistence: a.persistence, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
+	run := &RunImport{JobID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository, Branch: msg.Branch, Commit: msg.Commit, Token: token}
+	if err = a.runner.Start(rctx.Context(), rctx.ActorSystem(), importWorkerName(jobID), worker, run); err != nil {
+		if errors.Is(err, jobrunner.ErrBusy) {
+			_ = a.updateJob(rctx.Context(), jobID, "failed", 100, "too many imports are already running")
+			return "", errors.New("two repository imports are already running; retry when one finishes")
 		}
-	}()
-	a.jobs.Add(1)
-	workerActor := &ImportWorker{persistence: a.persistence, accounting: a.accounting, jobs: a.jobs, slots: a.slots, cloneBase: a.cloneBase}
-	worker, err := rctx.ActorSystem().Spawn(rctx.Context(), "project-import-"+strings.ReplaceAll(jobID, "-", ""), workerActor)
-	if err != nil {
-		a.jobs.Done()
 		_ = a.updateJob(rctx.Context(), jobID, "failed", 100, "import worker could not start")
 		return "", err
 	}
-	workerCtx := context.WithoutCancel(rctx.Context())
-	if err = goakt.Tell(workerCtx, worker, &RunImport{JobID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository, Branch: msg.Branch, Commit: msg.Commit, Token: token}); err != nil {
-		a.jobs.Done()
-		_ = a.updateJob(rctx.Context(), jobID, "failed", 100, "import worker could not start")
-		return "", err
-	}
-	reserved = false
 	return jobID, nil
 }
 
