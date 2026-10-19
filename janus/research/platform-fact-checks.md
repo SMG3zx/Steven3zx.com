@@ -98,3 +98,30 @@ Checks that passed on Windows with clang:
 - Linux has run only under WSL2, not on real node hardware. Check CPU time against wall time on an actual node before billing on it.
 - The sampler is not yet wired into a long-running instance. The current runtime only has `_start` runs bounded by a timeout.
 - A thread CPU clock counts only the thread the module runs on. Work the module hands to other threads would not appear. The current runtime has none.
+
+## JavaScript and TypeScript to WASM (Node and Bun templates)
+
+Researched 2026-10-19 for the two unbuildable templates in `janus/janus-go/actors/templates`. Sources are the Javy and ComponentizeJS READMEs and search results. **No tool was downloaded or run**, so everything below about output format is unconfirmed until a spike.
+
+**What the Janus runner needs:** a core WASI module (preview 1) that exports `_start` and works with the runner's limits, because `ExecuteWASI` instantiates a core module with `wasmtime-go` v49 and calls `_start`. It does not run components.
+
+| Option | What it is | Fit |
+|---|---|---|
+| [Javy](https://github.com/bytecodealliance/javy) (Bytecode Alliance) | Embeds the QuickJS interpreter in a Wasm module with your script. `javy build index.js -o index.wasm`. Reads stdin and writes stdout. Static output is at least 869 KB; dynamic linking gives 1 to 16 KB but needs a shared engine module at run time. | Best fit. Command-style, stdin and stdout match the runner. Interpreter, so fuel counts QuickJS operations, not script operations. |
+| [ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS) | Embeds SpiderMonkey (StarlingMonkey), about 8 MB, and outputs a WASI 0.2 component. README calls it experimental. | Poor fit today. Needs component support in the runner, which `wasmtime-go` v49 use in this repo does not have. |
+| Node or Bun themselves compiled to Wasm | Not a supported path. V8 and JavaScriptCore need a JIT, which Wasm does not allow. | Ruled out. |
+
+**What every option loses:** Node and Bun APIs. Javy has no `fs`, `http`, or `crypto`; npm packages that need them fail. A Node or Bun project builds only if it is a pure script that reads stdin, writes stdout, and bundles its dependencies into one file.
+
+**Proposal:** build the Node and Bun templates with Javy, in two steps inside the existing isolated builder container:
+1. Bundle to one file: `bun build` for the Bun template, `esbuild` for the Node template. Both also strip TypeScript.
+2. `javy build` the bundle to a `.wasm`, statically linked, so the Artifact stays one self-contained file.
+
+Targets: `wasm32-wasip1`, like Rust. Entry file: the Entrypoint the Account confirmed.
+
+**Open before building (a spike answers all three):**
+- Does `javy build` output export `_start` and run under the runner's Wasmtime with fuel and epoch interruption on? The README does not say.
+- Does the 128 MiB memory limit leave room for QuickJS plus a typical bundle?
+- Fuel per second for QuickJS code, which will be far from the numbers in the fuel table above. CPU billing uses active CPU time, so billing is unaffected.
+
+Also note for the template spec: users with `fs`, `http`, or npm-heavy projects will see a build failure with this approach, so the Scan should warn before the Owner confirms the Entrypoint.
