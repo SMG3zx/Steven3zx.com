@@ -14,7 +14,7 @@ import (
 
 func TestPersistenceMigratesPreActivationSnapshotSchema(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "legacy.db")
-	db, err := sql.Open("sqlite", databasePath)
+	db, err := sql.Open("turso", databasePath)
 	if err != nil {
 		t.Fatal(err)
 	}

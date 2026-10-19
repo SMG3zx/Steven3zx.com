@@ -4,7 +4,7 @@ Janus Go is a small GoAkt application with an HTTP edge and actor-owned authenti
 
 ## Run locally
 
-Copy `.env.example` to `.env`, set `JANUS_JWT_SECRET` to a private random value of at least 32 bytes, then run `go run .`. The example deliberately leaves it blank, so the app fails startup until you set one. Keep `.env` out of version control. Set `JANUS_COOKIE_SECURE=true` when serving over HTTPS. The default SQLite file is `data/janus.db`.
+Copy `.env.example` to `.env`, set `JANUS_JWT_SECRET` to a private random value of at least 32 bytes, then run `go run .`. The example deliberately leaves it blank, so the app fails startup until you set one. Keep `.env` out of version control. Set `JANUS_COOKIE_SECURE=true` when serving over HTTPS. The default database is the local Turso file `data/janus.db`. It is a local-only database file; no cloud sync is configured.
 
 Google sign-in is optional. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` together to enable it; the homepage then shows a **Continue with Google** button. Register the callback URL with the Google OAuth client. For the public Janus site, use `https://janus.steven3zx.com/auth/google/callback` and set `JANUS_COOKIE_SECURE=true`.
 
@@ -12,15 +12,15 @@ GitHub sign-in and repository import are optional. Set `GITHUB_CLIENT_ID`, `GITH
 
 ## Projects and repository imports
 
-Signed-in users can create an empty project at `/projects/new` or create a project and import a GitHub repository. The project page lists repositories, branches, and the 50 newest commits for a branch. Imports run asynchronously and show their current stage. Janus fetches the selected commit with pure-Go Git, scans without running repository code, and stores tracked file contents in SQLite. The per-snapshot limits are 256 MiB total uncompressed file content, 50,000 files, and 16 MiB per file. The five newest successful snapshots are retained per project; interrupted imports are cleaned up on startup. The project page lists retained snapshots and lets the owner reactivate an earlier revision without reimporting it.
+Signed-in users can create an empty project at `/projects/new` or create a project and import a GitHub repository. The project page lists repositories, branches, and the 50 newest commits for a branch. Imports run asynchronously and show their current stage. Janus fetches the selected commit with pure-Go Git, scans without running repository code, and stores tracked file contents in the local Turso database. The per-snapshot limits are 256 MiB total uncompressed file content, 50,000 files, and 16 MiB per file. The five newest successful snapshots are retained per project; interrupted imports are cleaned up on startup. The project page lists retained snapshots and lets the owner reactivate an earlier revision without reimporting it.
 
-The initial scanner recognizes Go, Node, Python, and Rust conventions. It suggests entrypoint candidates for the user to confirm. Repository metadata, selected branch and commit, language, stars, forks, file count, and bytes are shown after import. GitHub access tokens are encrypted in SQLite with AES-GCM using a key derived from `JANUS_JWT_SECRET`; changing that secret requires reconnecting GitHub. Disconnecting GitHub removes the stored token.
+The initial scanner recognizes Go, Node, Python, and Rust conventions. It suggests entrypoint candidates for the user to confirm. Repository metadata, selected branch and commit, language, stars, forks, file count, and bytes are shown after import. GitHub access tokens are encrypted in the local database with AES-GCM using a key derived from `JANUS_JWT_SECRET`; changing that secret requires reconnecting GitHub. Disconnecting GitHub removes the stored token.
 
 Project pages are `/projects`, `/projects/new`, and `/projects/{id}`. Authenticated JSON endpoints include `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/{id}`, `GET /api/github/repos`, `GET /api/github/branches?repository=owner/repo`, `GET /api/github/commits?repository=owner/repo&branch=main`, `POST /api/projects/{id}/imports`, `GET /api/imports/{job_id}`, `GET /api/projects/{id}/snapshots`, `POST /api/projects/{id}/snapshots/{snapshot_id}/activate`, `POST /api/projects/{id}/entrypoint`, `POST /api/projects/{id}/wasm-builds`, `GET /api/wasm-builds/{job_id}`, and `GET /api/wasm-builds/{job_id}/artifact`. All project reads, build status, and artifacts are scoped to the signed-in owner.
 
 ### Rust to WebAssembly builds
 
-Imported Rust snapshots can be built from the project page for `wasm32-unknown-unknown` or `wasm32-wasip1`. Imported Go snapshots can be built for `wasip1-wasm` when the repository has a root `go.mod` and root package. Build jobs run asynchronously, show bounded compiler output and status, and store the resulting `.wasm` files in a Zstandard-compressed ZIP (`.zip.zst`) in SQLite. Decompress the Zstandard frame to recover the ZIP archive. Import does not execute repository code; builds run explicitly in the isolated builder containers.
+Imported Rust snapshots can be built from the project page for `wasm32-unknown-unknown` or `wasm32-wasip1`. Imported Go snapshots can be built for `wasip1-wasm` when the repository has a root `go.mod` and root package. Build jobs run asynchronously, show bounded compiler output and status, and store the resulting `.wasm` files in a Zstandard-compressed ZIP (`.zip.zst`) in the local database. Decompress the Zstandard frame to recover the ZIP archive. Import does not execute repository code; builds run explicitly in the isolated builder containers.
 
 The `DockerControllerActor` is the application's single owner for Docker daemon checks and container execution. At startup it checks the engine and, when unavailable, runs `docker desktop start --timeout 60s`, then verifies the engine again. Startup fails if Docker Desktop cannot be started or the engine remains unavailable; this requires a Docker CLI with the Docker Desktop CLI plugin. The actor also runs requests from specialized workload actors with fixed isolation settings. Rust and Go builds use separate actors and separately configured trusted local images: `JANUS_WASM_BUILDER_IMAGE` and `JANUS_GO_WASM_BUILDER_IMAGE`. Build them with `docker build -f build/Dockerfile.wasm-rust -t janus-rust-wasm-builder:local .` and `docker build -f build/Dockerfile.wasm-go -t janus-go-wasm-builder:local .`. Each container has no network, a read-only root filesystem, a read-only source mount, no writable host mount during compilation, dropped Linux capabilities, a PID limit, 2 GiB memory, a 1 GiB temporary build filesystem, and a 10-minute deadline. Cargo is offline and locked; Go module lookup is also offline. Repositories must vendor dependencies or the trusted image must include dependency caches. The compressor actor wraps the generated ZIP in a Zstandard frame at level 19 and stores a `.zip.zst` artifact. The output archive is limited to 128 MiB. Other source languages and project-specific build settings are not supported yet.
 
@@ -49,13 +49,13 @@ OPA policy is embedded in `actors/authorization/policy.rego`. The default decisi
 
 - `AuthenticationActor` hashes/verifies passwords and signs/verifies JWT claims.
 - `AuthorizationActor` evaluates the embedded OPA policy.
-- `PersistenceActor` owns SQLite and account/provider-identity records.
+- `PersistenceActor` owns the local Turso database and account/provider-identity records.
 - `AccountingActor` receives structured application audit events and writes them through zap. Passwords, OAuth codes, tokens, and raw emails are excluded from audit fields.
 - `RoutesActor` builds the HTTP route table and coordinates requests to those service actors from HTTP request goroutines. The HTTP server actor owns listener lifecycle; request handling stays outside GoAkt `Receive` turns.
 - `TelemetryActor` configures OpenTelemetry. Actor receives and authentication flows create spans.
 - `DockerControllerActor` checks the Docker daemon and executes bounded, isolated containers requested by workload actors.
 
-Actor messages contain values rather than live HTTP request/response objects. SQLite is accessed only by its persistence actor. GoAkt's own runtime logs use the same zap logger through GoAkt's zap adapter; application audit events are delivered to the AccountingActor.
+Actor messages contain values rather than live HTTP request/response objects. The database is accessed only by its persistence actor. GoAkt's own runtime logs use the same zap logger through GoAkt's zap adapter; application audit events are delivered to the AccountingActor.
 
 ## Observability
 

@@ -10,7 +10,7 @@ import (
 
 	goakt "github.com/tochemey/goakt/v4/actor"
 	golog "github.com/tochemey/goakt/v4/log"
-	_ "modernc.org/sqlite"
+	_ "turso.tech/database/tursogo"
 )
 
 // startPersistence opens the database at path in a fresh actor system, which is
@@ -170,7 +170,7 @@ func TestDeleteProjectRemovesSnapshotsBuildsAndArtifacts(t *testing.T) {
 	}
 	stop()
 
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("turso", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestDeleteAccountRemovesProviderIdentities(t *testing.T) {
 	}
 	stop()
 
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("turso", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestDeleteAccountLeavesOtherAccountsProviderIdentitiesUntouched(t *testing.
 
 func TestMigrationAddsResumeColumnsToExistingDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy-jobs.db")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("turso", path)
 	if err != nil {
 		t.Fatal(err)
 	}

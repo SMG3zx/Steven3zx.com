@@ -13,7 +13,7 @@ import (
 	goakt "github.com/tochemey/goakt/v4/actor"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	_ "modernc.org/sqlite"
+	_ "turso.tech/database/tursogo"
 
 	actortrace "janus/actors/telemetry"
 )
@@ -43,7 +43,7 @@ func (a *Actor) PreStart(*goakt.Context) error {
 			return fmt.Errorf("create database directory: %w", err)
 		}
 	}
-	db, err := sql.Open("sqlite", a.path)
+	db, err := sql.Open("turso", a.path)
 	if err != nil {
 		return fmt.Errorf("open sqlite database: %w", err)
 	}
