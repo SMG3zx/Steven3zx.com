@@ -39,7 +39,7 @@ The stage of an Import that detects the Snapshot's language and suggests Entrypo
 _Avoid_: Analysis, inspection
 
 **Language**:
-The language with the most files in a Snapshot, as detected by its Scan. Examples: Go, Node, Python, Rust. A Language is buildable only when a WASM builder exists for it. Unbuildable Languages are still recorded, as a signal of which Projects Accounts want to build.
+The language with the most files in a Snapshot, as detected by its Scan. Examples: Go, Python, Rust, JavaScript/TypeScript (Node), JavaScript/TypeScript (Bun). The runtime appears in parentheses when one is detected. A Language is buildable only when a WASM builder exists for it. Unbuildable Languages are still recorded, as a signal of which Projects Accounts want to build.
 _Avoid_: Stack, runtime
 
 **Staging Snapshot**:
