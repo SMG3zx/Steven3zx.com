@@ -35,4 +35,20 @@ Not confirmed. The Headscale docs say the REST API uses a Bearer API key created
 
 ## Fuel-to-CPU-second constant
 
-Not measured. The current Wasmtime runtime does not record fuel, so the measurement needs the metering change from the ENG-55 decision first.
+Measured on 2026-10-19 with `TestMeasureFuelPerSecond` (`janus/janus-go/actors/wasmruntime/measure_cgo_test.go`). Each workload ran a single-threaded module through Wasmtime with the same settings as a real run (fuel metering and epoch interruption on), with a fuel budget large enough to run 0.2 to 2 seconds so the host clock could time it. Hardware: AMD Ryzen 5 7600X, one core.
+
+| Workload | Fuel per second (median, billions) | Spread across 7 runs |
+|---|---|---|
+| Memory loads and stores | 25.2 | 18.2 to 29.6 |
+| Integer arithmetic | 16.6 | 13.3 to 17.1 |
+| Function calls (recursive fib) | 3.4 | 3.1 to 3.6 |
+| Floating point (sqrt) | 2.3 | 2.0 to 2.4 |
+
+A separate earlier pass gave 18.4 and 28.1 for the first two, so a quiet machine reads higher than a busy one.
+
+**What it means:** fuel is not proportional to CPU time. Fuel counts operations, and an operation costs very different amounts of time: a square root or a call takes about ten times longer per fuel than a plain load or add. Any single constant therefore overcharges memory-heavy work and undercharges sqrt-heavy work. The geometric mean of the four workloads is about 7.6 billion fuel per second.
+
+**Caveats:**
+- These are synthetic loops. Real artifacts compiled from Go, Rust, or JavaScript mix operation types, so they will land inside this range. A calibration against real compiled artifacts would narrow it.
+- The numbers belong to this machine. Re-measure on the hardware that serves runs, because the constant scales with it.
+- Fuel stays the only deterministic meter, as the metering research found. The choice is whether to bill CPU on fuel through one constant, or on host-measured CPU time.
