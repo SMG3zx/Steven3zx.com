@@ -21,11 +21,26 @@ The old $0.15 placeholder came from Fly volumes, which are block storage. Janus 
 
 Confirmed on [AWS Lambda pricing](https://aws.amazon.com/lambda/pricing/) (fetched directly): $0.0000166667 per GB-second, $0.20 per million requests, 1 million requests and 400,000 GB-seconds free each month. The page sends data transfer out to the EC2 on-demand rates and does not state them. The $0.09/GB first-tier egress figure is therefore still third-party.
 
-## Still unverified
+## Provider figures re-checked on vendor pages (2026-10-19)
 
-- **Google Cloud Run:** Google's page could not be read by the fetch tool (it returned only the title). The earlier figures stand as third-party and search-snippet figures.
-- **Azure Container Apps:** the per-second CPU and memory rates were never retrieved. Only the free grant and the bandwidth page figures are known.
-- **Cloudflare Workers, Fastly Compute, Fly egress:** unchanged from the earlier research comment on ENG-57.
+Fetched directly from each vendor's own page, for the figures ENG-57 leans on.
+
+| Figure | Result |
+|---|---|
+| R2 Standard $0.015/GB-month, IA $0.01 plus $0.01/GB retrieval, Class A $4.50 / Class B $0.36 per million, free egress, free tier 10 GB, 1M A, 10M B | Confirmed on [R2 pricing](https://developers.cloudflare.com/r2/pricing/). IA operations are $9.00 and $0.90 per million, as recorded. |
+| Lambda $0.0000166667/GB-second, $0.20 per million requests, free 1M requests and 400,000 GB-seconds | Confirmed on [Lambda pricing](https://aws.amazon.com/lambda/pricing/). |
+| Fly volumes $0.15/GB-month | Confirmed on [Fly pricing](https://docs.fly.io/about/pricing). Fly egress is $0.02/GB in North America and Europe, $0.04 in Asia Pacific, Oceania and South America, $0.12 in Africa and India. Inbound is free. |
+| Cloudflare Workers per-CPU-ms billing | Confirmed on [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/): 30M CPU-ms included, then $0.02 per million. Requests: 10M included, then $0.30 per million. Wall time and egress are not billed. |
+| Fastly Compute per vCPU-ms | Confirmed on [Fastly pricing](https://www.fastly.com/pricing/): first 100M vCPU-ms free, then $0.05 per million, tiering down to $0.02. Requests $0.50 per million after 10M free. No separate duration rate. |
+| Vercel Active CPU excludes I/O wait, memory billed for instance lifetime | Confirmed on [Vercel fluid compute pricing](https://vercel.com/docs/fluid-compute/pricing). Rates are per region: $0.128 per CPU-hour and $0.0106 per GB-hour in the cheapest US regions (iad1, pdx1, cle1). |
+| Deno Deploy CPU billed only while code runs | Confirmed on [Deno pricing](https://deno.com/pricing): 10 hours free, 50 on Pro, 500 on Builder, overage $0.10/hour. |
+| Azure Container Apps free grant of 180,000 vCPU-seconds, 360,000 GiB-seconds, 2M requests | Confirmed on [Azure pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/). This is the same allowance Janus gives (180k CPU-seconds, 360k GiB-seconds). The per-second rates did not load. |
+
+**Still not confirmed from a vendor page:**
+- **S3 Standard $0.023/GB-month and AWS egress $0.09/GB:** AWS's S3 and EC2 pages loaded without their price tables. Search results from mid-2026 third-party pages agree: $0.023 for the first 50 TB in us-east-1, and $0.09/GB after 100 GB free, for the next 10 TB. Read the AWS Pricing Calculator, or the Price List API, to confirm. Janus egress at $0.09/GB matches this figure.
+- **Google Cloud Run:** the page text had no prices, and the fetch tool's answer came from background knowledge, not the page. Do not quote its rates.
+- **Azure Container Apps per-second rates:** not shown in the fetched text.
+- **Wasmer Edge:** third-party profile only, not checked.
 
 ## Headscale pre-auth key request
 
