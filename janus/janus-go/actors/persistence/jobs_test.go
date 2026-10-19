@@ -246,6 +246,47 @@ func TestDeleteAccountRemovesProviderIdentities(t *testing.T) {
 	}
 }
 
+func TestDeleteAccountRemovesGitHubConnection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pid, stop := startPersistence(t, filepath.Join(t.TempDir(), "github-delete.db"))
+	defer stop()
+	seedAccountAndProject(t, ctx, pid, "dana", "dana-project")
+	connected := askPersistence(t, ctx, pid, &ConnectGitHub{UserID: "dana", Subject: "github-dana", Email: "dana@example.com", DisplayName: "Dana", Token: "gho-dana-token"}).(*GitHubConnected)
+	if connected.Err != nil {
+		t.Fatalf("connect GitHub: %v", connected.Err)
+	}
+
+	deleted := askPersistence(t, ctx, pid, &DeleteAccount{UserID: "dana"}).(*AccountDeleted)
+	if deleted.Err != nil || !deleted.Deleted {
+		t.Fatalf("delete account: %#v", deleted)
+	}
+	found := askPersistence(t, ctx, pid, &FindGitHubToken{UserID: "dana"}).(*GitHubTokenFound)
+	if found.Connected || found.Token != "" {
+		t.Fatalf("deleted account still has a GitHub connection: %#v", found)
+	}
+}
+
+func TestDeleteAccountLeavesOtherAccountsUntouched(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pid, stop := startPersistence(t, filepath.Join(t.TempDir(), "isolation.db"))
+	defer stop()
+	seedAccountAndProject(t, ctx, pid, "erin", "erin-project")
+	seedAccountAndProject(t, ctx, pid, "frank", "frank-project")
+
+	deleted := askPersistence(t, ctx, pid, &DeleteAccount{UserID: "frank"}).(*AccountDeleted)
+	if deleted.Err != nil || !deleted.Deleted {
+		t.Fatalf("delete account: %#v", deleted)
+	}
+	if found := askPersistence(t, ctx, pid, &FindUser{ID: "erin"}).(*UserFound); !found.Found {
+		t.Fatal("deleting one account removed another account")
+	}
+	if project := askPersistence(t, ctx, pid, &GetProject{ID: "erin-project", OwnerID: "erin"}).(*ProjectFound); !project.Found {
+		t.Fatal("deleting one account removed another account's project")
+	}
+}
+
 func TestMigrationAddsResumeColumnsToExistingDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy-jobs.db")
 	db, err := sql.Open("sqlite", path)

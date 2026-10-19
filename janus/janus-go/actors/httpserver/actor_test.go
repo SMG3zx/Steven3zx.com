@@ -37,7 +37,7 @@ func TestHTTPServerActorServesImmutableRouterAndStops(t *testing.T) {
 		}
 		return c.Request.Header.Get("X-Test") + ":" + string(body)
 	})
-	serverActor := New("127.0.0.1:0", app, make(chan error, 1))
+	serverActor := New("127.0.0.1:0", app, nil)
 	pid, err := system.Spawn(ctx, "http-server", serverActor)
 	if err != nil {
 		t.Fatalf("spawn HTTP server actor: %v", err)
