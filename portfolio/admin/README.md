@@ -1,0 +1,45 @@
+# Origin admin
+
+`https://www.steven3zx.com/admin/` is a username/password sign-in that leads to a live React Flow map of the origin host. The map shows CPU per thread, memory, network (interfaces, listening sockets, inbound and outbound connections), storage, processes, Windows services, and Docker containers.
+
+## Pieces
+
+| Dir | What | Runs |
+|---|---|---|
+| `agent/` | Go collector for the Windows host. It serves `GET /snapshot` with a bearer token on `127.0.0.1:9180`. | Natively on Windows, as the per-user scheduled task `steven3zx-host-agent` |
+| `server/` | Go API: sign-in, sessions, and an authenticated proxy to the agent. Users live in a local Turso file. | `admin` container in `edge/compose.yaml` |
+| `web/` | React + TypeScript + `@xyflow/react` UI, built into the `admin` image | Served by `server/` under `/admin/` |
+
+Caddy routes `/admin` and `/admin/*` on `www.steven3zx.com` to `admin:8091`. The admin container reaches the agent at `host.docker.internal:9180`.
+
+## Security
+
+- Passwords are stored as argon2id hashes (64 MiB, t=3, p=2). The minimum length is 12 characters.
+- Sessions are 32 random bytes in an `HttpOnly; Secure; SameSite=Strict` cookie scoped to `/admin`. The database stores only the SHA-256 of the token. Sessions expire after 12 hours. Changing a password signs out every session for that user.
+- POSTs must be JSON from the same origin.
+- Failed logins are limited to 5 per 15 minutes per client IP (taken from `CF-Connecting-IP`) and 20 per 15 minutes per username.
+- The agent listens only on loopback and requires `HOST_AGENT_TOKEN` from `edge/.env`.
+
+## Managing users
+
+Turso locks the database file, so stop the server while you change users:
+
+```bash
+cd edge
+docker compose stop admin
+docker compose run --rm -it admin useradd steven   # or: passwd steven
+docker compose start admin
+```
+
+`useradd` and `passwd` prompt for the password twice without echoing it.
+
+## Agent
+
+Run `pwsh portfolio/admin/agent/install.ps1` to build `agent/build/hostagent.exe` and register the scheduled task, then start it. Run it again after you change the agent. It reads `HOST_AGENT_TOKEN` from `edge/.env`.
+
+## Local development
+
+```bash
+cd portfolio/admin/web && npm install && npm run dev        # Vite proxies /admin/api to :8091
+cd portfolio/admin/server && HOST_AGENT_TOKEN=... ADMIN_COOKIE_SECURE=false ADMIN_WEB_DIR=../web/dist go run .
+```

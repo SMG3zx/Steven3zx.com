@@ -1,0 +1,6 @@
+agent
+Dockerfile
+.dockerignore
+web/node_modules
+web/dist
+server/data

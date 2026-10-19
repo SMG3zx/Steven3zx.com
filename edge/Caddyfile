@@ -21,7 +21,13 @@ plane.steven3zx.com {
 }
 
 www.steven3zx.com {
-	reverse_proxy portfolio:8090
+	@admin path /admin /admin/*
+	handle @admin {
+		reverse_proxy admin:8091
+	}
+	handle {
+		reverse_proxy portfolio:8090
+	}
 }
 
 steven3zx.com {
