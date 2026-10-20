@@ -1,6 +1,9 @@
 package app
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 type CreateLocalUser struct {
 	ID           string
@@ -263,4 +266,25 @@ func (e *ReplyError) Unwrap() error { return e.Err }
 func IsReply(err error) bool {
 	var reply *ReplyError
 	return errors.As(err, &reply)
+}
+
+// CreateEnrollmentCode stores an Enrollment Code by its hash, so the Store
+// never holds a code that could be used. It can be consumed once, before
+// ExpiresAt.
+type CreateEnrollmentCode struct {
+	CodeHash, OwnerID string
+	ExpiresAt         time.Time
+}
+
+// CreateAgent records an Agent that enrolled with KeyID, the pre-auth key it
+// was given. Tag is the tailnet tag its node carries.
+type CreateAgent struct {
+	ID, OwnerID, Name, Tag, KeyID string
+	CreatedAt                     time.Time
+}
+
+// AgentRecord is a stored Agent.
+type AgentRecord struct {
+	ID, OwnerID, Name, Tag, KeyID string
+	CreatedAt                     time.Time
 }

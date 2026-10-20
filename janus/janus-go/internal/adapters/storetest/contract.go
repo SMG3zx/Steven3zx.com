@@ -7,6 +7,7 @@ import (
 	"janus/internal/app"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Run runs the Store contract against adapters made by newStore. Each case
@@ -26,6 +27,9 @@ func Run(t *testing.T, newStore func(t *testing.T) app.Store) {
 		{"CompletingACancelledImportFails", testCompletingACancelledImportFails},
 		{"BuildsFollowTheirStateMachine", testBuildsFollowTheirStateMachine},
 		{"DeletingAnAccountCascades", testDeletingAnAccountCascades},
+		{"EnrollmentCodesAreSingleUseAndExpire", testEnrollmentCodes},
+		{"AgentsAreOwned", testAgents},
+		{"DeletingAnAccountRemovesItsAgentsAndCodes", testDeletingAnAccountRemovesAgents},
 		{"ConcurrentCallersNeverDeadlock", testConcurrentCallers},
 	} {
 		t.Run(c.name, func(t *testing.T) { c.test(t, newStore(t)) })
@@ -463,5 +467,119 @@ func AdvanceImport(t testing.TB, store app.Store, id, from string, to ...string)
 			t.Fatalf("move import %s from %s to %s: %v", id, from, status, err)
 		}
 		from = status
+	}
+}
+
+func testEnrollmentCodes(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	for _, id := range []string{"alice", "bob"} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+	}
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	expires := base.Add(15 * time.Minute)
+
+	must(t, store.CreateEnrollmentCode(ctx, app.CreateEnrollmentCode{CodeHash: "h1", OwnerID: "alice", ExpiresAt: expires}))
+	if err := store.CreateEnrollmentCode(ctx, app.CreateEnrollmentCode{CodeHash: "h1", OwnerID: "bob", ExpiresAt: expires}); err == nil {
+		t.Fatal("a second code with the same hash was stored")
+	}
+
+	if owner, consumed, err := store.ConsumeEnrollmentCode(ctx, "unknown", base); err != nil || consumed || owner != "" {
+		t.Fatalf("consuming an unknown code = %q, %v, %v, want no owner and not consumed", owner, consumed, err)
+	}
+	owner, consumed, err := store.ConsumeEnrollmentCode(ctx, "h1", base.Add(time.Minute))
+	must(t, err)
+	if !consumed || owner != "alice" {
+		t.Fatalf("consuming a valid code = %q, %v, want alice and consumed", owner, consumed)
+	}
+	if owner, consumed, err = store.ConsumeEnrollmentCode(ctx, "h1", base.Add(2*time.Minute)); err != nil || consumed || owner != "" {
+		t.Fatalf("consuming a code twice = %q, %v, %v, want not consumed the second time", owner, consumed, err)
+	}
+
+	must(t, store.CreateEnrollmentCode(ctx, app.CreateEnrollmentCode{CodeHash: "h2", OwnerID: "alice", ExpiresAt: expires}))
+	if _, consumed, err = store.ConsumeEnrollmentCode(ctx, "h2", expires); err != nil || consumed {
+		t.Fatalf("consuming a code at the moment it expires = %v, %v, want not consumed", consumed, err)
+	}
+	if _, consumed, err = store.ConsumeEnrollmentCode(ctx, "h2", expires.Add(time.Hour)); err != nil || consumed {
+		t.Fatalf("consuming an expired code = %v, %v, want not consumed", consumed, err)
+	}
+	must(t, store.CreateEnrollmentCode(ctx, app.CreateEnrollmentCode{CodeHash: "h3", OwnerID: "bob", ExpiresAt: expires}))
+	if owner, consumed, err = store.ConsumeEnrollmentCode(ctx, "h3", expires.Add(-time.Nanosecond)); err != nil || !consumed || owner != "bob" {
+		t.Fatalf("consuming a code just before it expires = %q, %v, %v, want bob and consumed", owner, consumed, err)
+	}
+}
+
+func testAgents(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	for _, id := range []string{"alice", "bob"} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+	}
+	laptop := app.CreateAgent{ID: "a1", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "k1", CreatedAt: base}
+	must(t, store.CreateAgent(ctx, laptop))
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "a2", OwnerID: "alice", Name: "desktop", Tag: "tag:acct-alice", KeyID: "k2", CreatedAt: base.Add(time.Minute)}))
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "b1", OwnerID: "bob", Name: "server", Tag: "tag:acct-bob", KeyID: "k3", CreatedAt: base}))
+	if err := store.CreateAgent(ctx, app.CreateAgent{ID: "a3", OwnerID: "alice", Name: "again", Tag: "tag:acct-alice", KeyID: "k1", CreatedAt: base}); err == nil {
+		t.Fatal("two Agents were stored for the same key")
+	}
+
+	agents, err := store.ListAgents(ctx, "alice")
+	must(t, err)
+	if len(agents) != 2 || agents[0].ID != "a1" || agents[1].ID != "a2" {
+		t.Fatalf("alice's Agents = %#v, want a1 then a2 by creation time", agents)
+	}
+	if got := agents[0]; got.OwnerID != "alice" || got.Name != "laptop" || got.Tag != "tag:acct-alice" || got.KeyID != "k1" || !got.CreatedAt.Equal(base) {
+		t.Fatalf("stored Agent = %#v, want the fields it was created with", got)
+	}
+	if none, err := store.ListAgents(ctx, "nobody"); err != nil || len(none) != 0 {
+		t.Fatalf("an unknown owner's Agents = %#v, %v, want none", none, err)
+	}
+
+	if _, found, err := store.FindAgent(ctx, "a1", "bob"); err != nil || found {
+		t.Fatalf("bob found alice's Agent: %v, %v", found, err)
+	}
+	if got, found, err := store.FindAgent(ctx, "a1", "alice"); err != nil || !found || got.KeyID != "k1" {
+		t.Fatalf("finding alice's Agent = %#v, %v, %v", got, found, err)
+	}
+	if deleted, err := store.DeleteAgent(ctx, "a1", "bob"); err != nil || deleted {
+		t.Fatalf("bob deleted alice's Agent: %v, %v", deleted, err)
+	}
+	if deleted, err := store.DeleteAgent(ctx, "a1", "alice"); err != nil || !deleted {
+		t.Fatalf("alice deleting her Agent = %v, %v", deleted, err)
+	}
+	if deleted, err := store.DeleteAgent(ctx, "a1", "alice"); err != nil || deleted {
+		t.Fatalf("deleting an Agent twice = %v, %v, want false the second time", deleted, err)
+	}
+	if remaining, _ := store.ListAgents(ctx, "alice"); len(remaining) != 1 || remaining[0].ID != "a2" {
+		t.Fatalf("alice's Agents after a delete = %#v", remaining)
+	}
+}
+
+func testDeletingAnAccountRemovesAgents(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	for _, id := range []string{"alice", "bob"} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+	}
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "a1", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "k1", CreatedAt: base}))
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "b1", OwnerID: "bob", Name: "server", Tag: "tag:acct-bob", KeyID: "k2", CreatedAt: base}))
+	must(t, store.CreateEnrollmentCode(ctx, app.CreateEnrollmentCode{CodeHash: "ha", OwnerID: "alice", ExpiresAt: base.Add(time.Hour)}))
+	must(t, store.CreateEnrollmentCode(ctx, app.CreateEnrollmentCode{CodeHash: "hb", OwnerID: "bob", ExpiresAt: base.Add(time.Hour)}))
+
+	deleted, err := store.DeleteAccount(ctx, "alice", false)
+	must(t, err)
+	if !deleted.Deleted {
+		t.Fatalf("deleting the Account = %#v", deleted)
+	}
+	if agents, _ := store.ListAgents(ctx, "alice"); len(agents) != 0 {
+		t.Fatalf("an Agent survived its Account: %#v", agents)
+	}
+	if _, consumed, _ := store.ConsumeEnrollmentCode(ctx, "ha", base); consumed {
+		t.Fatal("an Enrollment Code survived its Account")
+	}
+	if agents, _ := store.ListAgents(ctx, "bob"); len(agents) != 1 {
+		t.Fatalf("deleting alice changed bob's Agents: %#v", agents)
+	}
+	if owner, consumed, _ := store.ConsumeEnrollmentCode(ctx, "hb", base); !consumed || owner != "bob" {
+		t.Fatal("deleting alice removed bob's Enrollment Code")
 	}
 }

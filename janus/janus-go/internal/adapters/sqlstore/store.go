@@ -229,4 +229,19 @@ CREATE TABLE IF NOT EXISTS project_wasm_builds (
 	 updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now'))
 );
 CREATE INDEX IF NOT EXISTS wasm_builds_owner ON project_wasm_builds(owner_id, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_wasm_build_per_project ON project_wasm_builds(project_id) WHERE status IN ('queued','building');`
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_wasm_build_per_project ON project_wasm_builds(project_id) WHERE status IN ('queued','building');
+CREATE TABLE IF NOT EXISTS enrollment_codes (
+	 code_hash TEXT PRIMARY KEY,
+	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	 expires_at INTEGER NOT NULL,
+	 used_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS agents (
+	 id TEXT PRIMARY KEY,
+	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	 name TEXT NOT NULL,
+	 tag TEXT NOT NULL,
+	 key_id TEXT NOT NULL UNIQUE,
+	 created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS agents_owner ON agents(owner_id, created_at, id);`

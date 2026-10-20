@@ -34,6 +34,8 @@ type Memory struct {
 	snapshots  map[string]*memSnapshot
 	imports    map[string]*memImport
 	builds     map[string]*memBuild
+	codes      map[string]memCode // by code hash
+	agents     map[string]app.AgentRecord
 }
 
 var _ app.Store = (*Memory)(nil)
@@ -49,6 +51,8 @@ func NewMemory() *Memory {
 		snapshots:  map[string]*memSnapshot{},
 		imports:    map[string]*memImport{},
 		builds:     map[string]*memBuild{},
+		codes:      map[string]memCode{},
+		agents:     map[string]app.AgentRecord{},
 	}
 }
 
@@ -56,6 +60,11 @@ type memUser struct{ id, email, displayName string }
 type memCredential struct{ email, passwordHash string }
 type memIdentity struct{ provider, subject string }
 type memGitHub struct{ subject, token string }
+type memCode struct {
+	ownerID   string
+	expiresAt time.Time
+	used      bool
+}
 
 type memProject struct {
 	id, ownerID, name, description string
@@ -779,8 +788,94 @@ func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJob
 			delete(m.identities, key)
 		}
 	}
+	for id, agent := range m.agents {
+		if agent.OwnerID == userID {
+			delete(m.agents, id)
+		}
+	}
+	for hash, code := range m.codes {
+		if code.ownerID == userID {
+			delete(m.codes, hash)
+		}
+	}
 	delete(m.github, userID)
 	delete(m.creds, userID)
 	delete(m.users, userID)
 	return app.AccountDeleted{Deleted: true}, nil
+}
+
+func (m *Memory) CreateEnrollmentCode(_ context.Context, code app.CreateEnrollmentCode) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.codes[code.CodeHash]; ok {
+		return constraint("UNIQUE constraint failed: enrollment_codes.code_hash")
+	}
+	m.codes[code.CodeHash] = memCode{ownerID: code.OwnerID, expiresAt: code.ExpiresAt}
+	return nil
+}
+
+func (m *Memory) ConsumeEnrollmentCode(_ context.Context, codeHash string, now time.Time) (string, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	code, ok := m.codes[codeHash]
+	if !ok || code.used || !now.Before(code.expiresAt) {
+		return "", false, nil
+	}
+	code.used = true
+	m.codes[codeHash] = code
+	return code.ownerID, true, nil
+}
+
+func (m *Memory) CreateAgent(_ context.Context, agent app.CreateAgent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.agents[agent.ID]; ok {
+		return constraint("UNIQUE constraint failed: agents.id")
+	}
+	for _, other := range m.agents {
+		if other.KeyID == agent.KeyID {
+			return constraint("UNIQUE constraint failed: agents.key_id")
+		}
+	}
+	m.agents[agent.ID] = app.AgentRecord{ID: agent.ID, OwnerID: agent.OwnerID, Name: agent.Name, Tag: agent.Tag, KeyID: agent.KeyID, CreatedAt: agent.CreatedAt.UTC()}
+	return nil
+}
+
+func (m *Memory) ListAgents(_ context.Context, ownerID string) ([]app.AgentRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agents := make([]app.AgentRecord, 0)
+	for _, agent := range m.agents {
+		if agent.OwnerID == ownerID {
+			agents = append(agents, agent)
+		}
+	}
+	sort.Slice(agents, func(i, j int) bool {
+		if !agents[i].CreatedAt.Equal(agents[j].CreatedAt) {
+			return agents[i].CreatedAt.Before(agents[j].CreatedAt)
+		}
+		return agents[i].ID < agents[j].ID
+	})
+	return agents, nil
+}
+
+func (m *Memory) FindAgent(_ context.Context, id, ownerID string) (app.AgentRecord, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[id]
+	if !ok || agent.OwnerID != ownerID {
+		return app.AgentRecord{}, false, nil
+	}
+	return agent, true, nil
+}
+
+func (m *Memory) DeleteAgent(_ context.Context, id, ownerID string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agent, ok := m.agents[id]
+	if !ok || agent.OwnerID != ownerID {
+		return false, nil
+	}
+	delete(m.agents, id)
+	return true, nil
 }

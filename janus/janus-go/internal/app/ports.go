@@ -1,7 +1,10 @@
 // Package app holds the Janus use cases and the ports they need.
 package app
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Store is what callers use to read and write Janus data. It returns typed
 // values and plain errors, so no caller sends a message, matches the reply type
@@ -56,6 +59,18 @@ type Store interface {
 	ListResumableImports(ctx context.Context) ([]ResumableImport, error)
 	ListResumableBuilds(ctx context.Context) ([]ResumableBuild, error)
 	ListActiveJobs(ctx context.Context, ownerID string) ([]ActiveJob, error)
+
+	// Agents and Enrollment Codes. A code is stored by hash and can be consumed
+	// once; every Agent lookup is scoped to its owner.
+	CreateEnrollmentCode(ctx context.Context, code CreateEnrollmentCode) error
+	// ConsumeEnrollmentCode marks the code used and returns its owner, if the
+	// code exists, is unused and expires after now. Otherwise consumed is false and
+	// the code, if any, is left as it is.
+	ConsumeEnrollmentCode(ctx context.Context, codeHash string, now time.Time) (ownerID string, consumed bool, err error)
+	CreateAgent(ctx context.Context, agent CreateAgent) error
+	ListAgents(ctx context.Context, ownerID string) ([]AgentRecord, error)
+	FindAgent(ctx context.Context, id, ownerID string) (agent AgentRecord, found bool, err error)
+	DeleteAgent(ctx context.Context, id, ownerID string) (deleted bool, err error)
 
 	// DeleteAccount deletes an Account and everything it owns. Without
 	// cancelActiveJobs an Account with unfinished jobs is left untouched and the
