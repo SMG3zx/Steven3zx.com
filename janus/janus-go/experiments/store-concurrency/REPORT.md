@@ -111,10 +111,10 @@ Workloads: `read95` 95% reads / 5% updates on 10k keys; `mixed50` 50/50; `write1
 ## Reproduce
 
 ```bash
-cd janus/janus-go
-go run ./experiments/store-concurrency -tune -reps 2 -dur 1s > experiments/store-concurrency/results/tuning.txt
-go run ./experiments/store-concurrency -out experiments/store-concurrency/results   # about 20 minutes
-go run ./experiments/store-concurrency -render -out experiments/store-concurrency/results   # rebuild results.md from results.csv
+cd janus/janus-go/experiments/store-concurrency
+go run . -tune -reps 2 -dur 1s > results/tuning.txt
+go run . -out results   # about 20 minutes
+go run . -render -out results   # rebuild results.md from results.csv
 ```
 
 Flags: `-only read95,scan-blocks`, `-variants atomic/`, `-reps`, `-dur`, `-warm`, `-gc`, `-render`. The tuned parameters at the top of `main.go` are the winners of the sweep in `results/tuning.txt`.

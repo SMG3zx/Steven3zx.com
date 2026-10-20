@@ -1,3 +1,5 @@
+> **Historical.** Janus no longer uses GoAkt: it was removed in ENG-71 (see [ADR 0003](adr/0003-ports-and-adapters.md)). This note records the audit that informed that decision.
+
 # GoAkt reference for Janus
 
 Janus runs on [GoAkt](https://github.com/Tochemey/goakt) v4 (`github.com/tochemey/goakt/v4`, pinned in `go.mod`). This note records what GoAkt offers, the rules that matter for Janus, and where each feature is, or could be, used here. It was written from the documentation shipped inside the module (`docs/` in the module cache), so it describes the version Janus builds against.

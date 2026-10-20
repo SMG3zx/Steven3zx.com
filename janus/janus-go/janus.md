@@ -1,3 +1,5 @@
+> **Historical.** The diagrams below describe the actor design that ENG-61 replaced. The current structure is in [docs/architecture.md](docs/architecture.md).
+
 [GoAkt actor model](https://docs.goakt.dev/actor/actor-model)
 
 ## Actor communication

@@ -1,4 +1,4 @@
-package wasmruntime
+package wasmtime
 
 import (
 	"janus/internal/domain/templates"

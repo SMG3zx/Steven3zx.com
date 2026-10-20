@@ -1,4 +1,4 @@
-package telemetry
+package main
 
 import (
 	"context"
@@ -23,8 +23,8 @@ var (
 	requestDuration metric.Int64Histogram
 )
 
-// Setup installs a global tracer provider and returns a shutdown func that flushes pending spans.
-func Init(ctx context.Context, service string) (func(context.Context) error, error) {
+// initTelemetry installs a global tracer provider and returns a shutdown func that flushes pending spans.
+func initTelemetry(ctx context.Context, service string) (func(context.Context) error, error) {
 	exp, err := otlptracehttp.New(ctx)
 	if err != nil {
 		return nil, err
@@ -88,9 +88,9 @@ func Init(ctx context.Context, service string) (func(context.Context) error, err
 	}, nil
 }
 
-// RecordHTTPRequest records the method, response status, and elapsed time of an
+// recordHTTPRequest records the method, response status, and elapsed time of an
 // HTTP request in the configured telemetry providers.
-func RecordHTTPRequest(ctx context.Context, method string, status int, duration time.Duration) {
+func recordHTTPRequest(ctx context.Context, method string, status int, duration time.Duration) {
 	if requestCount == nil || requestDuration == nil {
 		return
 	}

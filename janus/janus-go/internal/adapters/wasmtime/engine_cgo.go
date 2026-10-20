@@ -1,6 +1,6 @@
 //go:build cgo
 
-package wasmruntime
+package wasmtime
 
 import (
 	"errors"

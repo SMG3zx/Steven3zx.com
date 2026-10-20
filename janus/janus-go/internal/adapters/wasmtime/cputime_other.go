@@ -1,6 +1,6 @@
 //go:build !linux && !windows
 
-package wasmruntime
+package wasmtime
 
 import "time"
 

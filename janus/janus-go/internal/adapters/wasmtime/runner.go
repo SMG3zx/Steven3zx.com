@@ -1,4 +1,6 @@
-package wasmruntime
+// Package wasmtime is the app.Runner adapter that executes WASI modules with the
+// Wasmtime runtime (cgo; a build without cgo reports the runtime as unavailable).
+package wasmtime
 
 import (
 	"context"

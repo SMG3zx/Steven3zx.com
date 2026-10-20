@@ -1,32 +1,32 @@
-package telemetry
+package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"janus/internal/app"
-
 	"github.com/grafana/pyroscope-go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"janus/internal/app"
 )
 
-// Telemetry is the running OpenTelemetry providers and Pyroscope profiler.
+// telemetry is the running OpenTelemetry providers and Pyroscope profiler.
 // Application startup owns it: it starts them once and stops them last, so the
 // final spans and logs are flushed.
-type Telemetry struct {
+type telemetry struct {
 	shutdown func(context.Context) error
 	profiler *pyroscope.Profiler
 }
 
-// Log receives the messages of the profiler's own SDK, with a level of "info",
+// profilerLog receives the messages of the profiler's own SDK, with a level of "info",
 // "debug" or "error". It may be nil.
-type Log func(level, message string)
+type profilerLog func(level, message string)
 
-// Start installs the OpenTelemetry providers for service "janus-go" and starts
+// startTelemetry installs the OpenTelemetry providers for service "janus-go" and starts
 // the Pyroscope profiler against pyroscopeAddress.
-func Start(ctx context.Context, pyroscopeAddress string, log Log) (*Telemetry, error) {
-	shutdown, err := Init(ctx, "janus-go")
+func startTelemetry(ctx context.Context, pyroscopeAddress string, log profilerLog) (*telemetry, error) {
+	shutdown, err := initTelemetry(ctx, "janus-go")
 	if err != nil {
 		_, span := app.StartSpan(ctx, "telemetry.initialize", trace.WithSpanKind(trace.SpanKindInternal))
 		app.RecordError(span, err)
@@ -60,11 +60,11 @@ func Start(ctx context.Context, pyroscopeAddress string, log Log) (*Telemetry, e
 	_, readySpan := app.StartSpan(ctx, "telemetry.ready")
 	readySpan.SetAttributes(attribute.String("service.name", "janus-go"))
 	readySpan.End()
-	return &Telemetry{shutdown: shutdown, profiler: profiler}, nil
+	return &telemetry{shutdown: shutdown, profiler: profiler}, nil
 }
 
 // Stop stops the profiler and flushes and shuts down the providers.
-func (t *Telemetry) Stop(ctx context.Context) error {
+func (t *telemetry) Stop(ctx context.Context) error {
 	_, span := app.StartSpan(ctx, "pyroscope.stop", trace.WithSpanKind(trace.SpanKindInternal))
 	var profileErr error
 	if t.profiler != nil {
@@ -82,7 +82,7 @@ func (t *Telemetry) Stop(ctx context.Context) error {
 	return err
 }
 
-type sdkLogger struct{ log Log }
+type sdkLogger struct{ log profilerLog }
 
 func (l sdkLogger) Infof(format string, args ...interface{})  { l.write("info", format, args...) }
 func (l sdkLogger) Debugf(format string, args ...interface{}) { l.write("debug", format, args...) }
