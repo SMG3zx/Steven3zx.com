@@ -23,7 +23,6 @@ import (
 
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
-	"janus/actors/builder"
 	"janus/actors/github"
 	"janus/actors/gitsource"
 )
@@ -38,14 +37,14 @@ const (
 // e2eWASMBuilder builds any Rust workspace into a fixed Artifact.
 type e2eWASMBuilder struct{}
 
-func (e2eWASMBuilder) Build(_ context.Context, _ string, request builder.Request) (builder.Result, error) {
+func (e2eWASMBuilder) Build(_ context.Context, _ string, request app.BuildRequest) (app.BuildResult, error) {
 	if request.Target != "wasm32-unknown-unknown" {
-		return builder.Result{}, fmt.Errorf("unexpected target %q", request.Target)
+		return app.BuildResult{}, fmt.Errorf("unexpected target %q", request.Target)
 	}
 	if _, err := os.Stat(path.Join(request.Workspace, "Cargo.toml")); err != nil {
-		return builder.Result{}, err
+		return app.BuildResult{}, err
 	}
-	return builder.Result{Name: "wasm-artifacts.zip", Artifact: []byte("playwright-wasm-archive"), Log: []byte("Finished release build")}, nil
+	return app.BuildResult{Name: "wasm-artifacts.zip", Artifact: []byte("playwright-wasm-archive"), Log: []byte("Finished release build")}, nil
 }
 
 func TestProjectBrowserActions(t *testing.T) {
@@ -328,7 +327,7 @@ func startJanus(t *testing.T, ctx context.Context) (app.Store, http.Handler) {
 
 // startJanusWith starts the application in-process with b as its WASM builder.
 // It returns the Store, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.Store, *app.Builds, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store, *app.Builds, http.Handler) {
 	t.Helper()
 	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"), sqlstore.WithTokenSecret(jwtSecret))
 	if err != nil {

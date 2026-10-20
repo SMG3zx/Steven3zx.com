@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"janus/actors/builder"
 	"janus/internal/app"
 )
 
@@ -31,16 +30,16 @@ func newBlockingBuilder() *blockingBuilder {
 	return &blockingBuilder{started: make(chan string, 8), release: make(chan struct{}, 8)}
 }
 
-func (b *blockingBuilder) Build(ctx context.Context, language string, _ builder.Request) (builder.Result, error) {
+func (b *blockingBuilder) Build(ctx context.Context, language string, _ app.BuildRequest) (app.BuildResult, error) {
 	b.running.Add(1)
 	defer b.running.Add(-1)
 	b.started <- language
 	select {
 	case <-b.release:
-		return builder.Result{Name: "wasm-artifacts.zip", Artifact: []byte("archive"), Log: []byte("built " + language)}, nil
+		return app.BuildResult{Name: "wasm-artifacts.zip", Artifact: []byte("archive"), Log: []byte("built " + language)}, nil
 	case <-ctx.Done():
 		b.cancelled.Add(1)
-		return builder.Result{Log: []byte("stopped")}, ctx.Err()
+		return app.BuildResult{Log: []byte("stopped")}, ctx.Err()
 	}
 }
 

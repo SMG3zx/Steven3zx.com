@@ -1,4 +1,4 @@
-package builder
+package dockerbuild
 
 import (
 	"encoding/json"

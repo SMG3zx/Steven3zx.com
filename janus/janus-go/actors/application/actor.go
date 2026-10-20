@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-	"time"
 
 	goakt "github.com/tochemey/goakt/v4/actor"
 	"go.opentelemetry.io/otel/attribute"
@@ -12,14 +11,13 @@ import (
 
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
-	"janus/actors/builder"
 	configactor "janus/actors/config"
-	dockeractor "janus/actors/docker"
 	githubactor "janus/actors/github"
 	"janus/actors/gitsource"
 	telemetryactor "janus/actors/telemetry"
 	wasmruntime "janus/actors/wasmruntime"
 	"janus/internal/adapters/auditlog"
+	"janus/internal/adapters/dockerbuild"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
@@ -41,7 +39,6 @@ type Actor struct {
 	builds         *app.Builds
 	accounts       *app.Accounts
 	runs           *app.Runs
-	docker         *goakt.PID
 	logger         *zap.Logger
 	processErrors  chan error
 }
@@ -121,40 +118,19 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		return err
 	}
 	a.imports = app.NewImports(a.store, a.github.API, gitsource.New(), a.audit)
-	a.docker, err = a.system.Spawn(startupCtx, "docker-controller", dockeractor.New())
-	if err != nil {
-		return fmt.Errorf("spawn Docker controller actor: %w", err)
+	if err = dockerbuild.EnsureRunning(startupCtx); err != nil {
+		return fmt.Errorf("ensure Docker Engine is running: %w", err)
 	}
-	dockerResponse, err := goakt.Ask(startupCtx, a.docker, &dockeractor.EnsureRunning{}, 75*time.Second)
-	if err != nil {
-		return fmt.Errorf("check Docker daemon: %w", err)
-	}
-	dockerReady, ok := dockerResponse.(*dockeractor.Healthy)
-	if !ok {
-		return fmt.Errorf("check Docker daemon: unexpected response %T", dockerResponse)
-	}
-	if dockerReady.Err != nil {
-		return fmt.Errorf("ensure Docker Engine is running: %w", dockerReady.Err)
-	} else {
-		a.logger.Info("Docker daemon is ready")
-	}
-	imagesResponse, err := goakt.Ask(startupCtx, a.docker, &dockeractor.PrepareWASMBuilders{
-		RustImage: config.WASMBuilderImage, GoImage: config.GoWASMBuilderImage, JSImage: config.JSWASMBuilderImage,
-	}, 10*time.Minute)
+	a.logger.Info("Docker daemon is ready")
+	images := dockerbuild.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage}
+	built, err := dockerbuild.PrepareImages(startupCtx, images)
 	if err != nil {
 		return fmt.Errorf("prepare WASM builder images: %w", err)
 	}
-	imagesReady, ok := imagesResponse.(*dockeractor.WASMBuildersReady)
-	if !ok {
-		return fmt.Errorf("prepare WASM builder images: unexpected response %T", imagesResponse)
-	}
-	if imagesReady.Err != nil {
-		return fmt.Errorf("prepare WASM builder images: %w", imagesReady.Err)
-	}
-	for _, image := range imagesReady.BuiltImages {
+	for _, image := range built {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
-	compiler := builder.NewDocker(builder.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage})
+	compiler := dockerbuild.NewDocker(images)
 	a.builds = app.NewBuilds(a.store, compiler, a.audit)
 	a.runs = app.NewRuns(a.store, wasmruntime.Wasmtime{})
 	a.accounts = app.NewAccounts(a.store, a.imports, a.builds)

@@ -4,7 +4,7 @@
 //
 // Builds are plain calls, not actors: each runs on its caller's goroutine, so
 // builds of any Language overlap, up to the limit the job runner sets.
-package builder
+package dockerbuild
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"strings"
 
-	"janus/actors/docker"
 	"janus/internal/app"
 	"janus/internal/domain/artifact"
 )
@@ -28,17 +27,14 @@ const (
 
 var validImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 
-// The Builder port and its types live in app. They keep their old names here for
-// callers of this package.
 type (
 	Request       = app.BuildRequest
 	Result        = app.BuildResult
-	Builder       = app.Builder
 	ManifestError = app.ManifestError
 )
 
 // Executor runs a container. Docker is the real one.
-type Executor func(ctx context.Context, run docker.Run) docker.Ran
+type Executor func(ctx context.Context, run Run) Ran
 
 // adapter is how one Template is built: it checks the workspace, applies the
 // Target rule and returns the shell command to run in the builder image.
@@ -58,8 +54,8 @@ type Docker struct {
 // Images names the trusted builder image of each Language.
 type Images struct{ Rust, Go, JavaScript string }
 
-// NewDocker returns a Builder that runs the adapters in images through docker.Execute.
-func NewDocker(images Images) *Docker { return newDocker(images, docker.Execute) }
+// NewDocker returns a Builder that runs the adapters in images through Execute.
+func NewDocker(images Images) *Docker { return newDocker(images, Execute) }
 
 func newDocker(images Images, execute Executor) *Docker {
 	return &Docker{execute: execute, adapters: map[string]adapter{
@@ -82,7 +78,7 @@ func (d *Docker) Build(ctx context.Context, language string, request Request) (R
 	if !validImage.MatchString(a.image) {
 		return Result{}, errors.New("configure a trusted, pre-provisioned WASM builder image")
 	}
-	ran := d.execute(ctx, docker.Run{Image: a.image, Workspace: request.Workspace, Command: command, MaxLog: MaxLog, MaxOutput: artifact.MaxBytes + (1 << 20)})
+	ran := d.execute(ctx, Run{Image: a.image, Workspace: request.Workspace, Command: command, MaxLog: MaxLog, MaxOutput: artifact.MaxBytes + (1 << 20)})
 	if ran.Err != nil {
 		return Result{Log: ran.Stderr}, ran.Err
 	}

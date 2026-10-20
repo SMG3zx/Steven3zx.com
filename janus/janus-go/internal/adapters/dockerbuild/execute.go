@@ -1,4 +1,4 @@
-package docker
+package dockerbuild
 
 import (
 	"context"

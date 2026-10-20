@@ -1,4 +1,4 @@
-package builder
+package dockerbuild
 
 import (
 	"archive/tar"
@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"janus/actors/docker"
 	"janus/internal/adapters/buildertest"
 	"janus/internal/app"
 	"janus/internal/domain/artifact"
@@ -32,11 +31,11 @@ func wasmTar(t *testing.T) []byte {
 
 // recorder is an Executor that remembers the run it was given.
 type recorder struct {
-	got docker.Run
-	ran docker.Ran
+	got Run
+	ran Ran
 }
 
-func (r *recorder) execute(_ context.Context, run docker.Run) docker.Ran {
+func (r *recorder) execute(_ context.Context, run Run) Ran {
 	r.got = run
 	return r.ran
 }
@@ -56,7 +55,7 @@ func TestEachLanguageBuildsInItsOwnImageAndReturnsACompressedArtifact(t *testing
 				t.Fatal(err)
 			}
 		}
-		r := &recorder{ran: docker.Ran{Stdout: wasmTar(t), Stderr: []byte("compiled")}}
+		r := &recorder{ran: Ran{Stdout: wasmTar(t), Stderr: []byte("compiled")}}
 		got, err := newDocker(testImages, r.execute).Build(context.Background(), strings.ToLower(tc.language), Request{Workspace: workspace, Target: tc.target})
 		if err != nil {
 			t.Fatalf("%s: %v", tc.language, err)
@@ -115,7 +114,7 @@ func TestFailedBuildKeepsItsLog(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "go.mod"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	r := &recorder{ran: docker.Ran{Stderr: []byte("main.go:3: undefined: x"), Err: errors.New("exit status 1")}}
+	r := &recorder{ran: Ran{Stderr: []byte("main.go:3: undefined: x"), Err: errors.New("exit status 1")}}
 	got, err := newDocker(testImages, r.execute).Build(context.Background(), "Go", Request{Workspace: workspace, Target: "wasip1-wasm"})
 	if err == nil || string(got.Log) != "main.go:3: undefined: x" {
 		t.Fatalf("failed build = %q, %v", got.Log, err)
@@ -124,7 +123,7 @@ func TestFailedBuildKeepsItsLog(t *testing.T) {
 
 func TestDockerPassesTheBuilderContract(t *testing.T) {
 	buildertest.Run(t, func(t *testing.T) app.Builder {
-		r := &recorder{ran: docker.Ran{Stdout: wasmTar(t), Stderr: []byte("compiled")}}
+		r := &recorder{ran: Ran{Stdout: wasmTar(t), Stderr: []byte("compiled")}}
 		return newDocker(testImages, r.execute)
 	})
 }

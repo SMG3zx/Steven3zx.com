@@ -1,4 +1,4 @@
-package docker
+package dockerbuild
 
 import (
 	"context"
@@ -7,40 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
-
-	"github.com/tochemey/goakt/v4/actor"
 )
 
-var validImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
-
-// Actor owns Docker health checks and image preparation. Isolated executions
-// are plain calls to Execute, so they never queue behind this mailbox.
-type Actor struct{}
-
-var _ actor.Actor = (*Actor)(nil)
-
-// New creates a Docker controller actor.
-func New() *Actor                            { return &Actor{} }
-func (*Actor) PreStart(*actor.Context) error { return nil }
-
-func (*Actor) Receive(ctx *actor.ReceiveContext) {
-	switch msg := ctx.Message().(type) {
-	case *Health:
-		ctx.Response(&Healthy{Err: checkEngine(ctx.Context())})
-	case *EnsureRunning:
-		ctx.Response(&Healthy{Err: ensureRunning(ctx.Context())})
-	case *PrepareWASMBuilders:
-		built, err := prepareWASMBuilders(ctx.Context(), msg.RustImage, msg.GoImage, msg.JSImage)
-		ctx.Response(&WASMBuildersReady{BuiltImages: built, Err: err})
-	default:
-		ctx.Unhandled()
-	}
-}
-
-func prepareWASMBuilders(ctx context.Context, rustImage, goImage, jsImage string) ([]string, error) {
+// PrepareImages makes sure the three WASM builder images exist locally, building
+// any that are missing from the Dockerfiles under build/. It returns the images it
+// had to build.
+func PrepareImages(ctx context.Context, images Images) ([]string, error) {
+	rustImage, goImage, jsImage := images.Rust, images.Go, images.JavaScript
 	root, err := findProjectRoot()
 	if err != nil {
 		return nil, err
@@ -116,7 +91,8 @@ func ensureImage(ctx context.Context, image, dockerfile string) (bool, error) {
 	return true, nil
 }
 
-func ensureRunning(ctx context.Context) error {
+// EnsureRunning checks the Docker Engine and starts Docker Desktop if needed.
+func EnsureRunning(ctx context.Context) error {
 	if err := checkEngine(ctx); err == nil {
 		return nil
 	}
@@ -144,5 +120,3 @@ func checkEngine(ctx context.Context) error {
 	}
 	return nil
 }
-
-func (*Actor) PostStop(*actor.Context) error { return nil }
