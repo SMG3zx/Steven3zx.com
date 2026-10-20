@@ -1,0 +1,43 @@
+workload,workers,variant,ops_per_sec,p50_ns,p99_ns,p999_ns,allocs_per_op,scans_per_sec,spread
+read95,1,atomic/slots-cas,57888597,1,112,224,0.05,0.0,0.245
+read95,1,atomic/syncmap-cas,16223754,112,320,512,0.15,0.0,0.155
+read95,1,atomic/slots-fetch-add (counter only),53143088,1,112,112,0.00,0.0,0.084
+read95,8,atomic/slots-cas,115343914,112,112,448,0.05,0.0,0.042
+read95,8,atomic/syncmap-cas,70198771,112,320,640,0.15,0.0,0.056
+read95,8,atomic/slots-fetch-add (counter only),124736838,112,112,224,0.00,0.0,0.032
+read95,64,atomic/slots-cas,253666672,112,112,320,0.05,0.0,0.037
+read95,64,atomic/syncmap-cas,95921920,112,320,1024,0.15,0.0,0.077
+read95,64,atomic/slots-fetch-add (counter only),336113913,112,112,112,0.00,0.0,0.058
+mixed50,1,atomic/slots-cas,29664978,112,224,448,0.50,0.0,0.065
+mixed50,1,atomic/syncmap-cas,8796387,112,448,768,1.49,0.0,0.064
+mixed50,1,atomic/slots-fetch-add (counter only),48924834,1,112,112,0.00,0.0,0.170
+mixed50,8,atomic/slots-cas,65232276,112,224,8192,0.50,0.0,0.043
+mixed50,8,atomic/syncmap-cas,31927228,224,512,81920,1.49,0.0,0.205
+mixed50,8,atomic/slots-fetch-add (counter only),116426123,112,112,224,0.00,0.0,0.069
+mixed50,64,atomic/slots-cas,99184379,112,224,28672,0.50,0.0,0.071
+mixed50,64,atomic/syncmap-cas,38524699,224,768,229376,1.49,0.0,0.068
+mixed50,64,atomic/slots-fetch-add (counter only),283287893,112,112,224,0.00,0.0,0.023
+write100,1,atomic/slots-cas,23121454,112,224,512,1.00,0.0,0.118
+write100,1,atomic/syncmap-cas,6732127,224,448,896,2.97,0.0,0.050
+write100,1,atomic/slots-fetch-add (counter only),56722927,1,112,112,0.00,0.0,0.038
+write100,8,atomic/slots-cas,45501021,112,320,57344,1.00,0.0,0.011
+write100,8,atomic/syncmap-cas,21886179,224,1024,114688,2.98,0.0,0.033
+write100,8,atomic/slots-fetch-add (counter only),111187130,112,112,224,0.00,0.0,0.050
+write100,64,atomic/slots-cas,65507148,112,448,163840,1.00,0.0,0.090
+write100,64,atomic/syncmap-cas,25504753,224,1280,786432,2.98,0.0,0.046
+write100,64,atomic/slots-fetch-add (counter only),289659184,112,112,112,0.00,0.0,0.056
+hotkey,1,atomic/slots-cas,34065321,1,112,320,0.50,0.0,0.063
+hotkey,1,atomic/syncmap-cas,11403432,112,448,640,1.10,0.0,0.140
+hotkey,1,atomic/slots-fetch-add (counter only),41683001,112,112,112,0.00,0.0,0.091
+hotkey,8,atomic/slots-cas,18193802,112,3072,114688,1.88,0.0,0.043
+hotkey,8,atomic/syncmap-cas,8560127,224,20480,65536,1.65,0.0,0.041
+hotkey,8,atomic/slots-fetch-add (counter only),64600489,112,224,320,0.00,0.0,0.008
+hotkey,64,atomic/slots-cas,18736116,112,5120,229376,2.29,0.0,0.033
+hotkey,64,atomic/syncmap-cas,8175681,224,327680,786432,1.57,0.0,0.027
+hotkey,64,atomic/slots-fetch-add (counter only),112624879,112,224,320,0.00,0.0,0.030
+scan-blocks,8,atomic/slots-cas,111622169,112,224,512,0.05,3906.5,0.067
+scan-blocks,8,atomic/syncmap-cas,41684222,224,512,896,0.15,186.6,0.236
+scan-blocks,8,atomic/slots-fetch-add (counter only),116355572,112,112,224,0.00,17437.5,0.028
+scan-blocks,64,atomic/slots-cas,186952779,112,224,512,0.05,2167.1,0.042
+scan-blocks,64,atomic/syncmap-cas,44042658,224,640,1280,0.15,91.3,0.117
+scan-blocks,64,atomic/slots-fetch-add (counter only),303165341,112,112,224,0.00,4347.8,0.024
