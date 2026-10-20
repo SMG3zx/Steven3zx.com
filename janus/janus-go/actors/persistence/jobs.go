@@ -5,42 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
+
+	"janus/internal/domain/jobs"
 )
 
 // MaxResumes is how many times an interrupted job may resume after a restart.
 // The interruption after the last allowed resume fails the job.
 const MaxResumes = 3
-
-// importTransitions is the state machine for repository import jobs. A job that
-// was interrupted returns to queued so that it can resume; terminal statuses
-// (complete, failed, cancelled) have no outgoing transitions. A resumed import
-// whose Staging Snapshot already lists every file skips straight to storing,
-// and one that needs only some files skips scanning.
-var importTransitions = map[string][]string{
-	"queued":   {"cloning", "storing", "failed", "cancelled"},
-	"cloning":  {"scanning", "storing", "queued", "failed", "cancelled"},
-	"scanning": {"storing", "queued", "failed", "cancelled"},
-	"storing":  {"complete", "queued", "failed", "cancelled"},
-}
-
-// wasmTransitions is the state machine for WASM build jobs.
-var wasmTransitions = map[string][]string{
-	"queued":   {"building", "failed", "cancelled"},
-	"building": {"complete", "queued", "failed", "cancelled"},
-}
-
-// allowedTransition reports whether a job may move from one status to another.
-// Staying in the same non-terminal status is allowed so that progress can be
-// reported.
-func allowedTransition(table map[string][]string, from, to string) bool {
-	if from == to {
-		_, ok := table[from]
-		return ok
-	}
-	return slices.Contains(table[from], to)
-}
 
 // ActiveJob describes an import or WASM build that has not finished yet.
 type ActiveJob struct {
@@ -51,7 +23,7 @@ type ActiveJob struct {
 }
 
 func (a *Actor) updateImportStatus(ctx context.Context, msg *UpdateImportJob) error {
-	return transitionJob(ctx, a.db, "project_import_jobs", importTransitions, msg.ID, msg.Status, msg.Progress, msg.Error)
+	return transitionJob(ctx, a.db, "project_import_jobs", jobs.Import, msg.ID, msg.Status, msg.Progress, msg.Error)
 }
 
 func (a *Actor) updateWASMStatus(ctx context.Context, msg *UpdateWASMBuild) error {
@@ -64,7 +36,7 @@ func (a *Actor) updateWASMStatus(ctx context.Context, msg *UpdateWASMBuild) erro
 	if err != nil {
 		return err
 	}
-	if !allowedTransition(wasmTransitions, from, msg.Status) {
+	if !jobs.WASM.CanMove(from, msg.Status) {
 		return fmt.Errorf("WASM build cannot move from %s to %s", from, msg.Status)
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE project_wasm_builds SET status=?,progress=?,error=?,build_log=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`, msg.Status, msg.Progress, msg.Error, msg.Log, msg.ID, from)
@@ -88,7 +60,7 @@ func currentStatus(ctx context.Context, tx *sql.Tx, table, id string) (string, e
 
 // transitionJob moves an import job to status if the state machine allows it,
 // comparing against the stored status so that a concurrent change is detected.
-func transitionJob(ctx context.Context, db *sql.DB, table string, transitions map[string][]string, id, status string, progress int, reason string) error {
+func transitionJob(ctx context.Context, db *sql.DB, table string, machine jobs.Machine, id, status string, progress int, reason string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -98,7 +70,7 @@ func transitionJob(ctx context.Context, db *sql.DB, table string, transitions ma
 	if err != nil {
 		return err
 	}
-	if !allowedTransition(transitions, from, status) {
+	if !machine.CanMove(from, status) {
 		return fmt.Errorf("job cannot move from %s to %s", from, status)
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE `+table+` SET status=?,progress=?,error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`, status, progress, reason, id, from)

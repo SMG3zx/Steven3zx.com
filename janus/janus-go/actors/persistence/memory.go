@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"janus/internal/domain/jobs"
 )
 
 // Memory is a Store that keeps its data in maps, for tests of callers that need
@@ -483,7 +485,7 @@ func (m *Memory) UpdateImportJob(_ context.Context, update UpdateImportJob) erro
 	if !ok {
 		return fail("job not found")
 	}
-	if !allowedTransition(importTransitions, job.Status, update.Status) {
+	if !jobs.Import.CanMove(job.Status, update.Status) {
 		return fail("job cannot move from %s to %s", job.Status, update.Status)
 	}
 	job.Status, job.Progress, job.Error, job.UpdatedAt = update.Status, update.Progress, update.Error, m.now()
@@ -632,7 +634,7 @@ func (m *Memory) UpdateWASMBuild(_ context.Context, update UpdateWASMBuild) erro
 	if !ok {
 		return fail("job not found")
 	}
-	if !allowedTransition(wasmTransitions, build.Status, update.Status) {
+	if !jobs.WASM.CanMove(build.Status, update.Status) {
 		return fail("WASM build cannot move from %s to %s", build.Status, update.Status)
 	}
 	build.Status, build.Progress, build.Error, build.Log, build.UpdatedAt = update.Status, update.Progress, update.Error, update.Log, m.now()
