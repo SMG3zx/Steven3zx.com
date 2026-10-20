@@ -10,6 +10,7 @@ import {
 import { api, Unauthorized } from "./api";
 import { Detail } from "./Detail";
 import { rate } from "./format";
+import { JobTracker } from "./JobTracker";
 import { nodeTypes, SnapshotContext, type Kind, type MapNode } from "./nodes";
 import type { Snapshot } from "./types";
 
@@ -97,6 +98,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
   const [nodes, setNodes, onNodesChange] = useNodesState<MapNode>([]);
   const [selected, setSelected] = useState<{ kind: Kind; containerId?: string } | null>(null);
   const [paused, setPaused] = useState(false);
+  const [view, setView] = useState<"map" | "jobs">("map");
   const signedOut = useRef(false);
 
   const poll = useCallback(async () => {
@@ -117,14 +119,15 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
     }
   }, [onSignedOut, setNodes]);
 
+  // Only the map polls the host agent; the job tracker has no live data.
   useEffect(() => {
-    if (paused) return;
+    if (paused || view !== "map") return;
     poll();
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") poll();
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [poll, paused]);
+  }, [poll, paused, view]);
 
   const edgeList = useMemo(() => (snap ? edges(snap) : []), [snap]);
 
@@ -142,49 +145,64 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
           {snap && <span className="muted small"> · {snap.host.hostname} · updated {new Date(snap.collectedAt).toLocaleTimeString()}</span>}
         </div>
         <div className="topbar-actions">
-          {error && <span className="error small">{error}</span>}
-          <button className="ghost" onClick={() => setPaused((p) => !p)}>
-            {paused ? "Resume" : "Pause"}
-          </button>
+          <nav className="tabs view-tabs" aria-label="Admin views">
+            {(["map", "jobs"] as const).map((v) => (
+              <button key={v} aria-selected={view === v} onClick={() => setView(v)}>
+                {v === "map" ? "Map" : "Jobs"}
+              </button>
+            ))}
+          </nav>
+          {error && view === "map" && <span className="error small">{error}</span>}
+          {view === "map" && (
+            <button className="ghost" onClick={() => setPaused((p) => !p)}>
+              {paused ? "Resume" : "Pause"}
+            </button>
+          )}
           <span className="muted small">{username}</span>
           <button className="ghost" onClick={signOut}>
             Sign out
           </button>
         </div>
       </header>
-      <div className="canvas">
-        {!snap ? (
-          <div className="splash">{error || "Loading snapshot…"}</div>
-        ) : (
-          <SnapshotContext.Provider value={snap}>
-            <ReactFlow
-              nodes={nodes}
-              edges={edgeList}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onNodeClick={(_, n) => setSelected({ kind: n.data.kind, containerId: n.data.containerId })}
-              onPaneClick={() => setSelected(null)}
-              nodesConnectable={false}
-              fitView
-              fitViewOptions={{ padding: 0.12 }}
-              minZoom={0.2}
-              colorMode="system"
-            >
-              <Background gap={24} />
-              <Controls showInteractive={false} />
-              <MiniMap pannable zoomable className="minimap" />
-            </ReactFlow>
-            {selected && (
-              <Detail
-                kind={selected.kind}
-                containerId={selected.containerId}
-                snap={snap}
-                onClose={() => setSelected(null)}
-              />
-            )}
-          </SnapshotContext.Provider>
-        )}
-      </div>
+      {view === "jobs" ? (
+        <div className="canvas scroll">
+          <JobTracker onSignedOut={onSignedOut} />
+        </div>
+      ) : (
+        <div className="canvas">
+          {!snap ? (
+            <div className="splash">{error || "Loading snapshot…"}</div>
+          ) : (
+            <SnapshotContext.Provider value={snap}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edgeList}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onNodeClick={(_, n) => setSelected({ kind: n.data.kind, containerId: n.data.containerId })}
+                onPaneClick={() => setSelected(null)}
+                nodesConnectable={false}
+                fitView
+                fitViewOptions={{ padding: 0.12 }}
+                minZoom={0.2}
+                colorMode="system"
+              >
+                <Background gap={24} />
+                <Controls showInteractive={false} />
+                <MiniMap pannable zoomable className="minimap" />
+              </ReactFlow>
+              {selected && (
+                <Detail
+                  kind={selected.kind}
+                  containerId={selected.containerId}
+                  snap={snap}
+                  onClose={() => setSelected(null)}
+                />
+              )}
+            </SnapshotContext.Provider>
+          )}
+        </div>
+      )}
     </div>
   );
 }

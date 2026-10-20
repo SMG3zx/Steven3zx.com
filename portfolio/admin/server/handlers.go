@@ -38,6 +38,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /admin/api/logout", s.logout)
 	mux.HandleFunc("GET /admin/api/me", s.requireUser(s.me))
 	mux.HandleFunc("GET /admin/api/snapshot", s.requireUser(s.snapshot))
+	mux.HandleFunc("GET /admin/api/jobs", s.requireUser(s.listJobs))
+	mux.HandleFunc("POST /admin/api/jobs", s.requireUser(s.createJob))
+	mux.HandleFunc("PUT /admin/api/jobs/{id}", s.requireUser(s.updateJob))
+	mux.HandleFunc("DELETE /admin/api/jobs/{id}", s.requireUser(s.deleteJob))
 	mux.HandleFunc("GET /admin/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -205,6 +209,103 @@ func (s *server) snapshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	io.Copy(w, resp.Body)
+}
+
+// jobInput is the JSON body for creating or replacing a job.
+type jobInput struct {
+	Company  string `json:"company"`
+	Title    string `json:"title"`
+	Location string `json:"location"`
+	URL      string `json:"url"`
+	Status   string `json:"status"`
+	Salary   string `json:"salary"`
+	Applied  string `json:"applied"`
+	Notes    string `json:"notes"`
+}
+
+func (s *server) listJobs(w http.ResponseWriter, r *http.Request) {
+	jobs, err := s.store.listJobs(r.Context())
+	if err != nil {
+		log.Printf("list jobs: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string][]job{"jobs": jobs})
+}
+
+func (s *server) createJob(w http.ResponseWriter, r *http.Request) {
+	j, ok := decodeJob(w, r)
+	if !ok {
+		return
+	}
+	saved, err := s.store.createJob(r.Context(), j)
+	if err != nil {
+		log.Printf("create job: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusCreated, saved)
+}
+
+func (s *server) updateJob(w http.ResponseWriter, r *http.Request) {
+	j, ok := decodeJob(w, r)
+	if !ok {
+		return
+	}
+	j.ID = r.PathValue("id")
+	saved, err := s.store.updateJob(r.Context(), j)
+	if errors.Is(err, errNotFound) {
+		writeError(w, http.StatusNotFound, "no such job")
+		return
+	}
+	if err != nil {
+		log.Printf("update job: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
+func (s *server) deleteJob(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		writeError(w, http.StatusForbidden, "cross-site request refused")
+		return
+	}
+	err := s.store.deleteJob(r.Context(), r.PathValue("id"))
+	if errors.Is(err, errNotFound) {
+		writeError(w, http.StatusNotFound, "no such job")
+		return
+	}
+	if err != nil {
+		log.Printf("delete job: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// decodeJob reads and validates a job from a same-origin JSON request. It
+// writes the error response itself and reports false when the request fails.
+func decodeJob(w http.ResponseWriter, r *http.Request) (job, bool) {
+	if !sameOrigin(r) {
+		writeError(w, http.StatusForbidden, "cross-site request refused")
+		return job{}, false
+	}
+	var in jobInput
+	if err := json.NewDecoder(io.LimitReader(r.Body, 32<<10)).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return job{}, false
+	}
+	j := job{
+		Company: in.Company, Title: in.Title, Location: in.Location, URL: in.URL,
+		Status: in.Status, Salary: in.Salary, Applied: in.Applied, Notes: in.Notes,
+	}
+	if err := j.normalize(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return job{}, false
+	}
+	return j, true
 }
 
 // spa serves the built React app, falling back to index.html for client routes.
