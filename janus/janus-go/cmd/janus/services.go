@@ -66,10 +66,8 @@ func (a *application) Start(ctx context.Context) error {
 	}
 	a.startCtx = ctx
 	a.lifecycle = newLifecycle(a.groups()...)
-	a.lifecycle.startDone = a.endStartSpan
-	err := a.lifecycle.Start(ctx)
-	if err != nil {
-		a.record(ctx, "error", "application.start.failed", map[string]string{"error": err.Error()})
+	a.lifecycle.startDone = a.finishStart
+	if err := a.lifecycle.Start(ctx); err != nil {
 		return err
 	}
 	a.record(ctx, "info", "application.started", map[string]string{"name": "janus-go"})
@@ -202,6 +200,15 @@ func (a *application) startTelemetry(ctx context.Context) error {
 func (a *application) stopTelemetry(ctx context.Context) error {
 	a.endShutdownSpan()
 	return a.telemetry.Stop(ctx)
+}
+
+// finishStart runs when the start phase ends, before a failed start is rolled
+// back, so the failure is recorded while audit and telemetry are still running.
+func (a *application) finishStart(err error) {
+	if err != nil {
+		a.record(a.startCtx, "error", "application.start.failed", map[string]string{"error": err.Error()})
+	}
+	a.endStartSpan(err)
 }
 
 func (a *application) endStartSpan(err error) {
