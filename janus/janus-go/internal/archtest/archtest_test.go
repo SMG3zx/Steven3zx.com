@@ -38,6 +38,7 @@ var appForbiddenStdlib = []string{"net/http", "database/sql", "os/exec"}
 type listedPackage struct {
 	ImportPath string
 	Imports    []string
+	Error      *struct{ Err string }
 }
 
 type violation struct {
@@ -57,6 +58,9 @@ const (
 	layerAdapter
 	layerComposition
 )
+
+// Only non-test imports are checked: `go list` reports test imports
+// separately, so a *test adapter imported from a _test.go file is allowed.
 
 // check applies the four dependency rules to pkgs, whose import paths are
 // below root (the module path, or a fixture root under testdata).
@@ -185,6 +189,9 @@ func goList(t *testing.T, patterns ...string) []listedPackage {
 		if err := dec.Decode(&p); err != nil {
 			t.Fatalf("decode go list output: %v", err)
 		}
+		if p.Error != nil {
+			t.Fatalf("go list could not load %s: %s", p.ImportPath, p.Error.Err)
+		}
 		pkgs = append(pkgs, p)
 	}
 	return pkgs
@@ -213,6 +220,9 @@ func TestFixtures(t *testing.T) {
 		{"rule2", []string{
 			"package " + fixtures + "rule2/internal/app imports net/http: rule 2",
 			"package " + fixtures + "rule2/internal/app imports go.uber.org/zap: rule 2",
+			"package " + fixtures + "rule2/internal/app imports database/sql: rule 2",
+			"package " + fixtures + "rule2/internal/app imports os/exec: rule 2",
+			"package " + fixtures + "rule2/internal/app imports github.com/bytecodealliance/wasmtime-go/v49: rule 2",
 		}},
 		{"rule3", []string{
 			"package " + fixtures + "rule3/internal/adapters/httpapi imports " + fixtures + "rule3/internal/adapters/sqlstore: rule 3",
