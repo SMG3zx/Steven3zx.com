@@ -102,18 +102,18 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	}
 	const entrypointSnapshotID = "entrypoint-snapshot"
 	const entrypointCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	for _, message := range []any{
-		&persistence.CreateImportJob{ID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit},
-		&persistence.BeginSnapshot{ID: entrypointSnapshotID, JobID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, RepositoryID: 1, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit, DefaultBranch: "main", MetadataJSON: `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"fixture"}]}}`},
-		&persistence.UpdateImportJob{ID: "entrypoint-job", Status: "cloning", Progress: 15},
-		&persistence.UpdateImportJob{ID: "entrypoint-job", Status: "scanning", Progress: 45},
-		&persistence.UpdateImportJob{ID: "entrypoint-job", Status: "storing", Progress: 70},
-		&persistence.CompleteSnapshot{SnapshotID: entrypointSnapshotID, JobID: "entrypoint-job", FileCount: 1, TotalBytes: 10_591_486},
-	} {
-		if _, err := actor.Ask(ctx, persistencePID, message, 5*time.Second); err != nil {
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
+	must(store.CreateImportJob(ctx, persistence.CreateImportJob{ID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit}))
+	must(store.BeginSnapshot(ctx, persistence.BeginSnapshot{ID: entrypointSnapshotID, JobID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, RepositoryID: 1, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit, DefaultBranch: "main", MetadataJSON: `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"fixture"}]}}`}))
+	must(store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: "entrypoint-job", Status: "cloning", Progress: 15}))
+	must(store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: "entrypoint-job", Status: "scanning", Progress: 45}))
+	must(store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: "entrypoint-job", Status: "storing", Progress: 70}))
+	must(store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: entrypointSnapshotID, JobID: "entrypoint-job", FileCount: 1, TotalBytes: 10_591_486}))
 	listedProjects := perform(app, http.MethodGet, "/api/projects", "", session[0])
 	if listedProjects.Code != http.StatusOK || !bytes.Contains(listedProjects.Body.Bytes(), []byte(createdProject.ID)) {
 		t.Fatalf("project list status = %d body=%s", listedProjects.Code, listedProjects.Body.String())
@@ -168,16 +168,14 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		t.Fatalf("unconfigured homepage Google sign-in = status %d, headers %#v, body %s", home.Code, home.Header(), home.Body.String())
 	}
 
-	firstIdentityResponse, err := actor.Ask(ctx, persistencePID, &persistence.ResolveGoogleIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"}, 5*time.Second)
+	firstIdentity, err := store.ResolveGoogleIdentity(ctx, persistence.ResolveGoogleIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstIdentity := firstIdentityResponse.(*persistence.GoogleIdentityResolved)
-	secondIdentityResponse, err := actor.Ask(ctx, persistencePID, &persistence.ResolveGoogleIdentity{Subject: "google-subject", Email: "updated@example.com", DisplayName: "Alice Updated"}, 5*time.Second)
+	secondIdentity, err := store.ResolveGoogleIdentity(ctx, persistence.ResolveGoogleIdentity{Subject: "google-subject", Email: "updated@example.com", DisplayName: "Alice Updated"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondIdentity := secondIdentityResponse.(*persistence.GoogleIdentityResolved)
 	if firstIdentity.ID != secondIdentity.ID {
 		t.Fatalf("Google subject resolved to different users: %q and %q", firstIdentity.ID, secondIdentity.ID)
 	}

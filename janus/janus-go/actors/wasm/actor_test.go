@@ -43,8 +43,9 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 		defer stopCancel()
 		_ = system.Stop(stop)
 	})
-	dbPath := filepath.Join(t.TempDir(), "wasm.db")
-	dbPID, err := system.Spawn(ctx, "persistence", persistence.New(dbPath, strings.Repeat("s", 32)))
+	// This one test runs against a real database, so the whole path from the
+	// build actor through the Store to a stored Artifact is covered once.
+	dbPID, err := system.Spawn(ctx, "persistence", persistence.New(filepath.Join(t.TempDir(), "wasm.db"), strings.Repeat("s", 32)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,40 +54,29 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 		defer closeCancel()
 		_, _ = actor.Ask(closeCtx, dbPID, &persistence.CloseDatabase{}, time.Second)
 	})
-	ask := func(message any) any {
+	store := persistence.NewClient(dbPID, 5*time.Second)
+	must := func(err error) {
 		t.Helper()
-		response, askErr := actor.Ask(ctx, dbPID, message, 5*time.Second)
-		if askErr != nil {
-			t.Fatal(askErr)
+		if err != nil {
+			t.Fatal(err)
 		}
-		return response
 	}
-	if got := ask(&persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}).(*persistence.LocalUserCreated); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := ask(&persistence.CreateProject{ID: "project", OwnerID: "owner", Name: "Rust WASM"}).(*persistence.ProjectCreated); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := ask(&persistence.CreateImportJob{ID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: strings.Repeat("a", 40)}).(*persistence.ImportJobCreated); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := ask(&persistence.BeginSnapshot{ID: "snapshot", JobID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: strings.Repeat("a", 40), MetadataJSON: "{}", Language: "Rust"}).(*persistence.BeginSnapshotResult); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := ask(&persistence.AddSnapshotFiles{SnapshotID: "snapshot", Files: []persistence.SnapshotFile{
+	commit := strings.Repeat("a", 40)
+	must(store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
+	_, err = store.CreateProject(ctx, persistence.CreateProject{ID: "project", OwnerID: "owner", Name: "Rust WASM"})
+	must(err)
+	must(store.CreateImportJob(ctx, persistence.CreateImportJob{ID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: commit}))
+	must(store.BeginSnapshot(ctx, persistence.BeginSnapshot{ID: "snapshot", JobID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Rust"}))
+	must(store.AddSnapshotFiles(ctx, "snapshot", []persistence.SnapshotFile{
 		{Path: "Cargo.toml", Content: []byte("[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n"), Mode: "100644"},
 		{Path: "src/lib.rs", Content: []byte("#![no_std]\n"), Mode: "100644"},
-	}}).(*persistence.SnapshotFilesAdded); got.Err != nil {
-		t.Fatal(got.Err)
-	}
+	}))
 	for _, status := range []string{"cloning", "scanning", "storing"} {
-		ask(&persistence.UpdateImportJob{ID: "import", Status: status, Progress: 50})
+		must(store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: "import", Status: status, Progress: 50}))
 	}
-	if got := ask(&persistence.CompleteSnapshot{SnapshotID: "snapshot", JobID: "import", FileCount: 2, TotalBytes: 70}).(*persistence.SnapshotCompleted); got.Err != nil {
-		t.Fatal(got.Err)
-	}
+	must(store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: "snapshot", JobID: "import", FileCount: 2, TotalBytes: 70}))
 	runner := &fakeBuilder{}
-	buildPID, err := system.Spawn(ctx, "wasm", New(persistence.NewClient(dbPID, 5*time.Second), nil, runner))
+	buildPID, err := system.Spawn(ctx, "wasm", New(store, nil, runner))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,19 +107,14 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 	if result.Err != nil || result.Build.Status != "complete" || result.Build.SnapshotID != "snapshot" || runner.calls != 1 {
 		t.Fatalf("build result = %#v, runner calls=%d", result, runner.calls)
 	}
-	response, err = actor.Ask(ctx, dbPID, &persistence.FindWASMBuildArtifact{ID: queued.JobID, OwnerID: "owner"}, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	artifact := response.(*persistence.WASMBuildArtifact)
-	if artifact.Err != nil || !artifact.Found || artifact.Name != "wasm-artifacts.zip" || string(artifact.Data) != "zip fixture" {
+	artifact, err := store.FindWASMBuildArtifact(ctx, queued.JobID, "owner")
+	must(err)
+	if !artifact.Found || artifact.Name != "wasm-artifacts.zip" || string(artifact.Data) != "zip fixture" {
 		t.Fatalf("artifact result = %#v", artifact)
 	}
-	response, err = actor.Ask(ctx, dbPID, &persistence.FindWASMBuildArtifact{ID: queued.JobID, OwnerID: "other"}, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.(*persistence.WASMBuildArtifact).Found {
+	other, err := store.FindWASMBuildArtifact(ctx, queued.JobID, "other")
+	must(err)
+	if other.Found {
 		t.Fatal("another owner could retrieve the build artifact")
 	}
 }

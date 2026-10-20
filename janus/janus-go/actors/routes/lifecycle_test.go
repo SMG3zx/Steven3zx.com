@@ -22,7 +22,7 @@ import (
 	wasmactor "janus/actors/wasm"
 )
 
-func newLifecycleApp(t *testing.T) (http.Handler, *actor.PID) {
+func newLifecycleApp(t *testing.T) (http.Handler, persistence.Store) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -77,11 +77,11 @@ func newLifecycleApp(t *testing.T) (http.Handler, *actor.PID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return built.(*Built).App, persistencePID
+	return built.(*Built).App, store
 }
 
 func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testing.T) {
-	app, persistencePID := newLifecycleApp(t)
+	app, store := newLifecycleApp(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
@@ -95,7 +95,7 @@ func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testin
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &project); err != nil || project.ID == "" {
 		t.Fatalf("project create = %d %s", projectResponse.Code, projectResponse.Body.String())
 	}
-	if _, err := actor.Ask(ctx, persistencePID, &persistence.CreateImportJob{ID: "running-import", OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "dana/repo", Branch: "main", Commit: strings.Repeat("d", 40)}, 5*time.Second); err != nil {
+	if err := store.CreateImportJob(ctx, persistence.CreateImportJob{ID: "running-import", OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "dana/repo", Branch: "main", Commit: strings.Repeat("d", 40)}); err != nil {
 		t.Fatal(err)
 	}
 
