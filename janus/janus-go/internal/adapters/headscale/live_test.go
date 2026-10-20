@@ -196,6 +196,37 @@ func TestLiveTailnetContract(t *testing.T) {
 	})
 }
 
+// A tagged node must not expire, or an Agent would drop off the tailnet on its
+// own. Headscale reports an unset expiry as null.
+func TestLiveEnrolledNodesDoNotExpire(t *testing.T) {
+	ctx := context.Background()
+	key, err := live.CreatePreAuthKey(ctx, "tag:acct-live-expiry", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = join(t, key.Key, "live-expiry"); err != nil {
+		t.Fatal(err)
+	}
+	var listed struct {
+		Nodes []struct {
+			Name   string  `json:"name"`
+			Expiry *string `json:"expiry"`
+		} `json:"nodes"`
+	}
+	if err = live.do(ctx, http.MethodGet, "/api/v1/node", nil, &listed); err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range listed.Nodes {
+		if node.Name == "live-expiry" {
+			if node.Expiry != nil {
+				t.Fatalf("node %s expires at %s, want no expiry", node.Name, *node.Expiry)
+			}
+			return
+		}
+	}
+	t.Fatalf("no node named live-expiry in %#v", listed.Nodes)
+}
+
 func TestLiveDefaultDenyPolicy(t *testing.T) {
 	ctx := context.Background()
 	newNode := func(tag, name string) *tsnet.Server {
@@ -210,7 +241,7 @@ func TestLiveDefaultDenyPolicy(t *testing.T) {
 		serve(t, server, "9000", name)
 		return server
 	}
-	control := newNode(ControlTag, "policy-control")
+	control := newNode(app.ControlTag, "policy-control")
 	agentA := newNode("tag:acct-policy-a", "policy-agent-a")
 	agentB := newNode("tag:acct-policy-b", "policy-agent-b")
 	controlIP, aIP, bIP := addressOf(t, "policy-control"), addressOf(t, "policy-agent-a"), addressOf(t, "policy-agent-b")
@@ -232,9 +263,9 @@ func TestLiveEnrollmentEndToEnd(t *testing.T) {
 	if err := store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "live-alice", Email: "alice@example.com", PasswordHash: "h"}); err != nil {
 		t.Fatal(err)
 	}
-	agents := app.NewAgents(store, live, audit, liveURL)
+	agents := app.NewAgents(store, live, audit, liveURL, time.Now)
 
-	controlKey, err := live.CreatePreAuthKey(ctx, ControlTag, time.Now().Add(time.Hour))
+	controlKey, err := live.CreatePreAuthKey(ctx, app.ControlTag, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}

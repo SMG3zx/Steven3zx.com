@@ -9,10 +9,21 @@ import (
 )
 
 func (a *Server) registerAgentRoutes(app *mux) {
-	app.Post("/api/agents/enrollment-codes", a.issueAgentCode)
-	app.Post("/api/agents/enroll", a.enrollAgent)
-	app.Get("/api/agents", a.listAgents)
-	app.Delete("/api/agents/:id", a.removeAgent)
+	app.Post("/api/agents/enrollment-codes", a.whenAgentsConfigured(a.issueAgentCode))
+	app.Post("/api/agents/enroll", a.whenAgentsConfigured(a.enrollAgent))
+	app.Get("/api/agents", a.whenAgentsConfigured(a.listAgents))
+	app.Delete("/api/agents/:id", a.whenAgentsConfigured(a.removeAgent))
+}
+
+// whenAgentsConfigured answers 503 for every Agent route when no Headscale server
+// is configured.
+func (a *Server) whenAgentsConfigured(handle func(*call) any) func(*call) any {
+	return func(c *call) any {
+		if a.dependencies.Agents == nil {
+			return agentsUnavailable()
+		}
+		return handle(c)
+	}
 }
 
 // secretReply is a JSON reply that carries a code or a key, so no cache keeps it.
@@ -25,9 +36,6 @@ func agentsUnavailable() reply {
 }
 
 func (a *Server) issueAgentCode(c *call) any {
-	if a.dependencies.Agents == nil {
-		return agentsUnavailable()
-	}
 	owner, ok := a.authorizedSubject(c, "agent.code.create", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -47,9 +55,6 @@ type enrollInput struct {
 // enrollAgent trades an Enrollment Code for the key an Agent joins the tailnet
 // with. The Agent calls it from its command line, so there is no session.
 func (a *Server) enrollAgent(c *call) any {
-	if a.dependencies.Agents == nil {
-		return agentsUnavailable()
-	}
 	ctx := c.Request.Context()
 	allowed, err := a.allowed(ctx, "", "agent.enroll", nil)
 	if err != nil {
@@ -86,9 +91,6 @@ type agentView struct {
 }
 
 func (a *Server) listAgents(c *call) any {
-	if a.dependencies.Agents == nil {
-		return agentsUnavailable()
-	}
 	owner, ok := a.authorizedSubject(c, "agent.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -110,9 +112,6 @@ func (a *Server) listAgents(c *call) any {
 }
 
 func (a *Server) removeAgent(c *call) any {
-	if a.dependencies.Agents == nil {
-		return agentsUnavailable()
-	}
 	owner, ok := a.authorizedSubject(c, "agent.remove", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})

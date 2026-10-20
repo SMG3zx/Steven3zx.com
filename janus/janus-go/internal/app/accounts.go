@@ -38,15 +38,19 @@ func (a *Accounts) WithAgents(agents *Agents) *Accounts {
 // cancelActiveJobs is set: then those jobs end as cancelled, never resume, and
 // the ones running are stopped. Deleted is false when there was no such Account.
 //
-// The Account's Agents are revoked on the tailnet after the Account is gone. If
-// that fails the Account is still deleted, Deleted is true, and the error comes
-// back so the caller can report the nodes that were left behind.
+// The Account's Agents leave the tailnet first, unless the deletion is going to
+// be refused. If that fails, the Account is kept and the error comes back, so
+// deleting again finishes the job and no node is left behind without a record.
 func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bool) (AccountDeleted, error) {
-	var agents []AgentRecord
 	if a.agents != nil {
-		var err error
-		if agents, err = a.store.ListAgents(ctx, owner); err != nil {
+		active, err := a.store.ListActiveJobs(ctx, owner)
+		if err != nil {
 			return AccountDeleted{}, err
+		}
+		if len(active) == 0 || cancelActiveJobs {
+			if err = a.agents.RevokeAll(ctx, owner); err != nil {
+				return AccountDeleted{}, fmt.Errorf("remove the Account's Agents from the tailnet: %w", err)
+			}
 		}
 	}
 	result, err := a.store.DeleteAccount(ctx, owner, cancelActiveJobs)
@@ -56,11 +60,6 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	if result.Deleted && cancelActiveJobs {
 		for _, jobs := range a.running {
 			jobs.CancelOwner(owner)
-		}
-	}
-	if result.Deleted && a.agents != nil {
-		if err = a.agents.Revoke(ctx, agents); err != nil {
-			return result, fmt.Errorf("the Account was deleted but its Agents were not all removed from the tailnet: %w", err)
 		}
 	}
 	return result, nil

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -350,6 +351,6 @@ func (a *application) startAgents(ctx context.Context) error {
 		a.logger.Error("Agent enrollment is off: Headscale could not be prepared", zap.Error(err))
 		return nil
 	}
-	a.agents = app.NewAgents(a.store, client, a.audit, cfg.HeadscaleControlURL)
+	a.agents = app.NewAgents(a.store, client, a.audit, cfg.HeadscaleControlURL, time.Now)
 	return nil
 }

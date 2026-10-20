@@ -101,7 +101,8 @@ type TailnetKey struct {
 	Expires time.Time
 }
 
-// TailnetNode is a node on the tailnet. KeyID is the pre-auth key it joined with.
+// TailnetNode is a node on the tailnet. KeyID is the pre-auth key it joined with,
+// and is empty for a node that was registered another way.
 type TailnetNode struct {
 	ID, Name, KeyID string
 	Tags            []string

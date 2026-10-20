@@ -31,7 +31,7 @@ func newAgentEnv(t *testing.T, owners ...string) *agentEnv {
 		must(t, env.store.CreateLocalUser(context.Background(), app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
 	}
 	env.tailnet.Now = func() time.Time { return env.now }
-	env.agents = app.NewAgents(env.store, env.tailnet, env.audit, "https://tailnet.example.test", app.WithClock(func() time.Time { return env.now }))
+	env.agents = app.NewAgents(env.store, env.tailnet, env.audit, "https://tailnet.example.test", func() time.Time { return env.now })
 	return env
 }
 

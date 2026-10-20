@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,12 +20,7 @@ import (
 	"janus/internal/app"
 )
 
-const (
-	defaultUser = "janus"
-	// ControlTag is the tag of the control plane's own tailnet node. The policy
-	// lets only nodes with this tag open connections to other tagged nodes.
-	ControlTag = "tag:ctrl"
-)
+const defaultUser = "janus"
 
 // Config is what the adapter needs from the outside. It reads no environment.
 type Config struct {
@@ -62,9 +58,10 @@ func New(config Config) *Client {
 	return c
 }
 
-// Prepare makes sure the Headscale user exists and installs the policy: nodes
-// tagged tag:ctrl may open connections to any tagged node, and nothing else is
-// allowed, so an Agent cannot reach the control plane or another Agent. A tag
+// Prepare makes sure the Headscale user exists and installs the policy the Tailnet
+// port requires: nodes tagged app.ControlTag may open connections to any tagged
+// node, and nothing else is allowed, so an Agent cannot reach the control plane
+// or another Agent. A tag
 // need not be listed for a node to carry it, so enrolling an Account needs no
 // policy change. Prepare is safe to call again.
 func (c *Client) Prepare(ctx context.Context) error {
@@ -72,9 +69,9 @@ func (c *Client) Prepare(ctx context.Context) error {
 		return err
 	}
 	document, err := json.Marshal(map[string]any{
-		"tagOwners": map[string][]string{ControlTag: {c.user + "@"}},
+		"tagOwners": map[string][]string{app.ControlTag: {c.user + "@"}},
 		"acls": []map[string]any{
-			{"action": "accept", "src": []string{ControlTag}, "dst": []string{"autogroup:tagged:*"}},
+			{"action": "accept", "src": []string{app.ControlTag}, "dst": []string{"autogroup:tagged:*"}},
 		},
 	})
 	if err != nil {
@@ -166,15 +163,8 @@ func (c *Client) DeleteNode(ctx context.Context, nodeID string) error {
 // numeric reports whether id is a number, the only kind of ID Headscale gives a
 // key or a node. It rejects anything else with a 400, which is not worth a call.
 func numeric(id string) bool {
-	if id == "" {
-		return false
-	}
-	for _, r := range id {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
+	_, err := strconv.ParseUint(id, 10, 64)
+	return err == nil
 }
 
 // ensureUser returns the ID of the Headscale user, creating the user if needed.

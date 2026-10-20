@@ -134,10 +134,18 @@ type Audit interface {
 	Record(ctx context.Context, event AuditEvent)
 }
 
+// ControlTag is the tag of the control plane's own node on the tailnet.
+const ControlTag = "tag:ctrl"
+
 // Tailnet is the private network Agents join, run by a control server such as
 // Headscale. Janus asks it for the keys an Agent enrolls with and for the nodes
 // that joined, and removes a node to cut an Agent off. It never reaches an
 // Agent itself: that is a connection over the network, made by other code.
+//
+// Whoever implements Tailnet enforces one access rule: nodes tagged ControlTag
+// may open connections to every other tagged node, and no other connection is
+// allowed. So an Agent can reach neither the control plane nor another
+// Account's Agent, and enrolling an Account needs no change to the rule.
 //
 // An ID is whatever the control server calls a key or a node, as a string. A
 // key is single-use: once a node has joined with it, or after it is expired, a

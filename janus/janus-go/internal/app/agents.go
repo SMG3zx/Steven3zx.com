@@ -74,20 +74,11 @@ type Agents struct {
 	now        func() time.Time
 }
 
-// AgentsOption changes how an Agents behaves, for tests.
-type AgentsOption func(*Agents)
-
-// WithClock makes an Agents read the time from now.
-func WithClock(now func() time.Time) AgentsOption { return func(a *Agents) { a.now = now } }
-
 // NewAgents returns an Agents that records in store, enrolls nodes through
-// tailnet and tells each Agent to join the control server at controlURL.
-func NewAgents(store Store, tailnet Tailnet, audit Audit, controlURL string, options ...AgentsOption) *Agents {
-	agents := &Agents{store: store, tailnet: tailnet, audit: audit, controlURL: controlURL, now: time.Now}
-	for _, option := range options {
-		option(agents)
-	}
-	return agents
+// tailnet and tells each Agent to join the control server at controlURL. It
+// reads the time from now, so a code's lifetime can be tested without waiting.
+func NewAgents(store Store, tailnet Tailnet, audit Audit, controlURL string, now func() time.Time) *Agents {
+	return &Agents{store: store, tailnet: tailnet, audit: audit, controlURL: controlURL, now: now}
 }
 
 // AgentTag is the tailnet tag every node of an Owner's Agents carries.
@@ -101,7 +92,7 @@ func (a *Agents) IssueCode(ctx context.Context, ownerID string) (IssuedCode, err
 	}
 	code := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
 	expires := a.now().Add(enrollmentCodeTTL).UTC()
-	if err := a.store.CreateEnrollmentCode(ctx, CreateEnrollmentCode{CodeHash: hashCode(code), OwnerID: ownerID, ExpiresAt: expires}); err != nil {
+	if err := a.store.CreateEnrollmentCode(ctx, CreateEnrollmentCode{CodeHash: hashEnrollmentCode(code), OwnerID: ownerID, ExpiresAt: expires}); err != nil {
 		return IssuedCode{}, err
 	}
 	a.record(ctx, "agent.code.issued", map[string]string{"user_id": ownerID})
@@ -117,7 +108,7 @@ func (a *Agents) Enroll(ctx context.Context, code, name string) (Enrollment, err
 		return Enrollment{}, ErrAgentName
 	}
 	now := a.now()
-	ownerID, consumed, err := a.store.ConsumeEnrollmentCode(ctx, hashCode(code), now)
+	ownerID, consumed, err := a.store.ConsumeEnrollmentCode(ctx, hashEnrollmentCode(code), now)
 	if err != nil {
 		return Enrollment{}, err
 	}
@@ -179,7 +170,7 @@ func (a *Agents) Remove(ctx context.Context, ownerID, agentID string) (removed b
 	if err != nil || !found {
 		return false, err
 	}
-	if err = a.Revoke(ctx, []AgentRecord{record}); err != nil {
+	if err = a.revoke(ctx, []AgentRecord{record}); err != nil {
 		return false, err
 	}
 	removed, err = a.store.DeleteAgent(ctx, agentID, ownerID)
@@ -189,9 +180,25 @@ func (a *Agents) Remove(ctx context.Context, ownerID, agentID string) (removed b
 	return removed, err
 }
 
-// Revoke removes the tailnet nodes and keys of agents. It does not touch the
-// Store. Accounts uses it after an Account is deleted, when the records are gone.
-func (a *Agents) Revoke(ctx context.Context, agents []AgentRecord) error {
+// RevokeAll removes every tailnet node and key of the Owner's Agents and leaves
+// their records, which go with the Account. Accounts calls it before deleting an
+// Account, so a tailnet failure stops the deletion and a retry finishes it.
+func (a *Agents) RevokeAll(ctx context.Context, ownerID string) error {
+	records, err := a.store.ListAgents(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	if err = a.revoke(ctx, records); err != nil {
+		return err
+	}
+	for _, record := range records {
+		a.record(ctx, "agent.revoked", map[string]string{"user_id": ownerID, "agent_id": record.ID})
+	}
+	return nil
+}
+
+// revoke removes the tailnet nodes and keys of agents. It does not touch the Store.
+func (a *Agents) revoke(ctx context.Context, agents []AgentRecord) error {
 	if len(agents) == 0 {
 		return nil
 	}
@@ -218,9 +225,9 @@ func (a *Agents) record(ctx context.Context, name string, fields map[string]stri
 	a.audit.Record(ctx, AuditEvent{Level: "info", Name: name, Fields: fields})
 }
 
-// hashCode is what the Store keeps of a code. The code is lower-cased and
-// trimmed first, so how it was typed does not matter.
-func hashCode(code string) string {
+// hashEnrollmentCode is what the Store keeps of a code. The code is lower-cased
+// and trimmed first, so how it was typed does not matter.
+func hashEnrollmentCode(code string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(code))))
 	return hex.EncodeToString(sum[:])
 }

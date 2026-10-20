@@ -117,7 +117,7 @@ func TestAnAgentIsKeptWhenItsNodeCannotBeRemovedSoRemovingAgainFinishesTheJob(t 
 	ctx := context.Background()
 	enrollment := env.enroll(t, "alice", "laptop")
 	flaky := &failingTailnet{Tailnet: env.tailnet, broken: true}
-	agents := app.NewAgents(env.store, flaky, env.audit, "https://tailnet.example.test", app.WithClock(func() time.Time { return env.now }))
+	agents := app.NewAgents(env.store, flaky, env.audit, "https://tailnet.example.test", func() time.Time { return env.now })
 
 	if removed, err := agents.Remove(ctx, "alice", enrollment.AgentID); err == nil || removed {
 		t.Fatalf("removing while the tailnet is down = %v, %v, want an error", removed, err)
@@ -167,7 +167,7 @@ func TestListReportsPendingOnlineOfflineAndUnknown(t *testing.T) {
 	if got := statusOf(env.agents); got["joined"] != app.AgentOffline {
 		t.Fatalf("statuses = %v, want the joined Agent offline", got)
 	}
-	down := app.NewAgents(env.store, brokenTailnet{}, env.audit, "https://tailnet.example.test")
+	down := app.NewAgents(env.store, brokenTailnet{}, env.audit, "https://tailnet.example.test", time.Now)
 	if got := statusOf(down); got["pending"] != app.AgentUnknown || got["joined"] != app.AgentUnknown {
 		t.Fatalf("statuses with the tailnet down = %v, want unknown", got)
 	}
@@ -214,5 +214,59 @@ func TestDeletingAnAccountRemovesItsAgentsFromTheTailnet(t *testing.T) {
 	must(t, err)
 	if len(nodes) != 1 || nodes[0].Tags[0] != "tag:acct-bob" {
 		t.Fatalf("nodes after deleting alice = %#v, want only bob's", nodes)
+	}
+	var revoked []string
+	for _, event := range env.audit.Events() {
+		if event.Name == "agent.revoked" {
+			revoked = append(revoked, event.Fields["user_id"])
+		}
+	}
+	if !slices.Equal(revoked, []string{"alice"}) {
+		t.Fatalf("agent.revoked events for %v, want one for alice", revoked)
+	}
+}
+
+func TestAnAccountIsKeptWhenItsAgentsCannotBeRemovedFromTheTailnet(t *testing.T) {
+	env := newAgentEnv(t, "alice")
+	ctx := context.Background()
+	enrollment := env.enroll(t, "alice", "laptop")
+	flaky := &failingTailnet{Tailnet: env.tailnet, broken: true}
+	agents := app.NewAgents(env.store, flaky, env.audit, "https://tailnet.example.test", func() time.Time { return env.now })
+	accounts := app.NewAccounts(env.store).WithAgents(agents)
+
+	deleted, err := accounts.Delete(ctx, "alice", false)
+	if err == nil || deleted.Deleted {
+		t.Fatalf("deleting while the tailnet is down = %#v, %v, want an error and the Account kept", deleted, err)
+	}
+	if user, _ := env.store.FindUser(ctx, "alice"); !user.Found {
+		t.Fatal("the Account was deleted although its node could not be removed")
+	}
+	if listed, _ := agents.List(ctx, "alice"); len(listed) != 1 || listed[0].ID != enrollment.AgentID {
+		t.Fatalf("alice's Agents = %#v, want the one record kept so deleting can be retried", listed)
+	}
+
+	flaky.broken = false
+	if deleted, err = accounts.Delete(ctx, "alice", false); err != nil || !deleted.Deleted {
+		t.Fatalf("deleting again = %#v, %v, want it to finish", deleted, err)
+	}
+	if nodes, _ := env.tailnet.Nodes(ctx); len(nodes) != 0 {
+		t.Fatalf("nodes after the retry = %#v, want none", nodes)
+	}
+}
+
+func TestARefusedAccountDeletionLeavesItsAgentsOnTheTailnet(t *testing.T) {
+	env := newAgentEnv(t)
+	ctx := context.Background()
+	importedProject(t, env.store, "alice", "alice-project", "Rust")
+	must(t, env.store.CreateImportJob(ctx, app.CreateImportJob{ID: "alice-job", OwnerID: "alice", ProjectID: "alice-project", Repository: "alice/r", Branch: "main", Commit: "c"}))
+	env.enroll(t, "alice", "laptop")
+	accounts := app.NewAccounts(env.store).WithAgents(env.agents)
+
+	refused, err := accounts.Delete(ctx, "alice", false)
+	if err != nil || refused.Deleted || len(refused.ActiveJobs) != 1 {
+		t.Fatalf("deleting with an unfinished import = %#v, %v, want a refusal", refused, err)
+	}
+	if nodes, _ := env.tailnet.Nodes(ctx); len(nodes) != 1 {
+		t.Fatalf("a refused deletion removed the Agent's node: %#v", nodes)
 	}
 }

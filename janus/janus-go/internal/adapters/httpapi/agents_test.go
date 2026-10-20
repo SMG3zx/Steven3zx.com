@@ -36,7 +36,7 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
 	if withAgents {
-		config.Agents = app.NewAgents(store, tailnet, audit, "https://tailnet.example.test")
+		config.Agents = app.NewAgents(store, tailnet, audit, "https://tailnet.example.test", time.Now)
 	}
 	return &agentApp{handler: New(config).Handler(), tailnet: tailnet, audit: audit}
 }
