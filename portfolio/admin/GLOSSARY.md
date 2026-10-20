@@ -31,12 +31,16 @@ _Avoid_: command, operation, control
 ## Trust
 
 **Session**:
-A signed-in browser of an admin. An admin has at most one session at a time.
+A signed-in browser of an admin. An admin has at most one session at a time; signing in again replaces the earlier session.
 _Avoid_: login, token, cookie
 
 **Authenticator code**:
 The six-digit time-based code from the admin's phone, required at sign-in and for a reconfirmation.
 _Avoid_: OTP, 2FA code, MFA token
+
+**Enrollment link**:
+A single-use, short-lived link issued on the origin host that lets an admin pair their phone and so obtain authenticator codes. An admin without a paired phone cannot sign in.
+_Avoid_: setup link, invite, activation
 
 **Reconfirmation**:
 Proving presence again with an authenticator code immediately before a destructive action.
