@@ -86,9 +86,12 @@ type CreateImportJob struct {
 	MetadataJSON           string
 }
 
-type UpdateImportJob struct {
-	ID, Status, Error string
-	Progress          int
+// JobTransition moves a job from the status From to the status To, if the job
+// is still in From. Error is the reason shown when To is failed, and Log is the
+// build log a WASM build keeps; an import ignores it.
+type JobTransition struct {
+	ID, From, To, Error, Log string
+	Progress                 int
 }
 
 type ImportJob struct {
@@ -142,10 +145,6 @@ type ListProjectFiles struct {
 
 type CreateWASMBuild struct {
 	ID, OwnerID, ProjectID, SnapshotID, Target string
-}
-type UpdateWASMBuild struct {
-	ID, Status, Error, Log string
-	Progress               int
 }
 type CompleteWASMBuild struct {
 	ID, ArtifactName string

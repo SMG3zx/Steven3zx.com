@@ -47,6 +47,9 @@ type importJob struct {
 	Repository                Repository
 	Branch, Commit            string
 	Token                     string
+	// status is the status the job is in, as the use case last moved it. It is
+	// the From of the next transition, so the Store detects a concurrent change.
+	status string
 }
 
 // snapshotMetadata is what a Snapshot keeps about where it came from and what
@@ -119,13 +122,13 @@ func (i *Imports) Request(ctx context.Context, request ImportRequest) (string, e
 	if err = i.store.CreateImportJob(ctx, CreateImportJob{ID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, Repository: repository.FullName, Branch: request.Branch, Commit: request.Commit}); err != nil {
 		return "", err
 	}
-	job := &importJob{JobID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, Repository: repository, Branch: request.Branch, Commit: request.Commit, Token: token}
+	job := &importJob{JobID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, Repository: repository, Branch: request.Branch, Commit: request.Commit, Token: token, status: "queued"}
 	if err = i.jobs.Start(i.runner(job), i.crashed(job)); err != nil {
 		if errors.Is(err, ErrBusy) {
-			_ = i.updateJob(ctx, jobID, "failed", 100, "too many imports are already running")
+			_ = i.updateJob(ctx, job, "failed", 100, "too many imports are already running")
 			return "", errors.New("two repository imports are already running; retry when one finishes")
 		}
-		_ = i.updateJob(ctx, jobID, "failed", 100, "import worker could not start")
+		_ = i.updateJob(ctx, job, "failed", 100, "import worker could not start")
 		return "", err
 	}
 	i.record(ctx, "info", "project.import.queued", map[string]string{"user_id": request.OwnerID, "project_id": request.ProjectID, "job_id": jobID, "repository": request.Repository})
@@ -180,11 +183,11 @@ func (i *Imports) resumedJob(ctx context.Context, queued ResumableImport) (*impo
 	if err != nil {
 		return nil, err
 	}
-	return &importJob{JobID: queued.JobID, OwnerID: queued.OwnerID, ProjectID: queued.ProjectID, Repository: repository, Branch: queued.Branch, Commit: queued.Commit, Token: token}, nil
+	return &importJob{JobID: queued.JobID, OwnerID: queued.OwnerID, ProjectID: queued.ProjectID, Repository: repository, Branch: queued.Branch, Commit: queued.Commit, Token: token, status: "queued"}, nil
 }
 
 func (i *Imports) failResumed(ctx context.Context, jobID string, cause error) {
-	_ = i.updateJob(ctx, jobID, "failed", 100, "resume failed: "+cause.Error())
+	_ = i.updateJob(ctx, &importJob{JobID: jobID, status: "queued"}, "failed", 100, "resume failed: "+cause.Error())
 	_ = i.store.DiscardJobStaging(ctx, jobID)
 }
 
@@ -244,7 +247,7 @@ func (i *Imports) crashed(job *importJob) func(error) {
 	return func(err error) {
 		err = fmt.Errorf("repository import panicked: %v", err)
 		ctx := context.Background()
-		_ = i.updateJob(ctx, job.JobID, "failed", 100, err.Error())
+		_ = i.updateJob(ctx, job, "failed", 100, err.Error())
 		_ = i.store.DiscardJobStaging(ctx, job.JobID)
 		i.finish(job, err)
 	}
@@ -264,12 +267,17 @@ func (i *Imports) record(ctx context.Context, level, name string, fields map[str
 	i.audit.Record(ctx, AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
-func (i *Imports) updateJob(ctx context.Context, id, status string, progress int, reason string) error {
-	return i.store.UpdateImportJob(ctx, UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
+// updateJob moves job to status, from the status it is in.
+func (i *Imports) updateJob(ctx context.Context, job *importJob, status string, progress int, reason string) error {
+	err := i.store.TransitionImportJob(ctx, JobTransition{ID: job.JobID, From: job.status, To: status, Progress: progress, Error: reason})
+	if err == nil {
+		job.status = status
+	}
+	return err
 }
 
 func (i *Imports) fail(ctx context.Context, job *importJob, public string, err error) error {
-	_ = i.updateJob(ctx, job.JobID, "failed", 100, public)
+	_ = i.updateJob(ctx, job, "failed", 100, public)
 	_ = i.store.DiscardJobStaging(ctx, job.JobID)
 	return fmt.Errorf("%s: %w", public, err)
 }
@@ -426,7 +434,7 @@ func (i *Imports) run(parent context.Context, job *importJob) error {
 func (i *Imports) storeStaged(ctx context.Context, job *importJob, staged *stagedImport) error {
 	pending := staged.pending()
 	if len(pending) == 0 {
-		if err := i.updateJob(ctx, job.JobID, "storing", 95, ""); err != nil {
+		if err := i.updateJob(ctx, job, "storing", 95, ""); err != nil {
 			return err
 		}
 		return i.completeImport(ctx, job, staged.snapshotID, staged.manifest)
@@ -447,7 +455,7 @@ func (i *Imports) storeStaged(ctx context.Context, job *importJob, staged *stage
 	if !filesMatchManifest(files, pending) {
 		return errStagingCorrupt
 	}
-	if err = i.updateJob(ctx, job.JobID, "storing", 70, ""); err != nil {
+	if err = i.updateJob(ctx, job, "storing", 70, ""); err != nil {
 		return err
 	}
 	if err = i.storeFiles(ctx, job, staged.snapshotID, files); err != nil {
@@ -465,7 +473,7 @@ func (i *Imports) importFromClone(ctx context.Context, job *importJob) error {
 		return err
 	}
 	defer tree.Close()
-	if err = i.updateJob(ctx, job.JobID, "scanning", 45, ""); err != nil {
+	if err = i.updateJob(ctx, job, "scanning", 45, ""); err != nil {
 		return err
 	}
 	files, err := tree.Files(nil)
@@ -486,7 +494,7 @@ func (i *Imports) importFromClone(ctx context.Context, job *importJob) error {
 	if err != nil {
 		return i.fail(ctx, job, "snapshot could not be initialized", err)
 	}
-	if err = i.updateJob(ctx, job.JobID, "storing", 70, ""); err != nil {
+	if err = i.updateJob(ctx, job, "storing", 70, ""); err != nil {
 		return err
 	}
 	if err = i.storeFiles(ctx, job, snapshotID, files); err != nil {
@@ -498,7 +506,7 @@ func (i *Imports) importFromClone(ctx context.Context, job *importJob) error {
 // cloneCommit fetches the selected commit and returns its tree. The caller must
 // call Close on it after it has read the files.
 func (i *Imports) cloneCommit(ctx context.Context, job *importJob) (SourceTree, error) {
-	if err := i.updateJob(ctx, job.JobID, "cloning", 15, ""); err != nil {
+	if err := i.updateJob(ctx, job, "cloning", 15, ""); err != nil {
 		return nil, err
 	}
 	tree, err := i.source.Open(ctx, SourceRequest{Repository: job.Repository.FullName, Branch: job.Branch, Commit: job.Commit, Token: job.Token})
@@ -530,7 +538,7 @@ func (i *Imports) storeFiles(ctx context.Context, job *importJob, snapshotID str
 			return i.fail(ctx, job, "snapshot storage failed", err)
 		}
 		progress := 70 + (25*end)/max(1, len(files))
-		_ = i.updateJob(ctx, job.JobID, "storing", progress, "")
+		_ = i.updateJob(ctx, job, "storing", progress, "")
 	}
 	return nil
 }

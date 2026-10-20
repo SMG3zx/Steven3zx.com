@@ -432,13 +432,15 @@ func seedLanguageSnapshot(ctx context.Context, store app.Store, ownerID, project
 	}); err != nil {
 		return fmt.Errorf("add snapshot files: %w", err)
 	}
+	from := "queued"
 	for _, step := range []struct {
 		status   string
 		progress int
 	}{{"cloning", 20}, {"scanning", 50}, {"storing", 80}} {
-		if err := store.UpdateImportJob(ctx, app.UpdateImportJob{ID: jobID, Status: step.status, Progress: step.progress}); err != nil {
+		if err := store.TransitionImportJob(ctx, app.JobTransition{ID: jobID, From: from, To: step.status, Progress: step.progress}); err != nil {
 			return fmt.Errorf("move import job to %s: %w", step.status, err)
 		}
+		from = step.status
 	}
 	if err := store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshotID, JobID: jobID, FileCount: 2, TotalBytes: 1_234_567}); err != nil {
 		return fmt.Errorf("complete snapshot: %w", err)

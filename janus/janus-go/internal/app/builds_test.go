@@ -36,9 +36,7 @@ func importedProject(t *testing.T, store app.Store, owner, project, language str
 		{Path: "Cargo.toml", Content: []byte("[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n"), Mode: "100644"},
 		{Path: "src/lib.rs", Content: []byte("#![no_std]\n"), Mode: "100644"},
 	}))
-	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: status, Progress: 50}))
-	}
+	storetest.AdvanceImport(t, store, job, "queued", "cloning", "scanning", "storing")
 	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job, FileCount: 2, TotalBytes: 70}))
 }
 
@@ -191,7 +189,7 @@ func TestRetryBuildUsesTheFailedBuildsSnapshot(t *testing.T) {
 	f := newBuildFixture(t, "Rust", buildertest.NewFake())
 	ctx := context.Background()
 	must(t, f.store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "build-failed", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: rustTarget}))
-	must(t, f.store.UpdateWASMBuild(ctx, app.UpdateWASMBuild{ID: "build-failed", Status: "failed", Progress: 100, Error: "compiler crashed"}))
+	must(t, f.store.TransitionWASMBuild(ctx, app.JobTransition{ID: "build-failed", From: "queued", To: "failed", Progress: 100, Error: "compiler crashed"}))
 
 	id, err := f.builds.Retry(ctx, "owner", "build-failed")
 	if err != nil || id == "" || id == "build-failed" {

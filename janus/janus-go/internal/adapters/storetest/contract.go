@@ -26,6 +26,7 @@ func Run(t *testing.T, newStore func(t *testing.T) app.Store) {
 		{"CompletingACancelledImportFails", testCompletingACancelledImportFails},
 		{"BuildsFollowTheirStateMachine", testBuildsFollowTheirStateMachine},
 		{"DeletingAnAccountCascades", testDeletingAnAccountCascades},
+		{"ConcurrentCallersNeverDeadlock", testConcurrentCallers},
 	} {
 		t.Run(c.name, func(t *testing.T) { c.test(t, newStore(t)) })
 	}
@@ -52,9 +53,7 @@ func importSnapshot(t *testing.T, store app.Store, owner, project, name string) 
 		{Path: "src/lib.rs", Mode: "100644", Hash: "h2", Content: []byte("lib")},
 		{Path: "Cargo.toml", Mode: "100644", Hash: "h1", Content: []byte("cargo")},
 	}))
-	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: status, Progress: 50}))
-	}
+	AdvanceImport(t, store, job, "queued", "cloning", "scanning", "storing")
 	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job, EntryPoint: "src/lib.rs", FileCount: 2, TotalBytes: 8}))
 	return snapshot
 }
@@ -260,14 +259,20 @@ func testImportJobStateMachine(t *testing.T, store app.Store) {
 		t.Fatal("another Account found the job")
 	}
 
-	if err = store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "j1", Status: "complete", Progress: 100}); err == nil || !strings.Contains(err.Error(), "cannot move from queued to complete") {
+	if err = store.TransitionImportJob(ctx, app.JobTransition{ID: "j1", From: "queued", To: "complete", Progress: 100}); err == nil || !strings.Contains(err.Error(), "cannot move from queued to complete") {
 		t.Fatalf("queued to complete = %v", err)
 	}
-	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "j1", Status: "failed", Progress: 100, Error: "clone failed"}))
-	if err = store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "j1", Status: "queued"}); err == nil {
+	if err = store.TransitionImportJob(ctx, app.JobTransition{ID: "j1", From: "cloning", To: "scanning"}); err == nil || !strings.Contains(err.Error(), "changed while it was being updated") {
+		t.Fatalf("a move from a status the job is not in = %v", err)
+	}
+	if job, _, _ = store.FindImportJob(ctx, "j1", "alice"); job.Status != "queued" {
+		t.Fatalf("a refused move changed the job: %#v", job)
+	}
+	must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "j1", From: "queued", To: "failed", Progress: 100, Error: "clone failed"}))
+	if err = store.TransitionImportJob(ctx, app.JobTransition{ID: "j1", From: "failed", To: "queued"}); err == nil {
 		t.Fatal("a failed job moved back to queued")
 	}
-	if err = store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "nope", Status: "failed"}); err == nil || !strings.Contains(err.Error(), "job not found") {
+	if err = store.TransitionImportJob(ctx, app.JobTransition{ID: "nope", From: "queued", To: "failed"}); err == nil || !strings.Contains(err.Error(), "job not found") {
 		t.Fatalf("updating a missing job = %v", err)
 	}
 	if job, _, _ = store.FindImportJob(ctx, "j1", "alice"); job.Status != "failed" || job.Error != "clone failed" || job.Progress != 100 {
@@ -282,13 +287,13 @@ func testStagingSnapshotsAndResume(t *testing.T, store app.Store) {
 	must(t, err)
 	commit := strings.Repeat("d", 40)
 	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "job", OwnerID: "alice", ProjectID: "p1", Repository: "alice/repo", Branch: "main", Commit: commit}))
-	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job", Status: "cloning"}))
+	must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "job", From: "queued", To: "cloning"}))
 	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "staging", JobID: "job", OwnerID: "alice", ProjectID: "p1", Repository: "alice/repo", Branch: "main", Commit: commit, MetadataJSON: "{}", Manifest: "[manifest]"}))
 	must(t, store.AddSnapshotFiles(ctx, "staging", []app.SnapshotFile{{Path: "main.go", Mode: "100644", Hash: "abc", Content: []byte("x")}}))
 	if err = store.AddSnapshotFiles(ctx, "staging", []app.SnapshotFile{{Path: "main.go", Mode: "100644", Hash: "abc", Content: []byte("x")}}); err == nil {
 		t.Fatal("storing the same path twice succeeded")
 	}
-	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job", Status: "queued"}))
+	must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "job", From: "cloning", To: "queued"}))
 
 	staging, err := store.FindStagingSnapshot(ctx, "job")
 	must(t, err)
@@ -318,7 +323,7 @@ func testCompletingACancelledImportFails(t *testing.T, store app.Store) {
 	commit := strings.Repeat("e", 40)
 	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "job", OwnerID: "alice", ProjectID: "p1", Repository: "alice/repo", Branch: "main", Commit: commit}))
 	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "s", JobID: "job", OwnerID: "alice", ProjectID: "p1", Repository: "alice/repo", Branch: "main", Commit: commit, MetadataJSON: "{}"}))
-	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job", Status: "cancelled", Progress: 100}))
+	must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "job", From: "queued", To: "cancelled", Progress: 100}))
 
 	err = store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "s", JobID: "job", FileCount: 1})
 	if err == nil || !strings.Contains(err.Error(), "cancelled before it completed") {
@@ -360,10 +365,14 @@ func testBuildsFollowTheirStateMachine(t *testing.T, store app.Store) {
 	if artifact, err := store.FindWASMBuildArtifact(ctx, "b1", "alice"); err != nil || artifact.Found {
 		t.Fatalf("artifact of an unfinished build = %#v, %v", artifact, err)
 	}
-	if err = store.UpdateWASMBuild(ctx, app.UpdateWASMBuild{ID: "b1", Status: "complete"}); err == nil || !strings.Contains(err.Error(), "cannot move from queued to complete") {
+	if err = store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "queued", To: "complete"}); err == nil || !strings.Contains(err.Error(), "cannot move from queued to complete") {
 		t.Fatalf("queued to complete = %v", err)
 	}
-	must(t, store.UpdateWASMBuild(ctx, app.UpdateWASMBuild{ID: "b1", Status: "building", Progress: 40, Log: "compiling"}))
+	if err = store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "building", To: "failed"}); err == nil || !strings.Contains(err.Error(), "changed while it was being updated") {
+		t.Fatalf("a move from a status the build is not in = %v", err)
+	}
+	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "queued", To: "building", Progress: 40, Log: "compiling"}))
+	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "building", To: "building", Progress: 60, Log: "still compiling"}))
 	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b1", ArtifactName: "wasm-artifacts.zip", Artifact: []byte("zip"), Log: []byte("done")}))
 	if err = store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b1", ArtifactName: "x", Artifact: []byte("y")}); err == nil || !strings.Contains(err.Error(), "WASM build not found") {
 		t.Fatalf("completing a finished build = %v", err)
@@ -441,5 +450,18 @@ func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	}
 	if missing, err := store.DeleteAccount(ctx, "ghost", false); err != nil || missing.Deleted {
 		t.Fatalf("deleting a missing Account = %#v, %v", missing, err)
+	}
+}
+
+// AdvanceImport moves the import job id through the statuses in order, starting
+// from status from and reporting 50 percent each time, as a worker would. It is
+// for tests that need a job in a given state.
+func AdvanceImport(t testing.TB, store app.Store, id, from string, to ...string) {
+	t.Helper()
+	for _, status := range to {
+		if err := store.TransitionImportJob(context.Background(), app.JobTransition{ID: id, From: from, To: status, Progress: 50}); err != nil {
+			t.Fatalf("move import %s from %s to %s: %v", id, from, status, err)
+		}
+		from = status
 	}
 }

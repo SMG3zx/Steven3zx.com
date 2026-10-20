@@ -54,9 +54,7 @@ func completedBuild(t *testing.T, store app.Store, owner, id string, module []by
 	job, snapshot := id+"-job", id+"-snapshot"
 	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: owner, ProjectID: project, Repository: "o/r", Branch: "main", Commit: commit}))
 	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshot, JobID: job, OwnerID: owner, ProjectID: project, Repository: "o/r", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Go"}))
-	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: status, Progress: 50}))
-	}
+	storetest.AdvanceImport(t, store, job, "queued", "cloning", "scanning", "storing")
 	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job}))
 	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: id, OwnerID: owner, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm"}))
 	name, data := compressedArtifact(t, module)

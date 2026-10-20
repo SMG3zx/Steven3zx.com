@@ -50,6 +50,9 @@ func NewBuilds(store Store, builder Builder, audit Audit) *Builds {
 type buildJob struct {
 	OwnerID, ProjectID, SnapshotID string
 	JobID, Target, Language        string
+	// status is the status the job is in, as the use case last moved it. It is
+	// the From of the next transition, so the Store detects a concurrent change.
+	status string
 }
 
 // Request queues a Build and starts it. It returns the Build's ID, and a plain
@@ -89,13 +92,13 @@ func (b *Builds) Request(ctx context.Context, request NewBuild) (string, error) 
 	if err = b.store.CreateWASMBuild(ctx, CreateWASMBuild{ID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshotID, Target: request.Target}); err != nil {
 		return "", err
 	}
-	job := &buildJob{OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: request.Target, Language: strings.ToLower(template.Language)}
+	job := &buildJob{OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: request.Target, Language: strings.ToLower(template.Language), status: "queued"}
 	if err = b.jobs.Start(b.runner(job), b.crashed(job)); err != nil {
 		if errors.Is(err, ErrBusy) {
-			_ = b.update(ctx, jobID, "failed", 100, "two WASM builds are already running")
+			_ = b.update(ctx, job, "failed", 100, "two WASM builds are already running")
 			return "", errors.New("two WASM builds are already running; retry when one finishes")
 		}
-		_ = b.update(ctx, jobID, "failed", 100, "WASM build worker could not start")
+		_ = b.update(ctx, job, "failed", 100, "WASM build worker could not start")
 		return "", err
 	}
 	b.record(ctx, "info", "project.wasm.build.queued", map[string]string{"user_id": request.OwnerID, "project_id": request.ProjectID, "job_id": jobID, "target": request.Target})
@@ -137,10 +140,10 @@ func (b *Builds) Resume(ctx context.Context) (int, error) {
 	}
 	for _, build := range builds {
 		if _, ok := templates.Buildable(build.Language); !ok {
-			_ = b.update(ctx, build.JobID, "failed", 100, unbuildableLanguageError(build.Language).Error())
+			_ = b.update(ctx, &buildJob{JobID: build.JobID, status: "queued"}, "failed", 100, unbuildableLanguageError(build.Language).Error())
 			continue
 		}
-		job := &buildJob{OwnerID: build.OwnerID, ProjectID: build.ProjectID, SnapshotID: build.SnapshotID, JobID: build.JobID, Target: build.Target, Language: build.Language}
+		job := &buildJob{OwnerID: build.OwnerID, ProjectID: build.ProjectID, SnapshotID: build.SnapshotID, JobID: build.JobID, Target: build.Target, Language: build.Language, status: "queued"}
 		b.jobs.Queue(b.runner(job), b.crashed(job))
 	}
 	return len(builds), nil
@@ -194,7 +197,7 @@ func (b *Builds) runner(job *buildJob) func() {
 func (b *Builds) crashed(job *buildJob) func(error) {
 	return func(err error) {
 		err = fmt.Errorf("WASM build panicked: %v", err)
-		_ = b.update(context.Background(), job.JobID, "failed", 100, err.Error())
+		_ = b.update(context.Background(), job, "failed", 100, err.Error())
 		b.finish(job, err)
 	}
 }
@@ -214,28 +217,28 @@ func (b *Builds) run(parent context.Context, job *buildJob) error {
 	defer release()
 	ctx, cancel := context.WithTimeout(tracked, buildTimeout)
 	defer cancel()
-	if err := b.update(ctx, job.JobID, "building", 5, ""); err != nil {
+	if err := b.update(ctx, job, "building", 5, ""); err != nil {
 		return err
 	}
 	workspace, err := os.MkdirTemp("", "janus-wasm-build-")
 	if err != nil {
-		return b.fail(ctx, job.JobID, "could not allocate build workspace", err)
+		return b.fail(ctx, job, "could not allocate build workspace", err)
 	}
 	defer os.RemoveAll(workspace)
 	for offset := 0; ; offset += buildPageSize {
 		files, listErr := b.store.ListProjectFiles(ctx, ListProjectFiles{OwnerID: job.OwnerID, ProjectID: job.ProjectID, SnapshotID: job.SnapshotID, Offset: offset, Limit: buildPageSize})
 		if listErr != nil {
-			return b.fail(ctx, job.JobID, "could not read the imported source snapshot", listErr)
+			return b.fail(ctx, job, "could not read the imported source snapshot", listErr)
 		}
 		for _, file := range files {
 			if err = writeSourceFile(workspace, file); err != nil {
-				return b.fail(ctx, job.JobID, "imported source contains an unsafe path", err)
+				return b.fail(ctx, job, "imported source contains an unsafe path", err)
 			}
 		}
 		if len(files) < buildPageSize {
 			break
 		}
-		if err = b.update(ctx, job.JobID, "building", min(30, 5+offset/buildPageSize), ""); err != nil {
+		if err = b.update(ctx, job, "building", min(30, 5+offset/buildPageSize), ""); err != nil {
 			return err
 		}
 	}
@@ -248,18 +251,18 @@ func (b *Builds) run(parent context.Context, job *buildJob) error {
 	if err != nil {
 		var manifest *ManifestError
 		if errors.As(err, &manifest) {
-			return b.fail(ctx, job.JobID, manifest.Message, manifest.Err)
+			return b.fail(ctx, job, manifest.Message, manifest.Err)
 		}
 		label := languageLabel(job.Language)
-		_ = b.updateWithLog(ctx, job.JobID, "failed", 100, label+" WASM build failed: "+err.Error(), log)
+		_ = b.updateWithLog(ctx, job, "failed", 100, label+" WASM build failed: "+err.Error(), log)
 		return fmt.Errorf("%s WASM build failed: %w", label, err)
 	}
 	if len(data) == 0 || len(data) > artifact.MaxBytes {
-		return b.failWithLog(ctx, job.JobID, "WASM artifact is empty or exceeds the 128 MiB limit", log, errors.New("artifact size limit exceeded"))
+		return b.failWithLog(ctx, job, "WASM artifact is empty or exceeds the 128 MiB limit", log, errors.New("artifact size limit exceeded"))
 	}
 	err = b.store.CompleteWASMBuild(ctx, CompleteWASMBuild{ID: job.JobID, ArtifactName: name, Artifact: data, Log: log})
 	if err != nil {
-		return b.failWithLog(ctx, job.JobID, "WASM artifact could not be stored", log, err)
+		return b.failWithLog(ctx, job, "WASM artifact could not be stored", log, err)
 	}
 	return nil
 }
@@ -302,27 +305,32 @@ func mustRel(root, destination string) string {
 	return rel
 }
 
-func (b *Builds) update(ctx context.Context, id, status string, progress int, reason string) error {
-	return b.updateWithLog(ctx, id, status, progress, reason, nil)
+func (b *Builds) update(ctx context.Context, job *buildJob, status string, progress int, reason string) error {
+	return b.updateWithLog(ctx, job, status, progress, reason, nil)
 }
 
-func (b *Builds) updateWithLog(ctx context.Context, id, status string, progress int, reason string, log []byte) error {
-	return b.store.UpdateWASMBuild(ctx, UpdateWASMBuild{ID: id, Status: status, Progress: progress, Error: reason, Log: string(log)})
+// updateWithLog moves job to status, from the status it is in.
+func (b *Builds) updateWithLog(ctx context.Context, job *buildJob, status string, progress int, reason string, log []byte) error {
+	err := b.store.TransitionWASMBuild(ctx, JobTransition{ID: job.JobID, From: job.status, To: status, Progress: progress, Error: reason, Log: string(log)})
+	if err == nil {
+		job.status = status
+	}
+	return err
 }
 
-func (b *Builds) fail(ctx context.Context, id, reason string, cause error) error {
+func (b *Builds) fail(ctx context.Context, job *buildJob, reason string, cause error) error {
 	if cause != nil {
 		reason += ": " + cause.Error()
 	}
-	_ = b.update(ctx, id, "failed", 100, reason)
+	_ = b.update(ctx, job, "failed", 100, reason)
 	return fmt.Errorf("%s: %w", reason, cause)
 }
 
-func (b *Builds) failWithLog(ctx context.Context, id, reason string, log []byte, cause error) error {
+func (b *Builds) failWithLog(ctx context.Context, job *buildJob, reason string, log []byte, cause error) error {
 	if cause != nil {
 		reason += ": " + cause.Error()
 	}
-	_ = b.updateWithLog(ctx, id, "failed", 100, reason, log)
+	_ = b.updateWithLog(ctx, job, "failed", 100, reason, log)
 	return fmt.Errorf("%s: %w", reason, cause)
 }
 

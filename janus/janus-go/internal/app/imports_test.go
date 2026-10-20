@@ -119,9 +119,7 @@ func (f *importFixture) interruptedImport(job, staging string, stored map[string
 	f.t.Helper()
 	ctx := context.Background()
 	must(f.t, f.store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
-	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(f.t, f.store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: status, Progress: 50}))
-	}
+	storetest.AdvanceImport(f.t, f.store, job, "queued", "cloning", "scanning", "storing")
 	must(f.t, f.store.BeginSnapshot(ctx, app.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}", Manifest: manifest}))
 	var files []app.SnapshotFile
 	for path, hash := range stored {
@@ -130,7 +128,7 @@ func (f *importFixture) interruptedImport(job, staging string, stored map[string
 	if len(files) > 0 {
 		must(f.t, f.store.AddSnapshotFiles(ctx, staging, files))
 	}
-	must(f.t, f.store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: "queued", Progress: 0}))
+	must(f.t, f.store.TransitionImportJob(ctx, app.JobTransition{ID: job, From: "storing", To: "queued"}))
 }
 
 func (f *importFixture) resume() {
@@ -299,7 +297,7 @@ func TestRetryStartsANewImportFromAFailedOne(t *testing.T) {
 	f := newImportFixture(t)
 	ctx := context.Background()
 	must(t, f.store.CreateImportJob(ctx, app.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
-	must(t, f.store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"}))
+	must(t, f.store.TransitionImportJob(ctx, app.JobTransition{ID: "job-failed", From: "queued", To: "failed", Progress: 100, Error: "clone failed"}))
 
 	id, err := f.imports.Retry(ctx, "alice", "job-failed")
 	if err != nil || id == "" || id == "job-failed" {
@@ -422,9 +420,7 @@ func TestSetEntryPointAcceptsOnlyADetectedCandidateOfTheLatestSnapshot(t *testin
 	const metadata = `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"Go service entrypoint"}]}}`
 	must(t, f.store.CreateImportJob(ctx, app.CreateImportJob{ID: "job-1", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
 	must(t, f.store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "snapshot-1", JobID: "job-1", OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, MetadataJSON: metadata}))
-	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(t, f.store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: status, Progress: 50}))
-	}
+	storetest.AdvanceImport(t, f.store, "job-1", "queued", "cloning", "scanning", "storing")
 	must(t, f.store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "snapshot-1", JobID: "job-1"}))
 
 	if err := f.imports.SetEntryPoint(ctx, "alice", "project-1", "snapshot-1", "cmd/server/main.go"); err != nil {

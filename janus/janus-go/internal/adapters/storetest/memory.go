@@ -481,17 +481,20 @@ func (m *Memory) CreateImportJob(_ context.Context, job app.CreateImportJob) err
 	return nil
 }
 
-func (m *Memory) UpdateImportJob(_ context.Context, update app.UpdateImportJob) error {
+func (m *Memory) TransitionImportJob(_ context.Context, t app.JobTransition) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	job, ok := m.imports[update.ID]
+	job, ok := m.imports[t.ID]
 	if !ok {
 		return fail("job not found")
 	}
-	if !jobs.Import.CanMove(job.Status, update.Status) {
-		return fail("job cannot move from %s to %s", job.Status, update.Status)
+	if !jobs.Import.CanMove(t.From, t.To) {
+		return fail("job cannot move from %s to %s", t.From, t.To)
 	}
-	job.Status, job.Progress, job.Error, job.UpdatedAt = update.Status, update.Progress, update.Error, m.now()
+	if job.Status != t.From {
+		return fail("job changed while it was being updated")
+	}
+	job.Status, job.Progress, job.Error, job.UpdatedAt = t.To, t.Progress, t.Error, m.now()
 	return nil
 }
 
@@ -630,17 +633,20 @@ func (m *Memory) CreateWASMBuild(_ context.Context, build app.CreateWASMBuild) e
 	return nil
 }
 
-func (m *Memory) UpdateWASMBuild(_ context.Context, update app.UpdateWASMBuild) error {
+func (m *Memory) TransitionWASMBuild(_ context.Context, t app.JobTransition) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	build, ok := m.builds[update.ID]
+	build, ok := m.builds[t.ID]
 	if !ok {
 		return fail("job not found")
 	}
-	if !jobs.WASM.CanMove(build.Status, update.Status) {
-		return fail("WASM build cannot move from %s to %s", build.Status, update.Status)
+	if !jobs.WASM.CanMove(t.From, t.To) {
+		return fail("WASM build cannot move from %s to %s", t.From, t.To)
 	}
-	build.Status, build.Progress, build.Error, build.Log, build.UpdatedAt = update.Status, update.Progress, update.Error, update.Log, m.now()
+	if build.Status != t.From {
+		return fail("WASM build changed while it was being updated")
+	}
+	build.Status, build.Progress, build.Error, build.Log, build.UpdatedAt = t.To, t.Progress, t.Error, t.Log, m.now()
 	return nil
 }
 

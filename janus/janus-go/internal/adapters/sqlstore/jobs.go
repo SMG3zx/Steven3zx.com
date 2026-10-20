@@ -27,11 +27,13 @@ func (s *Store) CreateImportJob(ctx context.Context, job app.CreateImportJob) er
 	}))
 }
 
-// UpdateImportJob moves an import job to a new status when the import state
-// machine allows it.
-func (s *Store) UpdateImportJob(ctx context.Context, update app.UpdateImportJob) error {
-	ctx, done := s.start(ctx, "UpdateImportJob")
-	return done(s.transitionJob(ctx, "project_import_jobs", jobs.Import, update.ID, update.Status, update.Progress, update.Error))
+// TransitionImportJob moves an import job to a new status when the import
+// state machine allows it and the job is still in the status the caller saw.
+func (s *Store) TransitionImportJob(ctx context.Context, t app.JobTransition) error {
+	ctx, done := s.start(ctx, "TransitionImportJob")
+	return done(s.transition(ctx, "project_import_jobs", jobs.Import, t,
+		`UPDATE project_import_jobs SET status=?,progress=?,error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`,
+		[]any{t.To, t.Progress, t.Error, t.ID, t.From}, "job"))
 }
 
 // FindImportJob returns one of an Account's import jobs.
@@ -177,27 +179,13 @@ func (s *Store) CreateWASMBuild(ctx context.Context, build app.CreateWASMBuild) 
 	}))
 }
 
-// UpdateWASMBuild moves a build to a new status when the build state machine
-// allows it.
-func (s *Store) UpdateWASMBuild(ctx context.Context, update app.UpdateWASMBuild) error {
-	ctx, done := s.start(ctx, "UpdateWASMBuild")
-	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		from, err := currentStatus(ctx, tx, "project_wasm_builds", update.ID)
-		if err != nil {
-			return err
-		}
-		if !jobs.WASM.CanMove(from, update.Status) {
-			return fmt.Errorf("WASM build cannot move from %s to %s", from, update.Status)
-		}
-		result, err := tx.ExecContext(ctx, `UPDATE project_wasm_builds SET status=?,progress=?,error=?,build_log=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`, update.Status, update.Progress, update.Error, update.Log, update.ID, from)
-		if err != nil {
-			return err
-		}
-		if rows, _ := result.RowsAffected(); rows != 1 {
-			return errors.New("WASM build changed while it was being updated")
-		}
-		return nil
-	}))
+// TransitionWASMBuild moves a build to a new status when the build state
+// machine allows it and the build is still in the status the caller saw.
+func (s *Store) TransitionWASMBuild(ctx context.Context, t app.JobTransition) error {
+	ctx, done := s.start(ctx, "TransitionWASMBuild")
+	return done(s.transition(ctx, "project_wasm_builds", jobs.WASM, t,
+		`UPDATE project_wasm_builds SET status=?,progress=?,error=?,build_log=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`,
+		[]any{t.To, t.Progress, t.Error, t.Log, t.ID, t.From}, "WASM build"))
 }
 
 // CompleteWASMBuild stores a finished build's Artifact and log.
@@ -235,35 +223,28 @@ func (s *Store) FindWASMBuildArtifact(ctx context.Context, id, ownerID string) (
 	return result, done(err)
 }
 
-func currentStatus(ctx context.Context, q querier, table, id string) (string, error) {
-	var status string
-	err := q.QueryRowContext(ctx, `SELECT status FROM `+table+` WHERE id=?`, id).Scan(&status)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", errors.New("job not found")
+// transition checks the move against the domain rule and then swaps the status
+// with one UPDATE that matches the status the caller saw, so a concurrent change
+// is detected by the database and not by a read.
+func (s *Store) transition(ctx context.Context, table string, machine jobs.Machine, t app.JobTransition, update string, args []any, noun string) error {
+	if !machine.CanMove(t.From, t.To) {
+		return fmt.Errorf("%s cannot move from %s to %s", noun, t.From, t.To)
 	}
-	return status, err
-}
-
-// transitionJob moves an import job to status if the state machine allows it,
-// comparing against the stored status so that a concurrent change is detected.
-func (s *Store) transitionJob(ctx context.Context, table string, machine jobs.Machine, id, status string, progress int, reason string) error {
-	return s.inTx(ctx, func(tx *sql.Tx) error {
-		from, err := currentStatus(ctx, tx, table, id)
-		if err != nil {
-			return err
-		}
-		if !machine.CanMove(from, status) {
-			return fmt.Errorf("job cannot move from %s to %s", from, status)
-		}
-		result, err := tx.ExecContext(ctx, `UPDATE `+table+` SET status=?,progress=?,error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`, status, progress, reason, id, from)
-		if err != nil {
-			return err
-		}
-		if rows, _ := result.RowsAffected(); rows != 1 {
-			return errors.New("job changed while it was being updated")
-		}
+	result, err := s.db.ExecContext(ctx, update, args...)
+	if err != nil {
+		return err
+	}
+	if rows, _ := result.RowsAffected(); rows == 1 {
 		return nil
-	})
+	}
+	var exists int
+	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table+` WHERE id=?`, t.ID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 0 {
+		return errors.New("job not found")
+	}
+	return fmt.Errorf("%s changed while it was being updated", noun)
 }
 
 // migrateAndRecoverJobs adds the columns that job resumption needs to existing

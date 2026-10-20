@@ -34,7 +34,13 @@ type Store interface {
 
 	// Jobs: imports, Staging Snapshots, WASM Builds and Resume.
 	CreateImportJob(ctx context.Context, job CreateImportJob) error
-	UpdateImportJob(ctx context.Context, update UpdateImportJob) error
+	// TransitionImportJob and TransitionWASMBuild compare and swap a job's status.
+	// The move must be legal under the job's state machine in domain/jobs, and the
+	// stored status must still be transition.From; otherwise the job is left as it
+	// is and the error says "job cannot move from X to Y", "job not found" or
+	// "job changed while it was being updated". Staying in a non-terminal status
+	// is a legal move, so progress can be reported.
+	TransitionImportJob(ctx context.Context, transition JobTransition) error
 	FindImportJob(ctx context.Context, id, ownerID string) (job ImportJob, found bool, err error)
 	BeginSnapshot(ctx context.Context, snapshot BeginSnapshot) error
 	AddSnapshotFiles(ctx context.Context, snapshotID string, files []SnapshotFile) error
@@ -43,7 +49,7 @@ type Store interface {
 	FindStagingSnapshot(ctx context.Context, jobID string) (StagingSnapshotFound, error)
 	DiscardJobStaging(ctx context.Context, jobID string) error
 	CreateWASMBuild(ctx context.Context, build CreateWASMBuild) error
-	UpdateWASMBuild(ctx context.Context, update UpdateWASMBuild) error
+	TransitionWASMBuild(ctx context.Context, transition JobTransition) error
 	CompleteWASMBuild(ctx context.Context, build CompleteWASMBuild) error
 	FindWASMBuild(ctx context.Context, id, ownerID string) (build WASMBuild, found bool, err error)
 	FindWASMBuildArtifact(ctx context.Context, id, ownerID string) (WASMBuildArtifact, error)

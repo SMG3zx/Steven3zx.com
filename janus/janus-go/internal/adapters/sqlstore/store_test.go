@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
 
@@ -58,9 +59,7 @@ func seedAccountAndProject(t *testing.T, store *Store, owner, project string) {
 // it completes its Snapshot.
 func advanceImport(t *testing.T, store *Store, jobID string) {
 	t.Helper()
-	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(t, store.UpdateImportJob(testContext(t), app.UpdateImportJob{ID: jobID, Status: status, Progress: 50}))
-	}
+	storetest.AdvanceImport(t, store, jobID, "queued", "cloning", "scanning", "storing")
 }
 
 // startImportAt creates an import job and moves it to status, as a worker would
@@ -70,12 +69,14 @@ func startImportAt(t *testing.T, store *Store, owner, project, job, status strin
 	ctx := testContext(t)
 	commit := strings.Repeat("c", 40)
 	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: owner, ProjectID: project, Repository: "alice/repo", Branch: "main", Commit: commit}))
+	var path []string
 	for _, next := range []string{"cloning", "scanning", "storing"} {
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: next, Progress: 50}))
+		path = append(path, next)
 		if next == status {
 			break
 		}
 	}
+	storetest.AdvanceImport(t, store, job, "queued", path...)
 	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: job + "-snapshot", JobID: job, OwnerID: owner, ProjectID: project, RepositoryID: 1, Repository: "alice/repo", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Go"}))
 }
 
@@ -282,7 +283,7 @@ func TestProjectOwnershipSnapshotRetentionAndFailedImport(t *testing.T) {
 	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: strings.Repeat("0", 40)}))
 	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "snapshot-failed", JobID: "job-failed", OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: strings.Repeat("0", 40), MetadataJSON: "{}"}))
 	must(t, store.DeleteStagingSnapshot(ctx, "snapshot-failed"))
-	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"}))
+	must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "job-failed", From: "queued", To: "failed", Progress: 100, Error: "clone failed"}))
 	latest, found, err := store.GetProject(ctx, "project-1", "alice")
 	if err != nil || !found || latest.Commit != strings.Repeat("d", 40) || latest.SnapshotCount != 5 {
 		t.Fatalf("failed import damaged previous snapshot: %#v, %v, %v", latest, found, err)
@@ -355,9 +356,7 @@ func TestInterruptedImportResumesUpToThreeTimesThenFails(t *testing.T) {
 			t.Fatalf("restart %d: resumable jobs = %#v", restart, listed)
 		}
 		// The resumed worker runs again and is interrupted by the next restart.
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "cloning", Progress: 15}))
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "scanning", Progress: 45}))
-		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "storing", Progress: 70}))
+		storetest.AdvanceImport(t, store, "job-1", "queued", "cloning", "scanning", "storing")
 		stop()
 	}
 
@@ -379,9 +378,9 @@ func TestTerminalJobStatusCannotChange(t *testing.T) {
 	ctx := testContext(t)
 	seedAccountAndProject(t, store, "alice", "project-1")
 	startImportAt(t, store, "alice", "project-1", "job-1", "storing")
-	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "failed", Progress: 100, Error: "clone failed"}))
+	must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "job-1", From: "storing", To: "failed", Progress: 100, Error: "clone failed"}))
 
-	err := store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "cloning", Progress: 15})
+	err := store.TransitionImportJob(ctx, app.JobTransition{ID: "job-1", From: "failed", To: "cloning", Progress: 15})
 	if err == nil || !strings.Contains(err.Error(), "cannot move from failed to cloning") {
 		t.Fatalf("expected a rejected transition from failed, got %v", err)
 	}

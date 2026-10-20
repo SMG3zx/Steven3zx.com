@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"janus/internal/adapters/sqlstore"
+	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 	"net/http"
 	"net/http/httptest"
@@ -104,9 +105,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	}
 	must(store.CreateImportJob(ctx, app.CreateImportJob{ID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit}))
 	must(store.BeginSnapshot(ctx, app.BeginSnapshot{ID: entrypointSnapshotID, JobID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, RepositoryID: 1, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit, DefaultBranch: "main", MetadataJSON: `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"fixture"}]}}`}))
-	must(store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "entrypoint-job", Status: "cloning", Progress: 15}))
-	must(store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "entrypoint-job", Status: "scanning", Progress: 45}))
-	must(store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "entrypoint-job", Status: "storing", Progress: 70}))
+	storetest.AdvanceImport(t, store, "entrypoint-job", "queued", "cloning", "scanning", "storing")
 	must(store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: entrypointSnapshotID, JobID: "entrypoint-job", FileCount: 1, TotalBytes: 10_591_486}))
 	listedProjects := perform(handler, http.MethodGet, "/api/projects", "", session[0])
 	if listedProjects.Code != http.StatusOK || !bytes.Contains(listedProjects.Body.Bytes(), []byte(createdProject.ID)) {
