@@ -79,8 +79,8 @@ type Runner interface {
 
 // Source fetches a repository at a commit. Open makes the commit's file tree
 // readable and Close releases whatever Open holds; callers read the tree before
-// closing it. An unknown commit, an unreadable repository or a tree that breaks
-// a size limit fails with an error.
+// closing it. An unknown commit or an unreadable repository fails Open with a
+// *SourceError. A tree that breaks a size limit fails Files with an error.
 type Source interface {
 	Open(ctx context.Context, request SourceRequest) (SourceTree, error)
 }
@@ -107,7 +107,8 @@ type GitHost interface {
 
 // Audit records Audit Events. Recording never fails the caller and never
 // blocks it for long; an adapter that cannot write an event drops it. An event
-// with no Name is recorded under a generic one, and every Field is recorded.
+// with no Level and no Name is recorded as info under a generic name, and every
+// Field is recorded.
 type Audit interface {
 	Record(ctx context.Context, event AuditEvent)
 }

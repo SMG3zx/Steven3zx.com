@@ -5,49 +5,38 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path"
 	"strings"
 
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/uuid"
 	goakt "github.com/tochemey/goakt/v4/actor"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/actors/accounting"
 	"janus/actors/github"
 	"janus/actors/jobrunner"
-	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
-)
-
-const (
-	maxSnapshotBytes int64 = 256 << 20
-	maxFileBytes     int64 = 16 << 20
-	maxSnapshotFiles       = 50_000
-	cloneDepth             = 50
-	githubCloneBase        = "https://github.com/"
+	"janus/internal/app"
 )
 
 // Actor starts and resumes repository imports and owns Snapshot activation and
 // Entrypoints. Plain project operations and GitHub access are not here: callers
 // use the persistence Store and the github module directly.
 type Actor struct {
-	cloneBase  string
-	store      persistence.Store
-	accounting *goakt.PID
-	github     *github.Service
-	runner     *jobrunner.Runner
+	store  app.Store
+	source app.Source
+	audit  app.Audit
+	github *github.Service
+	runner *jobrunner.Runner
 }
 
 // ImportWorker owns the long-running clone, scan, and snapshot persistence
 // workflow for one repository import job.
 type ImportWorker struct {
-	cloneBase  string
-	store      persistence.Store
-	accounting *goakt.PID
-	runner     *jobrunner.Runner
+	store  app.Store
+	source app.Source
+	audit  app.Audit
+	runner *jobrunner.Runner
 }
 
 var _ goakt.Actor = (*ImportWorker)(nil)
@@ -92,24 +81,20 @@ func (a *ImportWorker) finish(ctx context.Context, done *importFinished) {
 	if done.Err != nil {
 		span.SetStatus(codes.Error, "repository import failed")
 		actortrace.RecordError(span, done.Err)
-		a.audit(ctx, "error", "project.import.failed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "reason": "import_failed"})
+		a.record(ctx, "error", "project.import.failed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "reason": "import_failed"})
 		return
 	}
-	a.audit(ctx, "info", "project.import.completed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "repository": msg.Repository.FullName, "commit": msg.Commit})
+	a.record(ctx, "info", "project.import.completed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "repository": msg.Repository.FullName, "commit": msg.Commit})
 }
 
 func (*ImportWorker) PostStop(*goakt.Context) error { return nil }
 
 var _ goakt.Actor = (*Actor)(nil)
 
-// New creates a project actor backed by store, reading GitHub through gh. If
-// provided, the first accountingPID receives project audit events.
-func New(store persistence.Store, gh *github.Service, accountingPID ...*goakt.PID) *Actor {
-	a := &Actor{store: store, github: gh, cloneBase: githubCloneBase, runner: jobrunner.New(2)}
-	if len(accountingPID) > 0 {
-		a.accounting = accountingPID[0]
-	}
-	return a
+// New creates a project actor backed by store, reading GitHub through gh and
+// repositories through source. Project audit events go to audit.
+func New(store app.Store, gh *github.Service, source app.Source, audit app.Audit) *Actor {
+	return &Actor{store: store, github: gh, source: source, audit: audit, runner: jobrunner.New(2)}
 }
 func (a *Actor) PreStart(*goakt.Context) error { return nil }
 
@@ -130,7 +115,7 @@ func (a *Actor) Receive(rctx *goakt.ReceiveContext) {
 		actortrace.RecordError(span, err)
 		if err == nil {
 			span.SetAttributes(attribute.String("project.import.job_id", jobID), attribute.String("project.import.repository", msg.Repository), attribute.String("project.import.commit", msg.Commit))
-			a.audit(ctx, "info", "project.import.queued", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": jobID, "repository": msg.Repository})
+			a.record(ctx, "info", "project.import.queued", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": jobID, "repository": msg.Repository})
 		}
 		rctx.Response(&ImportRequested{JobID: jobID, Err: err})
 	case *Drain:
@@ -177,11 +162,11 @@ func (a *Actor) setEntryPoint(ctx context.Context, msg *SetEntryPoint) error {
 	if err = validateEntrypoint(project.MetadataJSON, msg.EntryPoint); err != nil {
 		return err
 	}
-	return a.store.SetProjectEntryPoint(ctx, persistence.SetProjectEntryPoint{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, EntryPoint: msg.EntryPoint})
+	return a.store.SetProjectEntryPoint(ctx, app.SetProjectEntryPoint{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, EntryPoint: msg.EntryPoint})
 }
 
 func (a *Actor) updateJob(ctx context.Context, id, status string, progress int, reason string) error {
-	return a.store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
+	return a.store.UpdateImportJob(ctx, app.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
 }
 
 func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (string, error) {
@@ -241,10 +226,10 @@ func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (str
 		return "", errors.New("selected commit is not among the branch's 50 most recent commits")
 	}
 	jobID := uuid.NewString()
-	if err = a.store.CreateImportJob(rctx.Context(), persistence.CreateImportJob{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository.FullName, Branch: msg.Branch, Commit: msg.Commit}); err != nil {
+	if err = a.store.CreateImportJob(rctx.Context(), app.CreateImportJob{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository.FullName, Branch: msg.Branch, Commit: msg.Commit}); err != nil {
 		return "", err
 	}
-	worker := &ImportWorker{store: a.store, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
+	worker := &ImportWorker{store: a.store, source: a.source, audit: a.audit, runner: a.runner}
 	run := &RunImport{JobID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, Repository: repository, Branch: msg.Branch, Commit: msg.Commit, Token: token}
 	if err = a.runner.Start(rctx.Context(), rctx.ActorSystem(), importWorkerName(jobID), worker, run); err != nil {
 		if errors.Is(err, jobrunner.ErrBusy) {
@@ -257,64 +242,13 @@ func (a *Actor) startImport(rctx *goakt.ReceiveContext, msg *RequestImport) (str
 	return jobID, nil
 }
 
-type fileData struct {
-	path, mode string
-	content    []byte
-	hash       string
-}
 type snapshotMetadata struct {
 	Repository github.Repository `json:"repository"`
 	Scan       ScanResult        `json:"scan"`
 }
 
-func readSnapshotTree(tree *object.Tree) ([]fileData, int64, error) {
-	return readTreeFiles(tree, nil)
-}
-
-// readTreeFiles reads the files of tree. When want is not nil, only the files
-// whose paths it lists are read and the others are skipped.
-func readTreeFiles(tree *object.Tree, want map[string]bool) ([]fileData, int64, error) {
-	files := make([]fileData, 0)
-	var total int64
-	err := tree.Files().ForEach(func(file *object.File) error {
-		name := path.Clean(file.Name)
-		if name == "." || strings.HasPrefix(name, "../") || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") {
-			return errors.New("repository contains an unsafe file path")
-		}
-		if want != nil && !want[name] {
-			return nil
-		}
-		if len(files)+1 > maxSnapshotFiles {
-			return errors.New("repository exceeds the 50,000 file snapshot limit")
-		}
-		if file.Mode == 0o160000 {
-			contents := []byte(file.Hash.String())
-			total += int64(len(contents))
-			if total > maxSnapshotBytes {
-				return errors.New("repository exceeds the 256 MiB snapshot limit")
-			}
-			files = append(files, fileData{path: name, mode: file.Mode.String(), content: contents, hash: file.Hash.String()})
-			return nil
-		}
-		if file.Size > maxFileBytes {
-			return fmt.Errorf("file %s exceeds the 16 MiB per-file limit", name)
-		}
-		total += file.Size
-		if total > maxSnapshotBytes {
-			return errors.New("repository exceeds the 256 MiB snapshot limit")
-		}
-		contents, err := file.Contents()
-		if err != nil {
-			return err
-		}
-		files = append(files, fileData{path: name, mode: file.Mode.String(), content: []byte(contents), hash: file.Hash.String()})
-		return nil
-	})
-	return files, total, err
-}
-
 func (a *ImportWorker) updateJob(ctx context.Context, id, status string, progress int, reason string) error {
-	return a.store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
+	return a.store.UpdateImportJob(ctx, app.UpdateImportJob{ID: id, Status: status, Progress: progress, Error: reason})
 }
 func (a *ImportWorker) fail(ctx context.Context, msg *RunImport, public string, err error) error {
 	_ = a.updateJob(ctx, msg.JobID, "failed", 100, public)
@@ -322,18 +256,14 @@ func (a *ImportWorker) fail(ctx context.Context, msg *RunImport, public string, 
 	return fmt.Errorf("%s: %w", public, err)
 }
 
-func (a *ImportWorker) audit(ctx context.Context, level, name string, fields map[string]string) {
-	if a.accounting != nil {
-		_ = goakt.Tell(ctx, a.accounting, &accounting.Event{Level: level, Name: name, Fields: fields})
-	}
+func (a *ImportWorker) record(ctx context.Context, level, name string, fields map[string]string) {
+	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
-func (a *Actor) audit(ctx context.Context, level, name string, fields map[string]string) {
-	if a.accounting == nil {
-		return
-	}
-	_ = goakt.Tell(ctx, a.accounting, &accounting.Event{Level: level, Name: name, Fields: fields})
+func (a *Actor) record(ctx context.Context, level, name string, fields map[string]string) {
+	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
+
 func validateEntrypoint(metadataJSON, entrypoint string) error {
 	var metadata snapshotMetadata
 	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {

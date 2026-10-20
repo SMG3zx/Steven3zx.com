@@ -17,6 +17,7 @@ import (
 	configactor "janus/actors/config"
 	dockeractor "janus/actors/docker"
 	githubactor "janus/actors/github"
+	"janus/actors/gitsource"
 	httpserver "janus/actors/httpserver"
 	persistenceactor "janus/actors/persistence"
 	projectsactor "janus/actors/projects"
@@ -24,6 +25,7 @@ import (
 	telemetryactor "janus/actors/telemetry"
 	wasmactor "janus/actors/wasm"
 	wasmruntime "janus/actors/wasmruntime"
+	"janus/internal/app"
 )
 
 // Actor starts and stops the configured Janus services.
@@ -33,6 +35,7 @@ type Actor struct {
 	telemetry      *telemetryactor.Telemetry
 	httpServer     *goakt.PID
 	accounting     *goakt.PID
+	audit          app.Audit
 	authentication *authactor.Service
 	authorization  *authzactor.Policy
 	persistence    *goakt.PID
@@ -106,9 +109,10 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn accounting actor: %w", err)
 	}
-	accountingPID := a.accounting
+	audit := accountingactor.NewAudit(a.accounting)
+	a.audit = audit
 	a.telemetry, err = telemetryactor.Start(ctx.Context(), config.PyroscopeServerAddress, func(level, message string) {
-		_ = goakt.Tell(context.Background(), accountingPID, &accountingactor.Event{Level: level, Name: "pyroscope.sdk", Fields: map[string]string{"message": message}})
+		audit.Record(context.Background(), app.AuditEvent{Level: level, Name: "pyroscope.sdk", Fields: map[string]string{"message": message}})
 	})
 	if err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
@@ -127,13 +131,13 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		return fmt.Errorf("spawn persistence actor: %w", err)
 	}
 	a.store = persistenceactor.NewClient(a.persistence, 30*time.Second)
-	a.github = githubactor.NewService(a.store)
+	a.github = githubactor.NewService(a.store, githubactor.NewClient())
 	a.authentication = authactor.New([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry)
 	a.authorization, err = authzactor.New(startupCtx)
 	if err != nil {
 		return err
 	}
-	a.projects, err = a.system.Spawn(startupCtx, "projects", projectsactor.New(a.store, a.github, a.accounting))
+	a.projects, err = a.system.Spawn(startupCtx, "projects", projectsactor.New(a.store, a.github, gitsource.New(), a.audit))
 	if err != nil {
 		return fmt.Errorf("spawn projects actor: %w", err)
 	}
@@ -171,7 +175,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
 	builds := builder.NewDocker(builder.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage})
-	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.New(a.store, a.accounting, builds))
+	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.New(a.store, a.audit, builds))
 	if err != nil {
 		return fmt.Errorf("spawn WASM build actor: %w", err)
 	}
@@ -185,7 +189,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	}
 	a.routes, err = a.system.Spawn(startupCtx, "routes", routesactor.New(routesactor.Dependencies{
 		System: a.system, Authentication: a.authentication, Authorization: a.authorization,
-		Accounting: a.accounting, Store: a.store, GitHub: a.github, Projects: a.projects, WASMBuilds: a.wasmBuilds, WASMRuntime: a.wasmRuntime, JWTExpiry: config.JWTExpiry,
+		Audit: a.audit, Store: a.store, GitHub: a.github, Projects: a.projects, WASMBuilds: a.wasmBuilds, WASMRuntime: a.wasmRuntime, JWTExpiry: config.JWTExpiry,
 		CookieSecure: config.CookieSecure, GoogleEnabled: config.GoogleEnabled,
 		GoogleClientID: config.GoogleClientID, GoogleSecret: config.GoogleSecret,
 		GoogleCallback: config.GoogleCallback, JWTSecret: config.JWTSecret,
@@ -289,10 +293,10 @@ func (a *Actor) stop(ctx context.Context) error {
 }
 
 func (a *Actor) account(ctx context.Context, level, name string, fields map[string]string) {
-	if a.accounting == nil {
+	if a.audit == nil {
 		return
 	}
-	_ = goakt.Tell(ctx, a.accounting, &accountingactor.Event{Level: level, Name: name, Fields: fields})
+	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
 func (*Actor) PostStop(*goakt.Context) error { return nil }

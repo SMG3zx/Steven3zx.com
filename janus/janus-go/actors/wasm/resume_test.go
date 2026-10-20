@@ -12,6 +12,7 @@ import (
 
 	"janus/actors/builder"
 	"janus/actors/persistence"
+	"janus/internal/adapters/audittest"
 )
 
 // buildFixture is an in-memory Store holding one owner and one project whose
@@ -44,7 +45,7 @@ func newBuildFixture(t *testing.T, language string, runner builder.Builder) *bui
 	f := &buildFixture{t: t, ctx: ctx, store: storetest.NewMemory(), system: system}
 	f.must(f.store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
 	f.importProject("project", language)
-	f.builds, err = system.Spawn(ctx, "wasm", New(f.store, nil, runner))
+	f.builds, err = system.Spawn(ctx, "wasm", New(f.store, audittest.NewRecorder(), runner))
 	if err != nil {
 		t.Fatal(err)
 	}

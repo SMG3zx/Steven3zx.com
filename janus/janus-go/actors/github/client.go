@@ -9,39 +9,21 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"janus/internal/app"
 )
 
 const githubAPI = "https://api.github.com"
 
-// Repository is GitHub repository metadata available to an authenticated user.
-type Repository struct {
-	ID            int64  `json:"id"`
-	FullName      string `json:"full_name"`
-	Description   string `json:"description"`
-	Private       bool   `json:"private"`
-	DefaultBranch string `json:"default_branch"`
-	Language      string `json:"language"`
-	Stars         int    `json:"stargazers_count"`
-	Forks         int    `json:"forks_count"`
-	CloneURL      string `json:"clone_url"`
-	HTMLURL       string `json:"html_url"`
-	Size          int64  `json:"size"`
-}
+// The GitHost types live in app. They keep their old names here for callers of
+// this package.
+type (
+	Repository = app.Repository
+	Branch     = app.Branch
+	Commit     = app.Commit
+)
 
-// Branch identifies a repository branch and its current commit.
-type Branch struct {
-	Name   string `json:"name"`
-	Commit struct {
-		SHA string `json:"sha"`
-	} `json:"commit"`
-}
-
-// Commit contains the display metadata Janus uses for a repository revision.
-type Commit struct {
-	SHA     string    `json:"sha"`
-	Message string    `json:"message"`
-	Date    time.Time `json:"date"`
-}
+var _ app.GitHost = (*Client)(nil)
 
 // Client reads repository metadata from the GitHub API using a caller's token.
 type Client struct {

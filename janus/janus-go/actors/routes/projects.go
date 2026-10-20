@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
-	"janus/internal/domain/templates"
 	wasmactor "janus/actors/wasm"
 	wasmruntime "janus/actors/wasmruntime"
+	"janus/internal/domain/templates"
 	"janus/web"
 )
 

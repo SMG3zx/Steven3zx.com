@@ -16,12 +16,12 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/actors/accounting"
-	"janus/internal/domain/artifact"
 	"janus/actors/builder"
 	"janus/actors/jobrunner"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
+	"janus/internal/app"
+	"janus/internal/domain/artifact"
 	"janus/internal/domain/templates"
 )
 
@@ -34,18 +34,18 @@ const (
 // Actor coordinates build jobs, delegates compilation to a builder, and stores
 // artifacts.
 type Actor struct {
-	store      persistence.Store
-	accounting *actor.PID
-	builder    builder.Builder
-	jobs       *jobrunner.Runner
+	store   app.Store
+	audit   app.Audit
+	builder app.Builder
+	jobs    *jobrunner.Runner
 }
 
 var _ actor.Actor = (*Actor)(nil)
 
 // New creates a build actor that compiles with b. Each build runs on a worker
 // actor the job runner starts, so this actor stays responsive.
-func New(store persistence.Store, accountingPID *actor.PID, b builder.Builder) *Actor {
-	return &Actor{store: store, accounting: accountingPID, builder: b, jobs: jobrunner.New(maxConcurrentBuilds)}
+func New(store app.Store, audit app.Audit, b app.Builder) *Actor {
+	return &Actor{store: store, audit: audit, builder: b, jobs: jobrunner.New(maxConcurrentBuilds)}
 }
 
 func (a *Actor) PreStart(*actor.Context) error { return nil }
@@ -60,7 +60,7 @@ func (a *Actor) Receive(rctx *actor.ReceiveContext) {
 			actortrace.RecordError(span, err)
 		} else {
 			span.SetAttributes(attribute.String("wasm.build.job_id", jobID), attribute.String("wasm.target", msg.Target))
-			a.audit(ctx, "info", "project.wasm.build.queued", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": jobID, "target": msg.Target})
+			a.record(ctx, "info", "project.wasm.build.queued", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": jobID, "target": msg.Target})
 		}
 		rctx.Response(&BuildRequested{JobID: jobID, Err: err})
 	case *Build:
@@ -115,10 +115,10 @@ func (a *Actor) finish(ctx context.Context, span trace.Span, done *buildFinished
 	if done.Err != nil {
 		actortrace.RecordError(span, done.Err)
 		span.SetStatus(codes.Error, "WASM build failed")
-		a.audit(ctx, "error", "project.wasm.build.failed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "reason": "build_failed"})
+		a.record(ctx, "error", "project.wasm.build.failed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID, "reason": "build_failed"})
 		return
 	}
-	a.audit(ctx, "info", "project.wasm.build.completed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID})
+	a.record(ctx, "info", "project.wasm.build.completed", map[string]string{"user_id": msg.OwnerID, "project_id": msg.ProjectID, "job_id": msg.JobID})
 }
 
 func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, error) {
@@ -271,10 +271,8 @@ func (a *Actor) failWithLog(ctx context.Context, id, reason string, log []byte, 
 	return fmt.Errorf("%s: %w", reason, cause)
 }
 
-func (a *Actor) audit(ctx context.Context, level, name string, fields map[string]string) {
-	if a.accounting != nil {
-		_ = actor.Tell(ctx, a.accounting, &accounting.Event{Level: level, Name: name, Fields: fields})
-	}
+func (a *Actor) record(ctx context.Context, level, name string, fields map[string]string) {
+	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
 func (*Actor) PostStop(*actor.Context) error { return nil }

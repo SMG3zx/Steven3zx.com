@@ -4,18 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"time"
 
-	git "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	gitHTTP "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/uuid"
 	goakt "github.com/tochemey/goakt/v4/actor"
 
 	"janus/actors/persistence"
+	"janus/internal/app"
 )
 
 // ResumeImports starts every import that was interrupted by the previous
@@ -121,7 +117,7 @@ func (a *Actor) failResumedImport(ctx context.Context, jobID string, cause error
 // queueImport starts msg once an import slot is free, so resumed imports never
 // exceed the concurrency limit. It does not block the caller.
 func (a *Actor) queueImport(ctx context.Context, system goakt.ActorSystem, msg *RunImport) {
-	worker := &ImportWorker{store: a.store, accounting: a.accounting, runner: a.runner, cloneBase: a.cloneBase}
+	worker := &ImportWorker{store: a.store, source: a.source, audit: a.audit, runner: a.runner}
 	a.runner.Queue(ctx, system, importWorkerName(msg.JobID), worker, msg, func(err error) { a.failResumedImport(ctx, msg.JobID, err) })
 }
 
@@ -210,7 +206,7 @@ func storedFilesMatch(stored map[string]string, manifest []manifestEntry) bool {
 
 // filesMatchManifest reports whether files are exactly the entries of manifest,
 // with the same hashes.
-func filesMatchManifest(files []fileData, manifest []manifestEntry) bool {
+func filesMatchManifest(files []app.SnapshotFile, manifest []manifestEntry) bool {
 	if len(files) != len(manifest) {
 		return false
 	}
@@ -219,8 +215,8 @@ func filesMatchManifest(files []fileData, manifest []manifestEntry) bool {
 		hashes[entry.Path] = entry.Hash
 	}
 	for _, file := range files {
-		hash, ok := hashes[file.path]
-		if !ok || hash != file.hash {
+		hash, ok := hashes[file.Path]
+		if !ok || hash != file.Hash {
 			return false
 		}
 	}
@@ -228,10 +224,10 @@ func filesMatchManifest(files []fileData, manifest []manifestEntry) bool {
 }
 
 // manifestOf lists files as manifest entries.
-func manifestOf(files []fileData) []manifestEntry {
+func manifestOf(files []app.SnapshotFile) []manifestEntry {
 	manifest := make([]manifestEntry, 0, len(files))
 	for _, file := range files {
-		manifest = append(manifest, manifestEntry{Path: file.path, Mode: file.mode, Hash: file.hash, Size: int64(len(file.content))})
+		manifest = append(manifest, manifestEntry{Path: file.Path, Mode: file.Mode, Hash: file.Hash, Size: int64(len(file.Content))})
 	}
 	return manifest
 }
@@ -266,16 +262,16 @@ func (a *ImportWorker) storeStaged(ctx context.Context, msg *RunImport, staged *
 		}
 		return a.completeImport(ctx, msg, staged.snapshotID, staged.manifest)
 	}
-	tree, cleanup, err := a.cloneCommit(ctx, msg)
+	tree, err := a.cloneCommit(ctx, msg)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
+	defer tree.Close()
 	want := make(map[string]bool, len(pending))
 	for _, entry := range pending {
 		want[entry.Path] = true
 	}
-	files, _, err := readTreeFiles(tree, want)
+	files, err := tree.Files(want)
 	if err != nil {
 		return a.fail(ctx, msg, "repository scan failed", err)
 	}
@@ -295,15 +291,15 @@ func (a *ImportWorker) storeStaged(ctx context.Context, msg *RunImport, staged *
 // repository, starts a Staging Snapshot that keeps the manifest, and stores
 // every file.
 func (a *ImportWorker) importFromClone(ctx context.Context, msg *RunImport) error {
-	tree, cleanup, err := a.cloneCommit(ctx, msg)
+	tree, err := a.cloneCommit(ctx, msg)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
+	defer tree.Close()
 	if err = a.updateJob(ctx, msg.JobID, "scanning", 45, ""); err != nil {
 		return err
 	}
-	files, _, err := readSnapshotTree(tree)
+	files, err := tree.Files(nil)
 	if err != nil {
 		return a.fail(ctx, msg, "repository scan failed", err)
 	}
@@ -330,40 +326,21 @@ func (a *ImportWorker) importFromClone(ctx context.Context, msg *RunImport) erro
 	return a.completeImport(ctx, msg, snapshotID, manifest)
 }
 
-// cloneCommit fetches the selected commit into a temporary directory and returns
-// its tree. The caller must call cleanup after it has read the tree, because
-// file contents are read from that directory.
-func (a *ImportWorker) cloneCommit(ctx context.Context, msg *RunImport) (*object.Tree, func(), error) {
+// cloneCommit fetches the selected commit and returns its tree. The caller must
+// call Close on it after it has read the files.
+func (a *ImportWorker) cloneCommit(ctx context.Context, msg *RunImport) (app.SourceTree, error) {
 	if err := a.updateJob(ctx, msg.JobID, "cloning", 15, ""); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	dir, err := os.MkdirTemp("", "janus-github-import-")
+	tree, err := a.source.Open(ctx, app.SourceRequest{Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, Token: msg.Token})
 	if err != nil {
-		return nil, nil, a.fail(ctx, msg, "could not allocate import workspace", err)
+		var failure *app.SourceError
+		if errors.As(err, &failure) {
+			return nil, a.fail(ctx, msg, failure.Message, failure.Err)
+		}
+		return nil, a.fail(ctx, msg, "repository clone failed", err)
 	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
-	abort := func(public string, err error) (*object.Tree, func(), error) {
-		cleanup()
-		return nil, nil, a.fail(ctx, msg, public, err)
-	}
-	remote := a.cloneBase + msg.Repository.FullName + ".git"
-	_, err = git.PlainCloneContext(ctx, dir, true, &git.CloneOptions{URL: remote, Auth: &gitHTTP.BasicAuth{Username: "x-access-token", Password: msg.Token}, ReferenceName: plumbing.NewBranchReferenceName(msg.Branch), SingleBranch: true, Depth: cloneDepth, Tags: git.NoTags})
-	if err != nil {
-		return abort("repository clone failed", err)
-	}
-	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		return abort("cloned repository could not be opened", err)
-	}
-	commit, err := repo.CommitObject(plumbing.NewHash(msg.Commit))
-	if err != nil {
-		return abort("selected commit was not found in the fetched history", err)
-	}
-	tree, err := commit.Tree()
-	if err != nil {
-		return abort("selected commit tree could not be read", err)
-	}
-	return tree, cleanup, nil
+	return tree, nil
 }
 
 // beginStaging starts a Staging Snapshot for the commit and returns its ID.
@@ -377,12 +354,12 @@ func (a *ImportWorker) beginStaging(ctx context.Context, msg *RunImport, scan Sc
 }
 
 // storeFiles saves files into the Staging Snapshot in batches, reporting progress.
-func (a *ImportWorker) storeFiles(ctx context.Context, msg *RunImport, snapshotID string, files []fileData) error {
+func (a *ImportWorker) storeFiles(ctx context.Context, msg *RunImport, snapshotID string, files []app.SnapshotFile) error {
 	for start := 0; start < len(files); start += 100 {
 		end := min(start+100, len(files))
 		batch := make([]persistence.SnapshotFile, 0, end-start)
 		for _, file := range files[start:end] {
-			batch = append(batch, persistence.SnapshotFile{Path: file.path, Mode: file.mode, Content: file.content, Hash: file.hash})
+			batch = append(batch, persistence.SnapshotFile{Path: file.Path, Mode: file.Mode, Content: file.Content, Hash: file.Hash})
 		}
 		saveErr := a.store.AddSnapshotFiles(ctx, snapshotID, batch)
 		if saveErr != nil {

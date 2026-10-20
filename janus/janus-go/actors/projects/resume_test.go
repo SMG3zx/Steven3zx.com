@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"janus/actors/gitsource"
+	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/storetest"
 	"net/http"
 	"net/http/httptest"
@@ -72,10 +74,9 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 		_ = system.Stop(stop)
 	})
 	store := storetest.NewMemory()
-	gh := github.NewService(store)
+	gh := github.NewService(store, github.NewClient())
 	gh.API = &github.Client{HTTP: githubServer.Client(), BaseURL: githubServer.URL}
-	actor := New(store, gh)
-	actor.cloneBase = filepath.ToSlash(root) + "/"
+	actor := New(store, gh, &gitsource.Git{Base: filepath.ToSlash(root) + "/"}, audittest.NewRecorder())
 	projectsPID, err := system.Spawn(ctx, "projects", actor)
 	if err != nil {
 		t.Fatal(err)

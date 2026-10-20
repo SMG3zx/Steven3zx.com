@@ -82,3 +82,13 @@ type AuditEvent struct {
 	Name   string
 	Fields map[string]string
 }
+
+// SourceError is a failure to open a repository's tree. Message is the sentence
+// an Account sees, such as "repository clone failed"; Err is the underlying cause.
+type SourceError struct {
+	Message string
+	Err     error
+}
+
+func (e *SourceError) Error() string { return e.Message + ": " + e.Err.Error() }
+func (e *SourceError) Unwrap() error { return e.Err }

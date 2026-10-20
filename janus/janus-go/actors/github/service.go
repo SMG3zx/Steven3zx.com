@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sort"
 
-	"janus/actors/persistence"
+	"janus/internal/app"
 )
 
 // RepositoryList is the repositories an Account can import. Connected is false
@@ -21,14 +21,15 @@ var ErrNotConnected = errors.New("connect GitHub before importing a repository")
 // Service reads from GitHub on behalf of an Account, using the access token the
 // GitHub Connection stores. It keeps no state, so callers use it directly.
 type Service struct {
-	// API is the GitHub API client. Tests point it at a local server.
-	API   *Client
-	store persistence.Store
+	// API is the code host the Service reads from.
+	API   app.GitHost
+	store app.Store
 }
 
-// NewService returns a Service that reads tokens from store.
-func NewService(store persistence.Store) *Service {
-	return &Service{API: NewClient(), store: store}
+// NewService returns a Service that reads tokens from store and repository
+// metadata from host.
+func NewService(store app.Store, host app.GitHost) *Service {
+	return &Service{API: host, store: store}
 }
 
 // Token returns the Account's GitHub access token, and whether the Account is

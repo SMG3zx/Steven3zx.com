@@ -11,6 +11,7 @@ import (
 	"janus/actors/authorization"
 	"janus/actors/github"
 	"janus/actors/persistence"
+	"janus/internal/app"
 )
 
 // Build requests construction of the HTTP application. The actor replies with
@@ -26,7 +27,7 @@ type Dependencies struct {
 	System         goakt.ActorSystem
 	Authentication *authentication.Service
 	Authorization  *authorization.Policy
-	Accounting     *goakt.PID
+	Audit          app.Audit
 	Store          persistence.Store
 	GitHub         *github.Service
 	Projects       *goakt.PID

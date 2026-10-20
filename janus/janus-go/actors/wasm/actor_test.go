@@ -12,6 +12,7 @@ import (
 	golog "github.com/tochemey/goakt/v4/log"
 	"janus/actors/builder"
 	"janus/actors/persistence"
+	"janus/internal/adapters/audittest"
 )
 
 // fakeBuilder builds any Rust workspace into a fixed Artifact.
@@ -76,7 +77,7 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 	}
 	must(store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: "snapshot", JobID: "import", FileCount: 2, TotalBytes: 70}))
 	runner := &fakeBuilder{}
-	buildPID, err := system.Spawn(ctx, "wasm", New(store, nil, runner))
+	buildPID, err := system.Spawn(ctx, "wasm", New(store, audittest.NewRecorder(), runner))
 	if err != nil {
 		t.Fatal(err)
 	}

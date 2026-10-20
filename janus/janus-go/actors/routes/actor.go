@@ -24,9 +24,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/actors/accounting"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
+	"janus/internal/app"
 	"janus/web"
 )
 
@@ -359,7 +359,7 @@ func (a *Actor) ask(ctx context.Context, pid *goakt.PID, message any) (any, erro
 }
 
 func (a *Actor) log(ctx context.Context, level, name string, fields map[string]string) {
-	_ = goakt.Tell(ctx, a.dependencies.Accounting, &accounting.Event{Level: level, Name: name, Fields: fields})
+	a.dependencies.Audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
 func decodeJSON(request *http.Request, output any) error {
