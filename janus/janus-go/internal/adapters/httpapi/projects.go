@@ -44,7 +44,7 @@ func (a *Server) projectsPage(c *call) any {
 	if !ok {
 		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
-	projects, err := a.dependencies.Store.ListProjects(c.Request.Context(), owner)
+	projects, err := a.dependencies.Projects.List(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -118,7 +118,7 @@ func (a *Server) listProjects(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	projects, err := a.dependencies.Store.ListProjects(c.Request.Context(), owner)
+	projects, err := a.dependencies.Projects.List(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -157,7 +157,7 @@ func (a *Server) createProject(c *call, owner, name, description string) any {
 	if strings.TrimSpace(name) == "" || len(name) > 120 || len(description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	project, err := a.dependencies.Store.CreateProject(c.Request.Context(), app.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
+	project, err := a.dependencies.Projects.Create(c.Request.Context(), app.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
 	if err != nil {
 		if app.IsReply(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "project could not be created"})
@@ -172,7 +172,7 @@ func (a *Server) getProjectAPI(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	project, found, err := a.dependencies.Store.GetProject(c.Request.Context(), c.Param("id"), owner)
+	project, found, err := a.dependencies.Projects.Get(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -187,7 +187,7 @@ func (a *Server) listProjectSnapshots(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	snapshots, err := a.dependencies.Store.ListSnapshots(c.Request.Context(), owner, c.Param("id"))
+	snapshots, err := a.dependencies.Projects.Snapshots(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		if app.IsReply(err) {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
@@ -202,7 +202,7 @@ func (a *Server) activateProjectSnapshot(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	activated, err := a.dependencies.Store.ActivateSnapshot(c.Request.Context(), owner, c.Param("id"), c.Param("snapshot"))
+	activated, err := a.dependencies.Projects.ActivateSnapshot(c.Request.Context(), owner, c.Param("id"), c.Param("snapshot"))
 	if err != nil {
 		return internalError()
 	}
@@ -225,7 +225,7 @@ func (a *Server) updateProjectAPI(c *call) any {
 	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 120 || len(input.Description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	project, err := a.dependencies.Store.UpdateProject(c.Request.Context(), app.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
+	project, err := a.dependencies.Projects.Update(c.Request.Context(), app.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
 	if err != nil {
 		if err.Error() == "project not found" {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
@@ -240,7 +240,7 @@ func (a *Server) deleteProjectAPI(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	deleted, err := a.dependencies.Store.DeleteProject(c.Request.Context(), c.Param("id"), owner)
+	deleted, err := a.dependencies.Projects.Delete(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		if app.IsReply(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": err.Error()})
@@ -317,7 +317,7 @@ func (a *Server) getImportStatus(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	job, found, err := a.dependencies.Store.FindImportJob(c.Request.Context(), c.Param("id"), owner)
+	job, found, err := a.dependencies.Projects.ImportJob(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -388,7 +388,7 @@ func (a *Server) getWASMArtifact(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	artifact, err := a.dependencies.Store.FindWASMBuildArtifact(c.Request.Context(), c.Param("id"), owner)
+	artifact, err := a.dependencies.Builds.Artifact(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return internalError()
 	}
@@ -470,7 +470,7 @@ func (a *Server) projectPage(c *call) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
-	project, found, err := a.dependencies.Store.GetProject(c.Request.Context(), c.Param("id"), owner)
+	project, found, err := a.dependencies.Projects.Get(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -483,7 +483,7 @@ func (a *Server) projectPage(c *call) any {
 	}
 	var metadata projectMetadata
 	_ = json.Unmarshal([]byte(project.MetadataJSON), &metadata)
-	snapshots, err := a.dependencies.Store.ListSnapshots(c.Request.Context(), owner, project.ID)
+	snapshots, err := a.dependencies.Projects.Snapshots(c.Request.Context(), owner, project.ID)
 	if err != nil {
 		return internalError()
 	}

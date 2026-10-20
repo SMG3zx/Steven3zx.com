@@ -341,7 +341,7 @@ func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store
 	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
 	builds := app.NewBuilds(store, b, audit)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Store: store, GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
+		Audit: audit, Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,

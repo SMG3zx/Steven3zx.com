@@ -32,6 +32,8 @@ type application struct {
 	telemetry      *telemetry
 	database       *sqlstore.Store
 	store          app.Store
+	identity       *app.Identity
+	projects       *app.Projects
 	github         *app.GitHub
 	authentication *app.Authentication
 	authorization  *app.Policy
@@ -111,6 +113,10 @@ func (a *application) groups() []group {
 			{name: "store", start: a.openStore, stop: a.tracked(a.closeStore)},
 		}},
 		{name: "identity", components: []component{
+			{name: "identity use cases", start: func(context.Context) error {
+				a.identity = app.NewIdentity(a.store)
+				return nil
+			}},
 			{name: "authentication", start: func(context.Context) error {
 				a.authentication = app.NewAuthentication([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
 				return nil
@@ -122,6 +128,10 @@ func (a *application) groups() []group {
 			}},
 		}},
 		{name: "projects and builds", components: []component{
+			{name: "projects", start: func(context.Context) error {
+				a.projects = app.NewProjects(a.store)
+				return nil
+			}},
 			{name: "imports", start: func(context.Context) error {
 				a.github = app.NewGitHub(a.store, githubapi.NewClient())
 				a.imports = app.NewImports(a.store, a.github.API, gitsource.New(), a.audit)
@@ -278,7 +288,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Store: a.store, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,

@@ -35,7 +35,8 @@ type Config struct {
 	Authentication *app.Authentication
 	Authorization  *app.Policy
 	Audit          app.Audit
-	Store          app.Store
+	Identity       *app.Identity
+	Projects       *app.Projects
 	GitHub         *app.GitHub
 	Imports        *app.Imports
 	Builds         *app.Builds
@@ -208,7 +209,7 @@ func (a *Server) register(c *call) any {
 		return internalError()
 	}
 	userID := newUserID()
-	err = a.dependencies.Store.CreateLocalUser(ctx, app.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
+	err = a.dependencies.Identity.CreateLocalUser(ctx, app.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
 	if err != nil {
 		if isConflict(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
@@ -233,7 +234,7 @@ func (a *Server) login(c *call) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "login is disabled"})
 	}
-	user, err := a.dependencies.Store.FindLocalUser(ctx, input.Email)
+	user, err := a.dependencies.Identity.FindLocalUser(ctx, input.Email)
 	if err != nil {
 		return internalError()
 	}
@@ -274,7 +275,7 @@ func (a *Server) me(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	user, err := a.dependencies.Store.FindUser(ctx, subject)
+	user, err := a.dependencies.Identity.FindUser(ctx, subject)
 	if err != nil {
 		return internalError()
 	}
@@ -335,7 +336,7 @@ func (a *Server) googleCallback(c *call) any {
 		a.log(ctx, "warn", "auth.google.callback.denied", map[string]string{"reason": "provider_authentication_failed"})
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "Google sign-in failed"})
 	}
-	identity, err := a.dependencies.Store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
+	identity, err := a.dependencies.Identity.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
 	if err != nil {
 		return internalError()
 	}
@@ -364,7 +365,7 @@ func (a *Server) subject(ctx context.Context, request *http.Request) (string, bo
 		return "", false
 	}
 	// Sessions are stateless tokens, so an Account that was deleted is rejected here.
-	found, err := a.dependencies.Store.FindUser(ctx, subject)
+	found, err := a.dependencies.Identity.FindUser(ctx, subject)
 	return subject, err == nil && found.Found
 }
 

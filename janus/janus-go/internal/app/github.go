@@ -91,3 +91,8 @@ func (s *GitHub) connectedToken(ctx context.Context, ownerID string) (string, er
 	}
 	return token, nil
 }
+
+// Connect stores the GitHub Connection of an Account, replacing any earlier one.
+func (s *GitHub) Connect(ctx context.Context, connection ConnectGitHub) error {
+	return s.store.ConnectGitHub(ctx, connection)
+}

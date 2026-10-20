@@ -29,7 +29,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, app.Store) {
 		t.Fatal(err)
 	}
 	return New(Config{
-		Audit: audit, Store: store, GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
+		Audit: audit, Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler(), store
 }

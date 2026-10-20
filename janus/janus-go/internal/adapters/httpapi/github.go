@@ -171,7 +171,7 @@ func (a *Server) githubCallback(c *call) any {
 		if !ok || current != owner {
 			return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "sign in to the same Janus account and reconnect GitHub"})
 		}
-		if connectErr := a.dependencies.Store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
+		if connectErr := a.dependencies.GitHub.Connect(ctx, app.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
 			if app.IsReply(connectErr) {
 				return jsonResponse(http.StatusConflict, map[string]string{"error": connectErr.Error()})
 			}
@@ -180,7 +180,7 @@ func (a *Server) githubCallback(c *call) any {
 		a.log(ctx, "info", "github.connected", map[string]string{"user_id": owner})
 		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects?github=connected"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
-	identity, resolveErr := a.dependencies.Store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
+	identity, resolveErr := a.dependencies.Identity.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
 	if resolveErr != nil {
 		return internalError()
 	}

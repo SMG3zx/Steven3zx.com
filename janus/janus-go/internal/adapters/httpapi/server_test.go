@@ -28,7 +28,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audittest.NewRecorder(), Store: store, GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
+		Audit: audittest.NewRecorder(), Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
