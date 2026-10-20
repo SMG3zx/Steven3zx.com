@@ -21,6 +21,18 @@ Run on 2026-10-20 for Linear ENG-78. Measured facts from one local run, not docu
 | 9 | What does the control plane see when an Agent is dead? | The request fails only when the client timeout fires (5 s here). There was no fast error. |
 | 10 | Does an Agent come back from a restart without a new key? | Yes. `agent-b` restarted from its saved state directory with no new key and was reachable from the control plane about 7 s after the process started (started 13:41:33, first success 13:41:40). |
 
+## gRPC bidirectional stream over tsnet
+
+Run later the same day on the same setup, with `google.golang.org/grpc` v1.84.0. Policy was the spec's: `tag:ctrl` to the Agent tags only, no rule from an Agent to the control plane. The control plane (a gRPC client) opens one bidirectional stream to the Agent (a gRPC server on a tsnet `Listen`). gRPC dials through `tsnet.Server.Dial` via `grpc.WithContextDialer`. Messages are `StringValue`; the service is registered by hand, with no generated code. Source: `tsnet-grpc-probe/`. Same limits as above: one host, loopback, no NAT, no DERP.
+
+| # | Question | Result |
+|---|---|---|
+| 11 | Does a gRPC bidirectional stream work over tsnet with no Agent-to-control-plane rule? | Yes. The control plane sent a command every 3 s and the Agent answered each one and also sent its own event every 5 s, all on the stream the control plane opened. Over the whole run, which includes the kill and restart in rows 14 and 15, the control plane logged 13 acks and 8 events. |
+| 12 | Does an idle stream survive with the control plane pinging every 10 s (`Time` 10 s, `Timeout` 5 s, `PermitWithoutStream`) and the Agent's gRPC defaults? | No. About 40 s after it opened, the control plane received GOAWAY `ENHANCE_YOUR_CALM` with debug text `too_many_pings`, and the stream ended with `Unavailable`. The gRPC server's default enforcement policy rejects pings more often than every 5 minutes. A reopened stream was up 1 s later. |
+| 13 | Does an idle stream survive the same pinging when the Agent sets `KeepaliveEnforcementPolicy{MinTime: 5s, PermitWithoutStream: true}`? | Yes, for the 90 s run, with no errors and no traffic. |
+| 14 | How fast does the control plane notice a force-killed Agent? | 15.0 s after the last frame it received (last frame at 14:01:13.387, stream down at 14:01:28.387, error `keepalive ping failed to receive ACK within timeout`). That is the ping interval plus the ping timeout, 10 s plus 5 s. The Agent process was killed at 14:01:13.587, and the stream stayed open until the ping went unanswered. |
+| 15 | How fast does the stream return after the Agent restarts? | The Agent process restarted at 14:01:54.2 and its tsnet node was up at 14:01:56.0. The stream was reopened at 14:02:05.4, 11.2 s after the restart. The control plane had kept one `WaitForReady` call waiting for about 36 s. The delay after the Agent was up (9.4 s) is gRPC's client reconnect backoff, which had grown while the Agent was down; the tailnet path was not the cause. The backoff cap was not changed or measured. |
+
 ## Mistake in the run
 
 The first attempt to kill only `agent-b` matched on its name in the command line, which also matched `ctrl` and `agent-a` (their `-peers` flags name `agent-b`). All three probe processes were killed. Result 8 was read from Headscale and is unaffected. Results 9 and 10 come from a second run in which the control plane was restarted and `agent-a` was already dead, so the first failure in that run was `agent-a`, not an isolated dead Agent. `agent-b` was then restarted alone, which gave result 10.
