@@ -155,7 +155,7 @@ Two layers, both required.
 Each step ships on its own and keeps the HTTP end-to-end tests green. Until the last step the old and new layouts coexist.
 
 1. **Guard rail:** add `internal/archtest` with today's violations allow-listed, so the rules only tighten.
-2. **Domain:** move the job state machines, Artifact packing, Templates and scan into `internal/domain` (pure moves).
+2. **Domain:** move the job state machines, Artifact packing, Templates and scan into `internal/domain` (pure moves). Done in ENG-103 as the subpackages `domain/artifact`, `domain/templates`, `domain/jobs`, `domain/scan` and `domain/usage`; the old packages keep aliases where callers still use them.
 3. **Ports:** declare `Store`, `Builder`, `Runner`, `Source`, `GitHost` and `Audit` in `internal/app/ports.go`, starting from the interfaces that already exist. Move the in-memory Store and its contract tests (added by ENG-66) to `storetest`.
 4. **Store:** replace the persistence actor with `sqlstore` over `*sql.DB`; delete the messages, the client and the actor switch (ENG-66, ENG-67).
 5. **Use cases:** turn the `projects`, `wasm` and `wasmruntime` actors into `Imports`, `Builds` and `Runs`; keep `jobrunner` as shared support inside `app`. Account deletion becomes its own use case (ENG-69).
