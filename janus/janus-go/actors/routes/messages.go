@@ -29,8 +29,9 @@ type Dependencies struct {
 	Audit          app.Audit
 	Store          app.Store
 	GitHub         *github.Service
-	Projects       *goakt.PID
-	WASMBuilds     *goakt.PID
+	Imports        *app.Imports
+	Builds         *app.Builds
+	Accounts       *app.Accounts
 	Runs           *app.Runs
 	JWTExpiry      time.Duration
 	CookieSecure   bool

@@ -19,10 +19,8 @@ import (
 	githubactor "janus/actors/github"
 	"janus/actors/gitsource"
 	httpserver "janus/actors/httpserver"
-	projectsactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
 	telemetryactor "janus/actors/telemetry"
-	wasmactor "janus/actors/wasm"
 	wasmruntime "janus/actors/wasmruntime"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
@@ -41,8 +39,9 @@ type Actor struct {
 	database       *sqlstore.Store
 	store          app.Store
 	github         *githubactor.Service
-	projects       *goakt.PID
-	wasmBuilds     *goakt.PID
+	imports        *app.Imports
+	builds         *app.Builds
+	accounts       *app.Accounts
 	runs           *app.Runs
 	docker         *goakt.PID
 	logger         *zap.Logger
@@ -137,10 +136,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return err
 	}
-	a.projects, err = a.system.Spawn(startupCtx, "projects", projectsactor.New(a.store, a.github, gitsource.New(), a.audit))
-	if err != nil {
-		return fmt.Errorf("spawn projects actor: %w", err)
-	}
+	a.imports = app.NewImports(a.store, a.github.API, gitsource.New(), a.audit)
 	a.docker, err = a.system.Spawn(startupCtx, "docker-controller", dockeractor.New())
 	if err != nil {
 		return fmt.Errorf("spawn Docker controller actor: %w", err)
@@ -174,19 +170,17 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	for _, image := range imagesReady.BuiltImages {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
-	builds := builder.NewDocker(builder.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage})
-	a.wasmBuilds, err = a.system.Spawn(startupCtx, "wasm-builds", wasmactor.New(a.store, a.audit, builds))
-	if err != nil {
-		return fmt.Errorf("spawn WASM build actor: %w", err)
-	}
+	compiler := builder.NewDocker(builder.Images{Rust: config.WASMBuilderImage, Go: config.GoWASMBuilderImage, JavaScript: config.JSWASMBuilderImage})
+	a.builds = app.NewBuilds(a.store, compiler, a.audit)
 	a.runs = app.NewRuns(a.store, wasmruntime.Wasmtime{})
+	a.accounts = app.NewAccounts(a.store, a.imports, a.builds)
 
 	if err = a.resumeInterruptedJobs(startupCtx); err != nil {
 		return err
 	}
 	a.routes, err = a.system.Spawn(startupCtx, "routes", routesactor.New(routesactor.Dependencies{
 		System: a.system, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Store: a.store, GitHub: a.github, Projects: a.projects, WASMBuilds: a.wasmBuilds, Runs: a.runs, JWTExpiry: config.JWTExpiry,
+		Audit: a.audit, Store: a.store, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs, JWTExpiry: config.JWTExpiry,
 		CookieSecure: config.CookieSecure, GoogleEnabled: config.GoogleEnabled,
 		GoogleClientID: config.GoogleClientID, GoogleSecret: config.GoogleSecret,
 		GoogleCallback: config.GoogleCallback, JWTSecret: config.JWTSecret,
@@ -240,13 +234,13 @@ func (a *Actor) stop(ctx context.Context) error {
 			firstErr = result.Err
 		}
 	}
-	if a.projects != nil {
-		if err := projectsactor.WaitDrained(shutdownCtx, a.projects); err != nil && firstErr == nil {
+	if a.imports != nil {
+		if err := a.imports.Drain(shutdownCtx); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("drain project imports: %w", err)
 		}
 	}
-	if a.wasmBuilds != nil {
-		if err := wasmactor.WaitDrained(shutdownCtx, a.wasmBuilds); err != nil && firstErr == nil {
+	if a.builds != nil {
+		if err := a.builds.Drain(shutdownCtx); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("drain WASM builds: %w", err)
 		}
 	}
@@ -291,28 +285,14 @@ func (*Actor) PostStop(*goakt.Context) error { return nil }
 // resumeInterruptedJobs restarts the imports and WASM builds that the previous
 // shutdown interrupted. It runs before the routes accept requests.
 func (a *Actor) resumeInterruptedJobs(ctx context.Context) error {
-	importResponse, err := goakt.Ask(ctx, a.projects, &projectsactor.ResumeImports{}, StartupTimeout)
+	imports, err := a.imports.Resume(ctx)
 	if err != nil {
 		return fmt.Errorf("resume project imports: %w", err)
 	}
-	imports, ok := importResponse.(*projectsactor.ImportsResumed)
-	if !ok {
-		return fmt.Errorf("resume project imports: unexpected response %T", importResponse)
-	}
-	if imports.Err != nil {
-		return fmt.Errorf("resume project imports: %w", imports.Err)
-	}
-	buildResponse, err := goakt.Ask(ctx, a.wasmBuilds, &wasmactor.ResumeBuilds{}, StartupTimeout)
+	builds, err := a.builds.Resume(ctx)
 	if err != nil {
 		return fmt.Errorf("resume WASM builds: %w", err)
 	}
-	builds, ok := buildResponse.(*wasmactor.BuildsResumed)
-	if !ok {
-		return fmt.Errorf("resume WASM builds: unexpected response %T", buildResponse)
-	}
-	if builds.Err != nil {
-		return fmt.Errorf("resume WASM builds: %w", builds.Err)
-	}
-	a.logger.Info("resumed interrupted jobs", zap.Int("imports", imports.Count), zap.Int("wasm_builds", builds.Count))
+	a.logger.Info("resumed interrupted jobs", zap.Int("imports", imports), zap.Int("wasm_builds", builds))
 	return nil
 }

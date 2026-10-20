@@ -164,11 +164,6 @@ type WASMBuild struct {
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 }
-type WASMBuildFound struct {
-	Build WASMBuild
-	Found bool
-	Err   error
-}
 type WASMBuildArtifact struct {
 	Name  string
 	Data  []byte

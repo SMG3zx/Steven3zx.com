@@ -28,9 +28,7 @@ import (
 	"janus/actors/builder"
 	"janus/actors/github"
 	"janus/actors/gitsource"
-	projectactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
-	wasmactor "janus/actors/wasm"
 )
 
 const (
@@ -332,8 +330,8 @@ func startJanus(t *testing.T, ctx context.Context) (app.Store, http.Handler) {
 }
 
 // startJanusWith starts the application in-process with b as its WASM builder.
-// It returns the Store, the WASM build actor and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.Store, *actor.PID, http.Handler) {
+// It returns the Store, the Builds use case and the HTTP handler.
+func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.Store, *app.Builds, http.Handler) {
 	t.Helper()
 	system, err := actor.NewActorSystem("playwright-e2e", actor.WithLogger(golog.DiscardLogger))
 	if err != nil {
@@ -367,10 +365,11 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.S
 		t.Fatalf("prepare authorization: %v", err)
 	}
 	gh := github.NewService(store, github.NewClient())
-	projectsPID := spawn("projects", projectactor.New(store, gh, gitsource.New(), accounting.NewAudit(accountingPID)))
-	wasmBuildsPID := spawn("wasm-builds", wasmactor.New(store, accounting.NewAudit(accountingPID), b))
+	audit := accounting.NewAudit(accountingPID)
+	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
+	builds := app.NewBuilds(store, b, audit)
 	routesPID := spawn("routes", routesactor.New(routesactor.Dependencies{
-		System: system, Audit: accounting.NewAudit(accountingPID), Store: store, GitHub: gh, Projects: projectsPID, WASMBuilds: wasmBuildsPID,
+		System: system, Audit: accounting.NewAudit(accountingPID), Store: store, GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
@@ -379,7 +378,7 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.S
 	if err != nil {
 		t.Fatalf("build HTTP app: %v", err)
 	}
-	return store, wasmBuildsPID, built.(*routesactor.Built).App
+	return store, builds, built.(*routesactor.Built).App
 }
 
 func registerUser(t *testing.T, baseURL string) (string, string) {

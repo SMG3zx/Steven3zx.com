@@ -3,8 +3,6 @@ package routes
 import (
 	"net/http"
 
-	projectactor "janus/actors/projects"
-	wasmactor "janus/actors/wasm"
 	"janus/web"
 )
 
@@ -21,18 +19,11 @@ func (a *Actor) retryImportAPI(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.RetryImport{OwnerID: owner, JobID: c.Param("id")})
+	jobID, err := a.dependencies.Imports.Retry(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
-		return internalError()
+		return jsonResponse(importErrorStatus(err), map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*projectactor.ImportRequested)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(importErrorStatus(result.Err), map[string]string{"error": result.Err.Error()})
-	}
-	return jsonResponse(http.StatusAccepted, map[string]string{"job_id": result.JobID})
+	return jsonResponse(http.StatusAccepted, map[string]string{"job_id": jobID})
 }
 
 func (a *Actor) retryWASMBuildAPI(c *web.Context) any {
@@ -40,18 +31,11 @@ func (a *Actor) retryWASMBuildAPI(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.WASMBuilds, &wasmactor.RetryBuild{OwnerID: owner, JobID: c.Param("id")})
+	jobID, err := a.dependencies.Builds.Retry(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
-		return internalError()
+		return jsonResponse(retryBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*wasmactor.BuildRequested)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(retryBuildErrorStatus(result.Err), map[string]string{"error": result.Err.Error()})
-	}
-	return jsonResponse(http.StatusAccepted, map[string]string{"job_id": result.JobID})
+	return jsonResponse(http.StatusAccepted, map[string]string{"job_id": jobID})
 }
 
 // deleteAccountAPI deletes the signed-in Account. If it still has unfinished
@@ -63,12 +47,8 @@ func (a *Actor) deleteAccountAPI(c *web.Context) any {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
 	cancel := c.Request.URL.Query().Get("cancel_active_jobs") == "true"
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.DeleteAccount{OwnerID: owner, CancelActiveJobs: cancel})
+	result, err := a.dependencies.Accounts.Delete(c.Request.Context(), owner, cancel)
 	if err != nil {
-		return internalError()
-	}
-	result, ok := response.(*projectactor.AccountDeleted)
-	if !ok || result.Err != nil {
 		return internalError()
 	}
 	if !result.Deleted && len(result.ActiveJobs) > 0 {

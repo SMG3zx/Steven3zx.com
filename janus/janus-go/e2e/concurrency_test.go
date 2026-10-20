@@ -14,10 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tochemey/goakt/v4/actor"
-
 	"janus/actors/builder"
-	wasmactor "janus/actors/wasm"
+	"janus/internal/app"
 )
 
 // blockingBuilder holds every build until the test releases it, so the test
@@ -52,7 +50,7 @@ type concurrencyFixture struct {
 	t        *testing.T
 	server   *httptest.Server
 	cookie   string
-	builds   *actor.PID
+	builds   *app.Builds
 	rustA    string
 	rustB    string
 	goLang   string
@@ -227,7 +225,7 @@ func TestShutdownRefusesNewBuildsAndWaitsForRunningOnes(t *testing.T) {
 	f.startedLanguage()
 
 	drained := make(chan error, 1)
-	go func() { drained <- wasmactor.WaitDrained(context.Background(), f.builds) }()
+	go func() { drained <- f.builds.Drain(context.Background()) }()
 	select {
 	case err := <-drained:
 		t.Fatalf("shutdown finished while a build was running: %v", err)
@@ -259,9 +257,8 @@ func TestCancellingAnAccountsBuildsStopsTheRunningBuild(t *testing.T) {
 	f.startedLanguage()
 	owner := ownerOf(t, f)
 
-	response, err := actor.Ask(context.Background(), f.builds, &wasmactor.CancelBuilds{OwnerID: owner}, 5*time.Second)
-	if err != nil || response.(*wasmactor.BuildsCancelled).Count != 1 {
-		t.Fatalf("CancelBuilds = %#v, %v; want one running build signalled", response, err)
+	if count := f.builds.CancelOwner(owner); count != 1 {
+		t.Fatalf("CancelOwner = %d; want one running build signalled", count)
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for f.blocking.cancelled.Load() == 0 && time.Now().Before(deadline) {

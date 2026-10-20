@@ -9,8 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	projectactor "janus/actors/projects"
-	wasmactor "janus/actors/wasm"
+	"janus/internal/domain/scan"
 	"janus/internal/domain/templates"
 	"janus/web"
 )
@@ -304,21 +303,14 @@ func (a *Actor) startProjectImport(c *web.Context) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid import request"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.RequestImport{OwnerID: owner, ProjectID: c.Param("id"), Repository: input.Repository, Branch: input.Branch, Commit: input.Commit})
+	jobID, err := a.dependencies.Imports.Request(c.Request.Context(), app.ImportRequest{OwnerID: owner, ProjectID: c.Param("id"), Repository: input.Repository, Branch: input.Branch, Commit: input.Commit})
 	if err != nil {
-		return internalError()
-	}
-	result, ok := response.(*projectactor.ImportRequested)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
 		a.log(c.Request.Context(), "warn", "project.import.request.rejected", map[string]string{
-			"user_id": owner, "project_id": c.Param("id"), "reason": result.Err.Error(),
+			"user_id": owner, "project_id": c.Param("id"), "reason": err.Error(),
 		})
-		return jsonResponse(http.StatusBadRequest, map[string]string{"error": result.Err.Error()})
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": result.JobID, "status": "queued"}}
+	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
 }
 
 func (a *Actor) getImportStatus(c *web.Context) any {
@@ -345,26 +337,19 @@ func (a *Actor) startWASMBuild(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.WASMBuilds == nil {
+	if a.dependencies.Builds == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "WASM builds are unavailable"})
 	}
 	var input wasmBuildInput
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "select a supported WASM target"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.WASMBuilds, &wasmactor.RequestBuild{OwnerID: owner, ProjectID: c.Param("id"), Target: input.Target})
+	jobID, err := a.dependencies.Builds.Request(c.Request.Context(), app.NewBuild{OwnerID: owner, ProjectID: c.Param("id"), Target: input.Target})
 	if err != nil {
-		return internalError()
+		return jsonResponse(wasmBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*wasmactor.BuildRequested)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(wasmBuildErrorStatus(result.Err), map[string]string{"error": result.Err.Error()})
-	}
-	a.log(c.Request.Context(), "info", "project.wasm.build.requested", map[string]string{"user_id": owner, "project_id": c.Param("id"), "job_id": result.JobID, "target": input.Target})
-	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": result.JobID, "status": "queued"}}
+	a.log(c.Request.Context(), "info", "project.wasm.build.requested", map[string]string{"user_id": owner, "project_id": c.Param("id"), "job_id": jobID, "target": input.Target})
+	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
 }
 
 func wasmBuildErrorStatus(err error) int {
@@ -386,21 +371,17 @@ func (a *Actor) getWASMBuild(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.WASMBuilds == nil {
+	if a.dependencies.Builds == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "WASM builds are unavailable"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.WASMBuilds, &wasmactor.Build{OwnerID: owner, JobID: c.Param("id")})
+	build, found, err := a.dependencies.Builds.Find(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return internalError()
 	}
-	result, ok := response.(*wasmactor.BuildFound)
-	if !ok || result.Err != nil {
-		return internalError()
-	}
-	if !result.Found {
+	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "WASM build not found"})
 	}
-	return result.Build
+	return build
 }
 
 func (a *Actor) getWASMArtifact(c *web.Context) any {
@@ -472,16 +453,8 @@ func (a *Actor) setProjectEntrypoint(c *web.Context) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid entrypoint selection"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.Projects, &projectactor.SetEntryPoint{OwnerID: owner, ProjectID: c.Param("id"), SnapshotID: input.SnapshotID, EntryPoint: input.EntryPoint})
-	if err != nil {
-		return internalError()
-	}
-	result, ok := response.(*projectactor.EntryPointSet)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(http.StatusBadRequest, map[string]string{"error": result.Err.Error()})
+	if err := a.dependencies.Imports.SetEntryPoint(c.Request.Context(), owner, c.Param("id"), input.SnapshotID, input.EntryPoint); err != nil {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return map[string]string{"entry_point": input.EntryPoint}
 }
@@ -534,7 +507,7 @@ func (a *Actor) projectPage(c *web.Context) any {
 
 type projectMetadata struct {
 	Scan struct {
-		Candidates []projectactor.Candidate `json:"entrypoint_candidates"`
+		Candidates []scan.Candidate `json:"entrypoint_candidates"`
 	}
 }
 type projectsPageData struct {
@@ -546,7 +519,7 @@ type projectPageData struct {
 	GitHubConnected, GitHubEnabled bool
 	CanBuildWASM                   bool
 	BuildTargets                   []string
-	Candidates                     []projectactor.Candidate
+	Candidates                     []scan.Candidate
 	Snapshots                      []app.ProjectSnapshot
 }
 

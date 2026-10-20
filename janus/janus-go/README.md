@@ -49,7 +49,7 @@ OPA policy is embedded in `actors/authorization/policy.rego`. The default decisi
 
 This section describes the code as it is today. The structure it is moving to, ports and adapters with no actor framework, is the standard in [docs/architecture.md](docs/architecture.md) ([ADR 0003](docs/adr/0003-ports-and-adapters.md)).
 
-- `PersistenceActor` owns the local Turso database and account/provider-identity records.
+- The `sqlstore` adapter owns the local Turso database and its single connection. The use cases `Imports`, `Builds`, `Runs` and `Accounts` live in `internal/app` and run their work on goroutines they own; they are plain structs, not actors.
 - `AccountingActor` receives structured application audit events and writes them through zap. Passwords, OAuth codes, tokens, and raw emails are excluded from audit fields.
 - `RoutesActor` builds the HTTP route table and coordinates requests to those service actors from HTTP request goroutines. The HTTP server actor owns listener lifecycle; request handling stays outside GoAkt `Receive` turns.
 - `TelemetryActor` configures OpenTelemetry. Actor receives and authentication flows create spans.

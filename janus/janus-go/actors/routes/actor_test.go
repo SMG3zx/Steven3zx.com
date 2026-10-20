@@ -22,7 +22,6 @@ import (
 	authzactor "janus/actors/authorization"
 	"janus/actors/github"
 	"janus/actors/gitsource"
-	projectactor "janus/actors/projects"
 )
 
 func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
@@ -51,17 +50,15 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	gh := github.NewService(store, github.NewClient())
-	projectsPID, err := system.Spawn(ctx, "projects-test", projectactor.New(store, gh, gitsource.New(), accounting.NewAudit(accountingPID)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	audit := accounting.NewAudit(accountingPID)
+	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
 	authentication := authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute)
 	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	routesPID, err := system.Spawn(ctx, "routes-test-actor", New(Dependencies{
-		System: system, Audit: accounting.NewAudit(accountingPID), Store: store, GitHub: gh, Projects: projectsPID,
+		System: system, Audit: accounting.NewAudit(accountingPID), Store: store, GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
 		Authentication: authentication, Authorization: authorization, CookieSecure: true,
 	}))
 	if err != nil {
