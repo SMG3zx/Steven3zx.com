@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"janus/internal/adapters/storetest"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,7 +71,7 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 		defer stopCancel()
 		_ = system.Stop(stop)
 	})
-	store := persistence.NewMemory()
+	store := storetest.NewMemory()
 	gh := github.NewService(store)
 	gh.API = &github.Client{HTTP: githubServer.Client(), BaseURL: githubServer.URL}
 	actor := New(store, gh)

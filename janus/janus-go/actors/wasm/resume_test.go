@@ -2,6 +2,7 @@ package wasm
 
 import (
 	"context"
+	"janus/internal/adapters/storetest"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func newBuildFixture(t *testing.T, language string, runner builder.Builder) *bui
 		defer stopCancel()
 		_ = system.Stop(stop)
 	})
-	f := &buildFixture{t: t, ctx: ctx, store: persistence.NewMemory(), system: system}
+	f := &buildFixture{t: t, ctx: ctx, store: storetest.NewMemory(), system: system}
 	f.must(f.store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
 	f.importProject("project", language)
 	f.builds, err = system.Spawn(ctx, "wasm", New(f.store, nil, runner))

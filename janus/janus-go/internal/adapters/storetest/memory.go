@@ -1,4 +1,4 @@
-package persistence
+package storetest
 
 import (
 	"context"
@@ -9,10 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
+	"janus/internal/app"
 	"janus/internal/domain/jobs"
 )
 
-// Memory is a Store that keeps its data in maps, for tests of callers that need
+// Memory is an app.Store that keeps its data in maps, for tests of callers that need
 // no database. It follows the rules the persistence actor enforces: ownership,
 // uniqueness, the job state machines and the cascade when something is deleted.
 // Like the Client, every error it returns is a *ReplyError, and a constraint
@@ -25,15 +28,15 @@ type Memory struct {
 
 	users      map[string]*memUser
 	creds      map[string]memCredential // by user ID
-	identities map[memIdentity]string    // provider and subject to user ID
-	github     map[string]memGitHub      // by user ID
+	identities map[memIdentity]string   // provider and subject to user ID
+	github     map[string]memGitHub     // by user ID
 	projects   map[string]*memProject
 	snapshots  map[string]*memSnapshot
 	imports    map[string]*memImport
 	builds     map[string]*memBuild
 }
 
-var _ Store = (*Memory)(nil)
+var _ app.Store = (*Memory)(nil)
 
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
@@ -60,21 +63,21 @@ type memProject struct {
 }
 
 type memSnapshot struct {
-	ProjectSnapshot
+	app.ProjectSnapshot
 	ownerID, projectID, jobID string
 	repositoryID              int64
 	metadataJSON, manifest    string
 	state                     string
-	files                     map[string]SnapshotFile
+	files                     map[string]app.SnapshotFile
 }
 
 type memImport struct {
-	ImportJob
+	app.ImportJob
 	repositoryID int64
 }
 
 type memBuild struct {
-	WASMBuild
+	app.WASMBuild
 	ownerID  string
 	artifact []byte
 }
@@ -90,7 +93,7 @@ func isIn(status string, set []string) bool { return slices.Contains(set, status
 
 // fail wraps a message the way the persistence actor reports an error.
 func fail(format string, args ...any) error {
-	return &ReplyError{Err: fmt.Errorf(format, args...)}
+	return &app.ReplyError{Err: fmt.Errorf(format, args...)}
 }
 
 func constraint(what string) error { return fail("constraint failed: %s", what) }
@@ -108,7 +111,7 @@ func (m *Memory) now() string {
 
 // Identity.
 
-func (m *Memory) CreateLocalUser(_ context.Context, user CreateLocalUser) error {
+func (m *Memory) CreateLocalUser(_ context.Context, user app.CreateLocalUser) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	email := strings.TrimSpace(user.Email)
@@ -125,67 +128,67 @@ func (m *Memory) CreateLocalUser(_ context.Context, user CreateLocalUser) error 
 	return nil
 }
 
-func (m *Memory) FindLocalUser(_ context.Context, email string) (LocalUserFound, error) {
+func (m *Memory) FindLocalUser(_ context.Context, email string) (app.LocalUserFound, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	email = strings.TrimSpace(email)
 	for id, c := range m.creds {
 		if strings.EqualFold(c.email, email) {
-			return LocalUserFound{ID: id, Email: c.email, PasswordHash: c.passwordHash, Found: true}, nil
+			return app.LocalUserFound{ID: id, Email: c.email, PasswordHash: c.passwordHash, Found: true}, nil
 		}
 	}
-	return LocalUserFound{}, nil
+	return app.LocalUserFound{}, nil
 }
 
-func (m *Memory) FindUser(_ context.Context, id string) (UserFound, error) {
+func (m *Memory) FindUser(_ context.Context, id string) (app.UserFound, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	u, ok := m.users[id]
 	if !ok {
-		return UserFound{}, nil
+		return app.UserFound{}, nil
 	}
-	return UserFound{ID: u.id, Email: u.email, DisplayName: u.displayName, Found: true}, nil
+	return app.UserFound{ID: u.id, Email: u.email, DisplayName: u.displayName, Found: true}, nil
 }
 
-func (m *Memory) ResolveGoogleIdentity(_ context.Context, identity ResolveGoogleIdentity) (GoogleIdentityResolved, error) {
+func (m *Memory) ResolveGoogleIdentity(_ context.Context, identity app.ResolveGoogleIdentity) (app.GoogleIdentityResolved, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := memIdentity{"google", identity.Subject}
 	if id, ok := m.identities[key]; ok {
 		u := m.users[id]
-		return GoogleIdentityResolved{ID: u.id, Email: u.email, DisplayName: u.displayName}, nil
+		return app.GoogleIdentityResolved{ID: u.id, Email: u.email, DisplayName: u.displayName}, nil
 	}
-	id := newID()
+	id := uuid.NewString()
 	m.users[id] = &memUser{id: id, email: identity.Email, displayName: identity.DisplayName}
 	m.identities[key] = id
-	return GoogleIdentityResolved{ID: id, Email: identity.Email, DisplayName: identity.DisplayName}, nil
+	return app.GoogleIdentityResolved{ID: id, Email: identity.Email, DisplayName: identity.DisplayName}, nil
 }
 
-func (m *Memory) ResolveGitHubLogin(_ context.Context, login ResolveGitHubLogin) (GitHubLoginResolved, error) {
+func (m *Memory) ResolveGitHubLogin(_ context.Context, login app.ResolveGitHubLogin) (app.GitHubLoginResolved, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := memIdentity{"github", login.Subject}
 	if id, ok := m.identities[key]; ok {
 		u := m.users[id]
-		return GitHubLoginResolved{ID: u.id, Email: u.email, DisplayName: u.displayName}, nil
+		return app.GitHubLoginResolved{ID: u.id, Email: u.email, DisplayName: u.displayName}, nil
 	}
 	email := strings.TrimSpace(login.Email)
 	if email == "" {
-		return GitHubLoginResolved{}, fail("GitHub did not return a verified primary email")
+		return app.GitHubLoginResolved{}, fail("GitHub did not return a verified primary email")
 	}
 	for _, u := range m.users {
 		if u.email != "" && strings.EqualFold(u.email, email) {
-			return GitHubLoginResolved{EmailInUse: true}, nil
+			return app.GitHubLoginResolved{EmailInUse: true}, nil
 		}
 	}
-	id := newID()
+	id := uuid.NewString()
 	name := strings.TrimSpace(login.DisplayName)
 	m.users[id] = &memUser{id: id, email: email, displayName: name}
 	m.identities[key] = id
-	return GitHubLoginResolved{ID: id, Email: email, DisplayName: name}, nil
+	return app.GitHubLoginResolved{ID: id, Email: email, DisplayName: name}, nil
 }
 
-func (m *Memory) ConnectGitHub(_ context.Context, connection ConnectGitHub) error {
+func (m *Memory) ConnectGitHub(_ context.Context, connection app.ConnectGitHub) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if connection.UserID == "" || connection.Subject == "" || connection.Token == "" {
@@ -226,8 +229,8 @@ func (m *Memory) DisconnectGitHub(_ context.Context, userID string) error {
 
 // view builds the Project an Account sees: the project's own fields and those
 // of its active Snapshot.
-func (m *Memory) view(p *memProject) Project {
-	out := Project{ID: p.id, OwnerID: p.ownerID, Name: p.name, Description: p.description,
+func (m *Memory) view(p *memProject) app.Project {
+	out := app.Project{ID: p.id, OwnerID: p.ownerID, Name: p.name, Description: p.description,
 		CreatedAt: p.createdAt, UpdatedAt: p.updatedAt, MetadataJSON: "{}"}
 	for _, s := range m.snapshots {
 		if s.projectID != p.id || s.state != "ready" {
@@ -259,14 +262,14 @@ func (m *Memory) touch(projectID string) {
 	}
 }
 
-func (m *Memory) CreateProject(_ context.Context, project CreateProject) (Project, error) {
+func (m *Memory) CreateProject(_ context.Context, project app.CreateProject) (app.Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.projects[project.ID]; ok {
-		return Project{}, constraint("UNIQUE constraint failed: projects.id")
+		return app.Project{}, constraint("UNIQUE constraint failed: projects.id")
 	}
 	if _, ok := m.users[project.OwnerID]; !ok {
-		return Project{}, constraint("FOREIGN KEY constraint failed")
+		return app.Project{}, constraint("FOREIGN KEY constraint failed")
 	}
 	now := m.now()
 	p := &memProject{id: project.ID, ownerID: project.OwnerID, name: strings.TrimSpace(project.Name),
@@ -275,12 +278,12 @@ func (m *Memory) CreateProject(_ context.Context, project CreateProject) (Projec
 	return m.view(p), nil
 }
 
-func (m *Memory) UpdateProject(_ context.Context, project UpdateProject) (Project, error) {
+func (m *Memory) UpdateProject(_ context.Context, project app.UpdateProject) (app.Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.ownedProject(project.ID, project.OwnerID)
 	if !ok {
-		return Project{}, fail("project not found")
+		return app.Project{}, fail("project not found")
 	}
 	p.name, p.description = strings.TrimSpace(project.Name), strings.TrimSpace(project.Description)
 	p.updatedAt = m.now()
@@ -332,7 +335,7 @@ func (m *Memory) deleteSnapshot(id string) {
 	}
 }
 
-func (m *Memory) ListProjects(_ context.Context, ownerID string) ([]Project, error) {
+func (m *Memory) ListProjects(_ context.Context, ownerID string) ([]app.Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	owned := make([]*memProject, 0)
@@ -342,19 +345,19 @@ func (m *Memory) ListProjects(_ context.Context, ownerID string) ([]Project, err
 		}
 	}
 	sort.Slice(owned, func(i, j int) bool { return owned[i].updatedAt > owned[j].updatedAt })
-	projects := make([]Project, 0, len(owned))
+	projects := make([]app.Project, 0, len(owned))
 	for _, p := range owned {
 		projects = append(projects, m.view(p))
 	}
 	return projects, nil
 }
 
-func (m *Memory) GetProject(_ context.Context, id, ownerID string) (Project, bool, error) {
+func (m *Memory) GetProject(_ context.Context, id, ownerID string) (app.Project, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.ownedProject(id, ownerID)
 	if !ok {
-		return Project{}, false, nil
+		return app.Project{}, false, nil
 	}
 	return m.view(p), true, nil
 }
@@ -376,13 +379,13 @@ func (m *Memory) readySnapshots(projectID string) []*memSnapshot {
 	return ready
 }
 
-func (m *Memory) ListSnapshots(_ context.Context, ownerID, projectID string) ([]ProjectSnapshot, error) {
+func (m *Memory) ListSnapshots(_ context.Context, ownerID, projectID string) ([]app.ProjectSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.ownedProject(projectID, ownerID); !ok {
 		return nil, fail("project not found")
 	}
-	snapshots := make([]ProjectSnapshot, 0, 5)
+	snapshots := make([]app.ProjectSnapshot, 0, 5)
 	for _, s := range m.readySnapshots(projectID) {
 		snapshots = append(snapshots, s.ProjectSnapshot)
 	}
@@ -403,7 +406,7 @@ func (m *Memory) ActivateSnapshot(_ context.Context, ownerID, projectID, snapsho
 	return true, nil
 }
 
-func (m *Memory) SetProjectEntryPoint(_ context.Context, entry SetProjectEntryPoint) error {
+func (m *Memory) SetProjectEntryPoint(_ context.Context, entry app.SetProjectEntryPoint) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.snapshots[entry.SnapshotID]
@@ -415,7 +418,7 @@ func (m *Memory) SetProjectEntryPoint(_ context.Context, entry SetProjectEntryPo
 	return nil
 }
 
-func (m *Memory) ListProjectFiles(_ context.Context, page ListProjectFiles) ([]SnapshotFile, error) {
+func (m *Memory) ListProjectFiles(_ context.Context, page app.ListProjectFiles) ([]app.SnapshotFile, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if page.Offset < 0 {
@@ -428,7 +431,7 @@ func (m *Memory) ListProjectFiles(_ context.Context, page ListProjectFiles) ([]S
 	if _, ok := m.ownedProject(page.ProjectID, page.OwnerID); !ok {
 		return nil, fail("project not found")
 	}
-	files := make([]SnapshotFile, 0)
+	files := make([]app.SnapshotFile, 0)
 	s, ok := m.snapshots[page.SnapshotID]
 	if !ok || s.projectID != page.ProjectID || s.ownerID != page.OwnerID || s.state != "ready" {
 		return files, nil
@@ -451,14 +454,14 @@ func (m *Memory) ListProjectFiles(_ context.Context, page ListProjectFiles) ([]S
 	return files, nil
 }
 
-func copyFile(f SnapshotFile) SnapshotFile {
+func copyFile(f app.SnapshotFile) app.SnapshotFile {
 	f.Content = append([]byte(nil), f.Content...)
 	return f
 }
 
 // Jobs: imports, Staging Snapshots, WASM Builds and Resume.
 
-func (m *Memory) CreateImportJob(_ context.Context, job CreateImportJob) error {
+func (m *Memory) CreateImportJob(_ context.Context, job app.CreateImportJob) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.ownedProject(job.ProjectID, job.OwnerID); !ok {
@@ -473,12 +476,12 @@ func (m *Memory) CreateImportJob(_ context.Context, job CreateImportJob) error {
 		}
 	}
 	now := m.now()
-	m.imports[job.ID] = &memImport{ImportJob: ImportJob{ID: job.ID, OwnerID: job.OwnerID, ProjectID: job.ProjectID,
+	m.imports[job.ID] = &memImport{ImportJob: app.ImportJob{ID: job.ID, OwnerID: job.OwnerID, ProjectID: job.ProjectID,
 		Repository: job.Repository, Branch: job.Branch, Commit: job.Commit, Status: "queued", CreatedAt: now, UpdatedAt: now}}
 	return nil
 }
 
-func (m *Memory) UpdateImportJob(_ context.Context, update UpdateImportJob) error {
+func (m *Memory) UpdateImportJob(_ context.Context, update app.UpdateImportJob) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	job, ok := m.imports[update.ID]
@@ -492,17 +495,17 @@ func (m *Memory) UpdateImportJob(_ context.Context, update UpdateImportJob) erro
 	return nil
 }
 
-func (m *Memory) FindImportJob(_ context.Context, id, ownerID string) (ImportJob, bool, error) {
+func (m *Memory) FindImportJob(_ context.Context, id, ownerID string) (app.ImportJob, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	job, ok := m.imports[id]
 	if !ok || job.OwnerID != ownerID {
-		return ImportJob{}, false, nil
+		return app.ImportJob{}, false, nil
 	}
 	return job.ImportJob, true, nil
 }
 
-func (m *Memory) BeginSnapshot(_ context.Context, snapshot BeginSnapshot) error {
+func (m *Memory) BeginSnapshot(_ context.Context, snapshot app.BeginSnapshot) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.ownedProject(snapshot.ProjectID, snapshot.OwnerID); !ok {
@@ -512,17 +515,17 @@ func (m *Memory) BeginSnapshot(_ context.Context, snapshot BeginSnapshot) error 
 		return constraint("UNIQUE constraint failed: project_snapshots.id")
 	}
 	m.snapshots[snapshot.ID] = &memSnapshot{
-		ProjectSnapshot: ProjectSnapshot{ID: snapshot.ID, Repository: snapshot.Repository, Branch: snapshot.Branch,
+		ProjectSnapshot: app.ProjectSnapshot{ID: snapshot.ID, Repository: snapshot.Repository, Branch: snapshot.Branch,
 			Commit: snapshot.Commit, Language: snapshot.Language, Runtime: snapshot.Runtime,
 			DefaultBranch: snapshot.DefaultBranch, Stars: snapshot.Stars, Forks: snapshot.Forks, CreatedAt: m.now()},
 		ownerID: snapshot.OwnerID, projectID: snapshot.ProjectID, jobID: snapshot.JobID,
 		repositoryID: snapshot.RepositoryID, metadataJSON: snapshot.MetadataJSON, manifest: snapshot.Manifest,
-		state: "staging", files: map[string]SnapshotFile{},
+		state: "staging", files: map[string]app.SnapshotFile{},
 	}
 	return nil
 }
 
-func (m *Memory) AddSnapshotFiles(_ context.Context, snapshotID string, files []SnapshotFile) error {
+func (m *Memory) AddSnapshotFiles(_ context.Context, snapshotID string, files []app.SnapshotFile) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.snapshots[snapshotID]
@@ -543,7 +546,7 @@ func (m *Memory) AddSnapshotFiles(_ context.Context, snapshotID string, files []
 	return nil
 }
 
-func (m *Memory) CompleteSnapshot(_ context.Context, snapshot CompleteSnapshot) error {
+func (m *Memory) CompleteSnapshot(_ context.Context, snapshot app.CompleteSnapshot) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.snapshots[snapshot.SnapshotID]
@@ -579,7 +582,7 @@ func (m *Memory) DeleteStagingSnapshot(_ context.Context, snapshotID string) err
 	return nil
 }
 
-func (m *Memory) FindStagingSnapshot(_ context.Context, jobID string) (StagingSnapshotFound, error) {
+func (m *Memory) FindStagingSnapshot(_ context.Context, jobID string) (app.StagingSnapshotFound, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, s := range m.snapshots {
@@ -590,9 +593,9 @@ func (m *Memory) FindStagingSnapshot(_ context.Context, jobID string) (StagingSn
 		for path, f := range s.files {
 			files[path] = f.Hash
 		}
-		return StagingSnapshotFound{SnapshotID: s.ID, Found: true, Files: files, Manifest: s.manifest}, nil
+		return app.StagingSnapshotFound{SnapshotID: s.ID, Found: true, Files: files, Manifest: s.manifest}, nil
 	}
-	return StagingSnapshotFound{}, nil
+	return app.StagingSnapshotFound{}, nil
 }
 
 func (m *Memory) DiscardJobStaging(_ context.Context, jobID string) error {
@@ -606,7 +609,7 @@ func (m *Memory) DiscardJobStaging(_ context.Context, jobID string) error {
 	return nil
 }
 
-func (m *Memory) CreateWASMBuild(_ context.Context, build CreateWASMBuild) error {
+func (m *Memory) CreateWASMBuild(_ context.Context, build app.CreateWASMBuild) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.snapshots[build.SnapshotID]
@@ -622,12 +625,12 @@ func (m *Memory) CreateWASMBuild(_ context.Context, build CreateWASMBuild) error
 		}
 	}
 	now := m.now()
-	m.builds[build.ID] = &memBuild{ownerID: build.OwnerID, WASMBuild: WASMBuild{ID: build.ID, ProjectID: build.ProjectID,
+	m.builds[build.ID] = &memBuild{ownerID: build.OwnerID, WASMBuild: app.WASMBuild{ID: build.ID, ProjectID: build.ProjectID,
 		SnapshotID: build.SnapshotID, Target: build.Target, Status: "queued", CreatedAt: now, UpdatedAt: now}}
 	return nil
 }
 
-func (m *Memory) UpdateWASMBuild(_ context.Context, update UpdateWASMBuild) error {
+func (m *Memory) UpdateWASMBuild(_ context.Context, update app.UpdateWASMBuild) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	build, ok := m.builds[update.ID]
@@ -641,7 +644,7 @@ func (m *Memory) UpdateWASMBuild(_ context.Context, update UpdateWASMBuild) erro
 	return nil
 }
 
-func (m *Memory) CompleteWASMBuild(_ context.Context, complete CompleteWASMBuild) error {
+func (m *Memory) CompleteWASMBuild(_ context.Context, complete app.CompleteWASMBuild) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	build, ok := m.builds[complete.ID]
@@ -654,27 +657,27 @@ func (m *Memory) CompleteWASMBuild(_ context.Context, complete CompleteWASMBuild
 	return nil
 }
 
-func (m *Memory) FindWASMBuild(_ context.Context, id, ownerID string) (WASMBuild, bool, error) {
+func (m *Memory) FindWASMBuild(_ context.Context, id, ownerID string) (app.WASMBuild, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	build, ok := m.builds[id]
 	if !ok || build.ownerID != ownerID {
-		return WASMBuild{}, false, nil
+		return app.WASMBuild{}, false, nil
 	}
 	return build.WASMBuild, true, nil
 }
 
-func (m *Memory) FindWASMBuildArtifact(_ context.Context, id, ownerID string) (WASMBuildArtifact, error) {
+func (m *Memory) FindWASMBuildArtifact(_ context.Context, id, ownerID string) (app.WASMBuildArtifact, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	build, ok := m.builds[id]
 	if !ok || build.ownerID != ownerID || build.Status != "complete" {
-		return WASMBuildArtifact{}, nil
+		return app.WASMBuildArtifact{}, nil
 	}
-	return WASMBuildArtifact{Name: build.ArtifactName, Data: append([]byte(nil), build.artifact...), Found: true}, nil
+	return app.WASMBuildArtifact{Name: build.ArtifactName, Data: append([]byte(nil), build.artifact...), Found: true}, nil
 }
 
-func (m *Memory) ListResumableImports(_ context.Context) ([]ResumableImport, error) {
+func (m *Memory) ListResumableImports(_ context.Context) ([]app.ResumableImport, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var queued []*memImport
@@ -684,15 +687,15 @@ func (m *Memory) ListResumableImports(_ context.Context) ([]ResumableImport, err
 		}
 	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].CreatedAt < queued[j].CreatedAt })
-	var jobs []ResumableImport
+	var jobs []app.ResumableImport
 	for _, job := range queued {
-		jobs = append(jobs, ResumableImport{JobID: job.ID, OwnerID: job.OwnerID, ProjectID: job.ProjectID,
+		jobs = append(jobs, app.ResumableImport{JobID: job.ID, OwnerID: job.OwnerID, ProjectID: job.ProjectID,
 			Repository: job.Repository, Branch: job.Branch, Commit: job.Commit})
 	}
 	return jobs, nil
 }
 
-func (m *Memory) ListResumableBuilds(_ context.Context) ([]ResumableBuild, error) {
+func (m *Memory) ListResumableBuilds(_ context.Context) ([]app.ResumableBuild, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var queued []*memBuild
@@ -702,34 +705,34 @@ func (m *Memory) ListResumableBuilds(_ context.Context) ([]ResumableBuild, error
 		}
 	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].CreatedAt < queued[j].CreatedAt })
-	var builds []ResumableBuild
+	var builds []app.ResumableBuild
 	for _, build := range queued {
 		s, ok := m.snapshots[build.SnapshotID]
 		if !ok {
 			continue
 		}
-		builds = append(builds, ResumableBuild{JobID: build.ID, OwnerID: build.ownerID, ProjectID: build.ProjectID,
+		builds = append(builds, app.ResumableBuild{JobID: build.ID, OwnerID: build.ownerID, ProjectID: build.ProjectID,
 			SnapshotID: build.SnapshotID, Target: build.Target, Language: s.Language})
 	}
 	return builds, nil
 }
 
-func (m *Memory) ListActiveJobs(_ context.Context, ownerID string) ([]ActiveJob, error) {
+func (m *Memory) ListActiveJobs(_ context.Context, ownerID string) ([]app.ActiveJob, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.activeJobs(ownerID), nil
 }
 
-func (m *Memory) activeJobs(ownerID string) []ActiveJob {
-	jobs := make([]ActiveJob, 0)
+func (m *Memory) activeJobs(ownerID string) []app.ActiveJob {
+	jobs := make([]app.ActiveJob, 0)
 	for _, job := range m.imports {
 		if job.OwnerID == ownerID && isIn(job.Status, activeImportStatuses) {
-			jobs = append(jobs, ActiveJob{Kind: "import", ID: job.ID, ProjectID: job.ProjectID, Status: job.Status})
+			jobs = append(jobs, app.ActiveJob{Kind: "import", ID: job.ID, ProjectID: job.ProjectID, Status: job.Status})
 		}
 	}
 	for _, build := range m.builds {
 		if build.ownerID == ownerID && isIn(build.Status, activeBuildStatuses) {
-			jobs = append(jobs, ActiveJob{Kind: "wasm_build", ID: build.ID, ProjectID: build.ProjectID, Status: build.Status})
+			jobs = append(jobs, app.ActiveJob{Kind: "wasm_build", ID: build.ID, ProjectID: build.ProjectID, Status: build.Status})
 		}
 	}
 	sort.Slice(jobs, func(i, j int) bool {
@@ -741,14 +744,14 @@ func (m *Memory) activeJobs(ownerID string) []ActiveJob {
 	return jobs
 }
 
-func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJobs bool) (AccountDeleted, error) {
+func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJobs bool) (app.AccountDeleted, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.users[userID]; !ok {
-		return AccountDeleted{}, nil
+		return app.AccountDeleted{}, nil
 	}
 	if active := m.activeJobs(userID); len(active) > 0 && !cancelActiveJobs {
-		return AccountDeleted{ActiveJobs: active}, nil
+		return app.AccountDeleted{ActiveJobs: active}, nil
 	}
 	for id, p := range m.projects {
 		if p.ownerID == userID {
@@ -773,5 +776,5 @@ func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJob
 	delete(m.github, userID)
 	delete(m.creds, userID)
 	delete(m.users, userID)
-	return AccountDeleted{Deleted: true}, nil
+	return app.AccountDeleted{Deleted: true}, nil
 }

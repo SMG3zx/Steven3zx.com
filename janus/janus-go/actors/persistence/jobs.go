@@ -10,17 +10,6 @@ import (
 	"janus/internal/domain/jobs"
 )
 
-// MaxResumes is how many times an interrupted job may resume after a restart.
-// The interruption after the last allowed resume fails the job.
-const MaxResumes = 3
-
-// ActiveJob describes an import or WASM build that has not finished yet.
-type ActiveJob struct {
-	Kind      string `json:"kind"`
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
-	Status    string `json:"status"`
-}
 
 func (a *Actor) updateImportStatus(ctx context.Context, msg *UpdateImportJob) error {
 	return transitionJob(ctx, a.db, "project_import_jobs", jobs.Import, msg.ID, msg.Status, msg.Progress, msg.Error)
