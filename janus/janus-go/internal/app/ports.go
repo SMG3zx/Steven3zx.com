@@ -133,3 +133,26 @@ type GitHost interface {
 type Audit interface {
 	Record(ctx context.Context, event AuditEvent)
 }
+
+// Tailnet is the private network Agents join, run by a control server such as
+// Headscale. Janus asks it for the keys an Agent enrolls with and for the nodes
+// that joined, and removes a node to cut an Agent off. It never reaches an
+// Agent itself: that is a connection over the network, made by other code.
+//
+// An ID is whatever the control server calls a key or a node, as a string. A
+// key is single-use: once a node has joined with it, or after it is expired, a
+// second join fails. Removing or expiring something that does not exist is not
+// an error, so a retry after a partial failure finishes the job.
+type Tailnet interface {
+	// CreatePreAuthKey makes a single-use key that enrolls one node carrying tag,
+	// valid until expires.
+	CreatePreAuthKey(ctx context.Context, tag string, expires time.Time) (TailnetKey, error)
+	// ExpirePreAuthKey ends a key's validity at once. Nodes that already joined
+	// with it stay.
+	ExpirePreAuthKey(ctx context.Context, keyID string) error
+	// Nodes lists every node on the tailnet. Online reflects the control
+	// server's last report and may lag a disconnect by several seconds.
+	Nodes(ctx context.Context) ([]TailnetNode, error)
+	// DeleteNode removes a node, so it can no longer be reached.
+	DeleteNode(ctx context.Context, nodeID string) error
+}

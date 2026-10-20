@@ -92,3 +92,20 @@ type SourceError struct {
 
 func (e *SourceError) Error() string { return e.Message + ": " + e.Err.Error() }
 func (e *SourceError) Unwrap() error { return e.Err }
+
+// TailnetKey is a pre-auth key. ID names it for later calls; Key is the secret
+// an Agent presents to join, and must not be logged or stored.
+type TailnetKey struct {
+	ID, Key string
+	Tag     string
+	Expires time.Time
+}
+
+// TailnetNode is a node on the tailnet. KeyID is the pre-auth key it joined with.
+type TailnetNode struct {
+	ID, Name, KeyID string
+	Tags            []string
+	Addresses       []string
+	Online          bool
+	LastSeen        time.Time
+}
