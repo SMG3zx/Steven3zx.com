@@ -1,0 +1,35 @@
+Tuning sweep, 64 workers, ranked by read95+mixed50 ops/s:
+mutex sharded-1024                                         read95  114646944   mixed50   55634929
+mutex sharded-256                                          read95  102047112   mixed50   50197692
+mutex sharded-64                                           read95   91267093   mixed50   43229727
+mutex sharded-16                                           read95   47542747   mixed50   26416999
+mutex sharded-8                                            read95   28893962   mixed50   16711283
+chan sharded-256                                           read95   16815597   mixed50   15807178
+chan sharded-1024                                          read95   16774132   mixed50   15567781
+chan sharded-16                                            read95   15942018   mixed50   13663696
+chan sharded-64                                            read95   16725431   mixed50   11817440
+chan sharded-8                                             read95   11825111   mixed50   11970901
+actor tell shards=12 mailbox=default budget=2048           read95   10292789   mixed50    9903399
+actor tell shards=12 mailbox=default budget=32             read95   10234125   mixed50    9824237
+actor tell shards=12 mailbox=default budget=256            read95   10678367   mixed50    8109490
+actor tell shards=64 mailbox=default budget=2048           read95    8760784   mixed50    7917150
+actor tell shards=64 mailbox=default budget=32             read95    8531238   mixed50    8124678
+actor tell shards=12 mailbox=segmented budget=256          read95    8399017   mixed50    7944697
+actor tell shards=64 mailbox=default budget=256            read95    8351204   mixed50    7881221
+actor tell shards=12 mailbox=segmented budget=32           read95    8144103   mixed50    7771440
+actor tell shards=256 mailbox=default budget=32            read95    7652135   mixed50    7293264
+actor tell shards=256 mailbox=default budget=2048          read95    7734191   mixed50    7080162
+actor tell shards=256 mailbox=default budget=256           read95    7327111   mixed50    7213704
+actor tell shards=12 mailbox=segmented budget=2048         read95    7232890   mixed50    7200094
+actor tell shards=64 mailbox=segmented budget=2048         read95    6685997   mixed50    6575571
+actor tell shards=64 mailbox=segmented budget=256          read95    6629150   mixed50    6480232
+actor tell shards=64 mailbox=segmented budget=32           read95    6815847   mixed50    6288669
+actor tell shards=256 mailbox=segmented budget=256         read95    5846006   mixed50    5579518
+actor tell shards=256 mailbox=segmented budget=32          read95    5731414   mixed50    5313653
+actor tell shards=256 mailbox=segmented budget=2048        read95    5911171   mixed50    5088727
+actor tell shards=1 mailbox=segmented budget=256           read95    5474244   mixed50    5224721
+actor tell shards=1 mailbox=segmented budget=2048          read95    5306756   mixed50    4893585
+actor tell shards=1 mailbox=default budget=2048            read95    5215769   mixed50    4846701
+actor tell shards=1 mailbox=segmented budget=32            read95    5050161   mixed50    4784515
+actor tell shards=1 mailbox=default budget=256             read95    4652906   mixed50    4887300
+actor tell shards=1 mailbox=default budget=32              read95    4597505   mixed50    4083601

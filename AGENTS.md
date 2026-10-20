@@ -37,3 +37,7 @@ Canonical five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`,
 ### Domain docs
 
 Single-context per project: `janus/janus-go/` has its own `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Architecture
+
+`janus/janus-go/` is structured as ports and adapters, with no actor framework in the target. Read `janus/janus-go/docs/architecture.md` (layout, dependency rules, testing standard, migration order) before changing its structure, and see ADR 0003. The migration is tracked under ENG-61.
