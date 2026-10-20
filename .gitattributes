@@ -1,1 +1,6 @@
-*.go text eol=lf
+# Store and check out text as LF everywhere, so gofmt and diffs behave the same on every machine.
+* text=auto eol=lf
+
+# Windows scripts need CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
