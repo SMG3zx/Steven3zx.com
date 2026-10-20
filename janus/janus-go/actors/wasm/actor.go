@@ -18,7 +18,6 @@ import (
 
 	"janus/actors/builder"
 	"janus/actors/jobrunner"
-	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
 	"janus/internal/app"
 	"janus/internal/domain/artifact"
@@ -154,7 +153,7 @@ func (a *Actor) start(rctx *actor.ReceiveContext, msg *RequestBuild) (string, er
 	}
 	language := strings.ToLower(template.Language)
 	jobID := uuid.NewString()
-	if err = a.store.CreateWASMBuild(rctx.Context(), persistence.CreateWASMBuild{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, Target: msg.Target}); err != nil {
+	if err = a.store.CreateWASMBuild(rctx.Context(), app.CreateWASMBuild{ID: jobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, Target: msg.Target}); err != nil {
 		return "", err
 	}
 	run := &RunBuild{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: msg.Target, Language: language}
@@ -183,7 +182,7 @@ func (a *Actor) run(parent context.Context, msg *RunBuild) error {
 	}
 	defer os.RemoveAll(workspace)
 	for offset := 0; ; offset += pageSize {
-		files, listErr := a.store.ListProjectFiles(ctx, persistence.ListProjectFiles{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, Offset: offset, Limit: pageSize})
+		files, listErr := a.store.ListProjectFiles(ctx, app.ListProjectFiles{OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, SnapshotID: msg.SnapshotID, Offset: offset, Limit: pageSize})
 		if listErr != nil {
 			return a.fail(ctx, msg.JobID, "could not read the imported source snapshot", listErr)
 		}
@@ -217,14 +216,14 @@ func (a *Actor) run(parent context.Context, msg *RunBuild) error {
 	if len(data) == 0 || len(data) > artifact.MaxBytes {
 		return a.failWithLog(ctx, msg.JobID, "WASM artifact is empty or exceeds the 128 MiB limit", log, errors.New("artifact size limit exceeded"))
 	}
-	err = a.store.CompleteWASMBuild(ctx, persistence.CompleteWASMBuild{ID: msg.JobID, ArtifactName: name, Artifact: data, Log: log})
+	err = a.store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: msg.JobID, ArtifactName: name, Artifact: data, Log: log})
 	if err != nil {
 		return a.failWithLog(ctx, msg.JobID, "WASM artifact could not be stored", log, err)
 	}
 	return nil
 }
 
-func writeSourceFile(root string, file persistence.SnapshotFile) error {
+func writeSourceFile(root string, file app.SnapshotFile) error {
 	name := file.Path
 	if !artifact.SafePath(name) {
 		return errors.New("invalid repository path")
@@ -252,7 +251,7 @@ func (a *Actor) update(ctx context.Context, id, status string, progress int, rea
 }
 
 func (a *Actor) updateWithLog(ctx context.Context, id, status string, progress int, reason string, log []byte) error {
-	return a.store.UpdateWASMBuild(ctx, persistence.UpdateWASMBuild{ID: id, Status: status, Progress: progress, Error: reason, Log: string(log)})
+	return a.store.UpdateWASMBuild(ctx, app.UpdateWASMBuild{ID: id, Status: status, Progress: progress, Error: reason, Log: string(log)})
 }
 
 func (a *Actor) fail(ctx context.Context, id, reason string, cause error) error {

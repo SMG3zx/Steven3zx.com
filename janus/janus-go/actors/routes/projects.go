@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"janus/internal/app"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
-	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 	wasmactor "janus/actors/wasm"
 	wasmruntime "janus/actors/wasmruntime"
@@ -110,7 +110,7 @@ func (a *Actor) createProjectPage(c *web.Context) any {
 	if response, ok := created.(web.Response); ok && response.StatusCode >= 400 {
 		return response
 	}
-	if project, ok := created.(persistence.Project); ok {
+	if project, ok := created.(app.Project); ok {
 		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects/" + project.ID}}}
 	}
 	return internalError()
@@ -149,7 +149,7 @@ func (a *Actor) createProjectAPI(c *web.Context) any {
 	if failure, ok := created.(web.Response); ok {
 		return failure
 	}
-	project, ok := created.(persistence.Project)
+	project, ok := created.(app.Project)
 	if !ok {
 		return internalError()
 	}
@@ -160,9 +160,9 @@ func (a *Actor) createProject(c *web.Context, owner, name, description string) a
 	if strings.TrimSpace(name) == "" || len(name) > 120 || len(description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	project, err := a.dependencies.Store.CreateProject(c.Request.Context(), persistence.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
+	project, err := a.dependencies.Store.CreateProject(c.Request.Context(), app.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
 	if err != nil {
-		if persistence.IsReply(err) {
+		if app.IsReply(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "project could not be created"})
 		}
 		return internalError()
@@ -192,7 +192,7 @@ func (a *Actor) listProjectSnapshots(c *web.Context) any {
 	}
 	snapshots, err := a.dependencies.Store.ListSnapshots(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
-		if persistence.IsReply(err) {
+		if app.IsReply(err) {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 		}
 		return internalError()
@@ -228,7 +228,7 @@ func (a *Actor) updateProjectAPI(c *web.Context) any {
 	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 120 || len(input.Description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	project, err := a.dependencies.Store.UpdateProject(c.Request.Context(), persistence.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
+	project, err := a.dependencies.Store.UpdateProject(c.Request.Context(), app.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
 	if err != nil {
 		if err.Error() == "project not found" {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
@@ -245,7 +245,7 @@ func (a *Actor) deleteProjectAPI(c *web.Context) any {
 	}
 	deleted, err := a.dependencies.Store.DeleteProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
-		if persistence.IsReply(err) {
+		if app.IsReply(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": err.Error()})
 		}
 		return internalError()
@@ -553,16 +553,16 @@ type projectMetadata struct {
 	}
 }
 type projectsPageData struct {
-	Projects                       []persistence.Project
+	Projects                       []app.Project
 	GitHubConnected, GitHubEnabled bool
 }
 type projectPageData struct {
-	Project                        persistence.Project
+	Project                        app.Project
 	GitHubConnected, GitHubEnabled bool
 	CanBuildWASM                   bool
 	BuildTargets                   []string
 	Candidates                     []projectactor.Candidate
-	Snapshots                      []persistence.ProjectSnapshot
+	Snapshots                      []app.ProjectSnapshot
 }
 
 var snapshotHistoryTemplate = template.Must(template.New("snapshot-history").Funcs(template.FuncMap{"formatMB": formatMB}).Parse(`<section style="font:16px system-ui;background:#101827;color:#e6edf7;max-width:900px;margin:0 auto 3rem;padding:1rem"><h2>Repository snapshots</h2><p>The five most recent successful imports are kept. Activating a snapshot switches the project back to that saved revision.</p><ol>{{range .Snapshots}}<li style="padding:.6rem 0">{{.Repository}} · {{.Branch}} @ {{printf "%.7s" .Commit}} — {{.FileCount}} files, {{formatMB .TotalBytes}}{{if .Active}} · <strong>Active</strong>{{else}} <button type="button" onclick="activateSnapshot('{{.ID}}')">Use this snapshot</button>{{end}}</li>{{else}}<li>No imported snapshots yet.</li>{{end}}</ol><p id="snapshot-status" role="status"></p><script id="snapshot-history" data-project-id="{{.Project.ID}}">const snapshotProjectID=document.getElementById('snapshot-history').dataset.projectId;async function activateSnapshot(id){const status=document.getElementById('snapshot-status');status.textContent='Switching snapshot…';try{const response=await fetch('/api/projects/'+encodeURIComponent(snapshotProjectID)+'/snapshots/'+encodeURIComponent(id)+'/activate',{method:'POST'});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||'Could not activate snapshot')}location.reload()}catch(error){status.textContent=error.message}}</script></section>`))

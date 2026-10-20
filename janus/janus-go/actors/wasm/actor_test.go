@@ -2,6 +2,8 @@ package wasm
 
 import (
 	"context"
+	"janus/internal/adapters/sqlstore"
+	"janus/internal/app"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +13,6 @@ import (
 	"github.com/tochemey/goakt/v4/actor"
 	golog "github.com/tochemey/goakt/v4/log"
 	"janus/actors/builder"
-	"janus/actors/persistence"
 	"janus/internal/adapters/audittest"
 )
 
@@ -46,16 +47,11 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 	})
 	// This one test runs against a real database, so the whole path from the
 	// build actor through the Store to a stored Artifact is covered once.
-	dbPID, err := system.Spawn(ctx, "persistence", persistence.New(filepath.Join(t.TempDir(), "wasm.db"), strings.Repeat("s", 32)))
+	store, err := sqlstore.Open(filepath.Join(t.TempDir(), "wasm.db"), sqlstore.WithTokenSecret(strings.Repeat("s", 32)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Second)
-		defer closeCancel()
-		_, _ = actor.Ask(closeCtx, dbPID, &persistence.CloseDatabase{}, time.Second)
-	})
-	store := persistence.NewClient(dbPID, 5*time.Second)
+	t.Cleanup(func() { _ = store.Close() })
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -63,19 +59,19 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 		}
 	}
 	commit := strings.Repeat("a", 40)
-	must(store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
-	_, err = store.CreateProject(ctx, persistence.CreateProject{ID: "project", OwnerID: "owner", Name: "Rust WASM"})
+	must(store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
+	_, err = store.CreateProject(ctx, app.CreateProject{ID: "project", OwnerID: "owner", Name: "Rust WASM"})
 	must(err)
-	must(store.CreateImportJob(ctx, persistence.CreateImportJob{ID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: commit}))
-	must(store.BeginSnapshot(ctx, persistence.BeginSnapshot{ID: "snapshot", JobID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Rust"}))
-	must(store.AddSnapshotFiles(ctx, "snapshot", []persistence.SnapshotFile{
+	must(store.CreateImportJob(ctx, app.CreateImportJob{ID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: commit}))
+	must(store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "snapshot", JobID: "import", OwnerID: "owner", ProjectID: "project", Repository: "owner/rust", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Rust"}))
+	must(store.AddSnapshotFiles(ctx, "snapshot", []app.SnapshotFile{
 		{Path: "Cargo.toml", Content: []byte("[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n"), Mode: "100644"},
 		{Path: "src/lib.rs", Content: []byte("#![no_std]\n"), Mode: "100644"},
 	}))
 	for _, status := range []string{"cloning", "scanning", "storing"} {
-		must(store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: "import", Status: status, Progress: 50}))
+		must(store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "import", Status: status, Progress: 50}))
 	}
-	must(store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: "snapshot", JobID: "import", FileCount: 2, TotalBytes: 70}))
+	must(store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "snapshot", JobID: "import", FileCount: 2, TotalBytes: 70}))
 	runner := &fakeBuilder{}
 	buildPID, err := system.Spawn(ctx, "wasm", New(store, audittest.NewRecorder(), runner))
 	if err != nil {
@@ -89,7 +85,7 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 	if queued.Err != nil || queued.JobID == "" {
 		t.Fatalf("build request = %#v: %v", queued, queued.Err)
 	}
-	var result *persistence.WASMBuildFound
+	var result *app.WASMBuildFound
 	for {
 		response, err = actor.Ask(ctx, buildPID, &Build{OwnerID: "owner", JobID: queued.JobID}, 5*time.Second)
 		if err != nil {
@@ -120,14 +116,14 @@ func TestBuildActorExportsSnapshotBuildsAndReturnsOwnerScopedArtifact(t *testing
 	}
 }
 
-func (f *BuildFound) BuildFound() *persistence.WASMBuildFound {
-	return &persistence.WASMBuildFound{Build: f.Build, Found: f.Found, Err: f.Err}
+func (f *BuildFound) BuildFound() *app.WASMBuildFound {
+	return &app.WASMBuildFound{Build: f.Build, Found: f.Found, Err: f.Err}
 }
 
 func TestWriteSourceFileRejectsTraversal(t *testing.T) {
 	for _, name := range []string{"../escape", "src/../../escape", `C:\outside`, "src\\..\\escape", "/absolute"} {
 		t.Run(name, func(t *testing.T) {
-			if err := writeSourceFile(t.TempDir(), persistence.SnapshotFile{Path: name}); err == nil {
+			if err := writeSourceFile(t.TempDir(), app.SnapshotFile{Path: name}); err == nil {
 				t.Fatalf("accepted unsafe source path %q", name)
 			}
 		})

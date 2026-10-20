@@ -64,8 +64,8 @@ func newConcurrencyFixture(t *testing.T) *concurrencyFixture {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	blocking := newBlockingBuilder()
-	store, buildsPID, app := startJanusWith(t, ctx, blocking)
-	server := httptest.NewServer(app)
+	store, buildsPID, handler := startJanusWith(t, ctx, blocking)
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	userID, cookie := registerUser(t, server.URL)
 	f := &concurrencyFixture{t: t, server: server, cookie: cookie, builds: buildsPID, blocking: blocking}
@@ -291,8 +291,8 @@ func ownerOf(t *testing.T, f *concurrencyFixture) string {
 func TestManySignInsAtOnceAllSucceed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	_, _, app := startJanusWith(t, ctx, newBlockingBuilder())
-	server := httptest.NewServer(app)
+	_, _, handler := startJanusWith(t, ctx, newBlockingBuilder())
+	server := httptest.NewServer(handler)
 	defer server.Close()
 	registerUser(t, server.URL)
 

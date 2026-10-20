@@ -24,7 +24,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
 	"janus/internal/app"
 	"janus/web"
@@ -174,7 +173,7 @@ func (a *Actor) register(c *web.Context) any {
 		return internalError()
 	}
 	userID := newUserID()
-	err = a.dependencies.Store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
+	err = a.dependencies.Store.CreateLocalUser(ctx, app.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
 	if err != nil {
 		if isConflict(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
@@ -301,7 +300,7 @@ func (a *Actor) googleCallback(c *web.Context) any {
 		a.log(ctx, "warn", "auth.google.callback.denied", map[string]string{"reason": "provider_authentication_failed"})
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "Google sign-in failed"})
 	}
-	identity, err := a.dependencies.Store.ResolveGoogleIdentity(ctx, persistence.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
+	identity, err := a.dependencies.Store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
 	if err != nil {
 		return internalError()
 	}

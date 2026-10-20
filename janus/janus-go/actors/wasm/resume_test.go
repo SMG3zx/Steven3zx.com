@@ -3,6 +3,7 @@ package wasm
 import (
 	"context"
 	"janus/internal/adapters/storetest"
+	"janus/internal/app"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +12,6 @@ import (
 	golog "github.com/tochemey/goakt/v4/log"
 
 	"janus/actors/builder"
-	"janus/actors/persistence"
 	"janus/internal/adapters/audittest"
 )
 
@@ -21,7 +21,7 @@ import (
 type buildFixture struct {
 	t      *testing.T
 	ctx    context.Context
-	store  persistence.Store
+	store  app.Store
 	builds *actor.PID
 	system actor.ActorSystem
 }
@@ -43,7 +43,7 @@ func newBuildFixture(t *testing.T, language string, runner builder.Builder) *bui
 		_ = system.Stop(stop)
 	})
 	f := &buildFixture{t: t, ctx: ctx, store: storetest.NewMemory(), system: system}
-	f.must(f.store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
+	f.must(f.store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "owner", Email: "owner@example.com", PasswordHash: "hash"}))
 	f.importProject("project", language)
 	f.builds, err = system.Spawn(ctx, "wasm", New(f.store, audittest.NewRecorder(), runner))
 	if err != nil {
@@ -66,21 +66,21 @@ func (f *buildFixture) importProject(project, language string) {
 	commit := strings.Repeat("b", 40)
 	job := project + "-import"
 	snapshot := project + "-snapshot"
-	_, err := f.store.CreateProject(f.ctx, persistence.CreateProject{ID: project, OwnerID: "owner", Name: project})
+	_, err := f.store.CreateProject(f.ctx, app.CreateProject{ID: project, OwnerID: "owner", Name: project})
 	f.must(err)
-	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: job, OwnerID: "owner", ProjectID: project, Repository: "owner/" + project, Branch: "main", Commit: commit}))
-	f.must(f.store.BeginSnapshot(f.ctx, persistence.BeginSnapshot{ID: snapshot, JobID: job, OwnerID: "owner", ProjectID: project, Repository: "owner/" + project, Branch: "main", Commit: commit, MetadataJSON: "{}", Language: language}))
-	f.must(f.store.AddSnapshotFiles(f.ctx, snapshot, []persistence.SnapshotFile{
+	f.must(f.store.CreateImportJob(f.ctx, app.CreateImportJob{ID: job, OwnerID: "owner", ProjectID: project, Repository: "owner/" + project, Branch: "main", Commit: commit}))
+	f.must(f.store.BeginSnapshot(f.ctx, app.BeginSnapshot{ID: snapshot, JobID: job, OwnerID: "owner", ProjectID: project, Repository: "owner/" + project, Branch: "main", Commit: commit, MetadataJSON: "{}", Language: language}))
+	f.must(f.store.AddSnapshotFiles(f.ctx, snapshot, []app.SnapshotFile{
 		{Path: "Cargo.toml", Content: []byte("[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n"), Mode: "100644"},
 		{Path: "src/lib.rs", Content: []byte("#![no_std]\n"), Mode: "100644"},
 	}))
 	for _, status := range []string{"cloning", "scanning", "storing"} {
-		f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: job, Status: status, Progress: 50}))
+		f.must(f.store.UpdateImportJob(f.ctx, app.UpdateImportJob{ID: job, Status: status, Progress: 50}))
 	}
-	f.must(f.store.CompleteSnapshot(f.ctx, persistence.CompleteSnapshot{SnapshotID: snapshot, JobID: job, FileCount: 2, TotalBytes: 70}))
+	f.must(f.store.CompleteSnapshot(f.ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job, FileCount: 2, TotalBytes: 70}))
 }
 
-func (f *buildFixture) waitForBuild(job string) persistence.WASMBuild {
+func (f *buildFixture) waitForBuild(job string) app.WASMBuild {
 	f.t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
@@ -92,13 +92,13 @@ func (f *buildFixture) waitForBuild(job string) persistence.WASMBuild {
 		time.Sleep(20 * time.Millisecond)
 	}
 	f.t.Fatalf("build %s did not finish", job)
-	return persistence.WASMBuild{}
+	return app.WASMBuild{}
 }
 
 func TestResumedBuildRestartsFromScratchAndCompletes(t *testing.T) {
 	runner := &fakeBuilder{}
 	f := newBuildFixture(t, "Rust", runner)
-	f.must(f.store.CreateWASMBuild(f.ctx, persistence.CreateWASMBuild{ID: "build-1", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: "wasm32-unknown-unknown"}))
+	f.must(f.store.CreateWASMBuild(f.ctx, app.CreateWASMBuild{ID: "build-1", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: "wasm32-unknown-unknown"}))
 
 	response, err := actor.Ask(f.ctx, f.builds, &ResumeBuilds{}, 5*time.Second)
 	if err != nil {
@@ -141,8 +141,8 @@ func TestBuildForAnUnbuildableLanguageIsRejectedAndNothingIsQueued(t *testing.T)
 func TestRetryBuildUsesTheFailedBuildsSnapshot(t *testing.T) {
 	runner := &fakeBuilder{}
 	f := newBuildFixture(t, "Rust", runner)
-	f.must(f.store.CreateWASMBuild(f.ctx, persistence.CreateWASMBuild{ID: "build-failed", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: "wasm32-unknown-unknown"}))
-	f.must(f.store.UpdateWASMBuild(f.ctx, persistence.UpdateWASMBuild{ID: "build-failed", Status: "failed", Progress: 100, Error: "compiler crashed"}))
+	f.must(f.store.CreateWASMBuild(f.ctx, app.CreateWASMBuild{ID: "build-failed", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: "wasm32-unknown-unknown"}))
+	f.must(f.store.UpdateWASMBuild(f.ctx, app.UpdateWASMBuild{ID: "build-failed", Status: "failed", Progress: 100, Error: "compiler crashed"}))
 
 	response, err := actor.Ask(f.ctx, f.builds, &RetryBuild{OwnerID: "owner", JobID: "build-failed"}, 5*time.Second)
 	if err != nil {
@@ -160,7 +160,7 @@ func TestRetryBuildUsesTheFailedBuildsSnapshot(t *testing.T) {
 
 func TestRetryBuildRejectsABuildThatHasNotFailed(t *testing.T) {
 	f := newBuildFixture(t, "Rust", &fakeBuilder{})
-	f.must(f.store.CreateWASMBuild(f.ctx, persistence.CreateWASMBuild{ID: "build-queued", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: "wasm32-unknown-unknown"}))
+	f.must(f.store.CreateWASMBuild(f.ctx, app.CreateWASMBuild{ID: "build-queued", OwnerID: "owner", ProjectID: "project", SnapshotID: "project-snapshot", Target: "wasm32-unknown-unknown"}))
 
 	response, err := actor.Ask(f.ctx, f.builds, &RetryBuild{OwnerID: "owner", JobID: "build-queued"}, 5*time.Second)
 	if err != nil {

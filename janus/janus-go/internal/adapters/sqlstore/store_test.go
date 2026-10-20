@@ -1,0 +1,555 @@
+package sqlstore
+
+import (
+	"context"
+	"database/sql"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"janus/internal/app"
+)
+
+const testSecret = "sqlstore-test-secret-of-some-length"
+
+// openTest opens the database at path and closes it when the test ends.
+func openTest(t *testing.T, path string) *Store {
+	t.Helper()
+	store, closeStore := openAt(t, path)
+	t.Cleanup(closeStore)
+	return store
+}
+
+// openAt opens the database at path. Closing it and opening the same path again
+// simulates a restart: the next Open recovers interrupted jobs.
+func openAt(t *testing.T, path string) (*Store, func()) {
+	t.Helper()
+	store, err := Open(path, WithTokenSecret(testSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store, func() { _ = store.Close() }
+}
+
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func seedAccountAndProject(t *testing.T, store *Store, owner, project string) {
+	t.Helper()
+	ctx := testContext(t)
+	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: owner, Email: owner + "@example.com", PasswordHash: "hash"}))
+	_, err := store.CreateProject(ctx, app.CreateProject{ID: project, OwnerID: owner, Name: project})
+	must(t, err)
+}
+
+// advanceImport moves an import job through the stages a worker passes before
+// it completes its Snapshot.
+func advanceImport(t *testing.T, store *Store, jobID string) {
+	t.Helper()
+	for _, status := range []string{"cloning", "scanning", "storing"} {
+		must(t, store.UpdateImportJob(testContext(t), app.UpdateImportJob{ID: jobID, Status: status, Progress: 50}))
+	}
+}
+
+// startImportAt creates an import job and moves it to status, as a worker would
+// while it is running. The Staging Snapshot is begun at the storing stage.
+func startImportAt(t *testing.T, store *Store, owner, project, job, status string) {
+	t.Helper()
+	ctx := testContext(t)
+	commit := strings.Repeat("c", 40)
+	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: owner, ProjectID: project, Repository: "alice/repo", Branch: "main", Commit: commit}))
+	for _, next := range []string{"cloning", "scanning", "storing"} {
+		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: job, Status: next, Progress: 50}))
+		if next == status {
+			break
+		}
+	}
+	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: job + "-snapshot", JobID: job, OwnerID: owner, ProjectID: project, RepositoryID: 1, Repository: "alice/repo", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Go"}))
+}
+
+func importStatus(t *testing.T, store *Store, owner, job string) app.ImportJob {
+	t.Helper()
+	found, ok, err := store.FindImportJob(testContext(t), job, owner)
+	must(t, err)
+	if !ok {
+		t.Fatalf("import job %s not found", job)
+	}
+	return found
+}
+
+func TestMigratesPreActivationSnapshotSchema(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := sql.Open("turso", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacySchema := `
+CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT NOT NULL DEFAULT '',display_name TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE projects(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE project_snapshots(
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, repository_id INTEGER NOT NULL,
+ repository TEXT NOT NULL, branch TEXT NOT NULL, commit_sha TEXT NOT NULL,
+ default_branch TEXT NOT NULL DEFAULT '', language TEXT NOT NULL DEFAULT '', stars INTEGER NOT NULL DEFAULT 0,
+ forks INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}', entry_point TEXT NOT NULL DEFAULT '',
+ file_count INTEGER NOT NULL DEFAULT 0, total_bytes INTEGER NOT NULL DEFAULT 0,
+ state TEXT NOT NULL DEFAULT 'staging', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO users(id,email) VALUES('alice','alice@example.com');
+INSERT INTO projects(id,owner_id,name) VALUES('project-legacy','alice','Legacy');
+INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,state,created_at)
+ VALUES('snapshot-old','project-legacy','alice',1,'alice/repo','main','old','ready','2026-01-01 00:00:00.000');
+INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,state,created_at)
+ VALUES('snapshot-new','project-legacy','alice',1,'alice/repo','main','new','ready','2026-01-02 00:00:00.000');`
+	if _, err = db.Exec(legacySchema); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := openTest(t, databasePath)
+	ctx := testContext(t)
+	projects, err := store.ListProjects(ctx, "alice")
+	if err != nil || len(projects) != 1 {
+		t.Fatalf("list projects after schema migration: %#v, %v", projects, err)
+	}
+	if projects[0].SnapshotID != "snapshot-new" || projects[0].Commit != "new" {
+		t.Fatalf("migration did not activate newest successful snapshot: %#v", projects[0])
+	}
+	snapshots, err := store.ListSnapshots(ctx, "alice", "project-legacy")
+	if err != nil || len(snapshots) != 2 || !snapshots[0].Active || snapshots[1].Active {
+		t.Fatalf("snapshot activation after migration: %#v, %v", snapshots, err)
+	}
+}
+
+func TestMigrationAddsResumeColumnsToExistingDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy-jobs.db")
+	db, err := sql.Open("turso", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := `
+CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT NOT NULL DEFAULT '',display_name TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE projects(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE project_import_jobs(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,project_id TEXT NOT NULL,repository TEXT NOT NULL,branch TEXT NOT NULL,commit_sha TEXT NOT NULL,status TEXT NOT NULL,progress INTEGER NOT NULL DEFAULT 0,error TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+INSERT INTO users(id) VALUES('alice');
+INSERT INTO projects(id,owner_id,name) VALUES('p','alice','p');
+INSERT INTO project_import_jobs(id,owner_id,project_id,repository,branch,commit_sha,status) VALUES('old-job','alice','p','alice/repo','main','abc','storing');`
+	if _, err = db.Exec(legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := openTest(t, path)
+	if job := importStatus(t, store, "alice", "old-job"); job.Status != "queued" {
+		t.Fatalf("legacy running job should resume as queued, got %q", job.Status)
+	}
+}
+
+func TestGitHubIdentityCollisionAndEncryptedConnection(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
+	ctx := testContext(t)
+	const owner = "local-user"
+	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: owner, Email: "alice@example.com", PasswordHash: "hash"}))
+	collision, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "github-1", Email: "alice@example.com", DisplayName: "Alice"})
+	if err != nil || !collision.EmailInUse || collision.ID != "" {
+		t.Fatalf("existing email was not rejected: %#v, %v", collision, err)
+	}
+	login, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "github-2", Email: "new@example.com", DisplayName: "New"})
+	if err != nil || login.EmailInUse || login.ID == "" {
+		t.Fatalf("new GitHub identity was not created: %#v, %v", login, err)
+	}
+	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: owner, Subject: "github-private", Email: "alice@example.com", DisplayName: "Alice", Token: "gho-secret-token"}))
+	token, connected, err := store.FindGitHubToken(ctx, owner)
+	if err != nil || !connected || token != "gho-secret-token" {
+		t.Fatalf("GitHub token not recovered: %q, %v, %v", token, connected, err)
+	}
+	var ciphertext []byte
+	if err = store.db.QueryRow(`SELECT token_ciphertext FROM github_connections WHERE user_id=?`, owner).Scan(&ciphertext); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(ciphertext), "gho-secret-token") {
+		t.Fatal("GitHub token was stored in plaintext")
+	}
+	wrongKey := &Store{key: deriveTokenKey(strings.Repeat("different", 4))}
+	if _, err = wrongKey.decryptToken(ciphertext); err == nil {
+		t.Fatal("token decrypted after the JWT key changed")
+	}
+	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "other-user", Email: "other@example.com", PasswordHash: "hash"}))
+	if err = store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "other-user", Subject: "github-private", Token: "another"}); err == nil {
+		t.Fatal("same GitHub subject was linked to two Janus users")
+	}
+}
+
+func TestConnectGitHubNeedsATokenSecret(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "no-secret.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := testContext(t)
+	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "u", Email: "u@example.com", PasswordHash: "hash"}))
+	if err = store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "u", Subject: "s", Token: "t"}); err == nil {
+		t.Fatal("a token was stored with no key to protect it")
+	}
+}
+
+func TestErrorsAreReplyErrorsExceptForTheContext(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "errors.db"))
+	err := store.CreateLocalUser(testContext(t), app.CreateLocalUser{ID: "x", Email: "x@example.com"})
+	must(t, err)
+	err = store.CreateLocalUser(testContext(t), app.CreateLocalUser{ID: "x", Email: "y@example.com"})
+	if !app.IsReply(err) {
+		t.Fatalf("a constraint violation = %v, want a reply error", err)
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = store.CreateLocalUser(cancelled, app.CreateLocalUser{ID: "z", Email: "z@example.com"})
+	if err == nil || app.IsReply(err) {
+		t.Fatalf("a cancelled context = %v, want the context's error and not a reply error", err)
+	}
+}
+
+func TestProjectOwnershipSnapshotRetentionAndFailedImport(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
+	ctx := testContext(t)
+	for _, user := range []struct{ id, email string }{{"alice", "alice@example.com"}, {"bob", "bob@example.com"}} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: user.id, Email: user.email, PasswordHash: "hash"}))
+	}
+	_, err := store.CreateProject(ctx, app.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Janus", Description: "source"})
+	must(t, err)
+	if _, found, err := store.GetProject(ctx, "project-1", "bob"); err != nil || found {
+		t.Fatalf("project visible to another owner: %v, %v", found, err)
+	}
+	for i := 0; i < 6; i++ {
+		jobID := "job-" + string(rune('a'+i))
+		snapshotID := "snapshot-" + string(rune('a'+i))
+		commit := strings.Repeat(string(rune('a'+i)), 40)
+		must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: jobID, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: commit}))
+		must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshotID, JobID: jobID, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: commit, DefaultBranch: "main", MetadataJSON: `{"scan":{"entrypoint_candidates":[]}}`}))
+		must(t, store.AddSnapshotFiles(ctx, snapshotID, []app.SnapshotFile{{Path: "main.go", Mode: "100644", Content: []byte("package main"), Hash: "hash"}}))
+		advanceImport(t, store, jobID)
+		must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshotID, JobID: jobID, FileCount: 1, TotalBytes: 12}))
+		time.Sleep(3 * time.Millisecond)
+	}
+	listed, err := store.ListProjects(ctx, "alice")
+	if err != nil || len(listed) != 1 {
+		t.Fatalf("project list: %#v, %v", listed, err)
+	}
+	if listed[0].SnapshotCount != 5 || listed[0].Commit != strings.Repeat("f", 40) {
+		t.Fatalf("snapshot retention/latest selection wrong: %#v", listed[0])
+	}
+	activated, err := store.ActivateSnapshot(ctx, "alice", "project-1", "snapshot-d")
+	if err != nil || !activated {
+		t.Fatalf("activate retained snapshot: %v, %v", activated, err)
+	}
+	selected, found, err := store.GetProject(ctx, "project-1", "alice")
+	if err != nil || !found || selected.Commit != strings.Repeat("d", 40) {
+		t.Fatalf("project did not switch to activated snapshot: %#v, %v, %v", selected, found, err)
+	}
+	retained, err := store.ListSnapshots(ctx, "alice", "project-1")
+	if err != nil || len(retained) != 5 {
+		t.Fatalf("activating an older snapshot changed retention: %#v, %v", retained, err)
+	}
+	activeCount := 0
+	for _, snapshot := range retained {
+		if snapshot.Active {
+			activeCount++
+			if snapshot.ID != "snapshot-d" {
+				t.Fatalf("unexpected active snapshot: %#v", snapshot)
+			}
+		}
+	}
+	if activeCount != 1 {
+		t.Fatalf("expected exactly one active snapshot, got %d", activeCount)
+	}
+	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: strings.Repeat("0", 40)}))
+	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "snapshot-failed", JobID: "job-failed", OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: strings.Repeat("0", 40), MetadataJSON: "{}"}))
+	must(t, store.DeleteStagingSnapshot(ctx, "snapshot-failed"))
+	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"}))
+	latest, found, err := store.GetProject(ctx, "project-1", "alice")
+	if err != nil || !found || latest.Commit != strings.Repeat("d", 40) || latest.SnapshotCount != 5 {
+		t.Fatalf("failed import damaged previous snapshot: %#v, %v, %v", latest, found, err)
+	}
+}
+
+func TestProjectFilePagingAndWASMBuildArtifactOwnership(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
+	ctx := testContext(t)
+	for _, user := range []struct{ id, email string }{{"alice", "alice@example.com"}, {"bob", "bob@example.com"}} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: user.id, Email: user.email, PasswordHash: "hash"}))
+	}
+	_, err := store.CreateProject(ctx, app.CreateProject{ID: "wasm-project", OwnerID: "alice", Name: "WASM"})
+	must(t, err)
+	commit := strings.Repeat("a", 40)
+	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "wasm-import", OwnerID: "alice", ProjectID: "wasm-project", Repository: "alice/rust", Branch: "main", Commit: commit}))
+	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "wasm-snapshot", JobID: "wasm-import", OwnerID: "alice", ProjectID: "wasm-project", Repository: "alice/rust", Branch: "main", Commit: commit, MetadataJSON: "{}"}))
+	files := []app.SnapshotFile{{Path: "Cargo.toml", Content: []byte("manifest")}, {Path: "src/lib.rs", Content: []byte("library")}, {Path: "README.md", Content: []byte("readme")}}
+	must(t, store.AddSnapshotFiles(ctx, "wasm-snapshot", files))
+	advanceImport(t, store, "wasm-import")
+	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "wasm-snapshot", JobID: "wasm-import", FileCount: 3, TotalBytes: 23}))
+	first, err := store.ListProjectFiles(ctx, app.ListProjectFiles{OwnerID: "alice", ProjectID: "wasm-project", SnapshotID: "wasm-snapshot", Offset: 0, Limit: 2})
+	must(t, err)
+	second, err := store.ListProjectFiles(ctx, app.ListProjectFiles{OwnerID: "alice", ProjectID: "wasm-project", SnapshotID: "wasm-snapshot", Offset: 2, Limit: 2})
+	must(t, err)
+	if len(first) != 2 || len(second) != 1 || second[0].Path != "src/lib.rs" {
+		t.Fatalf("paged project files: first=%#v second=%#v", first, second)
+	}
+	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "wasm-job", OwnerID: "alice", ProjectID: "wasm-project", SnapshotID: "wasm-snapshot", Target: "wasm32-unknown-unknown"}))
+	if err = store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "wasm-job-2", OwnerID: "alice", ProjectID: "wasm-project", SnapshotID: "wasm-snapshot", Target: "wasm32-wasip1"}); err == nil {
+		t.Fatal("more than one active build was allowed for a project")
+	}
+	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "wasm-job", ArtifactName: "wasm-artifacts.zip", Artifact: []byte("artifact"), Log: []byte("build log")}))
+	build, found, err := store.FindWASMBuild(ctx, "wasm-job", "alice")
+	if err != nil || !found || build.Status != "complete" || build.Target != "wasm32-unknown-unknown" || build.Log != "build log" {
+		t.Fatalf("stored WASM build = %#v, %v, %v", build, found, err)
+	}
+	stored, err := store.FindWASMBuildArtifact(ctx, "wasm-job", "alice")
+	if err != nil || !stored.Found || string(stored.Data) != "artifact" {
+		t.Fatalf("stored WASM artifact = %#v, %v", stored, err)
+	}
+	if _, found, err = store.FindWASMBuild(ctx, "wasm-job", "bob"); err != nil || found {
+		t.Fatalf("another owner's WASM build was visible: %v, %v", found, err)
+	}
+}
+
+func TestInterruptedImportResumesUpToThreeTimesThenFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "resume.db")
+	ctx := testContext(t)
+
+	store, stop := openAt(t, path)
+	seedAccountAndProject(t, store, "alice", "project-1")
+	startImportAt(t, store, "alice", "project-1", "job-1", "storing")
+	stop()
+
+	for restart := 1; restart <= app.MaxResumes; restart++ {
+		store, stop = openAt(t, path)
+		job := importStatus(t, store, "alice", "job-1")
+		if job.Status != "queued" {
+			t.Fatalf("restart %d: status = %q, want queued", restart, job.Status)
+		}
+		staging, err := store.FindStagingSnapshot(ctx, "job-1")
+		must(t, err)
+		if !staging.Found {
+			t.Fatalf("restart %d: staging snapshot was discarded before the resume limit", restart)
+		}
+		listed, err := store.ListResumableImports(ctx)
+		must(t, err)
+		if len(listed) != 1 || listed[0].JobID != "job-1" {
+			t.Fatalf("restart %d: resumable jobs = %#v", restart, listed)
+		}
+		// The resumed worker runs again and is interrupted by the next restart.
+		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "cloning", Progress: 15}))
+		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "scanning", Progress: 45}))
+		must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "storing", Progress: 70}))
+		stop()
+	}
+
+	store, stop = openAt(t, path)
+	defer stop()
+	job := importStatus(t, store, "alice", "job-1")
+	if job.Status != "failed" || !strings.Contains(job.Error, "resume limit") {
+		t.Fatalf("after the fourth interruption: status=%q error=%q", job.Status, job.Error)
+	}
+	staging, err := store.FindStagingSnapshot(ctx, "job-1")
+	must(t, err)
+	if staging.Found {
+		t.Fatal("failed import kept its staging snapshot")
+	}
+}
+
+func TestTerminalJobStatusCannotChange(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "terminal.db"))
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "alice", "project-1")
+	startImportAt(t, store, "alice", "project-1", "job-1", "storing")
+	must(t, store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "failed", Progress: 100, Error: "clone failed"}))
+
+	err := store.UpdateImportJob(ctx, app.UpdateImportJob{ID: "job-1", Status: "cloning", Progress: 15})
+	if err == nil || !strings.Contains(err.Error(), "cannot move from failed to cloning") {
+		t.Fatalf("expected a rejected transition from failed, got %v", err)
+	}
+	job := importStatus(t, store, "alice", "job-1")
+	if job.Status != "failed" || job.Error != "clone failed" {
+		t.Fatalf("failed job changed: status=%q error=%q", job.Status, job.Error)
+	}
+}
+
+func TestFailedImportDiscardsOnlyItsStagingSnapshot(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "discard.db"))
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "alice", "project-1")
+	startImportAt(t, store, "alice", "project-1", "job-1", "storing")
+	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "job-1-snapshot", JobID: "job-1"}))
+	startImportAt(t, store, "alice", "project-1", "job-2", "storing")
+
+	must(t, store.DiscardJobStaging(ctx, "job-2"))
+
+	if found, err := store.FindStagingSnapshot(ctx, "job-2"); err != nil || found.Found {
+		t.Fatalf("failed import's staging snapshot still exists: %#v, %v", found, err)
+	}
+	listed, err := store.ListSnapshots(ctx, "alice", "project-1")
+	if err != nil || len(listed) != 1 || listed[0].ID != "job-1-snapshot" || !listed[0].Active {
+		t.Fatalf("active snapshot changed by a failed import: %#v, %v", listed, err)
+	}
+}
+
+func TestDeleteProjectRemovesSnapshotsBuildsAndArtifacts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "project-delete.db")
+	store, stop := openAt(t, path)
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "alice", "project-1")
+	startImportAt(t, store, "alice", "project-1", "job-1", "storing")
+	must(t, store.AddSnapshotFiles(ctx, "job-1-snapshot", []app.SnapshotFile{{Path: "main.go", Mode: "100644", Content: []byte("package main"), Hash: "h1"}}))
+	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "job-1-snapshot", JobID: "job-1", FileCount: 1, TotalBytes: 12}))
+	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "build-1", OwnerID: "alice", ProjectID: "project-1", SnapshotID: "job-1-snapshot", Target: "wasip1-wasm"}))
+	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "build-1", ArtifactName: "app.wasm.zst", Artifact: []byte("artifact"), Log: []byte("ok")}))
+
+	deleted, err := store.DeleteProject(ctx, "project-1", "alice")
+	if err != nil || !deleted {
+		t.Fatalf("delete project: deleted=%v err=%v", deleted, err)
+	}
+	for _, table := range []string{"project_snapshots", "project_files", "project_wasm_builds", "project_import_jobs"} {
+		var count int
+		if err = store.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("%s still has %d rows after deleting the project", table, count)
+		}
+	}
+	stop()
+}
+
+func TestDeleteAccountIsBlockedByActiveJobsUntilCancelled(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "account-delete.db"))
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "bob", "bob-project")
+	startImportAt(t, store, "bob", "bob-project", "bob-job", "cloning")
+	blocked, err := store.DeleteAccount(ctx, "bob", false)
+	if err != nil || blocked.Deleted || len(blocked.ActiveJobs) != 1 || blocked.ActiveJobs[0].ID != "bob-job" {
+		t.Fatalf("expected a blocked deletion listing bob-job, got %#v, %v", blocked, err)
+	}
+	if found, err := store.FindUser(ctx, "bob"); err != nil || !found.Found {
+		t.Fatal("blocked deletion removed the account")
+	}
+
+	deleted, err := store.DeleteAccount(ctx, "bob", true)
+	if err != nil || !deleted.Deleted {
+		t.Fatalf("cancelling deletion failed: %#v, %v", deleted, err)
+	}
+	if found, _ := store.FindUser(ctx, "bob"); found.Found {
+		t.Fatal("account still exists after deletion")
+	}
+	if _, found, _ := store.GetProject(ctx, "bob-project", "bob"); found {
+		t.Fatal("project survived account deletion")
+	}
+	if _, found, _ := store.FindImportJob(ctx, "bob-job", "bob"); found {
+		t.Fatal("import job survived account deletion")
+	}
+}
+
+func TestDeleteAccountRemovesProviderIdentities(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "identities.db"))
+	ctx := testContext(t)
+	linked, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-carol", Email: "carol@example.com", DisplayName: "Carol"})
+	if err != nil || linked.ID == "" {
+		t.Fatalf("expected a Google identity to create an account: %#v, %v", linked, err)
+	}
+	if deleted, err := store.DeleteAccount(ctx, linked.ID, false); err != nil || !deleted.Deleted {
+		t.Fatalf("delete account: %#v, %v", deleted, err)
+	}
+	var count int
+	if err = store.db.QueryRow(`SELECT COUNT(*) FROM oauth_identities WHERE subject='google-carol'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("deleted account still has %d provider identity rows", count)
+	}
+}
+
+func TestDeleteAccountRemovesGitHubConnection(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "github-delete.db"))
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "dana", "dana-project")
+	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "dana", Subject: "github-dana", Email: "dana@example.com", DisplayName: "Dana", Token: "gho-dana-token"}))
+	if deleted, err := store.DeleteAccount(ctx, "dana", false); err != nil || !deleted.Deleted {
+		t.Fatalf("delete account: %#v, %v", deleted, err)
+	}
+	token, connected, err := store.FindGitHubToken(ctx, "dana")
+	if err != nil || connected || token != "" {
+		t.Fatalf("deleted account still has a GitHub connection: %q, %v, %v", token, connected, err)
+	}
+}
+
+func TestDeleteAccountLeavesOtherAccountsUntouched(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "isolation.db"))
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "erin", "erin-project")
+	seedAccountAndProject(t, store, "frank", "frank-project")
+
+	if deleted, err := store.DeleteAccount(ctx, "frank", false); err != nil || !deleted.Deleted {
+		t.Fatalf("delete account: %#v, %v", deleted, err)
+	}
+	if found, err := store.FindUser(ctx, "erin"); err != nil || !found.Found {
+		t.Fatal("deleting one account removed another account")
+	}
+	if _, found, err := store.GetProject(ctx, "erin-project", "erin"); err != nil || !found {
+		t.Fatal("deleting one account removed another account's project")
+	}
+}
+
+func TestDeleteAccountLeavesOtherAccountsProviderIdentitiesUntouched(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "identity-isolation.db"))
+	ctx := testContext(t)
+	kept, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-gina", Email: "gina@example.com", DisplayName: "Gina"})
+	must(t, err)
+	doomed, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-hal", Email: "hal@example.com", DisplayName: "Hal"})
+	must(t, err)
+	if kept.ID == "" || doomed.ID == "" || kept.ID == doomed.ID {
+		t.Fatalf("expected two separate accounts, got %#v and %#v", kept, doomed)
+	}
+	if deleted, err := store.DeleteAccount(ctx, doomed.ID, false); err != nil || !deleted.Deleted {
+		t.Fatalf("delete account: %#v, %v", deleted, err)
+	}
+	again, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-gina", Email: "gina@example.com", DisplayName: "Gina"})
+	if err != nil || again.ID != kept.ID {
+		t.Fatalf("another account's identity changed after deletion: got %q, want %q (%v)", again.ID, kept.ID, err)
+	}
+}
+
+func TestSnapshotStoresRuntimeAndReturnsItToReaders(t *testing.T) {
+	store := openTest(t, filepath.Join(t.TempDir(), "runtime.db"))
+	ctx := testContext(t)
+	seedAccountAndProject(t, store, "ivy", "ivy-project")
+	commit := strings.Repeat("d", 40)
+	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "ivy-job", OwnerID: "ivy", ProjectID: "ivy-project", Repository: "ivy/app", Branch: "main", Commit: commit}))
+	advanceImport(t, store, "ivy-job")
+	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "ivy-snapshot", JobID: "ivy-job", OwnerID: "ivy", ProjectID: "ivy-project", RepositoryID: 1, Repository: "ivy/app", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "JavaScript/TypeScript", Runtime: "Bun"}))
+	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "ivy-snapshot", JobID: "ivy-job", FileCount: 1, TotalBytes: 3}))
+
+	project, found, err := store.GetProject(ctx, "ivy-project", "ivy")
+	if err != nil || !found || project.Language != "JavaScript/TypeScript" || project.Runtime != "Bun" {
+		t.Fatalf("project did not return its language and runtime: %#v, %v, %v", project, found, err)
+	}
+	listed, err := store.ListSnapshots(ctx, "ivy", "ivy-project")
+	if err != nil || len(listed) != 1 || listed[0].Runtime != "Bun" {
+		t.Fatalf("snapshot list did not return the runtime: %#v, %v", listed, err)
+	}
+}

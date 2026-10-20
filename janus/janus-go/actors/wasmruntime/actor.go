@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	actor "github.com/tochemey/goakt/v4/actor"
-	"janus/actors/persistence"
 	"janus/internal/app"
 	artifactpkg "janus/internal/domain/artifact"
 	"janus/internal/domain/templates"
@@ -88,7 +87,7 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 		return &RunRequested{Err: errors.New("two WASM runs are already active")}
 	}
 	build, found, err := a.store.FindWASMBuild(ctx.Context(), m.BuildID, m.OwnerID)
-	if err != nil && !persistence.IsReply(err) {
+	if err != nil && !app.IsReply(err) {
 		<-a.slots
 		return &RunRequested{Err: err}
 	}
@@ -105,7 +104,7 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 		return &RunRequested{Err: errors.New("only WASI WebAssembly targets can run")}
 	}
 	stored, err := a.store.FindWASMBuildArtifact(ctx.Context(), m.BuildID, m.OwnerID)
-	if err != nil && !persistence.IsReply(err) {
+	if err != nil && !app.IsReply(err) {
 		<-a.slots
 		return &RunRequested{Err: err}
 	}
@@ -148,7 +147,7 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 
 // limitsFor returns the resource limits of the template that built build, or
 // the defaults when its Snapshot cannot be found.
-func (a *Actor) limitsFor(ctx context.Context, ownerID string, build persistence.WASMBuild) templates.Resources {
+func (a *Actor) limitsFor(ctx context.Context, ownerID string, build app.WASMBuild) templates.Resources {
 	limits := templates.Resources{Fuel: templates.DefaultFuel, MemoryBytes: templates.DefaultMemoryBytes, Timeout: templates.DefaultTimeout}
 	snapshots, err := a.store.ListSnapshots(ctx, ownerID, build.ProjectID)
 	if err != nil {

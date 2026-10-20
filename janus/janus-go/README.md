@@ -1,6 +1,6 @@
 # Janus Go
 
-Janus Go is a small GoAkt application with an HTTP edge and actor-owned authentication, authorization, persistence, accounting, and telemetry services.
+Janus Go is a small GoAkt application with an HTTP edge and actor-owned authentication, authorization, accounting, and telemetry services over a SQL store.
 
 ## Run locally
 
@@ -57,7 +57,7 @@ This section describes the code as it is today. The structure it is moving to, p
 - `TelemetryActor` configures OpenTelemetry. Actor receives and authentication flows create spans.
 - `DockerControllerActor` checks the Docker daemon and executes bounded, isolated containers requested by workload actors.
 
-Actor messages contain values rather than live HTTP request/response objects. The database is accessed only by its persistence actor. GoAkt's own runtime logs use the same zap logger through GoAkt's zap adapter; application audit events are delivered to the AccountingActor.
+Actor messages contain values rather than live HTTP request/response objects. The database is accessed only through the `sqlstore` adapter of the `app.Store` port. GoAkt's own runtime logs use the same zap logger through GoAkt's zap adapter; application audit events are delivered to the AccountingActor.
 
 ## Observability
 

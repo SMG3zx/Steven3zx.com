@@ -8,10 +8,6 @@ type CreateLocalUser struct {
 	PasswordHash string
 }
 
-type LocalUserCreated struct{ Err error }
-
-type FindLocalUser struct{ Email string }
-
 type LocalUserFound struct {
 	ID           string
 	Email        string
@@ -52,18 +48,6 @@ type GitHubConnected struct {
 	Err error
 }
 
-type FindGitHubToken struct{ UserID string }
-
-type GitHubTokenFound struct {
-	Token     string
-	Connected bool
-	Err       error
-}
-
-type DisconnectGitHub struct{ UserID string }
-
-type GitHubDisconnected struct{ Err error }
-
 type Project struct {
 	ID            string `json:"id"`
 	OwnerID       string `json:"owner_id"`
@@ -93,35 +77,6 @@ type CreateProject struct {
 }
 
 type UpdateProject struct{ ID, OwnerID, Name, Description string }
-type ProjectUpdated struct {
-	Project Project
-	Err     error
-}
-type DeleteProject struct{ ID, OwnerID string }
-type ProjectDeleted struct {
-	Deleted bool
-	Err     error
-}
-
-type ProjectCreated struct {
-	Project Project
-	Err     error
-}
-
-type ListProjects struct{ OwnerID string }
-
-type ProjectsListed struct {
-	Projects []Project
-	Err      error
-}
-
-type GetProject struct{ ID, OwnerID string }
-
-type ProjectFound struct {
-	Project Project
-	Found   bool
-	Err     error
-}
 
 type CreateImportJob struct {
 	ID, OwnerID, ProjectID string
@@ -129,11 +84,6 @@ type CreateImportJob struct {
 	Repository             string
 	Branch, Commit         string
 	MetadataJSON           string
-}
-
-type ImportJobCreated struct {
-	ID  string
-	Err error
 }
 
 type UpdateImportJob struct {
@@ -155,14 +105,6 @@ type ImportJob struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
-type ImportJobFound struct {
-	Job   ImportJob
-	Found bool
-	Err   error
-}
-
-type FindImportJob struct{ ID, OwnerID string }
-
 type BeginSnapshot struct {
 	ID, JobID, OwnerID, ProjectID string
 	Repository                    string
@@ -177,19 +119,10 @@ type BeginSnapshot struct {
 	Manifest string
 }
 
-type BeginSnapshotResult struct{ Err error }
-
 type SnapshotFile struct {
 	Path, Mode, Hash string
 	Content          []byte
 }
-
-type AddSnapshotFiles struct {
-	SnapshotID string
-	Files      []SnapshotFile
-}
-
-type SnapshotFilesAdded struct{ Err error }
 
 type CompleteSnapshot struct {
 	SnapshotID, JobID string
@@ -198,32 +131,18 @@ type CompleteSnapshot struct {
 	TotalBytes        int64
 }
 
-type SnapshotCompleted struct{ Err error }
-
-type DeleteStagingSnapshot struct{ SnapshotID string }
-
-type StagingSnapshotDeleted struct{ Err error }
-
 type SetProjectEntryPoint struct {
 	OwnerID, ProjectID, SnapshotID, EntryPoint string
 }
-
-type ProjectEntryPointSet struct{ Err error }
 
 type ListProjectFiles struct {
 	OwnerID, ProjectID, SnapshotID string
 	Offset, Limit                  int
 }
 
-type ProjectFilesListed struct {
-	Files []SnapshotFile
-	Err   error
-}
-
 type CreateWASMBuild struct {
 	ID, OwnerID, ProjectID, SnapshotID, Target string
 }
-type WASMBuildCreated struct{ Err error }
 type UpdateWASMBuild struct {
 	ID, Status, Error, Log string
 	Progress               int
@@ -245,7 +164,6 @@ type WASMBuild struct {
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 }
-type FindWASMBuild struct{ ID, OwnerID string }
 type WASMBuildFound struct {
 	Build WASMBuild
 	Found bool
@@ -257,7 +175,6 @@ type WASMBuildArtifact struct {
 	Found bool
 	Err   error
 }
-type FindWASMBuildArtifact struct{ ID, OwnerID string }
 
 type ProjectSnapshot struct {
 	ID            string `json:"id"`
@@ -275,16 +192,6 @@ type ProjectSnapshot struct {
 	CreatedAt     string `json:"created_at"`
 	Active        bool   `json:"active"`
 }
-type ListSnapshots struct{ OwnerID, ProjectID string }
-type SnapshotsListed struct {
-	Snapshots []ProjectSnapshot
-	Err       error
-}
-type ActivateSnapshot struct{ OwnerID, ProjectID, SnapshotID string }
-type SnapshotActivated struct {
-	Activated bool
-	Err       error
-}
 
 type GoogleIdentityResolved struct {
 	ID          string
@@ -292,8 +199,6 @@ type GoogleIdentityResolved struct {
 	DisplayName string
 	Err         error
 }
-
-type FindUser struct{ ID string }
 
 type UserFound struct {
 	ID          string
@@ -325,21 +230,6 @@ type ResumableBuild struct {
 	Language   string
 }
 
-type ListResumableImports struct{}
-type ResumableImportsListed struct {
-	Jobs []ResumableImport
-	Err  error
-}
-
-type ListResumableBuilds struct{}
-type ResumableBuildsListed struct {
-	Builds []ResumableBuild
-	Err    error
-}
-
-// FindStagingSnapshot returns the Staging Snapshot an import job is writing, the
-// hash of each file already stored in it keyed by path, and its manifest.
-type FindStagingSnapshot struct{ JobID string }
 type StagingSnapshotFound struct {
 	SnapshotID string
 	Found      bool
@@ -348,24 +238,6 @@ type StagingSnapshotFound struct {
 	Err        error
 }
 
-// DiscardJobStaging deletes the Staging Snapshot of an import job that has
-// failed for good.
-type DiscardJobStaging struct{ JobID string }
-type JobStagingDiscarded struct{ Err error }
-
-type ListActiveJobs struct{ OwnerID string }
-type ActiveJobsListed struct {
-	Jobs []ActiveJob
-	Err  error
-}
-
-// DeleteAccount deletes an Account and everything it owns. Without
-// CancelActiveJobs, an Account with unfinished jobs is left untouched and its
-// active jobs are returned so the caller can ask the Owner what to do.
-type DeleteAccount struct {
-	UserID           string
-	CancelActiveJobs bool
-}
 type AccountDeleted struct {
 	Deleted    bool
 	ActiveJobs []ActiveJob
@@ -384,16 +256,16 @@ type ActiveJob struct {
 	Status    string `json:"status"`
 }
 
-// ReplyError is an error the persistence actor itself reported, such as a
-// constraint violation, as opposed to a request that never got an answer. Its
-// text is the reported error's text.
+// ReplyError is an error the database itself reported, such as a constraint
+// violation, as opposed to a request that was cancelled or timed out. Its text
+// is the reported error's text.
 type ReplyError struct{ Err error }
 
 func (e *ReplyError) Error() string { return e.Err.Error() }
 func (e *ReplyError) Unwrap() error { return e.Err }
 
-// IsReply reports whether err is an error that the persistence actor reported,
-// and not a transport failure such as a timeout.
+// IsReply reports whether err is an error that the database reported, and not
+// a cancelled or expired context.
 func IsReply(err error) bool {
 	var reply *ReplyError
 	return errors.As(err, &reply)

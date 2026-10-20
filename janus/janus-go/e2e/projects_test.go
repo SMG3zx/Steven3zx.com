@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"janus/internal/adapters/sqlstore"
+	"janus/internal/app"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,7 +28,6 @@ import (
 	"janus/actors/builder"
 	"janus/actors/github"
 	"janus/actors/gitsource"
-	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
 	wasmactor "janus/actors/wasm"
@@ -73,8 +74,8 @@ func TestProjectBrowserActions(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	store, app := startJanus(t, ctx)
-	server := httptest.NewServer(app)
+	store, handler := startJanus(t, ctx)
+	server := httptest.NewServer(handler)
 	defer server.Close()
 	userID, sessionCookie := registerUser(t, server.URL)
 	connectGitHub(t, ctx, store, userID)
@@ -324,15 +325,15 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 }
 
-func startJanus(t *testing.T, ctx context.Context) (persistence.Store, http.Handler) {
+func startJanus(t *testing.T, ctx context.Context) (app.Store, http.Handler) {
 	t.Helper()
-	store, _, app := startJanusWith(t, ctx, e2eWASMBuilder{})
-	return store, app
+	store, _, handler := startJanusWith(t, ctx, e2eWASMBuilder{})
+	return store, handler
 }
 
 // startJanusWith starts the application in-process with b as its WASM builder.
 // It returns the Store, the WASM build actor and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (persistence.Store, *actor.PID, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.Store, *actor.PID, http.Handler) {
 	t.Helper()
 	system, err := actor.NewActorSystem("playwright-e2e", actor.WithLogger(golog.DiscardLogger))
 	if err != nil {
@@ -355,13 +356,16 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (persi
 		return pid
 	}
 	accountingPID := spawn("accounting", accounting.New(zap.NewNop()))
-	persistencePID := spawn("persistence", persistence.New(path.Join(t.TempDir(), "e2e.sqlite"), jwtSecret))
+	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"), sqlstore.WithTokenSecret(jwtSecret))
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
 	authentication := authactor.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
 	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}
-	store := persistence.NewClient(persistencePID, 5*time.Second)
 	gh := github.NewService(store, github.NewClient())
 	projectsPID := spawn("projects", projectactor.New(store, gh, gitsource.New(), accounting.NewAudit(accountingPID)))
 	wasmBuildsPID := spawn("wasm-builds", wasmactor.New(store, accounting.NewAudit(accountingPID), b))
@@ -375,11 +379,6 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (persi
 	if err != nil {
 		t.Fatalf("build HTTP app: %v", err)
 	}
-	t.Cleanup(func() {
-		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		_, _ = actor.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
-	})
 	return store, wasmBuildsPID, built.(*routesactor.Built).App
 }
 
@@ -408,27 +407,27 @@ func registerUser(t *testing.T, baseURL string) (string, string) {
 	return "", ""
 }
 
-func connectGitHub(t *testing.T, ctx context.Context, store persistence.Store, userID string) {
+func connectGitHub(t *testing.T, ctx context.Context, store app.Store, userID string) {
 	t.Helper()
-	if err := store.ConnectGitHub(ctx, persistence.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
+	if err := store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
 		t.Fatalf("connect GitHub fixture: %v", err)
 	}
 }
 
-func seedSnapshot(ctx context.Context, store persistence.Store, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
+func seedSnapshot(ctx context.Context, store app.Store, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
 	return seedLanguageSnapshot(ctx, store, ownerID, projectID, jobID, snapshotID, commit, metadata, "Rust", "Cargo.toml", "[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n")
 }
 
 // seedLanguageSnapshot stores a completed Snapshot of language whose manifest
 // file is manifest with the given content.
-func seedLanguageSnapshot(ctx context.Context, store persistence.Store, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
-	if err := store.CreateImportJob(ctx, persistence.CreateImportJob{ID: jobID, OwnerID: ownerID, ProjectID: projectID, Repository: "SMG3zx/demo", Branch: "main", Commit: commit}); err != nil {
+func seedLanguageSnapshot(ctx context.Context, store app.Store, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
+	if err := store.CreateImportJob(ctx, app.CreateImportJob{ID: jobID, OwnerID: ownerID, ProjectID: projectID, Repository: "SMG3zx/demo", Branch: "main", Commit: commit}); err != nil {
 		return fmt.Errorf("create import job: %w", err)
 	}
-	if err := store.BeginSnapshot(ctx, persistence.BeginSnapshot{ID: snapshotID, JobID: jobID, OwnerID: ownerID, ProjectID: projectID, RepositoryID: 42, Repository: "SMG3zx/demo", Branch: "main", Commit: commit, DefaultBranch: "main", Language: language, Stars: 3, Forks: 1, MetadataJSON: metadata}); err != nil {
+	if err := store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshotID, JobID: jobID, OwnerID: ownerID, ProjectID: projectID, RepositoryID: 42, Repository: "SMG3zx/demo", Branch: "main", Commit: commit, DefaultBranch: "main", Language: language, Stars: 3, Forks: 1, MetadataJSON: metadata}); err != nil {
 		return fmt.Errorf("begin snapshot: %w", err)
 	}
-	if err := store.AddSnapshotFiles(ctx, snapshotID, []persistence.SnapshotFile{
+	if err := store.AddSnapshotFiles(ctx, snapshotID, []app.SnapshotFile{
 		{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
 		{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
 	}); err != nil {
@@ -438,11 +437,11 @@ func seedLanguageSnapshot(ctx context.Context, store persistence.Store, ownerID,
 		status   string
 		progress int
 	}{{"cloning", 20}, {"scanning", 50}, {"storing", 80}} {
-		if err := store.UpdateImportJob(ctx, persistence.UpdateImportJob{ID: jobID, Status: step.status, Progress: step.progress}); err != nil {
+		if err := store.UpdateImportJob(ctx, app.UpdateImportJob{ID: jobID, Status: step.status, Progress: step.progress}); err != nil {
 			return fmt.Errorf("move import job to %s: %w", step.status, err)
 		}
 	}
-	if err := store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: snapshotID, JobID: jobID, FileCount: 2, TotalBytes: 1_234_567}); err != nil {
+	if err := store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshotID, JobID: jobID, FileCount: 2, TotalBytes: 1_234_567}); err != nil {
 		return fmt.Errorf("complete snapshot: %w", err)
 	}
 	return nil

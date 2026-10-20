@@ -7,6 +7,7 @@ import (
 	"janus/actors/gitsource"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/storetest"
+	"janus/internal/app"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,7 +23,6 @@ import (
 	golog "github.com/tochemey/goakt/v4/log"
 
 	"janus/actors/github"
-	"janus/actors/persistence"
 )
 
 const resumeMainGo = "package main\n\nfunc main() {}\n"
@@ -32,7 +32,7 @@ const resumeMainGo = "package main\n\nfunc main() {}\n"
 type resumeFixture struct {
 	t        *testing.T
 	ctx      context.Context
-	store    persistence.Store
+	store    app.Store
 	projects *goakt.PID
 	commit   string
 	blob     string
@@ -83,10 +83,10 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 	}
 
 	f := &resumeFixture{t: t, ctx: ctx, store: store, projects: projectsPID, commit: commit, blob: blob, repoDir: repoDir}
-	f.must(store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}))
-	_, err = store.CreateProject(ctx, persistence.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Project"})
+	f.must(store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}))
+	_, err = store.CreateProject(ctx, app.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Project"})
 	f.must(err)
-	f.must(store.ConnectGitHub(ctx, persistence.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"}))
+	f.must(store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"}))
 	return f
 }
 
@@ -108,22 +108,22 @@ func (f *resumeFixture) manifestFor(hash string) string {
 // stands for a Staging Snapshot that was interrupted before its scan finished.
 func (f *resumeFixture) interruptedImport(job, staging string, stored map[string]string, manifest string) {
 	f.t.Helper()
-	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: job, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
+	f.must(f.store.CreateImportJob(f.ctx, app.CreateImportJob{ID: job, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
 	for _, status := range []string{"cloning", "scanning", "storing"} {
-		f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: job, Status: status, Progress: 50}))
+		f.must(f.store.UpdateImportJob(f.ctx, app.UpdateImportJob{ID: job, Status: status, Progress: 50}))
 	}
-	f.must(f.store.BeginSnapshot(f.ctx, persistence.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}", Manifest: manifest}))
-	var files []persistence.SnapshotFile
+	f.must(f.store.BeginSnapshot(f.ctx, app.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}", Manifest: manifest}))
+	var files []app.SnapshotFile
 	for path, hash := range stored {
-		files = append(files, persistence.SnapshotFile{Path: path, Mode: "100644", Content: []byte(resumeMainGo), Hash: hash})
+		files = append(files, app.SnapshotFile{Path: path, Mode: "100644", Content: []byte(resumeMainGo), Hash: hash})
 	}
 	if len(files) > 0 {
 		f.must(f.store.AddSnapshotFiles(f.ctx, staging, files))
 	}
-	f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: job, Status: "queued", Progress: 0}))
+	f.must(f.store.UpdateImportJob(f.ctx, app.UpdateImportJob{ID: job, Status: "queued", Progress: 0}))
 }
 
-func (f *resumeFixture) waitForImport(job string) persistence.ImportJob {
+func (f *resumeFixture) waitForImport(job string) app.ImportJob {
 	f.t.Helper()
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
@@ -135,10 +135,10 @@ func (f *resumeFixture) waitForImport(job string) persistence.ImportJob {
 		time.Sleep(50 * time.Millisecond)
 	}
 	f.t.Fatalf("import %s did not finish", job)
-	return persistence.ImportJob{}
+	return app.ImportJob{}
 }
 
-func (f *resumeFixture) snapshots() []persistence.ProjectSnapshot {
+func (f *resumeFixture) snapshots() []app.ProjectSnapshot {
 	f.t.Helper()
 	snapshots, err := f.store.ListSnapshots(f.ctx, "alice", "project-1")
 	f.must(err)
@@ -308,8 +308,8 @@ func TestResumeRestartsFromTheCloneWhenTheManifestDoesNotMatchTheRepository(t *t
 
 func TestRetryStartsANewImportFromAFailedOne(t *testing.T) {
 	f := newResumeFixture(t)
-	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
-	f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"}))
+	f.must(f.store.CreateImportJob(f.ctx, app.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
+	f.must(f.store.UpdateImportJob(f.ctx, app.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"}))
 
 	response, err := goakt.Ask(f.ctx, f.projects, &RetryImport{OwnerID: "alice", JobID: "job-failed"}, 30*time.Second)
 	if err != nil {
@@ -326,7 +326,7 @@ func TestRetryStartsANewImportFromAFailedOne(t *testing.T) {
 
 func TestRetryRejectsAnImportThatHasNotFailed(t *testing.T) {
 	f := newResumeFixture(t)
-	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: "job-running", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
+	f.must(f.store.CreateImportJob(f.ctx, app.CreateImportJob{ID: "job-running", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
 
 	response, err := goakt.Ask(f.ctx, f.projects, &RetryImport{OwnerID: "alice", JobID: "job-running"}, 30*time.Second)
 	if err != nil {

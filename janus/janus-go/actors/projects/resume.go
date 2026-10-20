@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	goakt "github.com/tochemey/goakt/v4/actor"
 
-	"janus/actors/persistence"
 	"janus/internal/app"
 )
 
@@ -39,7 +38,7 @@ type DeleteAccount struct {
 // and ActiveJobs is not empty, the Account still has unfinished jobs.
 type AccountDeleted struct {
 	Deleted    bool
-	ActiveJobs []persistence.ActiveJob
+	ActiveJobs []app.ActiveJob
 	Err        error
 }
 
@@ -94,7 +93,7 @@ func (a *Actor) resumeImports(ctx context.Context, system goakt.ActorSystem) (in
 
 // resumedImportRun prepares the run message for an interrupted import. The
 // repository is read again from GitHub, because the job stores only its name.
-func (a *Actor) resumedImportRun(ctx context.Context, job persistence.ResumableImport) (*RunImport, error) {
+func (a *Actor) resumedImportRun(ctx context.Context, job app.ResumableImport) (*RunImport, error) {
 	token, connected, err := a.github.Token(ctx, job.OwnerID)
 	if err != nil {
 		return nil, err
@@ -142,7 +141,7 @@ func (a *Actor) retryImport(rctx *goakt.ReceiveContext, msg *RetryImport) (strin
 
 func (a *Actor) deleteAccount(ctx context.Context, msg *DeleteAccount) (AccountDeleted, error) {
 	result, err := a.store.DeleteAccount(ctx, msg.OwnerID, msg.CancelActiveJobs)
-	if err != nil && !persistence.IsReply(err) {
+	if err != nil && !app.IsReply(err) {
 		return AccountDeleted{}, err
 	}
 	return AccountDeleted{Deleted: result.Deleted, ActiveJobs: result.ActiveJobs, Err: err}, nil
@@ -346,7 +345,7 @@ func (a *ImportWorker) cloneCommit(ctx context.Context, msg *RunImport) (app.Sou
 // beginStaging starts a Staging Snapshot for the commit and returns its ID.
 func (a *ImportWorker) beginStaging(ctx context.Context, msg *RunImport, scan ScanResult, metadata, manifest []byte) (string, error) {
 	snapshotID := uuid.NewString()
-	err := a.store.BeginSnapshot(ctx, persistence.BeginSnapshot{ID: snapshotID, JobID: msg.JobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, RepositoryID: msg.Repository.ID, Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, DefaultBranch: msg.Repository.DefaultBranch, Language: dominantLanguage(scan.Languages), Runtime: scan.Runtime, Stars: msg.Repository.Stars, Forks: msg.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
+	err := a.store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshotID, JobID: msg.JobID, OwnerID: msg.OwnerID, ProjectID: msg.ProjectID, RepositoryID: msg.Repository.ID, Repository: msg.Repository.FullName, Branch: msg.Branch, Commit: msg.Commit, DefaultBranch: msg.Repository.DefaultBranch, Language: dominantLanguage(scan.Languages), Runtime: scan.Runtime, Stars: msg.Repository.Stars, Forks: msg.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
 	if err != nil {
 		return "", err
 	}
@@ -357,9 +356,9 @@ func (a *ImportWorker) beginStaging(ctx context.Context, msg *RunImport, scan Sc
 func (a *ImportWorker) storeFiles(ctx context.Context, msg *RunImport, snapshotID string, files []app.SnapshotFile) error {
 	for start := 0; start < len(files); start += 100 {
 		end := min(start+100, len(files))
-		batch := make([]persistence.SnapshotFile, 0, end-start)
+		batch := make([]app.SnapshotFile, 0, end-start)
 		for _, file := range files[start:end] {
-			batch = append(batch, persistence.SnapshotFile{Path: file.Path, Mode: file.Mode, Content: file.Content, Hash: file.Hash})
+			batch = append(batch, app.SnapshotFile{Path: file.Path, Mode: file.Mode, Content: file.Content, Hash: file.Hash})
 		}
 		saveErr := a.store.AddSnapshotFiles(ctx, snapshotID, batch)
 		if saveErr != nil {
@@ -378,7 +377,7 @@ func (a *ImportWorker) completeImport(ctx context.Context, msg *RunImport, snaps
 	for _, entry := range manifest {
 		total += entry.Size
 	}
-	err := a.store.CompleteSnapshot(ctx, persistence.CompleteSnapshot{SnapshotID: snapshotID, JobID: msg.JobID, FileCount: len(manifest), TotalBytes: total})
+	err := a.store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshotID, JobID: msg.JobID, FileCount: len(manifest), TotalBytes: total})
 	if err != nil {
 		return a.fail(ctx, msg, "snapshot finalization failed", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"janus/internal/app"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,7 +19,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 
-	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
 	"janus/web"
 )
@@ -174,8 +174,8 @@ func (a *Actor) githubCallback(c *web.Context) any {
 		if !ok || current != owner {
 			return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "sign in to the same Janus account and reconnect GitHub"})
 		}
-		if connectErr := a.dependencies.Store.ConnectGitHub(ctx, persistence.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
-			if persistence.IsReply(connectErr) {
+		if connectErr := a.dependencies.Store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
+			if app.IsReply(connectErr) {
 				return jsonResponse(http.StatusConflict, map[string]string{"error": connectErr.Error()})
 			}
 			return internalError()
@@ -183,7 +183,7 @@ func (a *Actor) githubCallback(c *web.Context) any {
 		a.log(ctx, "info", "github.connected", map[string]string{"user_id": owner})
 		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects?github=connected"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
-	identity, resolveErr := a.dependencies.Store.ResolveGitHubLogin(ctx, persistence.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
+	identity, resolveErr := a.dependencies.Store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
 	if resolveErr != nil {
 		return internalError()
 	}

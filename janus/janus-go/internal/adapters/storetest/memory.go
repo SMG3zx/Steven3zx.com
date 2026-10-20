@@ -16,9 +16,9 @@ import (
 )
 
 // Memory is an app.Store that keeps its data in maps, for tests of callers that need
-// no database. It follows the rules the persistence actor enforces: ownership,
+// no database. It follows the rules the SQL store enforces: ownership,
 // uniqueness, the job state machines and the cascade when something is deleted.
-// Like the Client, every error it returns is a *ReplyError, and a constraint
+// Like the SQL store, every error it returns is a *ReplyError, and a constraint
 // violation reads "constraint failed: ..." as SQLite's does.
 //
 // It stores GitHub tokens as given, since there is no database to protect.
@@ -91,7 +91,7 @@ var (
 
 func isIn(status string, set []string) bool { return slices.Contains(set, status) }
 
-// fail wraps a message the way the persistence actor reports an error.
+// fail wraps a message the way the SQL store reports an error.
 func fail(format string, args ...any) error {
 	return &app.ReplyError{Err: fmt.Errorf(format, args...)}
 }

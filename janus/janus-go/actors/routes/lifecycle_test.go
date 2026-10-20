@@ -3,6 +3,8 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"janus/internal/adapters/sqlstore"
+	"janus/internal/app"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -18,12 +20,11 @@ import (
 	authzactor "janus/actors/authorization"
 	"janus/actors/github"
 	"janus/actors/gitsource"
-	"janus/actors/persistence"
 	projectactor "janus/actors/projects"
 	wasmactor "janus/actors/wasm"
 )
 
-func newLifecycleApp(t *testing.T) (http.Handler, persistence.Store) {
+func newLifecycleApp(t *testing.T) (http.Handler, app.Store) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -43,16 +44,11 @@ func newLifecycleApp(t *testing.T) (http.Handler, persistence.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	persistencePID, err := system.Spawn(ctx, "persistence-lifecycle", persistence.New(filepath.Join(t.TempDir(), "lifecycle.db")))
+	store, err := sqlstore.Open(filepath.Join(t.TempDir(), "lifecycle.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Second)
-		defer closeCancel()
-		_, _ = actor.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
-	})
-	store := persistence.NewClient(persistencePID, 5*time.Second)
+	t.Cleanup(func() { _ = store.Close() })
 	gh := github.NewService(store, github.NewClient())
 	projectsPID, err := system.Spawn(ctx, "projects-lifecycle", projectactor.New(store, gh, gitsource.New(), accounting.NewAudit(accountingPID)))
 	if err != nil {
@@ -82,34 +78,34 @@ func newLifecycleApp(t *testing.T) (http.Handler, persistence.Store) {
 }
 
 func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testing.T) {
-	app, store := newLifecycleApp(t)
+	handler, store := newLifecycleApp(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	register := perform(app, http.MethodPost, "/auth/register", `{"email":"dana@example.com","password":"correct horse battery staple"}`, nil)
+	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"dana@example.com","password":"correct horse battery staple"}`, nil)
 	if register.Code != http.StatusCreated {
 		t.Fatalf("register status = %d, body = %s", register.Code, register.Body.String())
 	}
 	session := register.Result().Cookies()[0]
-	projectResponse := perform(app, http.MethodPost, "/api/projects", `{"name":"Doomed","description":""}`, session)
-	var project persistence.Project
+	projectResponse := perform(handler, http.MethodPost, "/api/projects", `{"name":"Doomed","description":""}`, session)
+	var project app.Project
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &project); err != nil || project.ID == "" {
 		t.Fatalf("project create = %d %s", projectResponse.Code, projectResponse.Body.String())
 	}
-	if err := store.CreateImportJob(ctx, persistence.CreateImportJob{ID: "running-import", OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "dana/repo", Branch: "main", Commit: strings.Repeat("d", 40)}); err != nil {
+	if err := store.CreateImportJob(ctx, app.CreateImportJob{ID: "running-import", OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "dana/repo", Branch: "main", Commit: strings.Repeat("d", 40)}); err != nil {
 		t.Fatal(err)
 	}
 
-	blocked := perform(app, http.MethodDelete, "/api/account", "", session)
+	blocked := perform(handler, http.MethodDelete, "/api/account", "", session)
 	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "running-import") {
 		t.Fatalf("blocked deletion = %d %s, want 409 listing running-import", blocked.Code, blocked.Body.String())
 	}
-	profile := perform(app, http.MethodGet, "/api/me", "", session)
+	profile := perform(handler, http.MethodGet, "/api/me", "", session)
 	if profile.Code != http.StatusOK {
 		t.Fatalf("a blocked deletion must leave the account signed in, /api/me = %d", profile.Code)
 	}
 
-	deleted := perform(app, http.MethodDelete, "/api/account?cancel_active_jobs=true", "", session)
+	deleted := perform(handler, http.MethodDelete, "/api/account?cancel_active_jobs=true", "", session)
 	if deleted.Code != http.StatusNoContent {
 		t.Fatalf("cancelled deletion = %d %s, want 204", deleted.Code, deleted.Body.String())
 	}
@@ -117,26 +113,26 @@ func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testin
 	if len(cleared) == 0 || cleared[0].MaxAge >= 0 {
 		t.Fatalf("deletion did not clear the session cookie: %#v", cleared)
 	}
-	stale := perform(app, http.MethodGet, "/api/me", "", session)
+	stale := perform(handler, http.MethodGet, "/api/me", "", session)
 	if stale.Code == http.StatusOK {
 		t.Fatal("a session for a deleted account still authenticates")
 	}
 }
 
 func TestRetryRoutesReportMissingAndNotFailedJobs(t *testing.T) {
-	app, _ := newLifecycleApp(t)
-	register := perform(app, http.MethodPost, "/auth/register", `{"email":"eli@example.com","password":"correct horse battery staple"}`, nil)
+	handler, _ := newLifecycleApp(t)
+	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"eli@example.com","password":"correct horse battery staple"}`, nil)
 	session := register.Result().Cookies()[0]
 
-	missing := perform(app, http.MethodPost, "/api/imports/no-such-job/retry", "", session)
+	missing := perform(handler, http.MethodPost, "/api/imports/no-such-job/retry", "", session)
 	if missing.Code != http.StatusNotFound {
 		t.Fatalf("retry of an unknown import = %d, want 404", missing.Code)
 	}
-	missingBuild := perform(app, http.MethodPost, "/api/wasm-builds/no-such-build/retry", "", session)
+	missingBuild := perform(handler, http.MethodPost, "/api/wasm-builds/no-such-build/retry", "", session)
 	if missingBuild.Code != http.StatusNotFound {
 		t.Fatalf("retry of an unknown build = %d, want 404", missingBuild.Code)
 	}
-	anonymous := perform(app, http.MethodDelete, "/api/account", "", nil)
+	anonymous := perform(handler, http.MethodDelete, "/api/account", "", nil)
 	if anonymous.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous account deletion = %d, want 401", anonymous.Code)
 	}

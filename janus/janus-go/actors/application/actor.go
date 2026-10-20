@@ -19,12 +19,12 @@ import (
 	githubactor "janus/actors/github"
 	"janus/actors/gitsource"
 	httpserver "janus/actors/httpserver"
-	persistenceactor "janus/actors/persistence"
 	projectsactor "janus/actors/projects"
 	routesactor "janus/actors/routes"
 	telemetryactor "janus/actors/telemetry"
 	wasmactor "janus/actors/wasm"
 	wasmruntime "janus/actors/wasmruntime"
+	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
 )
 
@@ -38,8 +38,8 @@ type Actor struct {
 	audit          app.Audit
 	authentication *authactor.Service
 	authorization  *authzactor.Policy
-	persistence    *goakt.PID
-	store          persistenceactor.Store
+	database       *sqlstore.Store
+	store          app.Store
 	github         *githubactor.Service
 	projects       *goakt.PID
 	wasmBuilds     *goakt.PID
@@ -126,11 +126,11 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		startupSpan.End()
 	}()
 
-	a.persistence, err = a.system.Spawn(startupCtx, "persistence", persistenceactor.New(config.DatabasePath, config.JWTSecret))
+	a.database, err = sqlstore.Open(config.DatabasePath, sqlstore.WithTokenSecret(config.JWTSecret))
 	if err != nil {
-		return fmt.Errorf("spawn persistence actor: %w", err)
+		return fmt.Errorf("open database: %w", err)
 	}
-	a.store = persistenceactor.NewClient(a.persistence, 30*time.Second)
+	a.store = a.database
 	a.github = githubactor.NewService(a.store, githubactor.NewClient())
 	a.authentication = authactor.New([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry)
 	a.authorization, err = authzactor.New(startupCtx)
@@ -263,14 +263,9 @@ func (a *Actor) stop(ctx context.Context) error {
 			firstErr = result.Err
 		}
 	}
-	if a.persistence != nil {
-		response, err := goakt.Ask(shutdownCtx, a.persistence, &persistenceactor.CloseDatabase{}, ShutdownTimeout)
-		if err != nil && firstErr == nil {
+	if a.database != nil {
+		if err := a.database.Close(); err != nil && firstErr == nil {
 			firstErr = err
-		} else if result, ok := response.(*persistenceactor.DatabaseClosed); !ok && err == nil && firstErr == nil {
-			firstErr = fmt.Errorf("close persistence database: unexpected response %T", response)
-		} else if ok && result.Err != nil && firstErr == nil {
-			firstErr = result.Err
 		}
 	}
 	telemetryactor.RecordError(span, firstErr)

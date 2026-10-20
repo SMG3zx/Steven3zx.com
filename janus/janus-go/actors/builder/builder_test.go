@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"janus/actors/docker"
 	"janus/internal/adapters/buildertest"
 	"janus/internal/app"
 	"janus/internal/domain/artifact"
-	"janus/actors/docker"
 )
 
 var testImages = Images{Rust: "rust-builder:local", Go: "go-builder:local", JavaScript: "js-builder:local"}

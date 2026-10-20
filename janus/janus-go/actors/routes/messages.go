@@ -10,7 +10,6 @@ import (
 	"janus/actors/authentication"
 	"janus/actors/authorization"
 	"janus/actors/github"
-	"janus/actors/persistence"
 	"janus/internal/app"
 )
 
@@ -28,7 +27,7 @@ type Dependencies struct {
 	Authentication *authentication.Service
 	Authorization  *authorization.Policy
 	Audit          app.Audit
-	Store          persistence.Store
+	Store          app.Store
 	GitHub         *github.Service
 	Projects       *goakt.PID
 	WASMBuilds     *goakt.PID

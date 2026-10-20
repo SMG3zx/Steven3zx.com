@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"janus/internal/app"
 	"strings"
 
 	"github.com/tochemey/goakt/v4/actor"
 
-	"janus/actors/persistence"
 	"janus/internal/domain/templates"
 )
 
@@ -21,7 +21,7 @@ func unbuildableLanguageError(language string) error {
 
 // buildSource returns the Snapshot a build compiles and its detected language.
 // The project's active Snapshot is used unless the request names one.
-func (a *Actor) buildSource(ctx context.Context, msg *RequestBuild, project persistence.Project) (string, string, error) {
+func (a *Actor) buildSource(ctx context.Context, msg *RequestBuild, project app.Project) (string, string, error) {
 	if msg.SnapshotID == "" {
 		if project.SnapshotID == "" {
 			return "", "", errors.New("import a repository before building it")

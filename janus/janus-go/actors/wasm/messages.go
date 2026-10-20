@@ -3,12 +3,12 @@ package wasm
 import (
 	"context"
 	"fmt"
+	"janus/internal/app"
 	"time"
 
 	"github.com/tochemey/goakt/v4/actor"
 
 	"janus/actors/jobrunner"
-	"janus/actors/persistence"
 )
 
 type RequestBuild struct {
@@ -25,7 +25,7 @@ type BuildRequested struct {
 
 type Build struct{ OwnerID, JobID string }
 type BuildFound struct {
-	Build persistence.WASMBuild
+	Build app.WASMBuild
 	Found bool
 	Err   error
 }
