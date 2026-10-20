@@ -24,6 +24,13 @@ Create a Linear issue in team `Engineering`, project `Janus`. Use a parent issue
 
 Read the Linear issue by its identifier, for example `ENG-44`, or by the URL the user gives.
 
+## Editing issues
+
+- **Batch patches.** `save_issue` returns the whole description, which can be 10 KB or more. Put every patch for one issue into one `patch` array in one call, and do not read the issue again afterwards.
+- **`replace_range` keeps its `to` anchor.** End the `new_string` with a newline and leave the anchor text out of it, or the line appears twice.
+- **Anchor on plain words.** A description stores a link as an `<issue id=... href=...>ENG-n</issue>` tag, so a phrase that spans a link never matches; anchor on the words beside it.
+- **Cancel with the links.** When cancelling an issue, remove it from the blocked-by list of every issue it blocks with `removeBlockedBy`.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a Linear issue labelled `wayfinder:map`, and each **child ticket** is a sub-issue of the map.
