@@ -1,6 +1,6 @@
 # Mutex vs actor: head-to-head report
 
-Throwaway experiment, run 2026-10-19. The benchmark code was not kept in the repository: it exists only as commit `3cea76a` on the local branch `prototype/mutex-vs-actor-store`, which was not pushed. The raw tables are in [mutex-vs-actor-store-raw-results.md](mutex-vs-actor-store-raw-results.md). Related: ENG-66 (the `Memory` Store).
+Throwaway experiment, run 2026-10-19. The benchmark code was not kept in the repository: it exists only as commit `3cea76a` on the local branch `prototype/mutex-vs-actor-store`, which was not pushed. The raw tables are in [mutex-vs-actor-store-raw-results.md](mutex-vs-actor-store-raw-results.md). Related: ENG-66 (the `Memory` Store). Atomics were added afterwards; see the addendum at the end (prototype commit `f852c4f`).
 
 Question: *is an actor-owned store faster than a mutex-guarded one, because it avoids mutex choke points?*
 
@@ -92,6 +92,42 @@ All of them are bound by 1 / 27 µs. The mutex's median is better, but its tail 
 - Tuning ran on 64 callers with no per-op work, 2 repetitions of 1 s. Rankings between neighbouring settings (for example actor budgets) are within noise; only the large effects (shard count, `Ask` vs `Tell`) are trusted.
 - Not tried: lock-free or copy-on-write reads for the mutex family, goakt routers with consistent hashing, `BatchTell`, and the `Request`/reentrancy path. Any of these could move the actor family a bit; none changes the structural point that one owner is one queue.
 - In-memory maps are not a database. The `slow-io` workload is a model of one: CPU spin instead of I/O.
+
+## Addendum: atomics
+
+Added after the first run, same machine and settings, but a separate run (so cross-table comparisons carry ordinary run-to-run noise, roughly 10%). Three designs, because atomics only fit a keyed store in particular shapes:
+
+- **`slots-cas`**: a fixed array of atomic pointers to immutable records. A read is one atomic load; an update copies the record, applies the function and swaps with CompareAndSwap, retrying on conflict. Any update function works, but keys must be dense and known up front, and every attempt allocates a record.
+- **`syncmap-cas`**: the same copy-and-swap over `sync.Map`, so keys can be arbitrary.
+- **`slots-fetch-add` (counter only)**: an atomic add on one field of an in-place record. **Not equivalent to the others**: it ignores the update function and only does the counter increment this workload uses. It is a ceiling, not a design you could use for a general update.
+
+They were not run in the 25 µs workload. They have no critical section, so there is no owner to hold for 25 µs; work inside a CAS loop would run in parallel and be redone on conflict, which models optimistic concurrency, not a store bound by one database connection.
+
+**Throughput with 64 callers (ops/s), against the best of the earlier families:**
+
+| workload | slots-cas | syncmap-cas | fetch-add (counter only) | sharded mutex | sharded actors |
+|---|---:|---:|---:|---:|---:|
+| read95 | **253.7M** | 95.9M | 336.1M | 103.7M | 10.3M |
+| mixed50 | **99.2M** | 38.5M | 283.3M | 62.7M | 10.3M |
+| write100 | **65.5M** | 25.5M | 289.7M | 51.9M | 9.45M |
+| hotkey (80% on one key) | **18.7M** | 8.2M | 112.6M | 9.3M | 5.3M |
+| scan-blocks (foreground) | **187.0M** | 44.0M | 303.2M | 99.1M | 7.7M |
+
+**What it shows:**
+
+1. **Where atomics apply, they are the fastest family**: `slots-cas` is 1.3x to 2.4x the best sharded mutex and 3.5x to 25x the best sharded actors (the low end is the hot key, the high end read-heavy and scan-blocked loads). Even on the hot key it beats everything else (18.7M against 9.3M to 9.9M for the mutexes), because readers never queue.
+2. **They remove the scan choke point completely**: with a scanner running over 100k keys, `slots-cas` foreground p99 is 224 ns and the scanner is not slowed (about 2.2k scans/s). A scan is just loads, so nothing waits for it.
+3. **The general-purpose version gives most of it back**: `syncmap-cas` is 0.4x to 0.9x of the sharded mutex and a `sync.Map` scan of 100k keys manages only about 90 scans/s.
+4. **CAS retries are the cost on a hot key**: at 64 callers the hot-key run averages about 4 to 5 attempts per update (2.3 allocations per op, against 0.5 without retries), and p99.9 is 229 µs. Reads stay fast, but writers to the same key fight.
+5. **Each update allocates**: `slots-cas` allocates one record per update attempt (1.0 allocs/op in write100, 3.0 for `syncmap-cas`). Garbage is the price of lock-free reads of a 64-byte value.
+
+**Why this does not change the Janus conclusion:**
+
+- Atomics make one word, or one pointer, change atomically. They cannot express a rule across records, such as "one active import per project", "completing a snapshot activates it and deletes the old ones", or "deleting an account cascades to its projects, jobs and builds". Those need mutual exclusion (or a transaction), which is why `Memory` uses a mutex and the real store uses a database.
+- They cannot make a database connection concurrent. The real store is bound by one connection, the regime where every single-owner design ties at about 36k ops/s.
+- A scan with atomics is not a snapshot: it can see half of a multi-record change. The sharded mutex and actor scans have the same property per shard, but only atomics have it across the whole store.
+
+The ranking by how much the owner must understand holds up: atomics (one word) are fastest, then a mutex (a record or a shard), then an actor (anything, including I/O and sequences of steps). Speed falls as the amount of structure the owner can protect grows.
 
 ## Reproduce
 
