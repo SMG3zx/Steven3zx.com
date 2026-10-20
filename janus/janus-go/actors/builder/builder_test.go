@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"janus/internal/adapters/buildertest"
+	"janus/internal/app"
 	"janus/internal/domain/artifact"
 	"janus/actors/docker"
 )
@@ -118,4 +120,11 @@ func TestFailedBuildKeepsItsLog(t *testing.T) {
 	if err == nil || string(got.Log) != "main.go:3: undefined: x" {
 		t.Fatalf("failed build = %q, %v", got.Log, err)
 	}
+}
+
+func TestDockerPassesTheBuilderContract(t *testing.T) {
+	buildertest.Run(t, func(t *testing.T) app.Builder {
+		r := &recorder{ran: docker.Ran{Stdout: wasmTar(t), Stderr: []byte("compiled")}}
+		return newDocker(testImages, r.execute)
+	})
 }

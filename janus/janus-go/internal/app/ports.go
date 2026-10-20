@@ -56,3 +56,57 @@ type Store interface {
 	// result lists those jobs.
 	DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (AccountDeleted, error)
 }
+
+// Builder compiles a workspace of one Language to an Artifact. The language is
+// matched without regard to case.
+//
+// A workspace without the manifest the Language's Template requires fails with
+// a *ManifestError. A Language or Target no Template covers fails with a plain
+// error. The BuildResult's Log is set on failure too, and its Artifact is a
+// compressed ZIP that artifact.Module can open.
+type Builder interface {
+	Build(ctx context.Context, language string, request BuildRequest) (BuildResult, error)
+}
+
+// Runner runs a WASI module with the given arguments under limits. It reports
+// what the module wrote and what the run consumed. A module that cannot be
+// loaded, traps or exceeds a limit fails with an error, and the RunResult still
+// holds the output and Usage measured up to that point. Stdin is empty.
+type Runner interface {
+	Run(ctx context.Context, module []byte, args []string, limits RunLimits) (RunResult, error)
+}
+
+// Source fetches a repository at a commit. Open makes the commit's file tree
+// readable and Close releases whatever Open holds; callers read the tree before
+// closing it. An unknown commit, an unreadable repository or a tree that breaks
+// a size limit fails with an error.
+type Source interface {
+	Open(ctx context.Context, request SourceRequest) (SourceTree, error)
+}
+
+// SourceTree is the file tree of one commit.
+type SourceTree interface {
+	// Files returns the regular files and submodule pointers of the tree, in no
+	// particular order. When want is not nil only the files whose slash-separated
+	// paths it lists are read. Paths are clean and relative.
+	Files(want map[string]bool) ([]SnapshotFile, error)
+	Close() error
+}
+
+// GitHost reads repository metadata from a code host on behalf of an Account,
+// using the Account's access token. Repository, Branches and Commits fail with
+// an error for a name that is not "owner/name". Commits lists at most the 50
+// newest commits of a branch, newest first.
+type GitHost interface {
+	Repositories(ctx context.Context, token string) ([]Repository, error)
+	Repository(ctx context.Context, token, fullName string) (Repository, error)
+	Branches(ctx context.Context, token, fullName string) ([]Branch, error)
+	Commits(ctx context.Context, token, fullName, branch string) ([]Commit, error)
+}
+
+// Audit records Audit Events. Recording never fails the caller and never
+// blocks it for long; an adapter that cannot write an event drops it. An event
+// with no Name is recorded under a generic one, and every Field is recorded.
+type Audit interface {
+	Record(ctx context.Context, event AuditEvent)
+}

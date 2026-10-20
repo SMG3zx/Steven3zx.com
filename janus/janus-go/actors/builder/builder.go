@@ -14,8 +14,9 @@ import (
 	"regexp"
 	"strings"
 
-	"janus/internal/domain/artifact"
 	"janus/actors/docker"
+	"janus/internal/app"
+	"janus/internal/domain/artifact"
 )
 
 const (
@@ -27,33 +28,14 @@ const (
 
 var validImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 
-// Request asks for a workspace to be compiled for a Target. Entrypoint is the
-// file the Account confirmed, relative to the workspace root; adapters that
-// need one find their own when it is empty.
-type Request struct{ Workspace, Target, Entrypoint string }
-
-// Result is a finished build. Artifact is a compressed ZIP of the WASM
-// modules, and Log is the bounded compiler output. Log is set on failure too.
-type Result struct {
-	Name          string
-	Artifact, Log []byte
-}
-
-// Builder builds a workspace of one Language. The language is matched without
-// regard to case.
-type Builder interface {
-	Build(ctx context.Context, language string, request Request) (Result, error)
-}
-
-// ManifestError means the workspace lacks the manifest its Template requires.
-// Message is the sentence an Account sees; Err is the underlying cause.
-type ManifestError struct {
-	Message string
-	Err     error
-}
-
-func (e *ManifestError) Error() string { return e.Message + ": " + e.Err.Error() }
-func (e *ManifestError) Unwrap() error { return e.Err }
+// The Builder port and its types live in app. They keep their old names here for
+// callers of this package.
+type (
+	Request       = app.BuildRequest
+	Result        = app.BuildResult
+	Builder       = app.Builder
+	ManifestError = app.ManifestError
+)
 
 // Executor runs a container. Docker is the real one.
 type Executor func(ctx context.Context, run docker.Run) docker.Ran
@@ -64,6 +46,8 @@ type adapter struct {
 	image   string
 	command func(Request) (string, error)
 }
+
+var _ app.Builder = (*Docker)(nil)
 
 // Docker builds in sandboxed containers, one trusted image per Language.
 type Docker struct {

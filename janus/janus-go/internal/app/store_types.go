@@ -303,7 +303,6 @@ type UserFound struct {
 	Err         error
 }
 
-
 // ResumableImport is a queued import job found at startup. It is an interrupted
 // job waiting to resume.
 type ResumableImport struct {
