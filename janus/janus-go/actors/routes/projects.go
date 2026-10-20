@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	projectactor "janus/actors/projects"
 	wasmactor "janus/actors/wasm"
-	wasmruntime "janus/actors/wasmruntime"
 	"janus/internal/domain/templates"
 	"janus/web"
 )
@@ -428,7 +427,7 @@ func (a *Actor) startWASMRun(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.WASMRuntime == nil {
+	if a.dependencies.Runs == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "WASM runtime unavailable"})
 	}
 	var input struct {
@@ -437,18 +436,11 @@ func (a *Actor) startWASMRun(c *web.Context) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid run request"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.WASMRuntime, &wasmruntime.RequestRun{OwnerID: owner, BuildID: c.Param("id"), Args: input.Args})
+	runID, err := a.dependencies.Runs.Request(c.Request.Context(), owner, c.Param("id"), input.Args)
 	if err != nil {
-		return internalError()
+		return jsonResponse(wasmBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
-	result, ok := response.(*wasmruntime.RunRequested)
-	if !ok {
-		return internalError()
-	}
-	if result.Err != nil {
-		return jsonResponse(wasmBuildErrorStatus(result.Err), map[string]string{"error": result.Err.Error()})
-	}
-	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"run_id": result.RunID, "status": "running"}}
+	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"run_id": runID, "status": "running"}}
 }
 
 func (a *Actor) getWASMRun(c *web.Context) any {
@@ -456,21 +448,14 @@ func (a *Actor) getWASMRun(c *web.Context) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.WASMRuntime == nil {
+	if a.dependencies.Runs == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "WASM runtime unavailable"})
 	}
-	response, err := a.ask(c.Request.Context(), a.dependencies.WASMRuntime, &wasmruntime.GetRun{OwnerID: owner, RunID: c.Param("id")})
-	if err != nil {
-		return internalError()
-	}
-	result, ok := response.(*wasmruntime.RunFound)
-	if !ok || result.Err != nil {
-		return internalError()
-	}
-	if !result.Found {
+	run, found := a.dependencies.Runs.Get(owner, c.Param("id"))
+	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "WASM run not found"})
 	}
-	return result.Run
+	return run
 }
 
 type entrypointInput struct {

@@ -17,3 +17,7 @@ func (Wasmtime) Run(_ context.Context, module []byte, args []string, limits app.
 	stdout, stderr, usage, err := ExecuteWASIWith(module, args, limits)
 	return app.RunResult{Stdout: stdout, Stderr: stderr, Usage: usage}, err
 }
+
+// Available reports whether this build can run modules at all: it is false
+// without CGO, where every Run would fail.
+func (Wasmtime) Available() bool { return Available() }

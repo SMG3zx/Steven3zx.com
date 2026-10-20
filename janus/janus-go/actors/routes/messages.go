@@ -31,7 +31,7 @@ type Dependencies struct {
 	GitHub         *github.Service
 	Projects       *goakt.PID
 	WASMBuilds     *goakt.PID
-	WASMRuntime    *goakt.PID
+	Runs           *app.Runs
 	JWTExpiry      time.Duration
 	CookieSecure   bool
 	GoogleEnabled  bool

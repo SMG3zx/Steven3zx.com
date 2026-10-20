@@ -43,7 +43,7 @@ type Actor struct {
 	github         *githubactor.Service
 	projects       *goakt.PID
 	wasmBuilds     *goakt.PID
-	wasmRuntime    *goakt.PID
+	runs           *app.Runs
 	docker         *goakt.PID
 	logger         *zap.Logger
 	processErrors  chan error
@@ -179,17 +179,14 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn WASM build actor: %w", err)
 	}
-	a.wasmRuntime, err = a.system.Spawn(startupCtx, "wasm-runtime", wasmruntime.New(a.store, wasmruntime.Wasmtime{}))
-	if err != nil {
-		return fmt.Errorf("spawn WASM runtime actor: %w", err)
-	}
+	a.runs = app.NewRuns(a.store, wasmruntime.Wasmtime{})
 
 	if err = a.resumeInterruptedJobs(startupCtx); err != nil {
 		return err
 	}
 	a.routes, err = a.system.Spawn(startupCtx, "routes", routesactor.New(routesactor.Dependencies{
 		System: a.system, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Store: a.store, GitHub: a.github, Projects: a.projects, WASMBuilds: a.wasmBuilds, WASMRuntime: a.wasmRuntime, JWTExpiry: config.JWTExpiry,
+		Audit: a.audit, Store: a.store, GitHub: a.github, Projects: a.projects, WASMBuilds: a.wasmBuilds, Runs: a.runs, JWTExpiry: config.JWTExpiry,
 		CookieSecure: config.CookieSecure, GoogleEnabled: config.GoogleEnabled,
 		GoogleClientID: config.GoogleClientID, GoogleSecret: config.GoogleSecret,
 		GoogleCallback: config.GoogleCallback, JWTSecret: config.JWTSecret,
@@ -253,14 +250,9 @@ func (a *Actor) stop(ctx context.Context) error {
 			firstErr = fmt.Errorf("drain WASM builds: %w", err)
 		}
 	}
-	if a.wasmRuntime != nil {
-		response, err := goakt.Ask(shutdownCtx, a.wasmRuntime, &wasmruntime.Drain{}, ShutdownTimeout)
-		if err != nil && firstErr == nil {
+	if a.runs != nil {
+		if err := a.runs.Drain(shutdownCtx); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("drain WASM runtime: %w", err)
-		} else if result, ok := response.(*wasmruntime.Drained); !ok && err == nil && firstErr == nil {
-			firstErr = fmt.Errorf("drain WASM runtime: unexpected response %T", response)
-		} else if ok && result.Err != nil && firstErr == nil {
-			firstErr = result.Err
 		}
 	}
 	if a.database != nil {
