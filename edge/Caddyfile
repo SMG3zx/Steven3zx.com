@@ -7,8 +7,11 @@ janus.steven3zx.com {
 	handle @grafana {
 		reverse_proxy host.docker.internal:3000
 	}
+	# Janus gets its own port. 9091 on the host is the Janus stack's
+	# Prometheus, which must never be public. Run Janus with
+	# JANUS_HTTP_ADDRESS=127.0.0.1:9095.
 	handle {
-		reverse_proxy host.docker.internal:9091
+		reverse_proxy host.docker.internal:9095
 	}
 }
 
