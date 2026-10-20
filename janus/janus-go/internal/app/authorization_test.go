@@ -1,4 +1,4 @@
-package authorization
+package app
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestOwnerScopedPolicies(t *testing.T) {
-	policy, err := New(context.Background())
+	policy, err := NewPolicy(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestOwnerScopedPolicies(t *testing.T) {
 // The prepared query is shared by every request, so concurrent checks must
 // agree with sequential ones.
 func TestPolicyIsSafeForConcurrentChecks(t *testing.T) {
-	policy, err := New(context.Background())
+	policy, err := NewPolicy(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

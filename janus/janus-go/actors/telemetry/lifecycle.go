@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"janus/internal/app"
 
 	"github.com/grafana/pyroscope-go"
 	"go.opentelemetry.io/otel/attribute"
@@ -27,13 +28,13 @@ type Log func(level, message string)
 func Start(ctx context.Context, pyroscopeAddress string, log Log) (*Telemetry, error) {
 	shutdown, err := Init(ctx, "janus-go")
 	if err != nil {
-		_, span := StartSpan(ctx, "telemetry.initialize", trace.WithSpanKind(trace.SpanKindInternal))
-		RecordError(span, err)
+		_, span := app.StartSpan(ctx, "telemetry.initialize", trace.WithSpanKind(trace.SpanKindInternal))
+		app.RecordError(span, err)
 		span.End()
 		return nil, err
 	}
 
-	_, span := StartSpan(ctx, "pyroscope.start", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := app.StartSpan(ctx, "pyroscope.start", trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(
 		attribute.String("pyroscope.application.name", "janus-go"),
 		attribute.Bool("pyroscope.enabled", pyroscopeAddress != ""),
@@ -50,13 +51,13 @@ func Start(ctx context.Context, pyroscopeAddress string, log Log) (*Telemetry, e
 			pyroscope.ProfileInuseSpace,
 		},
 	})
-	RecordError(span, err)
+	app.RecordError(span, err)
 	span.End()
 	if err != nil {
 		_ = shutdown(ctx)
 		return nil, err
 	}
-	_, readySpan := StartSpan(ctx, "telemetry.ready")
+	_, readySpan := app.StartSpan(ctx, "telemetry.ready")
 	readySpan.SetAttributes(attribute.String("service.name", "janus-go"))
 	readySpan.End()
 	return &Telemetry{shutdown: shutdown, profiler: profiler}, nil
@@ -64,13 +65,13 @@ func Start(ctx context.Context, pyroscopeAddress string, log Log) (*Telemetry, e
 
 // Stop stops the profiler and flushes and shuts down the providers.
 func (t *Telemetry) Stop(ctx context.Context) error {
-	_, span := StartSpan(ctx, "pyroscope.stop", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := app.StartSpan(ctx, "pyroscope.stop", trace.WithSpanKind(trace.SpanKindInternal))
 	var profileErr error
 	if t.profiler != nil {
 		profileErr = t.profiler.Stop()
 		t.profiler = nil
 	}
-	RecordError(span, profileErr)
+	app.RecordError(span, profileErr)
 	span.End()
 
 	err := profileErr

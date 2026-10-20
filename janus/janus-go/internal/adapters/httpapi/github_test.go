@@ -2,19 +2,18 @@ package httpapi
 
 import (
 	"context"
+	"janus/internal/app"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
-
-	authzactor "janus/actors/authorization"
 )
 
 func TestGitHubOAuthUsesSeparateIdentityAndRepositoryScopesAndChecksState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	authorization, err := authzactor.New(ctx)
+	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

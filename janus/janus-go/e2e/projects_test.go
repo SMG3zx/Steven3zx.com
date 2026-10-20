@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/githubapi"
+	"janus/internal/adapters/gitsource"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
@@ -20,11 +22,6 @@ import (
 	"time"
 
 	"github.com/mxschmitt/playwright-go"
-
-	authactor "janus/actors/authentication"
-	authzactor "janus/actors/authorization"
-	"janus/actors/github"
-	"janus/actors/gitsource"
 )
 
 const (
@@ -334,12 +331,12 @@ func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store
 		t.Fatalf("open database: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	authentication := authactor.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
-	authorization, err := authzactor.New(ctx)
+	authentication := app.NewAuthentication([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
+	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}
-	gh := github.NewService(store, github.NewClient())
+	gh := app.NewGitHub(store, githubapi.NewClient())
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
 	builds := app.NewBuilds(store, b, audit)

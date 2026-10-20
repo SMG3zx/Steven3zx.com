@@ -9,15 +9,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	authactor "janus/actors/authentication"
-	authzactor "janus/actors/authorization"
 	configactor "janus/actors/config"
-	githubactor "janus/actors/github"
-	"janus/actors/gitsource"
 	telemetryactor "janus/actors/telemetry"
 	wasmruntime "janus/actors/wasmruntime"
 	"janus/internal/adapters/auditlog"
 	"janus/internal/adapters/dockerbuild"
+	"janus/internal/adapters/githubapi"
+	"janus/internal/adapters/gitsource"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
@@ -30,11 +28,11 @@ type Actor struct {
 	httpServer     *httpapi.Server
 	auditLog       *auditlog.Log
 	audit          app.Audit
-	authentication *authactor.Service
-	authorization  *authzactor.Policy
+	authentication *app.Authentication
+	authorization  *app.Policy
 	database       *sqlstore.Store
 	store          app.Store
-	github         *githubactor.Service
+	github         *app.GitHub
 	imports        *app.Imports
 	builds         *app.Builds
 	accounts       *app.Accounts
@@ -99,10 +97,10 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	}
 	a.account(ctx.Context(), "info", "pyroscope.profiling.started", map[string]string{"application": "janus-go"})
 
-	startupCtx, startupSpan := telemetryactor.StartSpan(ctx.Context(), "application.start", trace.WithSpanKind(trace.SpanKindInternal))
+	startupCtx, startupSpan := app.StartSpan(ctx.Context(), "application.start", trace.WithSpanKind(trace.SpanKindInternal))
 	startupSpan.SetAttributes(attribute.String("application.name", "janus-go"))
 	defer func() {
-		telemetryactor.RecordError(startupSpan, retErr)
+		app.RecordError(startupSpan, retErr)
 		startupSpan.End()
 	}()
 
@@ -111,9 +109,9 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 		return fmt.Errorf("open database: %w", err)
 	}
 	a.store = a.database
-	a.github = githubactor.NewService(a.store, githubactor.NewClient())
-	a.authentication = authactor.New([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry)
-	a.authorization, err = authzactor.New(startupCtx)
+	a.github = app.NewGitHub(a.store, githubapi.NewClient())
+	a.authentication = app.NewAuthentication([]byte(config.JWTSecret), config.JWTIssuer, config.JWTExpiry)
+	a.authorization, err = app.NewPolicy(startupCtx)
 	if err != nil {
 		return err
 	}
@@ -140,17 +138,17 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	}
 	a.httpServer = httpapi.New(httpapi.Config{
 		Addr: config.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Store: a.store, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs, JWTExpiry: config.JWTExpiry,
+		Audit: a.audit, Store: a.store, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs, JWTExpiry: config.JWTExpiry, RecordRequest: telemetryactor.RecordHTTPRequest,
 		CookieSecure: config.CookieSecure, GoogleEnabled: config.GoogleEnabled,
 		GoogleClientID: config.GoogleClientID, GoogleSecret: config.GoogleSecret,
 		GoogleCallback: config.GoogleCallback, JWTSecret: config.JWTSecret,
 		GitHubEnabled: config.GitHubEnabled, GitHubClientID: config.GitHubClientID,
 		GitHubSecret: config.GitHubSecret, GitHubCallback: config.GitHubCallback,
 	})
-	_, serverSpan := telemetryactor.StartSpan(startupCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
+	_, serverSpan := app.StartSpan(startupCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
 	serverSpan.SetAttributes(attribute.String("server.address", config.HTTPAddress))
 	err = a.httpServer.Start()
-	telemetryactor.RecordError(serverSpan, err)
+	app.RecordError(serverSpan, err)
 	serverSpan.End()
 	if err != nil {
 		a.httpServer = nil
@@ -161,7 +159,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 }
 
 func (a *Actor) stop(ctx context.Context) error {
-	shutdownCtx, span := telemetryactor.StartSpan(ctx, "application.shutdown", trace.WithSpanKind(trace.SpanKindInternal))
+	shutdownCtx, span := app.StartSpan(ctx, "application.shutdown", trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(attribute.String("application.name", "janus-go"))
 	spanEnded := false
 	endSpan := func() {
@@ -196,7 +194,7 @@ func (a *Actor) stop(ctx context.Context) error {
 			firstErr = err
 		}
 	}
-	telemetryactor.RecordError(span, firstErr)
+	app.RecordError(span, firstErr)
 	if a.auditLog != nil {
 		if err := a.auditLog.Flush(); err != nil && firstErr == nil {
 			firstErr = err
@@ -216,8 +214,8 @@ func (a *Actor) stop(ctx context.Context) error {
 func (a *Actor) watchHTTPServer(failed <-chan error) {
 	for err := range failed {
 		ctx := context.Background()
-		_, span := telemetryactor.StartSpan(ctx, "http.server.failure", trace.WithSpanKind(trace.SpanKindInternal))
-		telemetryactor.RecordError(span, err)
+		_, span := app.StartSpan(ctx, "http.server.failure", trace.WithSpanKind(trace.SpanKindInternal))
+		app.RecordError(span, err)
 		span.End()
 		a.account(ctx, "error", "http.server.failed", map[string]string{"error": err.Error()})
 		if a.processErrors != nil {

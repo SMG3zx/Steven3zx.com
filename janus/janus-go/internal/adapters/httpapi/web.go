@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"io"
+	"janus/internal/app"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,8 +13,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-
-	actortrace "janus/actors/telemetry"
 )
 
 // otel.Tracer returns a delegating tracer, so this works even if it's
@@ -91,7 +90,7 @@ func (a *mux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(req.Header))
 	}
 
-	ctx, span := actortrace.StartSpanWithScope(ctx, tracer, req.Method,
+	ctx, span := app.StartSpanWithScope(ctx, tracer, req.Method,
 		trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
 
@@ -125,7 +124,7 @@ func (a *mux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	handlerCtx, handlerSpan := actortrace.StartSpanWithScope(ctx, tracer, "http.route.handler",
+	handlerCtx, handlerSpan := app.StartSpanWithScope(ctx, tracer, "http.route.handler",
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attribute.String("http.route", route)),
 	)

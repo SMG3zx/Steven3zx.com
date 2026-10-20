@@ -1,4 +1,6 @@
-package github
+// Package githubapi is the app.GitHost adapter for the GitHub REST API. More Git
+// providers will sit beside it.
+package githubapi
 
 import (
 	"context"
@@ -15,8 +17,6 @@ import (
 
 const githubAPI = "https://api.github.com"
 
-// The GitHost types live in app. They keep their old names here for callers of
-// this package.
 type (
 	Repository = app.Repository
 	Branch     = app.Branch

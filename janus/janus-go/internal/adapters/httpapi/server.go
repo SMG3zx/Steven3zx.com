@@ -23,10 +23,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/actors/authentication"
-	"janus/actors/authorization"
-	"janus/actors/github"
-	actortrace "janus/actors/telemetry"
 	"janus/internal/app"
 )
 
@@ -36,11 +32,11 @@ import (
 type Config struct {
 	// Addr is the listen address; "127.0.0.1:0" picks a free port.
 	Addr           string
-	Authentication *authentication.Service
-	Authorization  *authorization.Policy
+	Authentication *app.Authentication
+	Authorization  *app.Policy
 	Audit          app.Audit
 	Store          app.Store
-	GitHub         *github.Service
+	GitHub         *app.GitHub
 	Imports        *app.Imports
 	Builds         *app.Builds
 	Accounts       *app.Accounts
@@ -56,6 +52,9 @@ type Config struct {
 	GitHubClientID string
 	GitHubSecret   string
 	GitHubCallback string
+	// RecordRequest, when set, is told the method, status and duration of each
+	// request the listener serves.
+	RecordRequest func(ctx context.Context, method string, status int, duration time.Duration)
 }
 
 // Server is the HTTP driving adapter: it turns requests into use-case calls
@@ -80,7 +79,7 @@ func New(config Config) *Server {
 func (s *Server) Handler() http.Handler { return s.mux }
 
 func (s *Server) routes() *mux {
-	_, span := actortrace.StartSpan(context.Background(), "routes.build", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := app.StartSpan(context.Background(), "routes.build", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	app := newMux("")
 	setupGoogle(s.dependencies)
@@ -190,7 +189,7 @@ type credentials struct {
 }
 
 func (a *Server) register(c *call) any {
-	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.local.register", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := app.StartSpan(c.Request.Context(), "auth.local.register", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	var input credentials
 	if err := decodeJSON(c.Request, &input); err != nil || !validEmail(input.Email) || len(input.Password) < 12 || len(input.Password) > 1024 {
@@ -221,7 +220,7 @@ func (a *Server) register(c *call) any {
 }
 
 func (a *Server) login(c *call) any {
-	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.local.login", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := app.StartSpan(c.Request.Context(), "auth.local.login", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	var input credentials
 	if err := decodeJSON(c.Request, &input); err != nil || !validEmail(input.Email) || len(input.Password) == 0 || len(input.Password) > 1024 {
@@ -255,7 +254,7 @@ func (a *Server) login(c *call) any {
 }
 
 func (a *Server) logout(c *call) any {
-	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.logout", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := app.StartSpan(c.Request.Context(), "auth.logout", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	if cookie, err := c.Request.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		if subject, valid := a.dependencies.Authentication.ValidateToken(ctx, cookie.Value); valid {
@@ -269,7 +268,7 @@ func (a *Server) logout(c *call) any {
 }
 
 func (a *Server) me(c *call) any {
-	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.profile.read", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := app.StartSpan(c.Request.Context(), "auth.profile.read", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	subject, ok := a.subject(ctx, c.Request)
 	if !ok {
@@ -297,7 +296,7 @@ func (a *Server) googleStart(c *call) any {
 	if !a.dependencies.GoogleEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Google sign-in is not configured"})
 	}
-	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.google.begin", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := app.StartSpan(c.Request.Context(), "auth.google.begin", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	allowed, err := a.allowed(ctx, "", "account.google.login", nil)
 	if err != nil {
@@ -321,7 +320,7 @@ func (a *Server) googleCallback(c *call) any {
 	if !a.dependencies.GoogleEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Google sign-in is not configured"})
 	}
-	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.google.callback", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := app.StartSpan(c.Request.Context(), "auth.google.callback", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	allowed, err := a.allowed(ctx, "", "account.google.login", nil)
 	if err != nil {

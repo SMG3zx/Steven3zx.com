@@ -3,15 +3,13 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"janus/internal/adapters/githubapi"
+	"janus/internal/adapters/gitsource"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	authactor "janus/actors/authentication"
-	authzactor "janus/actors/authorization"
-	"janus/actors/github"
-	"janus/actors/gitsource"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
@@ -22,17 +20,17 @@ func newLifecycleApp(t *testing.T) (http.Handler, app.Store) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	store := storetest.NewMemory()
-	gh := github.NewService(store, github.NewClient())
+	gh := app.NewGitHub(store, githubapi.NewClient())
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
 	builds := app.NewBuilds(store, nil, audit)
-	authorization, err := authzactor.New(ctx)
+	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return New(Config{
 		Audit: audit, Store: store, GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
-		Authentication: authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
+		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler(), store
 }
 

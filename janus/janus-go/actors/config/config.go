@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"errors"
+	"janus/internal/app"
 	"os"
 	"strconv"
 	"strings"
@@ -11,8 +12,6 @@ import (
 	"github.com/joho/godotenv"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-
-	actortrace "janus/actors/telemetry"
 )
 
 // Config contains validated runtime settings loaded from the environment.
@@ -49,7 +48,7 @@ func LoadEnvironment() error {
 
 // Load validates the process environment and returns the settings it describes.
 func Load(ctx context.Context) (Config, error) {
-	_, span := actortrace.StartSpan(ctx, "config.load", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := app.StartSpan(ctx, "config.load", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 
 	addr := strings.TrimSpace(os.Getenv("JANUS_HTTP_ADDRESS"))

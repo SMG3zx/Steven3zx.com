@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"janus/internal/app"
 	"net"
 	"net/http"
 	"sync"
@@ -12,8 +13,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-
-	actortrace "janus/actors/telemetry"
 )
 
 // listenState holds the running http.Server.
@@ -42,7 +41,7 @@ func (s *Server) Start() error {
 	l.addr = listener.Addr().String()
 	l.failed = make(chan error, 1)
 	l.server = &http.Server{
-		Addr: l.addr, Handler: serverHandler{app: s.mux},
+		Addr: l.addr, Handler: serverHandler{app: s.mux, record: s.dependencies.RecordRequest},
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -86,14 +85,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return server.Shutdown(ctx)
 }
 
-type serverHandler struct{ app *mux }
+type serverHandler struct {
+	app    *mux
+	record func(ctx context.Context, method string, status int, duration time.Duration)
+}
 
 func (h serverHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	ctx, span := actortrace.StartSpan(r.Context(), "http.edge", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := app.StartSpan(r.Context(), "http.edge", trace.WithSpanKind(trace.SpanKindServer))
 	writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 	defer func() {
-		actortrace.RecordHTTPRequest(ctx, r.Method, writer.status, time.Since(started))
+		if h.record != nil {
+			h.record(ctx, r.Method, writer.status, time.Since(started))
+		}
 		span.End()
 	}()
 	span.SetAttributes(

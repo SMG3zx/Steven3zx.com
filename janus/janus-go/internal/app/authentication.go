@@ -1,4 +1,4 @@
-package authentication
+package app
 
 import (
 	"context"
@@ -15,8 +15,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/argon2"
-
-	actortrace "janus/actors/telemetry"
 )
 
 const (
@@ -27,57 +25,57 @@ const (
 	argonSaltLength  = 16
 )
 
-// Service hashes and verifies passwords and issues and validates session
+// Authentication hashes and verifies passwords and issues and validates session
 // tokens. It holds only configuration, so any number of callers may use it at
 // once and no call waits for another.
-type Service struct {
+type Authentication struct {
 	secret []byte
 	issuer string
 	ttl    time.Duration
 }
 
-// New creates a Service that signs tokens with secret, uses issuer as the JWT
+// NewAuthentication creates an Authentication that signs tokens with secret, uses issuer as the JWT
 // issuer claim, and gives tokens a lifetime of ttl.
-func New(secret []byte, issuer string, ttl time.Duration) *Service {
-	return &Service{secret: append([]byte(nil), secret...), issuer: issuer, ttl: ttl}
+func NewAuthentication(secret []byte, issuer string, ttl time.Duration) *Authentication {
+	return &Authentication{secret: append([]byte(nil), secret...), issuer: issuer, ttl: ttl}
 }
 
 // Token is a signed session token and the Unix time at which it expires.
-type Token struct {
+type SessionToken struct {
 	Value     string
 	ExpiresAt int64
 }
 
 // HashPassword returns the Argon2id encoding of password.
-func (s *Service) HashPassword(ctx context.Context, password string) (string, error) {
+func (s *Authentication) HashPassword(ctx context.Context, password string) (string, error) {
 	_, span := s.span(ctx, "authentication.hash_password")
 	defer span.End()
 	hash, err := hashPassword(password)
-	actortrace.RecordError(span, err)
+	RecordError(span, err)
 	return hash, err
 }
 
 // VerifyPassword reports whether password matches the encoded Argon2id hash.
-func (s *Service) VerifyPassword(ctx context.Context, password, encoded string) (bool, error) {
+func (s *Authentication) VerifyPassword(ctx context.Context, password, encoded string) (bool, error) {
 	_, span := s.span(ctx, "authentication.verify_password")
 	defer span.End()
 	valid, err := verifyPassword(password, encoded)
-	actortrace.RecordError(span, err)
+	RecordError(span, err)
 	return valid, err
 }
 
 // IssueToken signs a session token for subject.
-func (s *Service) IssueToken(ctx context.Context, subject string) (Token, error) {
+func (s *Authentication) IssueToken(ctx context.Context, subject string) (SessionToken, error) {
 	_, span := s.span(ctx, "authentication.issue_token")
 	defer span.End()
 	token, err := s.issue(subject)
-	actortrace.RecordError(span, err)
+	RecordError(span, err)
 	return token, err
 }
 
 // ValidateToken returns the subject of a valid, unexpired token. valid is false
 // for a token that is malformed, expired, or signed for another issuer.
-func (s *Service) ValidateToken(ctx context.Context, token string) (subject string, valid bool) {
+func (s *Authentication) ValidateToken(ctx context.Context, token string) (subject string, valid bool) {
 	_, span := s.span(ctx, "authentication.validate_token")
 	defer span.End()
 	claims := &sessionClaims{}
@@ -88,22 +86,22 @@ func (s *Service) ValidateToken(ctx context.Context, token string) (subject stri
 		return s.secret, nil
 	}, jwt.WithIssuer(s.issuer), jwt.WithAudience("janus-go"), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil && !errors.Is(err, jwt.ErrTokenExpired) {
-		actortrace.RecordError(span, err)
+		RecordError(span, err)
 	}
 	return claims.Subject, err == nil && parsed.Valid && claims.Subject != ""
 }
 
-func (s *Service) span(ctx context.Context, name string) (context.Context, trace.Span) {
-	ctx, span := actortrace.StartSpan(ctx, name, trace.WithSpanKind(trace.SpanKindInternal))
+func (s *Authentication) span(ctx context.Context, name string) (context.Context, trace.Span) {
+	ctx, span := StartSpan(ctx, name, trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(attribute.String("component", "authentication"))
 	return ctx, span
 }
 
 type sessionClaims struct{ jwt.RegisteredClaims }
 
-func (s *Service) issue(subject string) (Token, error) {
+func (s *Authentication) issue(subject string) (SessionToken, error) {
 	if strings.TrimSpace(subject) == "" {
-		return Token{}, errors.New("token subject is required")
+		return SessionToken{}, errors.New("token subject is required")
 	}
 	now := time.Now().UTC()
 	expiresAt := now.Add(s.ttl)
@@ -114,7 +112,7 @@ func (s *Service) issue(subject string) (Token, error) {
 	}}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	encoded, err := token.SignedString(s.secret)
-	return Token{Value: encoded, ExpiresAt: expiresAt.Unix()}, err
+	return SessionToken{Value: encoded, ExpiresAt: expiresAt.Unix()}, err
 }
 
 func hashPassword(password string) (string, error) {

@@ -1,11 +1,9 @@
-package github
+package app
 
 import (
 	"context"
 	"errors"
 	"sort"
-
-	"janus/internal/app"
 )
 
 // RepositoryList is the repositories an Account can import. Connected is false
@@ -18,34 +16,34 @@ type RepositoryList struct {
 // ErrNotConnected means the Account has no GitHub Connection.
 var ErrNotConnected = errors.New("connect GitHub before importing a repository")
 
-// Service reads from GitHub on behalf of an Account, using the access token the
+// GitHub reads from GitHub on behalf of an Account, using the access token the
 // GitHub Connection stores. It keeps no state, so callers use it directly.
-type Service struct {
+type GitHub struct {
 	// API is the code host the Service reads from.
-	API   app.GitHost
-	store app.Store
+	API   GitHost
+	store Store
 }
 
-// NewService returns a Service that reads tokens from store and repository
+// NewGitHub returns a GitHub that reads tokens from store and repository
 // metadata from host.
-func NewService(store app.Store, host app.GitHost) *Service {
-	return &Service{API: host, store: store}
+func NewGitHub(store Store, host GitHost) *GitHub {
+	return &GitHub{API: host, store: store}
 }
 
 // Token returns the Account's GitHub access token, and whether the Account is
 // connected at all.
-func (s *Service) Token(ctx context.Context, ownerID string) (token string, connected bool, err error) {
+func (s *GitHub) Token(ctx context.Context, ownerID string) (token string, connected bool, err error) {
 	return s.store.FindGitHubToken(ctx, ownerID)
 }
 
 // Disconnect removes the Account's stored token. Its sign-in identities stay.
-func (s *Service) Disconnect(ctx context.Context, ownerID string) error {
+func (s *GitHub) Disconnect(ctx context.Context, ownerID string) error {
 	return s.store.DisconnectGitHub(ctx, ownerID)
 }
 
 // Repositories lists the repositories the Account can see. An Account that is
 // not connected gets an empty list and no error.
-func (s *Service) Repositories(ctx context.Context, ownerID string) (RepositoryList, error) {
+func (s *GitHub) Repositories(ctx context.Context, ownerID string) (RepositoryList, error) {
 	token, connected, err := s.Token(ctx, ownerID)
 	if err != nil || !connected {
 		return RepositoryList{Connected: connected}, err
@@ -55,7 +53,7 @@ func (s *Service) Repositories(ctx context.Context, ownerID string) (RepositoryL
 }
 
 // Branches lists the branches of a repository, default branch first.
-func (s *Service) Branches(ctx context.Context, ownerID, repository string) ([]Branch, error) {
+func (s *GitHub) Branches(ctx context.Context, ownerID, repository string) ([]Branch, error) {
 	token, err := s.connectedToken(ctx, ownerID)
 	if err != nil {
 		return nil, err
@@ -75,7 +73,7 @@ func (s *Service) Branches(ctx context.Context, ownerID, repository string) ([]B
 }
 
 // Commits lists the 50 newest commits of a branch.
-func (s *Service) Commits(ctx context.Context, ownerID, repository, branch string) ([]Commit, error) {
+func (s *GitHub) Commits(ctx context.Context, ownerID, repository, branch string) ([]Commit, error) {
 	token, err := s.connectedToken(ctx, ownerID)
 	if err != nil {
 		return nil, err
@@ -83,7 +81,7 @@ func (s *Service) Commits(ctx context.Context, ownerID, repository, branch strin
 	return s.API.Commits(ctx, token, repository, branch)
 }
 
-func (s *Service) connectedToken(ctx context.Context, ownerID string) (string, error) {
+func (s *GitHub) connectedToken(ctx context.Context, ownerID string) (string, error) {
 	token, connected, err := s.Token(ctx, ownerID)
 	if err != nil {
 		return "", err

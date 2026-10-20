@@ -1,4 +1,4 @@
-package authentication
+package app
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func TestArgon2idHashingRejectsInvalidAndTamperedValues(t *testing.T) {
 func TestSessionTokensRoundTripAndRejectOtherIssuers(t *testing.T) {
 	ctx := context.Background()
 	secret := []byte(strings.Repeat("k", 32))
-	service := New(secret, "janus-test", time.Minute)
+	service := NewAuthentication(secret, "janus-test", time.Minute)
 	token, err := service.IssueToken(ctx, "alice")
 	if err != nil {
 		t.Fatal(err)
@@ -43,10 +43,10 @@ func TestSessionTokensRoundTripAndRejectOtherIssuers(t *testing.T) {
 	if subject, valid := service.ValidateToken(ctx, token.Value); !valid || subject != "alice" {
 		t.Fatalf("validate own token = %q, %v", subject, valid)
 	}
-	if _, valid := New(secret, "another-issuer", time.Minute).ValidateToken(ctx, token.Value); valid {
+	if _, valid := NewAuthentication(secret, "another-issuer", time.Minute).ValidateToken(ctx, token.Value); valid {
 		t.Fatal("a token for another issuer was accepted")
 	}
-	if _, valid := New([]byte(strings.Repeat("x", 32)), "janus-test", time.Minute).ValidateToken(ctx, token.Value); valid {
+	if _, valid := NewAuthentication([]byte(strings.Repeat("x", 32)), "janus-test", time.Minute).ValidateToken(ctx, token.Value); valid {
 		t.Fatal("a token signed with another secret was accepted")
 	}
 	if _, valid := service.ValidateToken(ctx, "not-a-token"); valid {
@@ -55,7 +55,7 @@ func TestSessionTokensRoundTripAndRejectOtherIssuers(t *testing.T) {
 	if _, err := service.IssueToken(ctx, "  "); err == nil {
 		t.Fatal("a token was issued without a subject")
 	}
-	expired := New(secret, "janus-test", -time.Minute)
+	expired := NewAuthentication(secret, "janus-test", -time.Minute)
 	old, err := expired.IssueToken(ctx, "alice")
 	if err != nil {
 		t.Fatal(err)

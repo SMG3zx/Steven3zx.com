@@ -4,16 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"janus/internal/adapters/githubapi"
+	"janus/internal/adapters/gitsource"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	authactor "janus/actors/authentication"
-	authzactor "janus/actors/authorization"
-	"janus/actors/github"
-	"janus/actors/gitsource"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
@@ -23,15 +21,15 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	store := storetest.NewMemory()
-	gh := github.NewService(store, github.NewClient())
+	gh := app.NewGitHub(store, githubapi.NewClient())
 	imports := app.NewImports(store, gh.API, gitsource.New(), audittest.NewRecorder())
-	authorization, err := authzactor.New(ctx)
+	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
 		Audit: audittest.NewRecorder(), Store: store, GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
-		Authentication: authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
+		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
 	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"alice@example.com","password":"correct horse battery staple"}`, nil)
