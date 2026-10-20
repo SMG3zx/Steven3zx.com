@@ -68,7 +68,8 @@ type Builder interface {
 	Build(ctx context.Context, language string, request BuildRequest) (BuildResult, error)
 }
 
-// Runner runs a WASI module with the given arguments under limits. It reports
+// Runner runs a WASI module with the given arguments under limits. limits.Timeout
+// bounds the run, and an adapter may also stop early when ctx ends. It reports
 // what the module wrote and what the run consumed. A module that cannot be
 // loaded, traps or exceeds a limit fails with an error, and the RunResult still
 // holds the output and Usage measured up to that point. Stdin is empty.

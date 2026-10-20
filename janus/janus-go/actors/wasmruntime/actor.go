@@ -7,13 +7,15 @@ import (
 
 	"github.com/google/uuid"
 	actor "github.com/tochemey/goakt/v4/actor"
-	artifactpkg "janus/internal/domain/artifact"
 	"janus/actors/persistence"
+	"janus/internal/app"
+	artifactpkg "janus/internal/domain/artifact"
 	"janus/internal/domain/templates"
 )
 
 type Actor struct {
-	store    persistence.Store
+	store    app.Store
+	runner   app.Runner
 	runs     map[string]Run
 	slots    chan struct{}
 	draining bool
@@ -21,8 +23,10 @@ type Actor struct {
 
 var _ actor.Actor = (*Actor)(nil)
 
-func New(store persistence.Store) *Actor {
-	return &Actor{store: store, runs: map[string]Run{}, slots: make(chan struct{}, 2)}
+// New returns the runtime actor. It reads builds from store and runs their
+// modules with runner.
+func New(store app.Store, runner app.Runner) *Actor {
+	return &Actor{store: store, runner: runner, runs: map[string]Run{}, slots: make(chan struct{}, 2)}
 }
 func (*Actor) PreStart(*actor.Context) error { return nil }
 
@@ -133,7 +137,9 @@ func (a *Actor) request(ctx *actor.ReceiveContext, m *RequestRun) *RunRequested 
 		var out, stderr []byte
 		var usage Usage
 		if e == nil {
-			out, stderr, usage, e = ExecuteWASIWith(module, args, limits)
+			var result app.RunResult
+			result, e = a.runner.Run(context.Background(), module, args, limits)
+			out, stderr, usage = result.Stdout, result.Stderr, result.Usage
 		}
 		_ = actor.Tell(context.Background(), self, &completed{ID: id, Module: name, Stdout: out, Stderr: stderr, Usage: usage, Err: e})
 	}()

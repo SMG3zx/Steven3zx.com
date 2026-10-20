@@ -175,7 +175,7 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("spawn WASM build actor: %w", err)
 	}
-	a.wasmRuntime, err = a.system.Spawn(startupCtx, "wasm-runtime", wasmruntime.New(a.store))
+	a.wasmRuntime, err = a.system.Spawn(startupCtx, "wasm-runtime", wasmruntime.New(a.store, wasmruntime.Wasmtime{}))
 	if err != nil {
 		return fmt.Errorf("spawn WASM runtime actor: %w", err)
 	}
