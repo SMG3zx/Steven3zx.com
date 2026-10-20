@@ -60,7 +60,7 @@ Rules for the tree:
 
 1. `domain` imports only the standard library and pure libraries. It imports nothing else from this repository.
 2. `app` imports `domain` and pure libraries (uuid, argon2, JWT, OPA, zstd, the OpenTelemetry API). It never imports an adapter, `net/http`, `database/sql`, `os/exec`, a Docker or Git client, Wasmtime, or any actor framework.
-3. An adapter imports `app` and `domain`. An adapter never imports another adapter, `cmd`, or a test adapter, except that a `<port>test` package may be imported by tests.
+3. An adapter imports `app` and `domain`. An adapter never imports another adapter, `cmd`, or a test adapter, except that a `<port>test` package may be imported by tests. `internal/archtest` checks non-test imports only, so that exception holds by construction.
 4. `cmd/janus` is the only package that imports concrete adapters.
 5. Dependencies point inward: `cmd` and adapters toward `app`, `app` toward `domain`.
 
