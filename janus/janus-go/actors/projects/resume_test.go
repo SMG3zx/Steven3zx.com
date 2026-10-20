@@ -25,15 +25,15 @@ import (
 const resumeMainGo = "package main\n\nfunc main() {}\n"
 
 // resumeFixture is a local git repository served as alice/repo, plus the
-// persistence and projects actors that run against it.
+// in-memory Store and projects actor that run against it.
 type resumeFixture struct {
-	t           *testing.T
-	ctx         context.Context
-	persistence *goakt.PID
-	projects    *goakt.PID
-	commit      string
-	blob        string
-	repoDir     string
+	t        *testing.T
+	ctx      context.Context
+	store    persistence.Store
+	projects *goakt.PID
+	commit   string
+	blob     string
+	repoDir  string
 }
 
 func newResumeFixture(t *testing.T) *resumeFixture {
@@ -70,17 +70,7 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 		defer stopCancel()
 		_ = system.Stop(stop)
 	})
-	persistencePID, err := system.Spawn(ctx, "persistence", persistence.New(filepath.Join(t.TempDir(), "resume.db"), strings.Repeat("s", 32)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Second)
-		defer closeCancel()
-		_, _ = goakt.Ask(closeCtx, persistencePID, &persistence.CloseDatabase{}, time.Second)
-	})
-
-	store := persistence.NewClient(persistencePID, 5*time.Second)
+	store := persistence.NewMemory()
 	gh := github.NewService(store)
 	gh.API = &github.Client{HTTP: githubServer.Client(), BaseURL: githubServer.URL}
 	actor := New(store, gh)
@@ -90,20 +80,19 @@ func newResumeFixture(t *testing.T) *resumeFixture {
 		t.Fatal(err)
 	}
 
-	f := &resumeFixture{t: t, ctx: ctx, persistence: persistencePID, projects: projectsPID, commit: commit, blob: blob, repoDir: repoDir}
-	f.ask(&persistence.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"})
-	f.ask(&persistence.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Project"})
-	f.ask(&persistence.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"})
+	f := &resumeFixture{t: t, ctx: ctx, store: store, projects: projectsPID, commit: commit, blob: blob, repoDir: repoDir}
+	f.must(store.CreateLocalUser(ctx, persistence.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}))
+	_, err = store.CreateProject(ctx, persistence.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Project"})
+	f.must(err)
+	f.must(store.ConnectGitHub(ctx, persistence.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"}))
 	return f
 }
 
-func (f *resumeFixture) ask(message any) any {
+func (f *resumeFixture) must(err error) {
 	f.t.Helper()
-	response, err := goakt.Ask(f.ctx, f.persistence, message, 10*time.Second)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return response
 }
 
 // manifestFor returns the scan manifest of the fixture repository, with main.go
@@ -117,28 +106,29 @@ func (f *resumeFixture) manifestFor(hash string) string {
 // stands for a Staging Snapshot that was interrupted before its scan finished.
 func (f *resumeFixture) interruptedImport(job, staging string, stored map[string]string, manifest string) {
 	f.t.Helper()
-	f.ask(&persistence.CreateImportJob{ID: job, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit})
+	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: job, OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
 	for _, status := range []string{"cloning", "scanning", "storing"} {
-		f.ask(&persistence.UpdateImportJob{ID: job, Status: status, Progress: 50})
+		f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: job, Status: status, Progress: 50}))
 	}
-	f.ask(&persistence.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}", Manifest: manifest})
+	f.must(f.store.BeginSnapshot(f.ctx, persistence.BeginSnapshot{ID: staging, JobID: job, OwnerID: "alice", ProjectID: "project-1", RepositoryID: 42, Repository: "alice/repo", Branch: "main", Commit: f.commit, DefaultBranch: "main", MetadataJSON: "{}", Manifest: manifest}))
 	var files []persistence.SnapshotFile
 	for path, hash := range stored {
 		files = append(files, persistence.SnapshotFile{Path: path, Mode: "100644", Content: []byte(resumeMainGo), Hash: hash})
 	}
 	if len(files) > 0 {
-		f.ask(&persistence.AddSnapshotFiles{SnapshotID: staging, Files: files})
+		f.must(f.store.AddSnapshotFiles(f.ctx, staging, files))
 	}
-	f.ask(&persistence.UpdateImportJob{ID: job, Status: "queued", Progress: 0})
+	f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: job, Status: "queued", Progress: 0}))
 }
 
 func (f *resumeFixture) waitForImport(job string) persistence.ImportJob {
 	f.t.Helper()
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
-		found := f.ask(&persistence.FindImportJob{ID: job, OwnerID: "alice"}).(*persistence.ImportJobFound)
-		if found.Job.Status == "complete" || found.Job.Status == "failed" {
-			return found.Job
+		found, _, err := f.store.FindImportJob(f.ctx, job, "alice")
+		f.must(err)
+		if found.Status == "complete" || found.Status == "failed" {
+			return found
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -148,7 +138,9 @@ func (f *resumeFixture) waitForImport(job string) persistence.ImportJob {
 
 func (f *resumeFixture) snapshots() []persistence.ProjectSnapshot {
 	f.t.Helper()
-	return f.ask(&persistence.ListSnapshots{OwnerID: "alice", ProjectID: "project-1"}).(*persistence.SnapshotsListed).Snapshots
+	snapshots, err := f.store.ListSnapshots(f.ctx, "alice", "project-1")
+	f.must(err)
+	return snapshots
 }
 
 func (f *resumeFixture) resume() {
@@ -232,7 +224,7 @@ func TestResumeDiscardsStagingThatDoesNotMatchTheCommit(t *testing.T) {
 func TestResumeWithoutGitHubConnectionFailsAndDiscardsStaging(t *testing.T) {
 	f := newResumeFixture(t)
 	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob}, f.manifestFor(f.blob))
-	f.ask(&persistence.DisconnectGitHub{UserID: "alice"})
+	f.must(f.store.DisconnectGitHub(f.ctx, "alice"))
 
 	f.resume()
 	job := f.waitForImport("job-1")
@@ -240,7 +232,7 @@ func TestResumeWithoutGitHubConnectionFailsAndDiscardsStaging(t *testing.T) {
 	if job.Status != "failed" || !strings.Contains(job.Error, "reconnect GitHub") {
 		t.Fatalf("status=%q error=%q, want failure asking to reconnect GitHub", job.Status, job.Error)
 	}
-	if staging := f.ask(&persistence.FindStagingSnapshot{JobID: "job-1"}).(*persistence.StagingSnapshotFound); staging.Found {
+	if staging, err := f.store.FindStagingSnapshot(f.ctx, "job-1"); err != nil || staging.Found {
 		t.Fatal("failed resume kept its staging snapshot")
 	}
 }
@@ -314,8 +306,8 @@ func TestResumeRestartsFromTheCloneWhenTheManifestDoesNotMatchTheRepository(t *t
 
 func TestRetryStartsANewImportFromAFailedOne(t *testing.T) {
 	f := newResumeFixture(t)
-	f.ask(&persistence.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit})
-	f.ask(&persistence.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"})
+	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: "job-failed", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
+	f.must(f.store.UpdateImportJob(f.ctx, persistence.UpdateImportJob{ID: "job-failed", Status: "failed", Progress: 100, Error: "clone failed"}))
 
 	response, err := goakt.Ask(f.ctx, f.projects, &RetryImport{OwnerID: "alice", JobID: "job-failed"}, 30*time.Second)
 	if err != nil {
@@ -332,7 +324,7 @@ func TestRetryStartsANewImportFromAFailedOne(t *testing.T) {
 
 func TestRetryRejectsAnImportThatHasNotFailed(t *testing.T) {
 	f := newResumeFixture(t)
-	f.ask(&persistence.CreateImportJob{ID: "job-running", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit})
+	f.must(f.store.CreateImportJob(f.ctx, persistence.CreateImportJob{ID: "job-running", OwnerID: "alice", ProjectID: "project-1", Repository: "alice/repo", Branch: "main", Commit: f.commit}))
 
 	response, err := goakt.Ask(f.ctx, f.projects, &RetryImport{OwnerID: "alice", JobID: "job-running"}, 30*time.Second)
 	if err != nil {
