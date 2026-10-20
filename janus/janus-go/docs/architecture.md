@@ -64,7 +64,7 @@ Rules for the tree:
 4. `cmd/janus` is the only package that imports concrete adapters.
 5. Dependencies point inward: `cmd` and adapters toward `app`, `app` toward `domain`.
 
-`internal/archtest` enforces rules 1 to 4 with a Go test over `go list -deps` and fails the build on a violation. The allow-list of pure libraries lives in that test, so adding one is a visible review decision.
+`internal/archtest` ([archtest_test.go](../internal/archtest/archtest_test.go)) enforces rules 1 to 4 with a Go test over the `go list` import graph and fails the build on a violation. Fixture packages under its `testdata/` break each rule to prove the check works. The allow-list of pure libraries lives in that test, so adding one is a visible review decision.
 
 ## 5. Ports
 
