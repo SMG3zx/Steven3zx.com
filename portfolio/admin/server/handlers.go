@@ -40,6 +40,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /admin/api/snapshot", s.requireUser(s.snapshot))
 	mux.HandleFunc("GET /admin/api/jobs", s.requireUser(s.listJobs))
 	mux.HandleFunc("POST /admin/api/jobs", s.requireUser(s.createJob))
+	mux.HandleFunc("POST /admin/api/jobs/scrape", s.requireUser(s.scrapeJobPosting))
 	mux.HandleFunc("PUT /admin/api/jobs/{id}", s.requireUser(s.updateJob))
 	mux.HandleFunc("DELETE /admin/api/jobs/{id}", s.requireUser(s.deleteJob))
 	mux.HandleFunc("GET /admin/api/", func(w http.ResponseWriter, _ *http.Request) {
@@ -265,6 +266,34 @@ func (s *server) updateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, saved)
+}
+
+// scrapeJobPosting fetches a posting URL and returns the fields it advertises.
+// Nothing is saved; the form shows the result for the user to check.
+func (s *server) scrapeJobPosting(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		writeError(w, http.StatusForbidden, "cross-site request refused")
+		return
+	}
+	var in struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	raw := strings.TrimSpace(in.URL)
+	if raw == "" || len(raw) > maxJobURL {
+		writeError(w, http.StatusBadRequest, "url must be an http or https link")
+		return
+	}
+	got, err := scrapeJob(r.Context(), raw)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, got)
 }
 
 func (s *server) deleteJob(w http.ResponseWriter, r *http.Request) {

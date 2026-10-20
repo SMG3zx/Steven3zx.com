@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api, Unauthorized } from "./api";
-import { JOB_STATUSES, type Job, type JobInput, type JobStatus } from "./types";
+import { JOB_STATUSES, type Job, type JobInput, type JobStatus, type ScrapedJob } from "./types";
 
 const LABELS: Record<JobStatus, string> = {
   saved: "Saved",
@@ -155,6 +157,14 @@ export function JobTracker({ onSignedOut }: { onSignedOut: () => void }) {
   );
 }
 
+// Fields the posting scraper can fill, with the label shown in the note.
+const SCRAPED: [keyof ScrapedJob, string][] = [
+  ["company", "company"],
+  ["title", "role"],
+  ["location", "location"],
+  ["salary", "salary"],
+];
+
 function JobForm({
   initial,
   isNew,
@@ -171,11 +181,43 @@ function JobForm({
   const [form, setForm] = useState<JobInput>(initial);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [previewNotes, setPreviewNotes] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<{ text: string; bad: boolean } | null>(null);
 
   const field =
     (name: keyof JobInput) =>
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [name]: e.target.value }));
+
+  // Fills only the blank fields, so nothing typed by hand is overwritten.
+  // Nothing is saved until the user presses Save.
+  async function fillFromLink() {
+    setReading(true);
+    setReadNote(null);
+    try {
+      const got = await api.jobs.scrape(form.url.trim());
+      const next = { ...form };
+      const filled: string[] = [];
+      for (const [key, label] of SCRAPED) {
+        if (!form[key] && got[key]) {
+          next[key] = got[key];
+          filled.push(label);
+        }
+      }
+      setForm(next);
+      setReadNote({
+        text: filled.length
+          ? `Filled ${filled.join(", ")}. Check it before you save.`
+          : "Nothing new on that page. Fill the rest in by hand.",
+        bad: false,
+      });
+    } catch (err) {
+      setReadNote({ text: message(err), bad: true });
+    } finally {
+      setReading(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -223,14 +265,51 @@ function JobForm({
           Salary
           <input maxLength={200} value={form.salary} onChange={field("salary")} />
         </label>
-        <label className="wide">
-          Posting link
-          <input type="url" maxLength={2000} placeholder="https://" value={form.url} onChange={field("url")} />
-        </label>
-        <label className="wide">
-          Notes
-          <textarea rows={4} maxLength={5000} value={form.notes} onChange={field("notes")} />
-        </label>
+        <div className="wide link-row">
+          <label>
+            Posting link
+            <input type="url" maxLength={2000} placeholder="https://" value={form.url} onChange={field("url")} />
+          </label>
+          <button
+            type="button"
+            className="ghost"
+            onClick={fillFromLink}
+            disabled={busy || reading || !form.url.trim()}
+          >
+            {reading ? "Reading…" : "Fill from link"}
+          </button>
+        </div>
+        {readNote && <p className={`small wide ${readNote.bad ? "error" : "muted"}`}>{readNote.text}</p>}
+        <div className="wide notes-field">
+          <div className="notes-head">
+            <label htmlFor="job-notes">
+              Notes <span className="muted small">Markdown</span>
+            </label>
+            <button type="button" className="ghost" onClick={() => setPreviewNotes((p) => !p)}>
+              {previewNotes ? "Edit" : "Preview"}
+            </button>
+          </div>
+          {previewNotes ? (
+            <div className="markdown notes-preview">
+              {form.notes.trim() ? (
+                <Markdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>
+                  {form.notes}
+                </Markdown>
+              ) : (
+                <p className="muted">Nothing yet.</p>
+              )}
+            </div>
+          ) : (
+            <textarea
+              id="job-notes"
+              rows={6}
+              maxLength={5000}
+              placeholder="Contacts, next steps, anything worth remembering. Markdown works: **bold**, - lists, [links](https://…)."
+              value={form.notes}
+              onChange={field("notes")}
+            />
+          )}
+        </div>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="job-form-actions">
@@ -249,4 +328,9 @@ function JobForm({
       </div>
     </form>
   );
+}
+
+// Links in notes open in a new tab, so the admin page stays put.
+function ExternalLink(props: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+  return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }

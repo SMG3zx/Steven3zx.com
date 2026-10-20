@@ -175,3 +175,11 @@ export interface Job {
 }
 
 export type JobInput = Omit<Job, "id" | "createdAt" | "updatedAt">;
+
+// Mirrors scrapedJob in portfolio/admin/server/scrape.go. Empty means the page did not say.
+export interface ScrapedJob {
+  company: string;
+  title: string;
+  location: string;
+  salary: string;
+}
