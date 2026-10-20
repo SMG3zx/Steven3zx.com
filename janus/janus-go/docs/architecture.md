@@ -47,6 +47,8 @@ internal/
     hosttest/                   test adapter for GitHost and Source
     auditlog/                   driven: Audit (zap)
     audittest/                  recorder
+    headscale/                  driven: Tailnet over the Headscale REST API
+    tailnettest/                test adapter and contract suite for Tailnet
 ```
 
 Rules for the tree:
@@ -86,6 +88,7 @@ Rules for the tree:
 | `Source` | fetch a repository at a commit | `gitsource` | `hosttest.Source` (local directory) |
 | `GitHost` | list repositories, branches, commits | `githubapi` | `hosttest.Host` |
 | `Audit` | record an Audit Event | `auditlog` | `audittest.Recorder` |
+| `Tailnet` | issue pre-auth keys, list and remove the nodes Agents join | `headscale` | `tailnettest.Fake` |
 
 ### One Store
 

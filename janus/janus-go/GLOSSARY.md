@@ -119,6 +119,20 @@ Removing an Agent stops every Deployment pinned to it (reason removed), and the 
 **Failed Deployment**:
 A Deployment that ended in an error, kept with its message. It is not resumed. If the control plane restarts mid-Deploy, it reconciles with the Agent and marks the Deployment healthy or failed. The Owner starts a new Deploy from the same WASM Build, and the previous live Deployment keeps serving meanwhile.
 
+## Agents
+
+**Agent**:
+The Janus program on an Owner's machine that runs a Deployment's module. It joins the Janus tailnet under the tag `tag:acct-<owner id>` and accepts connections only from the control plane. It opens no listener on the internet. An Agent is listed with a status: online, offline (its node joined but the tailnet reports it down), pending (enrolled, but no node has joined with its key yet), or unknown (the tailnet could not be asked).
+_Avoid_: Worker, runner, node (a node is the Agent's presence on the tailnet)
+
+**Enrollment Code**:
+A single-use code the web UI shows an Owner once, valid for 15 minutes, that the Agent's command line exchanges for a pre-auth key. Janus keeps only a hash of it. An unknown, used or expired code is refused in the same words, so a guess learns nothing. A code is used up even if enrolling fails afterwards, so the Owner asks for a new one.
+_Avoid_: Token, invite, pairing code
+
+**Tailnet**:
+The one private network the Agents and the control plane join, run by Headscale. It is default-deny: the control plane may open connections to any tagged node, and nothing else may. An Agent cannot reach the control plane or another Account's Agent. Removing an Agent deletes its node, so it can no longer be reached, and expires its pre-auth key.
+_Avoid_: VPN, mesh
+
 ## Jobs
 
 **Resume**:

@@ -31,6 +31,9 @@ type settings struct {
 	GitHubSecret           string
 	GitHubCallback         string
 	GitHubEnabled          bool
+	HeadscaleURL           string
+	HeadscaleAPIKey        string
+	HeadscaleControlURL    string
 	WASMBuilderImage       string
 	GoWASMBuilderImage     string
 	JSWASMBuilderImage     string
@@ -116,12 +119,22 @@ func loadSettings(ctx context.Context) (settings, error) {
 	if (githubID != "" || githubSecret != "" || githubCallback != "") && !githubEnabled {
 		return settings{}, errors.New("GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and GITHUB_CALLBACK_URL must all be set")
 	}
+	headscaleURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HEADSCALE_URL")), "/")
+	headscaleKey := strings.TrimSpace(os.Getenv("HEADSCALE_API_KEY"))
+	if (headscaleURL == "") != (headscaleKey == "") {
+		return settings{}, errors.New("HEADSCALE_URL and HEADSCALE_API_KEY must both be set, or neither")
+	}
+	headscaleControlURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HEADSCALE_CONTROL_URL")), "/")
+	if headscaleControlURL == "" {
+		headscaleControlURL = headscaleURL
+	}
 	span.SetAttributes(
 		attribute.String("config.http.address", addr),
 		attribute.String("config.http.address.source", source),
 		attribute.String("config.database.path", databasePath),
 		attribute.Bool("config.google.enabled", googleEnabled),
 		attribute.Bool("config.github.enabled", githubEnabled),
+		attribute.Bool("config.headscale.enabled", headscaleURL != ""),
 		attribute.Bool("config.pyroscope.enabled", pyroscopeAddress != ""),
 	)
 	return settings{
@@ -129,6 +142,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
+		HeadscaleURL: headscaleURL, HeadscaleAPIKey: headscaleKey, HeadscaleControlURL: headscaleControlURL,
 		WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage, JSWASMBuilderImage: jsWASMBuilderImage,
 		PyroscopeServerAddress: pyroscopeAddress,
 	}, nil

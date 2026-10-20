@@ -80,3 +80,28 @@ allow if {
 	input.subject != ""
 	input.resource.owner_id == input.subject
 }
+
+allow if {
+	input.action == "agent.code.create"
+	input.subject != ""
+	input.resource.owner_id == input.subject
+}
+
+allow if {
+	input.action == "agent.read"
+	input.subject != ""
+	input.resource.owner_id == input.subject
+}
+
+allow if {
+	input.action == "agent.remove"
+	input.subject != ""
+	input.resource.owner_id == input.subject
+}
+
+# An Agent enrolls from its command line with no session. The Enrollment Code
+# it presents is the credential.
+allow if {
+	input.action == "agent.enroll"
+	input.subject == ""
+}

@@ -11,7 +11,7 @@ func TestOwnerScopedPolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"project.build", "account.delete"} {
+	for _, action := range []string{"project.build", "account.delete", "agent.code.create", "agent.read", "agent.remove"} {
 		for _, test := range []struct {
 			name    string
 			subject string
@@ -28,6 +28,22 @@ func TestOwnerScopedPolicies(t *testing.T) {
 					t.Fatalf("%s for %q on %q = %v, %v; want allowed=%t", action, test.subject, test.owner, allowed, err, test.allowed)
 				}
 			})
+		}
+	}
+}
+
+// Enrolling an Agent is done by the Agent's command line with no session: the
+// Enrollment Code is the credential, so the action is open to a caller with no
+// subject. A signed-in user is not what it expects.
+func TestEnrollingAnAgentIsAnonymous(t *testing.T) {
+	policy, err := NewPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for subject, want := range map[string]bool{"": true, "alice": false} {
+		allowed, err := policy.Allowed(context.Background(), subject, "agent.enroll", map[string]any{})
+		if err != nil || allowed != want {
+			t.Fatalf("agent.enroll for %q = %v, %v; want allowed=%t", subject, allowed, err, want)
 		}
 	}
 }

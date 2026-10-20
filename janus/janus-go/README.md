@@ -10,6 +10,14 @@ Google sign-in is optional. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and 
 
 GitHub sign-in and repository import are optional. Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_CALLBACK_URL` together. Register the configured callback URL (for example `https://janus.steven3zx.com/auth/github/callback`) in the GitHub OAuth App. GitHub sign-in requests `read:user` and `user:email`; connecting GitHub from Projects requests the broader `repo` scope so private repositories can be imported. Sign-in identities are matched by GitHub's provider ID, never by email. If the verified email already belongs to a Janus account, sign in there and connect GitHub from `/projects`.
 
+## Agents (optional)
+
+Agent enrollment needs a [Headscale](https://headscale.net) server (v0.29) with its policy set to database mode (`policy.mode: database`) and an API key (`headscale apikeys create`). Set `HEADSCALE_URL` and `HEADSCALE_API_KEY` together; `HEADSCALE_CONTROL_URL` is the address Agents are told to join and defaults to `HEADSCALE_URL`. At startup Janus creates the Headscale user `janus` and installs one policy that lets only nodes tagged `tag:ctrl` open connections to other tagged nodes, so an Agent can reach neither the control plane nor another Account's Agent. If Headscale cannot be reached at startup, Janus runs with Agent enrollment off and says why in the log.
+
+A signed-in Owner calls `POST /api/agents/enrollment-codes` for a single-use code (valid 15 minutes). The Agent's command line calls `POST /api/agents/enroll` with `{"code", "name"}` and no session, and receives a single-use pre-auth key (valid one hour), the tag its node carries and the control URL. `GET /api/agents` lists the Owner's Agents with `online`, `offline`, `pending` or `unknown`, and `DELETE /api/agents/{id}` removes the Agent's node from the tailnet. Deleting an Account removes its Agents the same way.
+
+The live tests run against a real Headscale in Docker and real `tsnet` nodes: `go test -tags live ./internal/adapters/headscale`. They need Docker and internet access.
+
 ## Projects and repository imports
 
 Signed-in users can create an empty project at `/projects/new` or create a project and import a GitHub repository. The project page lists repositories, branches, and the 50 newest commits for a branch. Imports run asynchronously and show their current stage. Janus fetches the selected commit with pure-Go Git, scans without running repository code, and stores tracked file contents in the local Turso database. The per-snapshot limits are 256 MiB total uncompressed file content, 50,000 files, and 16 MiB per file. The five newest successful snapshots are retained per project; interrupted imports are cleaned up on startup. The project page lists retained snapshots and lets the owner reactivate an earlier revision without reimporting it.

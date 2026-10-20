@@ -41,6 +41,7 @@ type Config struct {
 	Imports        *app.Imports
 	Builds         *app.Builds
 	Accounts       *app.Accounts
+	Agents         *app.Agents
 	Runs           *app.Runs
 	JWTExpiry      time.Duration
 	CookieSecure   bool
@@ -181,6 +182,7 @@ func (a *Server) registerAuthenticationRoutes(app *mux) {
 	app.Get("/auth/github/connect", a.githubConnect)
 	app.Post("/auth/github/disconnect", a.githubDisconnect)
 	a.registerProjectRoutes(app)
+	a.registerAgentRoutes(app)
 	a.registerLifecycleRoutes(app)
 }
 

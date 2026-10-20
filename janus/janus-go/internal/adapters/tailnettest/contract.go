@@ -109,8 +109,10 @@ func testExpired(t *testing.T, s Subject) {
 	if err := s.Join(t, key, "contract-expired"); err == nil {
 		t.Fatal("a node joined with an expired key")
 	}
-	if err := s.Tailnet.ExpirePreAuthKey(context.Background(), "no-such-key"); err != nil {
-		t.Fatalf("expiring an unknown key = %v, want no error", err)
+	for _, unknown := range []string{"no-such-key", "987654321"} {
+		if err := s.Tailnet.ExpirePreAuthKey(context.Background(), unknown); err != nil {
+			t.Fatalf("expiring unknown key %q = %v, want no error", unknown, err)
+		}
 	}
 }
 
@@ -131,7 +133,9 @@ func testDelete(t *testing.T, s Subject) {
 	if err = s.Tailnet.DeleteNode(ctx, node.ID); err != nil {
 		t.Fatalf("deleting a node twice = %v, want no error", err)
 	}
-	if err = s.Tailnet.DeleteNode(ctx, "no-such-node"); err != nil {
-		t.Fatalf("deleting an unknown node = %v, want no error", err)
+	for _, unknown := range []string{"no-such-node", "987654321"} {
+		if err = s.Tailnet.DeleteNode(ctx, unknown); err != nil {
+			t.Fatalf("deleting unknown node %q = %v, want no error", unknown, err)
+		}
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"janus/internal/adapters/dockerbuild"
 	"janus/internal/adapters/githubapi"
 	"janus/internal/adapters/gitsource"
+	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/wasmtime"
@@ -35,6 +36,7 @@ type application struct {
 	identity       *app.Identity
 	projects       *app.Projects
 	github         *app.GitHub
+	agents         *app.Agents
 	authentication *app.Authentication
 	authorization  *app.Policy
 	imports        *app.Imports
@@ -126,6 +128,7 @@ func (a *application) groups() []group {
 				a.authorization, err = app.NewPolicy(a.startCtx)
 				return err
 			}},
+			{name: "agents", start: a.startAgents},
 		}},
 		{name: "projects and builds", components: []component{
 			{name: "projects", start: func(context.Context) error {
@@ -143,7 +146,7 @@ func (a *application) groups() []group {
 				return wrap("drain WASM builds", a.builds.Drain(ctx))
 			})},
 			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.imports, a.builds)
+				a.accounts = app.NewAccounts(a.store, a.imports, a.builds).WithAgents(a.agents)
 				return nil
 			}},
 			{name: "resume", start: a.resumeInterruptedJobs},
@@ -288,7 +291,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Agents: a.agents, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,
@@ -331,4 +334,22 @@ func (a *application) record(ctx context.Context, level, name string, fields map
 		return
 	}
 	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
+}
+
+// startAgents builds the Agents use case when a Headscale server is configured.
+// A Headscale that cannot be prepared leaves Agent enrollment off and the
+// control plane running, with the reason in the log.
+func (a *application) startAgents(ctx context.Context) error {
+	cfg := a.settings
+	if cfg.HeadscaleURL == "" {
+		a.logger.Info("Agent enrollment is off: HEADSCALE_URL is not set")
+		return nil
+	}
+	client := headscale.New(headscale.Config{URL: cfg.HeadscaleURL, APIKey: cfg.HeadscaleAPIKey})
+	if err := client.Prepare(ctx); err != nil {
+		a.logger.Error("Agent enrollment is off: Headscale could not be prepared", zap.Error(err))
+		return nil
+	}
+	a.agents = app.NewAgents(a.store, client, a.audit, cfg.HeadscaleControlURL)
+	return nil
 }
