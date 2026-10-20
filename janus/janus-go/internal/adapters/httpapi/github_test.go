@@ -1,4 +1,4 @@
-package routes
+package httpapi
 
 import (
 	"context"
@@ -8,36 +8,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tochemey/goakt/v4/actor"
-	golog "github.com/tochemey/goakt/v4/log"
 	authzactor "janus/actors/authorization"
-	"janus/web"
 )
 
 func TestGitHubOAuthUsesSeparateIdentityAndRepositoryScopesAndChecksState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	system, err := actor.NewActorSystem("github-oauth-test", actor.WithLogger(golog.DiscardLogger))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = system.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		stop, c := context.WithTimeout(context.Background(), 3*time.Second)
-		defer c()
-		_ = system.Stop(stop)
-	})
 	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &Actor{dependencies: Dependencies{Authorization: authorization, GitHubEnabled: true, GitHubClientID: "client-id", GitHubSecret: "client-secret", GitHubCallback: "https://janus.example/auth/github/callback", JWTSecret: strings.Repeat("k", 32), CookieSecure: true}}
+	a := &Server{dependencies: Config{Authorization: authorization, GitHubEnabled: true, GitHubClientID: "client-id", GitHubSecret: "client-secret", GitHubCallback: "https://janus.example/auth/github/callback", JWTSecret: strings.Repeat("k", 32), CookieSecure: true}}
 	request := httptest.NewRequest("GET", "https://janus.example/auth/github", nil)
-	started, ok := a.beginGitHubOAuth(&web.Context{Request: request}, "login", "").(web.Response)
+	started, ok := a.beginGitHubOAuth(&call{Request: request}, "login", "").(reply)
 	if !ok {
-		t.Fatalf("login response %T", a.beginGitHubOAuth(&web.Context{Request: request}, "login", ""))
+		t.Fatalf("login response %T", a.beginGitHubOAuth(&call{Request: request}, "login", ""))
 	}
 	loginURL, err := url.Parse(started.Header.Get("Location"))
 	if err != nil {
@@ -56,7 +41,7 @@ func TestGitHubOAuthUsesSeparateIdentityAndRepositoryScopesAndChecksState(t *tes
 		t.Fatal("could not parse OAuth state cookie")
 	}
 
-	connect, ok := a.beginGitHubOAuth(&web.Context{Request: request}, "connect", "user-123").(web.Response)
+	connect, ok := a.beginGitHubOAuth(&call{Request: request}, "connect", "user-123").(reply)
 	if !ok {
 		t.Fatalf("connect response %T", connect)
 	}
@@ -70,7 +55,7 @@ func TestGitHubOAuthUsesSeparateIdentityAndRepositoryScopesAndChecksState(t *tes
 
 	callback := httptest.NewRequest("GET", "https://janus.example/auth/github/callback?state=attacker&code=ignored", nil)
 	callback.AddCookie(parsed[0])
-	response := a.githubCallback(&web.Context{Request: callback}).(web.Response)
+	response := a.githubCallback(&call{Request: callback}).(reply)
 	if response.StatusCode != 400 {
 		t.Fatalf("invalid OAuth state status = %d", response.StatusCode)
 	}

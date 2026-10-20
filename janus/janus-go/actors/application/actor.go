@@ -18,10 +18,9 @@ import (
 	dockeractor "janus/actors/docker"
 	githubactor "janus/actors/github"
 	"janus/actors/gitsource"
-	httpserver "janus/actors/httpserver"
-	routesactor "janus/actors/routes"
 	telemetryactor "janus/actors/telemetry"
 	wasmruntime "janus/actors/wasmruntime"
+	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
 )
@@ -29,9 +28,8 @@ import (
 // Actor starts and stops the configured Janus services.
 type Actor struct {
 	system         goakt.ActorSystem
-	routes         *goakt.PID
 	telemetry      *telemetryactor.Telemetry
-	httpServer     *goakt.PID
+	httpServer     *httpapi.Server
 	accounting     *goakt.PID
 	audit          app.Audit
 	authentication *authactor.Service
@@ -75,17 +73,6 @@ func (a *Actor) Receive(ctx *goakt.ReceiveContext) {
 		a.account(ctx.Context(), "info", "application.shutdown.started", nil)
 		ctx.Response(&Stopped{Err: a.stop(msg.Context)})
 		ctx.Shutdown()
-	case *httpserver.ServeFailed:
-		_, span := telemetryactor.StartSpan(ctx.Context(), "http.server.failure", trace.WithSpanKind(trace.SpanKindInternal))
-		telemetryactor.RecordError(span, msg.Err)
-		span.End()
-		a.account(ctx.Context(), "error", "http.server.failed", map[string]string{"error": msg.Err.Error()})
-		if a.processErrors != nil {
-			select {
-			case a.processErrors <- msg.Err:
-			default:
-			}
-		}
 	default:
 		ctx.Unhandled()
 	}
@@ -178,36 +165,25 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if err = a.resumeInterruptedJobs(startupCtx); err != nil {
 		return err
 	}
-	a.routes, err = a.system.Spawn(startupCtx, "routes", routesactor.New(routesactor.Dependencies{
-		System: a.system, Authentication: a.authentication, Authorization: a.authorization,
+	a.httpServer = httpapi.New(httpapi.Config{
+		Addr: config.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
 		Audit: a.audit, Store: a.store, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Runs: a.runs, JWTExpiry: config.JWTExpiry,
 		CookieSecure: config.CookieSecure, GoogleEnabled: config.GoogleEnabled,
 		GoogleClientID: config.GoogleClientID, GoogleSecret: config.GoogleSecret,
 		GoogleCallback: config.GoogleCallback, JWTSecret: config.JWTSecret,
 		GitHubEnabled: config.GitHubEnabled, GitHubClientID: config.GitHubClientID,
 		GitHubSecret: config.GitHubSecret, GitHubCallback: config.GitHubCallback,
-	}))
-	if err != nil {
-		return fmt.Errorf("spawn routes actor: %w", err)
-	}
-	routesResponse, err := goakt.Ask(startupCtx, a.routes, &routesactor.Build{}, StartupTimeout)
-	if err != nil {
-		return fmt.Errorf("request routes: %w", err)
-	}
-	routesBuilt, ok := routesResponse.(*routesactor.Built)
-	if !ok {
-		return fmt.Errorf("build routes: unexpected response %T", routesResponse)
-	}
-	app := routesBuilt.App
-
-	serverCtx, serverSpan := telemetryactor.StartSpan(startupCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
+	})
+	_, serverSpan := telemetryactor.StartSpan(startupCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
 	serverSpan.SetAttributes(attribute.String("server.address", config.HTTPAddress))
-	a.httpServer, err = a.system.Spawn(serverCtx, "http-server", httpserver.New(config.HTTPAddress, app, ctx.Self()))
+	err = a.httpServer.Start()
 	telemetryactor.RecordError(serverSpan, err)
 	serverSpan.End()
 	if err != nil {
-		return fmt.Errorf("spawn HTTP server actor: %w", err)
+		a.httpServer = nil
+		return fmt.Errorf("start HTTP server: %w", err)
 	}
+	go a.watchHTTPServer(a.httpServer.Failed())
 	return nil
 }
 
@@ -225,14 +201,7 @@ func (a *Actor) stop(ctx context.Context) error {
 
 	var firstErr error
 	if a.httpServer != nil {
-		response, err := goakt.Ask(shutdownCtx, a.httpServer, &httpserver.Stop{Context: shutdownCtx}, ShutdownTimeout)
-		if err != nil {
-			firstErr = err
-		} else if result, ok := response.(*httpserver.Stopped); !ok {
-			firstErr = fmt.Errorf("stop HTTP server: unexpected response %T", response)
-		} else if result.Err != nil {
-			firstErr = result.Err
-		}
+		firstErr = a.httpServer.Shutdown(shutdownCtx)
 	}
 	if a.imports != nil {
 		if err := a.imports.Drain(shutdownCtx); err != nil && firstErr == nil {
@@ -271,6 +240,23 @@ func (a *Actor) stop(ctx context.Context) error {
 		}
 	}
 	return firstErr
+}
+
+// watchHTTPServer reports an unexpected HTTP serve failure to the process.
+func (a *Actor) watchHTTPServer(failed <-chan error) {
+	for err := range failed {
+		ctx := context.Background()
+		_, span := telemetryactor.StartSpan(ctx, "http.server.failure", trace.WithSpanKind(trace.SpanKindInternal))
+		telemetryactor.RecordError(span, err)
+		span.End()
+		a.account(ctx, "error", "http.server.failed", map[string]string{"error": err.Error()})
+		if a.processErrors != nil {
+			select {
+			case a.processErrors <- err:
+			default:
+			}
+		}
+	}
 }
 
 func (a *Actor) account(ctx context.Context, level, name string, fields map[string]string) {

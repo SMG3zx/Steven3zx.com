@@ -1,4 +1,4 @@
-package routes
+package httpapi
 
 import (
 	"context"
@@ -20,7 +20,6 @@ import (
 	"golang.org/x/oauth2"
 
 	actortrace "janus/actors/telemetry"
-	"janus/web"
 )
 
 const githubOAuthCookie = "janus_github_oauth"
@@ -36,13 +35,13 @@ type githubEmail struct {
 	Verified bool   `json:"verified"`
 }
 
-func (a *Actor) githubOAuthConfig(scopes ...string) *oauth2.Config {
+func (a *Server) githubOAuthConfig(scopes ...string) *oauth2.Config {
 	return &oauth2.Config{ClientID: a.dependencies.GitHubClientID, ClientSecret: a.dependencies.GitHubSecret, RedirectURL: a.dependencies.GitHubCallback, Scopes: scopes, Endpoint: oauth2.Endpoint{AuthURL: "https://github.com/login/oauth/authorize", TokenURL: "https://github.com/login/oauth/access_token"}}
 }
 
-func (a *Actor) githubStart(c *web.Context) any { return a.beginGitHubOAuth(c, "login", "") }
+func (a *Server) githubStart(c *call) any { return a.beginGitHubOAuth(c, "login", "") }
 
-func (a *Actor) githubConnect(c *web.Context) any {
+func (a *Server) githubConnect(c *call) any {
 	ctx := c.Request.Context()
 	owner, ok := a.subject(ctx, c.Request)
 	if !ok {
@@ -58,7 +57,7 @@ func (a *Actor) githubConnect(c *web.Context) any {
 	return a.beginGitHubOAuth(c, "connect", owner)
 }
 
-func (a *Actor) beginGitHubOAuth(c *web.Context, flow, owner string) any {
+func (a *Server) beginGitHubOAuth(c *call, flow, owner string) any {
 	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.github.begin", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	span.SetAttributes(
@@ -111,12 +110,12 @@ func (a *Actor) beginGitHubOAuth(c *web.Context, flow, owner string) any {
 	}
 	location := a.githubOAuthConfig(scopes...).AuthCodeURL(state, oauth2.SetAuthURLParam("allow_signup", "true"))
 	span.SetAttributes(attribute.String("auth.github.result", "redirect"))
-	return web.Response{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": {location}, "Set-Cookie": writer.Header().Values("Set-Cookie")}}
+	return reply{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": {location}, "Set-Cookie": writer.Header().Values("Set-Cookie")}}
 }
 
 // logGitHubOAuthFailure records the failing phase and error type without logging
 // OAuth cookies, state, authorization codes, tokens, or provider credentials.
-func (a *Actor) logGitHubOAuthFailure(ctx context.Context, stage string, err error) {
+func (a *Server) logGitHubOAuthFailure(ctx context.Context, stage string, err error) {
 	if err == nil {
 		return
 	}
@@ -126,7 +125,7 @@ func (a *Actor) logGitHubOAuthFailure(ctx context.Context, stage string, err err
 	})
 }
 
-func (a *Actor) githubCallback(c *web.Context) any {
+func (a *Server) githubCallback(c *call) any {
 	if !a.dependencies.GitHubEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "GitHub OAuth is not configured"})
 	}
@@ -146,7 +145,7 @@ func (a *Actor) githubCallback(c *web.Context) any {
 	flow, _ := session.Values["flow"].(string)
 	owner, _ := session.Values["owner"].(string)
 	if providerErr := c.Request.URL.Query().Get("error"); providerErr != "" {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/?github=cancelled"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/?github=cancelled"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
 	code := c.Request.URL.Query().Get("code")
 	if code == "" || (flow != "login" && flow != "connect") {
@@ -181,17 +180,17 @@ func (a *Actor) githubCallback(c *web.Context) any {
 			return internalError()
 		}
 		a.log(ctx, "info", "github.connected", map[string]string{"user_id": owner})
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects?github=connected"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects?github=connected"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
 	identity, resolveErr := a.dependencies.Store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
 	if resolveErr != nil {
 		return internalError()
 	}
 	if identity.EmailInUse {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/?github=account_exists"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/?github=account_exists"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
 	issued := a.issueCookie(ctx, identity.ID, http.StatusSeeOther, nil)
-	redirect, ok := issued.(web.Response)
+	redirect, ok := issued.(reply)
 	if !ok {
 		return internalError()
 	}
@@ -214,7 +213,7 @@ func hasGitHubScope(value any, want string) bool {
 	return false
 }
 
-func (a *Actor) githubDisconnect(c *web.Context) any {
+func (a *Server) githubDisconnect(c *call) any {
 	ctx := c.Request.Context()
 	owner, ok := a.subject(ctx, c.Request)
 	if !ok {
@@ -231,15 +230,15 @@ func (a *Actor) githubDisconnect(c *web.Context) any {
 		return internalError()
 	}
 	a.log(ctx, "info", "github.disconnected", map[string]string{"user_id": owner})
-	return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects"}}}
+	return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects"}}}
 }
 
-func (a *Actor) githubOAuthStore() *sessions.CookieStore {
+func (a *Server) githubOAuthStore() *sessions.CookieStore {
 	store := sessions.NewCookieStore([]byte(a.dependencies.JWTSecret))
 	store.Options = &sessions.Options{Path: "/", MaxAge: 600, HttpOnly: true, Secure: a.dependencies.CookieSecure, SameSite: http.SameSiteLaxMode}
 	return store
 }
-func (a *Actor) clearOAuthCookie(req *http.Request, session *sessions.Session) *http.Cookie {
+func (a *Server) clearOAuthCookie(req *http.Request, session *sessions.Session) *http.Cookie {
 	session.Options = &sessions.Options{Path: "/", MaxAge: -1, HttpOnly: true, Secure: a.dependencies.CookieSecure, SameSite: http.SameSiteLaxMode}
 	writer := httptest.NewRecorder()
 	_ = session.Save(req, writer)

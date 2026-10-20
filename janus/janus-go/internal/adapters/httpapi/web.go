@@ -1,4 +1,4 @@
-package web
+package httpapi
 
 import (
 	"encoding/json"
@@ -20,63 +20,63 @@ import (
 // declared before telemetry.Setup runs.
 var tracer = otel.Tracer("github.com/SMG3zx/Janus/web")
 
-// Handler responds to a matched request. Returned strings are sent as text,
+// handlerFunc responds to a matched request. Returned strings are sent as text,
 // []byte values as raw bytes, nil as an empty 200 response, and other values as
 // JSON. A handler may also write directly through Context.
-type Handler func(c *Context) any
+type handlerFunc func(c *call) any
 
 // Context provides a handler with the request, route parameters, query values,
 // response headers, and response-writing helpers.
-type Context struct {
+type call struct {
 	Request *http.Request
 	Params  map[string]string
 	Query   url.Values
 }
 
 // Param returns a path parameter by name, or "" if it isn't present
-func (c *Context) Param(name string) string {
+func (c *call) Param(name string) string {
 	return c.Params[name]
 }
 
 // App is a chainable route collection that serves registered handlers as an
 // http.Handler.
-type App struct {
+type mux struct {
 	prefix string
 	r      *router
 }
 
 // New creates an app whose prefix is prepended to every route registered on it.
-func New(prefix string) *App {
-	return &App{prefix: prefix, r: newRouter()}
+func newMux(prefix string) *mux {
+	return &mux{prefix: prefix, r: newRouter()}
 }
 
 // GET, POST, PUT, PATCH, DELETE verb methods
-func (a *App) Get(path string, h Handler) *App    { return a.Route(http.MethodGet, path, h) }
-func (a *App) Post(path string, h Handler) *App   { return a.Route(http.MethodPost, path, h) }
-func (a *App) Put(path string, h Handler) *App    { return a.Route(http.MethodPut, path, h) }
-func (a *App) Patch(path string, h Handler) *App  { return a.Route(http.MethodPatch, path, h) }
-func (a *App) Delete(path string, h Handler) *App { return a.Route(http.MethodDelete, path, h) }
+func (a *mux) Get(path string, h handlerFunc) *mux    { return a.Route(http.MethodGet, path, h) }
+func (a *mux) Post(path string, h handlerFunc) *mux   { return a.Route(http.MethodPost, path, h) }
+func (a *mux) Put(path string, h handlerFunc) *mux    { return a.Route(http.MethodPut, path, h) }
+func (a *mux) Patch(path string, h handlerFunc) *mux  { return a.Route(http.MethodPatch, path, h) }
+func (a *mux) Delete(path string, h handlerFunc) *mux { return a.Route(http.MethodDelete, path, h) }
 
 // All matches any HTTP method
 // It is the fallback when no method-specific route matches the same path.
-func (a *App) All(path string, h Handler) *App { return a.Route("*", path, h) }
+func (a *mux) All(path string, h handlerFunc) *mux { return a.Route("*", path, h) }
 
 // Route registers a handler for an arbitrary method.
 // Methods are case-sensitive, so use uppercase, ex. "M-SEARCH"
-func (a *App) Route(method, path string, h Handler) *App {
+func (a *mux) Route(method, path string, h handlerFunc) *mux {
 	a.r.insert(method, joinPath(a.prefix, path), h)
 	return a
 }
 
 // Group registers routes under a shared prefix inside fn.
-func (a *App) Group(prefix string, fn func(g *App)) *App {
-	fn(&App{prefix: joinPath(a.prefix, prefix), r: a.r})
+func (a *mux) Group(prefix string, fn func(g *mux)) *mux {
+	fn(&mux{prefix: joinPath(a.prefix, prefix), r: a.r})
 	return a
 }
 
 // Use merges the routes of another App (built with New) into this one.
 // Routes keep the prefix they were defined with.
-func (a *App) Use(sub *App) *App {
+func (a *mux) Use(sub *mux) *mux {
 	for _, rt := range sub.r.routes {
 		a.r.insert(rt.method, rt.path, rt.handler)
 	}
@@ -84,7 +84,7 @@ func (a *App) Use(sub *App) *App {
 }
 
 // ServeHttp makes App and http.Handler.
-func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (a *mux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Continue an upstream trace if the caller sent a traceparent header.
 	ctx := req.Context()
 	if !trace.SpanFromContext(ctx).SpanContext().IsValid() {
@@ -109,7 +109,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		attribute.String("url.path", req.URL.Path),
 	)
 
-	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+	sw := &routeStatusWriter{ResponseWriter: w, status: http.StatusOK}
 
 	// Deferred calls run in reverse order, so this runs before span.End().
 	defer func() {
@@ -133,7 +133,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		defer handlerSpan.End()
 		// Pass the traced context to handlers so they can start child spans
 		// with c.Request.Context().
-		writeResult(sw, h(&Context{
+		writeResult(sw, h(&call{
 			Request: req.WithContext(handlerCtx),
 			Params:  params,
 			Query:   url.Values(req.URL.Query()),
@@ -145,20 +145,15 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}()
 }
 
-// statusWriter records the status code so it can go on the span.
-type statusWriter struct {
+// routeStatusWriter records the status code so it can go on the span.
+type routeStatusWriter struct {
 	http.ResponseWriter
 	status int
 }
 
-func (s *statusWriter) WriteHeader(code int) {
+func (s *routeStatusWriter) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
-}
-
-// Listen starts an HTTP server on addr. It blocks until the server stops.
-func (a *App) Listen(addr string) error {
-	return http.ListenAndServe(addr, a)
 }
 
 func writeResult(w http.ResponseWriter, out any) {
@@ -170,9 +165,9 @@ func writeResult(w http.ResponseWriter, out any) {
 		io.WriteString(w, v)
 	case []byte:
 		w.Write(v)
-	case Response:
+	case reply:
 		writeResponse(w, v)
-	case *Response:
+	case *reply:
 		if v == nil {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -189,15 +184,14 @@ func writeResult(w http.ResponseWriter, out any) {
 	}
 }
 
-// Response lets a route set an explicit status, headers, cookies, and body.
-// Response describes an explicit HTTP response returned by a Handler.
-type Response struct {
+// reply describes an explicit HTTP response returned by a handlerFunc.
+type reply struct {
 	StatusCode int
 	Header     http.Header
 	Body       any
 }
 
-func writeResponse(w http.ResponseWriter, response Response) {
+func writeResponse(w http.ResponseWriter, response reply) {
 	for key, values := range response.Header {
 		w.Header()[key] = append([]string(nil), values...)
 	}

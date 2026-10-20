@@ -1,20 +1,18 @@
-package routes
+package httpapi
 
 import (
 	"net/http"
-
-	"janus/web"
 )
 
 // registerLifecycleRoutes adds the routes for retrying failed jobs and deleting
 // an Account.
-func (a *Actor) registerLifecycleRoutes(app *web.App) {
+func (a *Server) registerLifecycleRoutes(app *mux) {
 	app.Post("/api/imports/:id/retry", a.retryImportAPI)
 	app.Post("/api/wasm-builds/:id/retry", a.retryWASMBuildAPI)
 	app.Delete("/api/account", a.deleteAccountAPI)
 }
 
-func (a *Actor) retryImportAPI(c *web.Context) any {
+func (a *Server) retryImportAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.import", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -26,7 +24,7 @@ func (a *Actor) retryImportAPI(c *web.Context) any {
 	return jsonResponse(http.StatusAccepted, map[string]string{"job_id": jobID})
 }
 
-func (a *Actor) retryWASMBuildAPI(c *web.Context) any {
+func (a *Server) retryWASMBuildAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.build", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -41,7 +39,7 @@ func (a *Actor) retryWASMBuildAPI(c *web.Context) any {
 // deleteAccountAPI deletes the signed-in Account. If it still has unfinished
 // imports or builds, nothing is deleted and the response lists them. Sending
 // cancel_active_jobs=true cancels them first.
-func (a *Actor) deleteAccountAPI(c *web.Context) any {
+func (a *Server) deleteAccountAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "account.delete", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -61,7 +59,7 @@ func (a *Actor) deleteAccountAPI(c *web.Context) any {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "account not found"})
 	}
 	a.log(c.Request.Context(), "info", "account.deleted", map[string]string{"user_id": owner})
-	return web.Response{StatusCode: http.StatusNoContent, Header: http.Header{
+	return reply{StatusCode: http.StatusNoContent, Header: http.Header{
 		"Set-Cookie": {a.cookie("", -1).String()},
 	}}
 }

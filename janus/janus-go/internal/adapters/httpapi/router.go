@@ -1,17 +1,17 @@
-package web
+package httpapi
 
 import "strings"
 
 type route struct {
 	method  string
 	path    string
-	handler Handler
+	handler handlerFunc
 }
 
 // Leaf is a complete pattern
 // Its handler and its param name in path order.
 type leaf struct {
-	handler Handler
+	handler handlerFunc
 	names   []string
 	pattern string // the registered path, e.g. "/id/:id"
 }
@@ -44,7 +44,7 @@ type slot struct {
 	wild bool
 }
 
-func (r *router) insert(method, path string, h Handler) {
+func (r *router) insert(method, path string, h handlerFunc) {
 	r.routes = append(r.routes, route{method, path, h})
 
 	seen := make(map[slot]bool)
@@ -74,7 +74,7 @@ func expandOptional(segments []string) [][]string {
 	return [][]string{segments}
 }
 
-func (r *router) insertSegments(method string, segments []string, h Handler, pattern string, seen map[slot]bool) {
+func (r *router) insertSegments(method string, segments []string, h handlerFunc, pattern string, seen map[slot]bool) {
 	n, ok := r.roots[method]
 	if !ok {
 		n = &node{}
@@ -118,7 +118,7 @@ func (r *router) insertSegments(method string, segments []string, h Handler, pat
 
 // match finds a handler for method+path.
 // A method-specific route wins over /an All ("*") route with the same path.
-func (r *router) match(method, path string) (Handler, map[string]string, string) {
+func (r *router) match(method, path string) (handlerFunc, map[string]string, string) {
 	segments := splitPath(path)
 	for _, m := range []string{method, "*"} {
 		root, ok := r.roots[m]

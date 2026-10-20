@@ -1,75 +1,38 @@
-package routes
+package httpapi
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"janus/internal/adapters/sqlstore"
-	"janus/internal/adapters/storetest"
-	"janus/internal/app"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/tochemey/goakt/v4/actor"
-	golog "github.com/tochemey/goakt/v4/log"
-	"go.uber.org/zap"
-
-	"janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
 	"janus/actors/github"
 	"janus/actors/gitsource"
+	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/storetest"
+	"janus/internal/app"
 )
 
 func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	system, err := actor.NewActorSystem("routes-test", actor.WithLogger(golog.DiscardLogger))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := system.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer stopCancel()
-		_ = system.Stop(stopCtx)
-	})
-
-	accountingPID, err := system.Spawn(ctx, "accounting-test", accounting.New(zap.NewNop()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	store, err := sqlstore.Open(filepath.Join(t.TempDir(), "accounts.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := storetest.NewMemory()
 	gh := github.NewService(store, github.NewClient())
-	audit := accounting.NewAudit(accountingPID)
-	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
-	authentication := authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute)
+	imports := app.NewImports(store, gh.API, gitsource.New(), audittest.NewRecorder())
 	authorization, err := authzactor.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	routesPID, err := system.Spawn(ctx, "routes-test-actor", New(Dependencies{
-		System: system, Audit: accounting.NewAudit(accountingPID), Store: store, GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
-		Authentication: authentication, Authorization: authorization, CookieSecure: true,
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	built, err := actor.Ask(ctx, routesPID, &Build{}, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := built.(*Built).App
+	handler := New(Config{
+		Audit: audittest.NewRecorder(), Store: store, GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
+		Authentication: authactor.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
+	}).Handler()
 
 	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"alice@example.com","password":"correct horse battery staple"}`, nil)
 	if register.Code != http.StatusCreated {

@@ -1,8 +1,7 @@
-package web_test
+package httpapi
 
 import (
 	"context"
-	"janus/web"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-func send(app *web.App, method, target string) *httptest.ResponseRecorder {
+func send(app *mux, method, target string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, httptest.NewRequest(method, target, nil))
 	return rec
@@ -27,27 +26,27 @@ func expectBody(t *testing.T, rec *httptest.ResponseRecorder, want string) {
 }
 
 func TestHandleRoot(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any { return "Hi" })
+	app := newMux("").Get("/", func(c *call) any { return "Hi" })
 	expectBody(t, send(app, http.MethodGet, "/"), "Hi")
 }
 
 func TestHandleMultipleLevel(t *testing.T) {
-	app := web.New("").Get("/this/is/my/deep/nested/root", func(c *web.Context) any { return "Ok" })
+	app := newMux("").Get("/this/is/my/deep/nested/root", func(c *call) any { return "Ok" })
 	expectBody(t, send(app, http.MethodGet, "/this/is/my/deep/nested/root"), "Ok")
 }
 
 func TestReturnBoolean(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any { return true })
+	app := newMux("").Get("/", func(c *call) any { return true })
 	expectBody(t, send(app, http.MethodGet, "/"), "true")
 }
 
 func TestReturnNumber(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any { return 617 })
+	app := newMux("").Get("/", func(c *call) any { return 617 })
 	expectBody(t, send(app, http.MethodGet, "/"), "617")
 }
 
 func TestReturnJSON(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any {
+	app := newMux("").Get("/", func(c *call) any {
 		return map[string]string{"name": "takodachi"}
 	})
 	rec := send(app, http.MethodGet, "/")
@@ -58,26 +57,26 @@ func TestReturnJSON(t *testing.T) {
 }
 
 func TestParseSingleParam(t *testing.T) {
-	app := web.New("").Get("/id/:id", func(c *web.Context) any { return c.Param("id") })
+	app := newMux("").Get("/id/:id", func(c *call) any { return c.Param("id") })
 	expectBody(t, send(app, http.MethodGet, "/id/123"), "123")
 }
 
 func TestParseMultipleParams(t *testing.T) {
-	app := web.New("").Get("/id/:id/:name", func(c *web.Context) any {
+	app := newMux("").Get("/id/:id/:name", func(c *call) any {
 		return c.Param("id") + "/" + c.Param("name")
 	})
 	expectBody(t, send(app, http.MethodGet, "/id/fubuki/Elysia"), "fubuki/Elysia")
 }
 
 func TestParseOptionalParams(t *testing.T) {
-	app := web.New("").Get("/id/:id?", func(c *web.Context) any { return c.Param("id") })
+	app := newMux("").Get("/id/:id?", func(c *call) any { return c.Param("id") })
 
 	expectBody(t, send(app, http.MethodGet, "/id"), "")
 	expectBody(t, send(app, http.MethodGet, "/id/fubuki"), "fubuki")
 }
 
 func TestParseMultipleOptionalParams(t *testing.T) {
-	app := web.New("").Get("/id/:id?/:name?", func(c *web.Context) any {
+	app := newMux("").Get("/id/:id?/:name?", func(c *call) any {
 		return c.Param("id") + "/" + c.Param("name")
 	})
 
@@ -94,12 +93,12 @@ func TestParseMultipleOptionalParams(t *testing.T) {
 }
 
 func TestAcceptWildcard(t *testing.T) {
-	app := web.New("").Get("/wildcard/*", func(c *web.Context) any { return "Wildcard" })
+	app := newMux("").Get("/wildcard/*", func(c *call) any { return "Wildcard" })
 	expectBody(t, send(app, http.MethodGet, "/wildcard/okayu"), "Wildcard")
 }
 
 func TestUnknownRouteIs404(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any { return "Hi" })
+	app := newMux("").Get("/", func(c *call) any { return "Hi" })
 	rec := send(app, http.MethodGet, "/wildcard/okayu")
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
@@ -107,24 +106,24 @@ func TestUnknownRouteIs404(t *testing.T) {
 }
 
 func TestParseQueryString(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any { return c.Query.Get("id") })
+	app := newMux("").Get("/", func(c *call) any { return c.Query.Get("id") })
 	expectBody(t, send(app, http.MethodGet, "/?id=123"), "123")
 }
 
 func TestParseMultipleQueryStrings(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any {
+	app := newMux("").Get("/", func(c *call) any {
 		return c.Query.Get("last") + " " + c.Query.Get("first")
 	})
 	expectBody(t, send(app, http.MethodGet, "/?first=Fubuki&last=Shirakami"), "Shirakami Fubuki")
 }
 
 func TestParseQueryStringWithSpace(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any { return c.Query.Get("id") })
+	app := newMux("").Get("/", func(c *call) any { return c.Query.Get("id") })
 	expectBody(t, send(app, http.MethodGet, "/?id=test+123%2B"), "test 123+")
 }
 
 func TestParseHeaders(t *testing.T) {
-	app := web.New("").Post("/", func(c *web.Context) any {
+	app := newMux("").Post("/", func(c *call) any {
 		return c.Request.Header.Get("x-powered-by")
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -135,50 +134,50 @@ func TestParseHeaders(t *testing.T) {
 }
 
 func TestDecodeURI(t *testing.T) {
-	app := web.New("").Get("/", func(c *web.Context) any {
+	app := newMux("").Get("/", func(c *call) any {
 		return c.Query.Get("name") + "|" + c.Query.Get("c")
 	})
 	expectBody(t, send(app, http.MethodGet, "/?name=a%20b&c=d%20e"), "a b|d e")
 }
 
 func TestHandleGroup(t *testing.T) {
-	app := web.New("").Group("/gamer", func(g *web.App) {
-		g.Get("/korone", func(c *web.Context) any { return "Yubi Yubi!" })
+	app := newMux("").Group("/gamer", func(g *mux) {
+		g.Get("/korone", func(c *call) any { return "Yubi Yubi!" })
 	})
 	expectBody(t, send(app, http.MethodGet, "/gamer/korone"), "Yubi Yubi!")
 }
 
 func TestHandlePlugin(t *testing.T) {
-	plugin := web.New("")
-	plugin.Get("/korone", func(c *web.Context) any { return "Yubi Yubi!" })
-	app := web.New("").Use(plugin)
+	plugin := newMux("")
+	plugin.Get("/korone", func(c *call) any { return "Yubi Yubi!" })
+	app := newMux("").Use(plugin)
 	expectBody(t, send(app, http.MethodGet, "/korone"), "Yubi Yubi!")
 }
 
 func TestHandleRouteStartingWithSameLetter(t *testing.T) {
-	app := web.New("").
-		Get("/aa", func(c *web.Context) any { return "route 1" }).
-		Get("/ab", func(c *web.Context) any { return "route 2" })
+	app := newMux("").
+		Get("/aa", func(c *call) any { return "route 1" }).
+		Get("/ab", func(c *call) any { return "route 2" })
 	expectBody(t, send(app, http.MethodGet, "/ab"), "route 2")
 }
 
 func TestHandleWildcard(t *testing.T) {
-	app := web.New("").Get("/*", func(c *web.Context) any { return "Hi" })
+	app := newMux("").Get("/*", func(c *call) any { return "Hi" })
 	expectBody(t, send(app, http.MethodGet, "/"), "Hi")
 	expectBody(t, send(app, http.MethodGet, "/anything/should/match"), "Hi")
 }
 
 func TestHandleWildcardOnMultipleMethods(t *testing.T) {
-	app := web.New("").
-		Get("/part", func(c *web.Context) any { return "Part" }).
-		Route(http.MethodOptions, "*", func(c *web.Context) any { return "Hi" })
+	app := newMux("").
+		Get("/part", func(c *call) any { return "Part" }).
+		Route(http.MethodOptions, "*", func(c *call) any { return "Hi" })
 
 	expectBody(t, send(app, http.MethodGet, "/part"), "Part")
 	expectBody(t, send(app, http.MethodOptions, "/part"), "Hi")
 }
 
 func TestHandleAllMethod(t *testing.T) {
-	app := web.New("").All("/", func(c *web.Context) any { return "Hi" })
+	app := newMux("").All("/", func(c *call) any { return "Hi" })
 	expectBody(t, send(app, http.MethodGet, "/"), "Hi")
 	expectBody(t, send(app, http.MethodPost, "/"), "Hi")
 }
@@ -193,7 +192,7 @@ func TestServerSpanHasPositiveDuration(t *testing.T) {
 		_ = provider.Shutdown(context.Background())
 	})
 
-	app := web.New("").Get("/healthz", func(c *web.Context) any {
+	app := newMux("").Get("/healthz", func(c *call) any {
 		return "ok"
 	})
 	_ = send(app, http.MethodGet, "/healthz")

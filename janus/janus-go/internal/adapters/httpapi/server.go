@@ -1,4 +1,4 @@
-package routes
+package httpapi
 
 import (
 	"context"
@@ -20,42 +20,78 @@ import (
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/google"
-	goakt "github.com/tochemey/goakt/v4/actor"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"janus/actors/authentication"
+	"janus/actors/authorization"
+	"janus/actors/github"
 	actortrace "janus/actors/telemetry"
 	"janus/internal/app"
-	"janus/web"
 )
 
-type Actor struct{ dependencies Dependencies }
+// Config is everything the adapter needs from the outside: the use cases and
+// modules its handlers call, and its settings. The adapter reads no
+// environment variables.
+type Config struct {
+	// Addr is the listen address; "127.0.0.1:0" picks a free port.
+	Addr           string
+	Authentication *authentication.Service
+	Authorization  *authorization.Policy
+	Audit          app.Audit
+	Store          app.Store
+	GitHub         *github.Service
+	Imports        *app.Imports
+	Builds         *app.Builds
+	Accounts       *app.Accounts
+	Runs           *app.Runs
+	JWTExpiry      time.Duration
+	CookieSecure   bool
+	GoogleEnabled  bool
+	GoogleClientID string
+	GoogleSecret   string
+	GoogleCallback string
+	JWTSecret      string
+	GitHubEnabled  bool
+	GitHubClientID string
+	GitHubSecret   string
+	GitHubCallback string
+}
 
-var _ goakt.Actor = (*Actor)(nil)
+// Server is the HTTP driving adapter: it turns requests into use-case calls
+// and results into responses, and owns the HTTP listener.
+type Server struct {
+	dependencies Config
+	mux          *mux
+	listener     *listenState
+}
 
 var gothSetup sync.Once
 
-func New(dependencies Dependencies) *Actor { return &Actor{dependencies: dependencies} }
+// New builds the server and its routes. Nothing listens until Start.
+func New(config Config) *Server {
+	s := &Server{dependencies: config, listener: &listenState{}}
+	s.mux = s.routes()
+	return s
+}
 
-func (*Actor) PreStart(*goakt.Context) error { return nil }
+// Handler returns the routed application without the listener's edge
+// middleware, for tests that drive it with httptest.
+func (s *Server) Handler() http.Handler { return s.mux }
 
-func (a *Actor) Receive(ctx *goakt.ReceiveContext) {
-	if _, ok := ctx.Message().(*Build); !ok {
-		ctx.Unhandled()
-		return
-	}
-	_, span := actortrace.StartSpan(ctx.Context(), "routes.build", trace.WithSpanKind(trace.SpanKindInternal))
+func (s *Server) routes() *mux {
+	_, span := actortrace.StartSpan(context.Background(), "routes.build", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
-	app := web.New("")
-	setupGoogle(a.dependencies)
-	app.Get("/", a.home)
-	app.Get("/healthz", func(c *web.Context) any {
-		a.log(c.Request.Context(), "info", "http.health.check", map[string]string{"status": "ok"})
+	app := newMux("")
+	setupGoogle(s.dependencies)
+	app.Get("/", s.home)
+	app.Get("/healthz", func(c *call) any {
+		s.log(c.Request.Context(), "info", "http.health.check", map[string]string{"status": "ok"})
 		return map[string]string{"status": "ok"}
 	})
-	a.registerAuthenticationRoutes(app)
-	span.SetAttributes(attribute.Int("routes.count", 24), attribute.Bool("auth.google.enabled", a.dependencies.GoogleEnabled), attribute.Bool("auth.github.enabled", a.dependencies.GitHubEnabled))
-	ctx.Response(&Built{App: app})
+	s.registerAuthenticationRoutes(app)
+	span.SetAttributes(attribute.Int("routes.count", 24), attribute.Bool("auth.google.enabled", s.dependencies.GoogleEnabled), attribute.Bool("auth.github.enabled", s.dependencies.GitHubEnabled))
+	return app
 }
 
 type homePageData struct {
@@ -102,23 +138,23 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 
 </html>`))
 
-func homePage(googleEnabled bool, identity string) web.Response {
+func homePage(googleEnabled bool, identity string) reply {
 	return homePageWithProviders(googleEnabled, false, identity, false)
 }
 
-func homePageWithProviders(googleEnabled, githubEnabled bool, identity string, accountExists bool) web.Response {
+func homePageWithProviders(googleEnabled, githubEnabled bool, identity string, accountExists bool) reply {
 	var body strings.Builder
 	if err := homeTemplate.Execute(&body, homePageData{GoogleEnabled: googleEnabled, GitHubEnabled: githubEnabled, Identity: identity, AccountExists: accountExists}); err != nil {
 		return internalError()
 	}
-	return web.Response{
+	return reply{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": {"text/html; charset=utf-8"}},
 		Body:       body.String(),
 	}
 }
 
-func (a *Actor) home(c *web.Context) any {
+func (a *Server) home(c *call) any {
 	profileResponse := a.me(c)
 	if profile, ok := profileResponse.(map[string]string); ok {
 		identity := strings.TrimSpace(profile["display_name"])
@@ -127,13 +163,13 @@ func (a *Actor) home(c *web.Context) any {
 		}
 		return homePageWithProviders(a.dependencies.GoogleEnabled, a.dependencies.GitHubEnabled, identity, false)
 	}
-	if response, ok := profileResponse.(web.Response); ok && response.StatusCode != http.StatusUnauthorized {
+	if response, ok := profileResponse.(reply); ok && response.StatusCode != http.StatusUnauthorized {
 		return response
 	}
 	return homePageWithProviders(a.dependencies.GoogleEnabled, a.dependencies.GitHubEnabled, "", c.Query.Get("github") == "account_exists")
 }
 
-func (a *Actor) registerAuthenticationRoutes(app *web.App) {
+func (a *Server) registerAuthenticationRoutes(app *mux) {
 	app.Post("/auth/register", a.register)
 	app.Post("/auth/login", a.login)
 	app.Post("/auth/logout", a.logout)
@@ -153,7 +189,7 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
-func (a *Actor) register(c *web.Context) any {
+func (a *Server) register(c *call) any {
 	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.local.register", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	var input credentials
@@ -184,7 +220,7 @@ func (a *Actor) register(c *web.Context) any {
 	return a.issueCookie(ctx, userID, http.StatusCreated, map[string]string{"id": userID, "email": strings.TrimSpace(input.Email)})
 }
 
-func (a *Actor) login(c *web.Context) any {
+func (a *Server) login(c *call) any {
 	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.local.login", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	var input credentials
@@ -218,7 +254,7 @@ func (a *Actor) login(c *web.Context) any {
 	return a.issueCookie(ctx, user.ID, http.StatusOK, map[string]string{"id": user.ID, "email": user.Email})
 }
 
-func (a *Actor) logout(c *web.Context) any {
+func (a *Server) logout(c *call) any {
 	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.logout", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	if cookie, err := c.Request.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
@@ -226,13 +262,13 @@ func (a *Actor) logout(c *web.Context) any {
 			a.log(ctx, "info", "auth.logout", map[string]string{"user_id": subject})
 		}
 	}
-	return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{
+	return reply{StatusCode: http.StatusSeeOther, Header: http.Header{
 		"Location":   {"/"},
 		"Set-Cookie": {a.cookie("", -1).String()},
 	}}
 }
 
-func (a *Actor) me(c *web.Context) any {
+func (a *Server) me(c *call) any {
 	ctx, span := actortrace.StartSpan(c.Request.Context(), "auth.profile.read", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	subject, ok := a.subject(ctx, c.Request)
@@ -257,7 +293,7 @@ func (a *Actor) me(c *web.Context) any {
 	return map[string]string{"id": user.ID, "email": user.Email, "display_name": user.DisplayName}
 }
 
-func (a *Actor) googleStart(c *web.Context) any {
+func (a *Server) googleStart(c *call) any {
 	if !a.dependencies.GoogleEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Google sign-in is not configured"})
 	}
@@ -278,10 +314,10 @@ func (a *Actor) googleStart(c *web.Context) any {
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": "Google sign-in could not be started"})
 	}
 	span.SetAttributes(attribute.String("auth.provider", "google"))
-	return web.Response{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": {writer.Header().Get("Location")}, "Set-Cookie": writer.Header().Values("Set-Cookie")}}
+	return reply{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": {writer.Header().Get("Location")}, "Set-Cookie": writer.Header().Values("Set-Cookie")}}
 }
 
-func (a *Actor) googleCallback(c *web.Context) any {
+func (a *Server) googleCallback(c *call) any {
 	if !a.dependencies.GoogleEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Google sign-in is not configured"})
 	}
@@ -305,7 +341,7 @@ func (a *Actor) googleCallback(c *web.Context) any {
 		return internalError()
 	}
 	issued := a.issueCookie(ctx, identity.ID, http.StatusTemporaryRedirect, nil)
-	redirect, ok := issued.(web.Response)
+	redirect, ok := issued.(reply)
 	if !ok {
 		return internalError()
 	}
@@ -319,7 +355,7 @@ func (a *Actor) googleCallback(c *web.Context) any {
 
 const sessionCookieName = "janus_session"
 
-func (a *Actor) subject(ctx context.Context, request *http.Request) (string, bool) {
+func (a *Server) subject(ctx context.Context, request *http.Request) (string, bool) {
 	cookie, err := request.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
 		return "", false
@@ -333,31 +369,25 @@ func (a *Actor) subject(ctx context.Context, request *http.Request) (string, boo
 	return subject, err == nil && found.Found
 }
 
-func (a *Actor) issueCookie(ctx context.Context, subject string, status int, body any) any {
+func (a *Server) issueCookie(ctx context.Context, subject string, status int, body any) any {
 	issued, err := a.dependencies.Authentication.IssueToken(ctx, subject)
 	if err != nil {
 		return internalError()
 	}
 	maxAge := int(time.Until(time.Unix(issued.ExpiresAt, 0)).Seconds())
 	cookie := a.cookie(issued.Value, maxAge)
-	return web.Response{StatusCode: status, Header: http.Header{"Set-Cookie": {cookie.String()}}, Body: body}
+	return reply{StatusCode: status, Header: http.Header{"Set-Cookie": {cookie.String()}}, Body: body}
 }
 
-func (a *Actor) cookie(value string, maxAge int) *http.Cookie {
+func (a *Server) cookie(value string, maxAge int) *http.Cookie {
 	return &http.Cookie{Name: sessionCookieName, Value: value, Path: "/", HttpOnly: true, Secure: a.dependencies.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge}
 }
 
-func (a *Actor) allowed(ctx context.Context, subject, action string, resource map[string]any) (bool, error) {
+func (a *Server) allowed(ctx context.Context, subject, action string, resource map[string]any) (bool, error) {
 	return a.dependencies.Authorization.Allowed(ctx, subject, action, resource)
 }
 
-func (a *Actor) ask(ctx context.Context, pid *goakt.PID, message any) (any, error) {
-	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	return goakt.Ask(requestCtx, pid, message, 5*time.Second)
-}
-
-func (a *Actor) log(ctx context.Context, level, name string, fields map[string]string) {
+func (a *Server) log(ctx context.Context, level, name string, fields map[string]string) {
 	a.dependencies.Audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
@@ -385,11 +415,11 @@ func validEmail(value string) bool {
 	return err == nil && strings.EqualFold(address.Address, strings.TrimSpace(value))
 }
 
-func jsonResponse(status int, body any) web.Response {
-	return web.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: body}
+func jsonResponse(status int, body any) reply {
+	return reply{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: body}
 }
 
-func internalError() web.Response {
+func internalError() reply {
 	return jsonResponse(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 }
 
@@ -414,7 +444,7 @@ func withGoogleProvider(request *http.Request) *http.Request {
 	return cloned
 }
 
-func setupGoogle(dependencies Dependencies) {
+func setupGoogle(dependencies Config) {
 	if !dependencies.GoogleEnabled {
 		return
 	}
@@ -426,5 +456,3 @@ func setupGoogle(dependencies Dependencies) {
 		gothic.Store = store
 	})
 }
-
-func (*Actor) PostStop(*goakt.Context) error { return nil }

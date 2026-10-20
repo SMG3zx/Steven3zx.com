@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
 	"net/http"
@@ -18,17 +20,12 @@ import (
 	"time"
 
 	"github.com/mxschmitt/playwright-go"
-	"github.com/tochemey/goakt/v4/actor"
-	golog "github.com/tochemey/goakt/v4/log"
-	"go.uber.org/zap"
 
-	"janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
 	"janus/actors/builder"
 	"janus/actors/github"
 	"janus/actors/gitsource"
-	routesactor "janus/actors/routes"
 )
 
 const (
@@ -333,27 +330,6 @@ func startJanus(t *testing.T, ctx context.Context) (app.Store, http.Handler) {
 // It returns the Store, the Builds use case and the HTTP handler.
 func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.Store, *app.Builds, http.Handler) {
 	t.Helper()
-	system, err := actor.NewActorSystem("playwright-e2e", actor.WithLogger(golog.DiscardLogger))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := system.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		defer cancel()
-		_ = system.Stop(stopCtx)
-	})
-
-	spawn := func(name string, actorImpl actor.Actor) *actor.PID {
-		pid, err := system.Spawn(ctx, name, actorImpl)
-		if err != nil {
-			t.Fatalf("spawn %s: %v", name, err)
-		}
-		return pid
-	}
-	accountingPID := spawn("accounting", accounting.New(zap.NewNop()))
 	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"), sqlstore.WithTokenSecret(jwtSecret))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
@@ -365,20 +341,16 @@ func startJanusWith(t *testing.T, ctx context.Context, b builder.Builder) (app.S
 		t.Fatalf("prepare authorization: %v", err)
 	}
 	gh := github.NewService(store, github.NewClient())
-	audit := accounting.NewAudit(accountingPID)
+	audit := audittest.NewRecorder()
 	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
 	builds := app.NewBuilds(store, b, audit)
-	routesPID := spawn("routes", routesactor.New(routesactor.Dependencies{
-		System: system, Audit: accounting.NewAudit(accountingPID), Store: store, GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
+	server := httpapi.New(httpapi.Config{
+		Audit: audit, Store: store, GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
-	}))
-	built, err := actor.Ask(ctx, routesPID, &routesactor.Build{}, 5*time.Second)
-	if err != nil {
-		t.Fatalf("build HTTP app: %v", err)
-	}
-	return store, builds, built.(*routesactor.Built).App
+	})
+	return store, builds, server.Handler()
 }
 
 func registerUser(t *testing.T, baseURL string) (string, string) {

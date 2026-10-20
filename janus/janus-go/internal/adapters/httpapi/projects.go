@@ -1,4 +1,4 @@
-package routes
+package httpapi
 
 import (
 	"encoding/json"
@@ -11,10 +11,9 @@ import (
 	"github.com/google/uuid"
 	"janus/internal/domain/scan"
 	"janus/internal/domain/templates"
-	"janus/web"
 )
 
-func (a *Actor) registerProjectRoutes(app *web.App) {
+func (a *Server) registerProjectRoutes(app *mux) {
 	app.Get("/projects", a.projectsPage)
 	app.Get("/projects/new", a.newProjectPage)
 	app.Get("/projects/import", a.repoImportPage)
@@ -40,10 +39,10 @@ func (a *Actor) registerProjectRoutes(app *web.App) {
 	app.Get("/api/wasm-runs/:id", a.getWASMRun)
 }
 
-func (a *Actor) projectsPage(c *web.Context) any {
+func (a *Server) projectsPage(c *call) any {
 	owner, ok := a.subject(c.Request.Context(), c.Request)
 	if !ok {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
 	projects, err := a.dependencies.Store.ListProjects(c.Request.Context(), owner)
 	if err != nil {
@@ -57,20 +56,20 @@ func (a *Actor) projectsPage(c *web.Context) any {
 	if err = projectsListTemplate.Execute(&body, projectsPageData{Projects: projects, GitHubConnected: connected, GitHubEnabled: a.dependencies.GitHubEnabled}); err != nil {
 		return internalError()
 	}
-	return web.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: body.String()}
+	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: body.String()}
 }
 
-func (a *Actor) newProjectPage(c *web.Context) any {
+func (a *Server) newProjectPage(c *call) any {
 	if _, ok := a.subject(c.Request.Context(), c.Request); !ok {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
 	return htmlPage(newProjectTemplate, "new project data", nil)
 }
 
-func (a *Actor) repoImportPage(c *web.Context) any {
+func (a *Server) repoImportPage(c *call) any {
 	owner, ok := a.subject(c.Request.Context(), c.Request)
 	if !ok {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
 	if !a.dependencies.GitHubEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "GitHub OAuth is not configured"})
@@ -80,19 +79,19 @@ func (a *Actor) repoImportPage(c *web.Context) any {
 		return internalError()
 	}
 	if !connected {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/auth/github/connect"}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/auth/github/connect"}}}
 	}
 	var out strings.Builder
 	if err = repoImportTemplate.Execute(&out, nil); err != nil {
 		return internalError()
 	}
-	return web.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: out.String()}
+	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: out.String()}
 }
 
-func (a *Actor) createProjectPage(c *web.Context) any {
+func (a *Server) createProjectPage(c *call) any {
 	owner, ok := a.subject(c.Request.Context(), c.Request)
 	if !ok {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
 	allowed, authErr := a.allowed(c.Request.Context(), owner, "project.create", nil)
 	if authErr != nil {
@@ -105,16 +104,16 @@ func (a *Actor) createProjectPage(c *web.Context) any {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid form"})
 	}
 	created := a.createProject(c, owner, c.Request.FormValue("name"), c.Request.FormValue("description"))
-	if response, ok := created.(web.Response); ok && response.StatusCode >= 400 {
+	if response, ok := created.(reply); ok && response.StatusCode >= 400 {
 		return response
 	}
 	if project, ok := created.(app.Project); ok {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects/" + project.ID}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects/" + project.ID}}}
 	}
 	return internalError()
 }
 
-func (a *Actor) listProjects(c *web.Context) any {
+func (a *Server) listProjects(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", map[string]any{})
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -131,7 +130,7 @@ type createProjectInput struct {
 	Description string `json:"description"`
 }
 
-func (a *Actor) createProjectAPI(c *web.Context) any {
+func (a *Server) createProjectAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.create", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -144,17 +143,17 @@ func (a *Actor) createProjectAPI(c *web.Context) any {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
 	created := a.createProject(c, owner, input.Name, input.Description)
-	if failure, ok := created.(web.Response); ok {
+	if failure, ok := created.(reply); ok {
 		return failure
 	}
 	project, ok := created.(app.Project)
 	if !ok {
 		return internalError()
 	}
-	return web.Response{StatusCode: http.StatusCreated, Body: project}
+	return reply{StatusCode: http.StatusCreated, Body: project}
 }
 
-func (a *Actor) createProject(c *web.Context, owner, name, description string) any {
+func (a *Server) createProject(c *call, owner, name, description string) any {
 	if strings.TrimSpace(name) == "" || len(name) > 120 || len(description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
@@ -168,7 +167,7 @@ func (a *Actor) createProject(c *web.Context, owner, name, description string) a
 	return project
 }
 
-func (a *Actor) getProjectAPI(c *web.Context) any {
+func (a *Server) getProjectAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -183,7 +182,7 @@ func (a *Actor) getProjectAPI(c *web.Context) any {
 	return project
 }
 
-func (a *Actor) listProjectSnapshots(c *web.Context) any {
+func (a *Server) listProjectSnapshots(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -198,7 +197,7 @@ func (a *Actor) listProjectSnapshots(c *web.Context) any {
 	return snapshots
 }
 
-func (a *Actor) activateProjectSnapshot(c *web.Context) any {
+func (a *Server) activateProjectSnapshot(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.update", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -214,7 +213,7 @@ func (a *Actor) activateProjectSnapshot(c *web.Context) any {
 	return map[string]bool{"active": true}
 }
 
-func (a *Actor) updateProjectAPI(c *web.Context) any {
+func (a *Server) updateProjectAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.update", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -236,7 +235,7 @@ func (a *Actor) updateProjectAPI(c *web.Context) any {
 	return project
 }
 
-func (a *Actor) deleteProjectAPI(c *web.Context) any {
+func (a *Server) deleteProjectAPI(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.delete", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -251,10 +250,10 @@ func (a *Actor) deleteProjectAPI(c *web.Context) any {
 	if !deleted {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 	}
-	return web.Response{StatusCode: http.StatusNoContent}
+	return reply{StatusCode: http.StatusNoContent}
 }
 
-func (a *Actor) listGitHubRepos(c *web.Context) any {
+func (a *Server) listGitHubRepos(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -265,7 +264,7 @@ func (a *Actor) listGitHubRepos(c *web.Context) any {
 	}
 	return list
 }
-func (a *Actor) listGitHubBranches(c *web.Context) any {
+func (a *Server) listGitHubBranches(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -276,7 +275,7 @@ func (a *Actor) listGitHubBranches(c *web.Context) any {
 	}
 	return branches
 }
-func (a *Actor) listGitHubCommits(c *web.Context) any {
+func (a *Server) listGitHubCommits(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -294,7 +293,7 @@ type importInput struct {
 	Commit     string `json:"commit"`
 }
 
-func (a *Actor) startProjectImport(c *web.Context) any {
+func (a *Server) startProjectImport(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.import", map[string]any{"owner_id": ""})
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -310,10 +309,10 @@ func (a *Actor) startProjectImport(c *web.Context) any {
 		})
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
+	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
 }
 
-func (a *Actor) getImportStatus(c *web.Context) any {
+func (a *Server) getImportStatus(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -332,7 +331,7 @@ type wasmBuildInput struct {
 	Target string `json:"target"`
 }
 
-func (a *Actor) startWASMBuild(c *web.Context) any {
+func (a *Server) startWASMBuild(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.build", map[string]any{"owner_id": ""})
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -349,7 +348,7 @@ func (a *Actor) startWASMBuild(c *web.Context) any {
 		return jsonResponse(wasmBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
 	a.log(c.Request.Context(), "info", "project.wasm.build.requested", map[string]string{"user_id": owner, "project_id": c.Param("id"), "job_id": jobID, "target": input.Target})
-	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
+	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
 }
 
 func wasmBuildErrorStatus(err error) int {
@@ -366,7 +365,7 @@ func wasmBuildErrorStatus(err error) int {
 	}
 }
 
-func (a *Actor) getWASMBuild(c *web.Context) any {
+func (a *Server) getWASMBuild(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -384,7 +383,7 @@ func (a *Actor) getWASMBuild(c *web.Context) any {
 	return build
 }
 
-func (a *Actor) getWASMArtifact(c *web.Context) any {
+func (a *Server) getWASMArtifact(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -400,10 +399,10 @@ func (a *Actor) getWASMArtifact(c *web.Context) any {
 	if strings.HasSuffix(strings.ToLower(artifact.Name), ".zst") {
 		contentType = "application/zstd"
 	}
-	return web.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {contentType}, "Content-Disposition": {`attachment; filename="` + artifact.Name + `"`}}, Body: artifact.Data}
+	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {contentType}, "Content-Disposition": {`attachment; filename="` + artifact.Name + `"`}}, Body: artifact.Data}
 }
 
-func (a *Actor) startWASMRun(c *web.Context) any {
+func (a *Server) startWASMRun(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.run", map[string]any{"owner_id": ""})
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -421,10 +420,10 @@ func (a *Actor) startWASMRun(c *web.Context) any {
 	if err != nil {
 		return jsonResponse(wasmBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
-	return web.Response{StatusCode: http.StatusAccepted, Body: map[string]string{"run_id": runID, "status": "running"}}
+	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"run_id": runID, "status": "running"}}
 }
 
-func (a *Actor) getWASMRun(c *web.Context) any {
+func (a *Server) getWASMRun(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -444,7 +443,7 @@ type entrypointInput struct {
 	EntryPoint string `json:"entry_point"`
 }
 
-func (a *Actor) setProjectEntrypoint(c *web.Context) any {
+func (a *Server) setProjectEntrypoint(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.import", map[string]any{"owner_id": ""})
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -459,10 +458,10 @@ func (a *Actor) setProjectEntrypoint(c *web.Context) any {
 	return map[string]string{"entry_point": input.EntryPoint}
 }
 
-func (a *Actor) projectPage(c *web.Context) any {
+func (a *Server) projectPage(c *call) any {
 	owner, ok := a.subject(c.Request.Context(), c.Request)
 	if !ok {
-		return web.Response{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
+		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
 	allowed, authErr := a.allowed(c.Request.Context(), owner, "project.read", map[string]any{"owner_id": owner})
 	if authErr != nil {
@@ -502,7 +501,7 @@ func (a *Actor) projectPage(c *web.Context) any {
 	if err = projectTemplate.Execute(&page, data); err != nil {
 		return internalError()
 	}
-	return web.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: page.String()}
+	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: page.String()}
 }
 
 type projectMetadata struct {
@@ -546,14 +545,14 @@ var projectTemplate = template.Must(template.New("project").Funcs(template.FuncM
 </main><script id="project-actions" data-project-id="{{.Project.ID}}" data-snapshot-id="{{.Project.SnapshotID}}">const projectData=document.getElementById('project-actions').dataset;const projectID=projectData.projectId;const snapshotID=projectData.snapshotId;const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));async function requestJSON(url,options){const response=await fetch(url,options);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Request failed');return body}async function loadRepos(){const result=await requestJSON('/api/github/repos');const select=document.getElementById('repo');for(const repo of result.repositories){const option=document.createElement('option');option.value=repo.full_name;option.textContent=repo.full_name+(repo.private?' · private':'');select.appendChild(option)}if(select.options.length)await loadBranches()}async function loadBranches(){const repo=document.getElementById('repo').value;const branches=await requestJSON('/api/github/branches?repository='+encodeURIComponent(repo));const select=document.getElementById('branch');select.innerHTML='';for(const branch of branches){const option=document.createElement('option');option.value=branch.name;option.textContent=branch.name;select.appendChild(option)}await loadCommits()}async function loadCommits(){const repo=document.getElementById('repo').value,branch=document.getElementById('branch').value;const commits=await requestJSON('/api/github/commits?repository='+encodeURIComponent(repo)+'&branch='+encodeURIComponent(branch));const select=document.getElementById('commit');select.innerHTML='';for(const commit of commits){const option=document.createElement('option');option.value=commit.sha;option.textContent=commit.sha.slice(0,7)+' · '+commit.message.split('\n')[0];select.appendChild(option)}}async function startImport(){const panel=document.getElementById('import-progress'),status=document.getElementById('import-status'),percent=document.getElementById('import-percent'),fill=document.getElementById('import-progress-fill'),detail=document.getElementById('import-detail');panel.hidden=false;status.textContent='Queueing import…';detail.textContent=document.getElementById('repo').value+' · '+document.getElementById('branch').value;try{const queued=await requestJSON('/api/projects/'+encodeURIComponent(projectID)+'/imports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({repository:document.getElementById('repo').value,branch:document.getElementById('branch').value,commit:document.getElementById('commit').value})});let job;do{job=await requestJSON('/api/imports/'+encodeURIComponent(queued.job_id));const progress=Math.max(0,Math.min(100,Number(job.progress)||0));status.textContent='Import '+job.status;percent.textContent=progress+'%';fill.style.width=progress+'%';detail.textContent=job.error||({queued:'Waiting for an import worker',cloning:'Fetching repository data from GitHub',scanning:'Scanning repository files and detecting entrypoints',storing:'Saving files and creating snapshot',complete:'Snapshot is ready',failed:'Import failed'}[job.status]||'Processing repository');await pause(900)}while(job.status!=='complete'&&job.status!=='failed');if(job.status==='complete'){fill.style.width='100%';percent.textContent='100%';detail.textContent='Import complete. Loading the imported repository…';await pause(500);location.reload()}else detail.textContent=job.error||'Import failed'}catch(error){status.textContent='Import failed';detail.textContent=error.message}}
 async function activateSnapshot(id){const status=document.getElementById('snapshot-status');status.textContent='Switching snapshot…';try{await requestJSON('/api/projects/'+encodeURIComponent(projectID)+'/snapshots/'+encodeURIComponent(id)+'/activate',{method:'POST'});location.reload()}catch(error){status.textContent=error.message}}async function saveEntryPoint(){const entry=document.getElementById('entrypoint').value;try{await requestJSON('/api/projects/'+encodeURIComponent(projectID)+'/entrypoint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshot_id:snapshotID,entry_point:entry})});location.reload()}catch(error){alert(error.message)}}function buildFailureGuidance(error,target){const message=(error||'').toLowerCase();const checks=[];if(message.includes('require a cargo.toml'))checks.push('This snapshot is missing Cargo.toml at its repository root. Import a Rust repository with a root Cargo.toml, or select a snapshot that has one.');if(message.includes('require a go.mod'))checks.push('This snapshot is missing go.mod at its repository root. Import a Go repository with a root go.mod.');if(message.includes('configure a trusted, pre-provisioned wasm builder image'))checks.push('Janus could not find a configured Go WASM builder image, so it stopped before starting a compiler container. Set JANUS_GO_WASM_BUILDER_IMAGE=janus-go-wasm-builder:local, build the image with: docker build -f build/Dockerfile.wasm-go -t janus-go-wasm-builder:local . Then restart Janus. The log confirms the Docker daemon itself was ready.');else if(message.includes('builder is not configured')||message.includes('builder unavailable'))checks.push('The server has no configured builder for this language. Configure the matching JANUS_WASM_BUILDER_IMAGE or JANUS_GO_WASM_BUILDER_IMAGE and ensure the image is available to Docker.');if(message.includes('no such file')||message.includes('cannot find')||message.includes('not found'))checks.push('A compiler, target, or build tool may be missing from the builder image. Check that the configured builder image was built from the matching build/Dockerfile and includes its target toolchain.');if(message.includes('network')||message.includes('offline')||message.includes('package')||message.includes('dependency')||message.includes('failed to get'))checks.push('Build containers have no network and dependency lookup is offline. Vendor dependencies or add them to the trusted builder image cache, then rebuild.');if(message.includes('docker')||message.includes('daemon')||message.includes('container'))checks.push('Check that Docker Desktop is running and that the configured builder image is present locally. Builds run in an isolated container with no network.');if(message.includes('timed out')||message.includes('deadline'))checks.push('The build exceeded its 10 minute limit. Reduce build work or dependencies and retry.');if(message.includes('128 mib')||message.includes('artifact size'))checks.push('The generated artifact exceeded the 128 MiB output limit. Reduce the build output size and retry.');if(checks.length===0)checks.push('Review the full build output below. Confirm the '+target+' target is supported by this repository and that its dependencies are available offline in the builder.');return checks}function showBuildFailure(error,target){const box=document.getElementById('build-failure'),help=document.getElementById('build-help');box.textContent=error||'The build stopped without a detailed error message.';box.hidden=false;help.replaceChildren();const title=document.createElement('strong');title.textContent='Things to check';const list=document.createElement('ul');for(const item of buildFailureGuidance(error,target)){const li=document.createElement('li');li.textContent=item;list.appendChild(li)}help.append(title,list);help.hidden=false}async function buildWASM(){const panel=document.getElementById('build-progress'),status=document.getElementById('wasm-status'),percent=document.getElementById('wasm-percent'),fill=document.getElementById('wasm-progress-fill'),detail=document.getElementById('wasm-detail'),log=document.getElementById('wasm-log'),logEmpty=document.getElementById('wasm-log-empty'),failure=document.getElementById('build-failure'),help=document.getElementById('build-help'),download=document.getElementById('wasm-download'),button=document.getElementById('build-button'),target=document.getElementById('wasm-target').value;panel.hidden=false;failure.hidden=true;help.hidden=true;log.textContent='';logEmpty.hidden=true;download.hidden=true;button.disabled=true;status.textContent='Starting container build…';detail.textContent='Preparing the active repository snapshot';fill.style.width='0%';percent.textContent='0%';try{const queued=await requestJSON('/api/projects/'+encodeURIComponent(projectID)+'/wasm-builds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})});let job;do{await pause(900);job=await requestJSON('/api/wasm-builds/'+encodeURIComponent(queued.job_id));const progress=Math.max(0,Math.min(100,Number(job.progress)||0));status.textContent=job.status==='failed'?'Build stopped during '+(job.target||target):'Build '+job.status;percent.textContent=progress+'%';fill.style.width=progress+'%';detail.textContent=job.status==='queued'?'Waiting for a build worker':job.status==='building'?'Docker is compiling the active snapshot':job.status==='complete'?'Build completed successfully':'Build stopped; see the error and output below';log.textContent=job.log||'';log.hidden=!job.log;logEmpty.hidden=Boolean(job.log);log.scrollTop=log.scrollHeight;if(job.status==='failed')showBuildFailure(job.error,target);await pause(0)}while(job.status==='queued'||job.status==='building');if(job.status==='complete'){fill.style.width='100%';percent.textContent='100%';download.href='/api/wasm-builds/'+encodeURIComponent(job.id)+'/artifact';download.textContent='Download '+(job.artifact_name||'WASM artifact');download.hidden=false;detail.textContent='Build complete. Artifact: '+(job.artifact_name||'WASM artifact')}else if(job.status!=='failed'){status.textContent='Build ended with status: '+job.status;detail.textContent=job.error||'The server returned an unexpected build status.';showBuildFailure(job.error||('Unexpected build status: '+job.status),target)}}catch(error){status.textContent='Could not complete build request';detail.textContent='The build status could not be retrieved. The job may still be running; retry after checking the server connection.';showBuildFailure(error.message,target)}finally{button.disabled=false}}const repoSelect=document.getElementById('repo');if(repoSelect){loadRepos().catch(error=>{const panel=document.getElementById('import-progress');panel.hidden=false;document.getElementById('import-status').textContent='Could not load repositories';document.getElementById('import-detail').textContent=error.message});repoSelect.addEventListener('change',()=>loadBranches().catch(error=>{document.getElementById('import-progress').hidden=false;document.getElementById('import-detail').textContent=error.message}));document.getElementById('branch').addEventListener('change',()=>loadCommits().catch(error=>{document.getElementById('import-progress').hidden=false;document.getElementById('import-detail').textContent=error.message}))}</script></html>`))
 
-func htmlPage(t *template.Template, name string, data any) web.Response {
+func htmlPage(t *template.Template, name string, data any) reply {
 	var out strings.Builder
 	if err := t.Execute(&out, data); err != nil {
 		return internalError()
 	}
-	return web.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: out.String()}
+	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: out.String()}
 }
-func (a *Actor) authorizedSubject(c *web.Context, action string, resource map[string]any) (string, bool) {
+func (a *Server) authorizedSubject(c *call, action string, resource map[string]any) (string, bool) {
 	owner, ok := a.subject(c.Request.Context(), c.Request)
 	if !ok {
 		return "", false

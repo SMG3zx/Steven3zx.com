@@ -1,4 +1,4 @@
-# Web.App Usage
+# Route collection usage (the unexported `mux` in this package; examples use its former exported names)
 
 ```golang
 app := web.New("")
