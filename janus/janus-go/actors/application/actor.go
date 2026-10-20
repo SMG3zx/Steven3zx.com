@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	accountingactor "janus/actors/accounting"
 	authactor "janus/actors/authentication"
 	authzactor "janus/actors/authorization"
 	"janus/actors/builder"
@@ -20,6 +19,7 @@ import (
 	"janus/actors/gitsource"
 	telemetryactor "janus/actors/telemetry"
 	wasmruntime "janus/actors/wasmruntime"
+	"janus/internal/adapters/auditlog"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
@@ -30,7 +30,7 @@ type Actor struct {
 	system         goakt.ActorSystem
 	telemetry      *telemetryactor.Telemetry
 	httpServer     *httpapi.Server
-	accounting     *goakt.PID
+	auditLog       *auditlog.Log
 	audit          app.Audit
 	authentication *authactor.Service
 	authorization  *authzactor.Policy
@@ -91,11 +91,8 @@ func (a *Actor) start(ctx *goakt.ReceiveContext) (retErr error) {
 	if a.logger == nil {
 		a.logger = zap.NewNop()
 	}
-	a.accounting, err = a.system.Spawn(ctx.Context(), "accounting", accountingactor.New(a.logger))
-	if err != nil {
-		return fmt.Errorf("spawn accounting actor: %w", err)
-	}
-	audit := accountingactor.NewAudit(a.accounting)
+	a.auditLog = auditlog.New(a.logger)
+	audit := a.auditLog
 	a.audit = audit
 	a.telemetry, err = telemetryactor.Start(ctx.Context(), config.PyroscopeServerAddress, func(level, message string) {
 		audit.Record(context.Background(), app.AuditEvent{Level: level, Name: "pyroscope.sdk", Fields: map[string]string{"message": message}})
@@ -224,12 +221,9 @@ func (a *Actor) stop(ctx context.Context) error {
 		}
 	}
 	telemetryactor.RecordError(span, firstErr)
-	if a.accounting != nil {
-		response, err := goakt.Ask(shutdownCtx, a.accounting, &accountingactor.Flush{}, ShutdownTimeout)
-		if err != nil && firstErr == nil {
+	if a.auditLog != nil {
+		if err := a.auditLog.Flush(); err != nil && firstErr == nil {
 			firstErr = err
-		} else if result, ok := response.(*accountingactor.Flushed); ok && result.Err != nil && firstErr == nil {
-			firstErr = result.Err
 		}
 	}
 	if a.telemetry != nil {

@@ -1,6 +1,6 @@
 # Janus Go
 
-Janus Go is a small GoAkt application with an HTTP edge and actor-owned authentication, authorization, accounting, and telemetry services over a SQL store.
+Janus Go is a small GoAkt application with an HTTP edge and actor-owned authentication, authorization, audit, and telemetry services over a SQL store.
 
 ## Run locally
 
@@ -50,12 +50,12 @@ OPA policy is embedded in `actors/authorization/policy.rego`. The default decisi
 This section describes the code as it is today. The structure it is moving to, ports and adapters with no actor framework, is the standard in [docs/architecture.md](docs/architecture.md) ([ADR 0003](docs/adr/0003-ports-and-adapters.md)).
 
 - The `sqlstore` adapter owns the local Turso database and its single connection. The use cases `Imports`, `Builds`, `Runs` and `Accounts` live in `internal/app` and run their work on goroutines they own; they are plain structs, not actors.
-- `AccountingActor` receives structured application audit events and writes them through zap. Passwords, OAuth codes, tokens, and raw emails are excluded from audit fields.
+- `auditlog.Log` (`internal/adapters/auditlog`, the `app.Audit` port) writes structured application audit events through zap. Passwords, OAuth codes, tokens, and raw emails are excluded from audit fields.
 - `RoutesActor` builds the HTTP route table and coordinates requests to those service actors from HTTP request goroutines. The HTTP server actor owns listener lifecycle; request handling stays outside GoAkt `Receive` turns.
 - `TelemetryActor` configures OpenTelemetry. Actor receives and authentication flows create spans.
 - `DockerControllerActor` checks the Docker daemon and executes bounded, isolated containers requested by workload actors.
 
-Actor messages contain values rather than live HTTP request/response objects. The database is accessed only through the `sqlstore` adapter of the `app.Store` port. GoAkt's own runtime logs use the same zap logger through GoAkt's zap adapter; application audit events are delivered to the AccountingActor.
+Actor messages contain values rather than live HTTP request/response objects. The database is accessed only through the `sqlstore` adapter of the `app.Store` port. GoAkt's own runtime logs use the same zap logger through GoAkt's zap adapter; application audit events are written by `auditlog.Log`.
 
 ## Observability
 
