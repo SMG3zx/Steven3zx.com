@@ -47,6 +47,8 @@ OPA policy is embedded in `actors/authorization/policy.rego`. The default decisi
 
 ## Actor boundaries
 
+This section describes the code as it is today. The structure it is moving to, ports and adapters with no actor framework, is the standard in [docs/architecture.md](docs/architecture.md) ([ADR 0003](docs/adr/0003-ports-and-adapters.md)).
+
 - `AuthenticationActor` hashes/verifies passwords and signs/verifies JWT claims.
 - `AuthorizationActor` evaluates the embedded OPA policy.
 - `PersistenceActor` owns the local Turso database and account/provider-identity records.
