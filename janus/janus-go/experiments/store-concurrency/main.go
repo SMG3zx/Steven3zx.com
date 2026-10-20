@@ -30,16 +30,24 @@ func variants() []Variant {
 		{"mutex/coarse", "mutex", newCoarse},
 		{"mutex/rwmutex", "mutex", newRW},
 		{fmt.Sprintf("mutex/sharded-%d", bestMutexShards), "mutex", newShardedRW(bestMutexShards)},
-		{"atomic/slots-cas", "atomic", newSlotsCAS},
-		{"atomic/syncmap-cas", "atomic", newSyncMapCAS},
-		{"atomic/slots-fetch-add (counter only)", "atomic", newSlotsFetchAdd},
 		{"chan/single-owner", "channel", newChanStore(1)},
 		{fmt.Sprintf("chan/sharded-%d", bestChanShards), "channel", newChanStore(bestChanShards)},
 		{"actor/janus-today", "actor", newActorStore(janusActor)},
 		{"actor/single-tuned", "actor", newActorStore(bestSingleActor)},
 		{fmt.Sprintf("actor/sharded-%d-ask", bestShardedActor.Shards), "actor", newActorStore(withAsk(bestShardedActor))},
 		{fmt.Sprintf("actor/sharded-%d-tuned", bestShardedActor.Shards), "actor", newActorStore(bestShardedActor)},
+		{"atomic/slots-cas", "atomic", newSlotsCAS},
+		{"atomic/syncmap-cas", "atomic", newSyncMapCAS},
+		{"atomic/slots-fetch-add (counter only)", "atomic", newSlotsFetchAdd},
 	}
+}
+
+// skips reports whether a variant cannot run a workload. Atomics have no
+// critical section, so there is no owner to hold for 25us: work in a CAS loop
+// would run in parallel and be redone on conflict, which models optimistic
+// concurrency, not a store bound by one database connection.
+func (v Variant) skips(workload string) bool {
+	return v.Family == "atomic" && workload == "slow-io-25us"
 }
 
 func main() {
@@ -50,6 +58,7 @@ func main() {
 		only      = flag.String("only", "", "comma-separated workload names")
 		match     = flag.String("variants", "", "substring filter on variant names")
 		tune      = flag.Bool("tune", false, "run the tuning sweep instead of the matrix")
+		render    = flag.Bool("render", false, "rebuild results.md from an existing results.csv in -out, without running")
 		out       = flag.String("out", "results", "directory for results.md and results.csv")
 		gcPercent = flag.Int("gc", -1, "GC percent, -1 leaves the default")
 	)
@@ -61,6 +70,17 @@ func main() {
 
 	if *tune {
 		runTune(*dur, *warm, *reps)
+		return
+	}
+	if *render {
+		results, err := readCSV(filepath.Join(*out, "results.csv"))
+		if err == nil {
+			err = writeReport(*out, results, *dur, *reps)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "render:", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -78,6 +98,9 @@ func main() {
 		for _, workers := range w.Workers {
 			for _, v := range variants() {
 				if *match != "" && !strings.Contains(v.Name, *match) {
+					continue
+				}
+				if v.skips(w.Name) {
 					continue
 				}
 				r := run(v, w, workers, *reps, *warm, *dur)
@@ -151,8 +174,10 @@ func writeReport(dir string, results []Result, dur time.Duration, reps int) erro
 	}
 
 	var md strings.Builder
-	fmt.Fprintf(&md, "# Raw results\n\nGo %s, %s/%s, GOMAXPROCS=%d, %d reps of %v per cell, median by throughput. Spread is (max-min)/median ops/s across the reps.\n\n",
+	fmt.Fprintf(&md, "# Results\n\nGo %s, %s/%s, GOMAXPROCS=%d, %d reps of %v per cell, median by throughput. Spread is (max-min)/median ops/s across the reps.\n\n",
 		runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.GOMAXPROCS(0), reps, dur)
+	md.WriteString("## Side by side\n\nEvery variant ran in the same session with the same settings. Bold is the best in the column among the general-purpose variants: the counter-only atomic is a ceiling that cannot do a general update, so it is never marked. n/a means the variant cannot run that workload (see the report). Latencies are of foreground operations.\n\n")
+	sideBySide(&md, results)
 	for _, w := range workloads {
 		var any bool
 		for _, r := range results {
@@ -163,7 +188,7 @@ func writeReport(dir string, results []Result, dur time.Duration, reps int) erro
 		if !any {
 			continue
 		}
-		fmt.Fprintf(&md, "## %s\n\n%s\n\n", w.Name, w.Desc)
+		fmt.Fprintf(&md, "## Detail: %s\n\n%s\n\n", w.Name, w.Desc)
 		for _, workers := range w.Workers {
 			fmt.Fprintf(&md, "### %d workers\n\n| variant | ops/s | p50 | p99 | p99.9 | allocs/op | spread |\n|---|---:|---:|---:|---:|---:|---:|\n", workers)
 			for _, r := range results {
@@ -195,4 +220,120 @@ func human(v float64) string {
 		return fmt.Sprintf("%.1fk", v/1e3)
 	}
 	return fmt.Sprintf("%.0f", v)
+}
+
+// sideBySide writes, for each caller count, one table per metric with a row per
+// variant and a column per workload, and marks the best of each column.
+func sideBySide(md *strings.Builder, results []Result) {
+	family := map[string]string{}
+	for _, v := range variants() {
+		family[v.Name] = v.Family
+	}
+	var order []string
+	seen := map[string]bool{}
+	byKey := map[string]Result{}
+	for _, r := range results {
+		if !seen[r.Variant] {
+			seen[r.Variant] = true
+			order = append(order, r.Variant)
+		}
+		byKey[fmt.Sprintf("%s|%s|%d", r.Variant, r.Workload, r.Workers)] = r
+	}
+	type metric struct {
+		title  string
+		get    func(Result) float64
+		format func(float64) string
+		higher bool
+	}
+	latency := func(v float64) string { return time.Duration(v).String() }
+	metrics := []metric{
+		{"Throughput (ops/s, higher is better)", func(r Result) float64 { return r.OpsPerSec }, human, true},
+		{"p99 latency (lower is better)", func(r Result) float64 { return float64(r.P99) }, latency, false},
+		{"p99.9 latency (lower is better)", func(r Result) float64 { return float64(r.P999) }, latency, false},
+	}
+	for _, workers := range []int{1, 8, 64} {
+		var cols []Workload
+		for _, w := range workloads {
+			for _, n := range w.Workers {
+				if n == workers {
+					cols = append(cols, w)
+				}
+			}
+		}
+		if len(cols) == 0 {
+			continue
+		}
+		fmt.Fprintf(md, "### %d callers\n\n", workers)
+		for _, m := range metrics {
+			fmt.Fprintf(md, "**%s**\n\n| variant | family |", m.title)
+			for _, w := range cols {
+				fmt.Fprintf(md, " %s |", w.Name)
+			}
+			md.WriteString("\n|---|---|")
+			for range cols {
+				md.WriteString("---:|")
+			}
+			md.WriteString("\n")
+			best := make([]float64, len(cols))
+			have := make([]bool, len(cols))
+			for ci, w := range cols {
+				for _, name := range order {
+					r, ok := byKey[fmt.Sprintf("%s|%s|%d", name, w.Name, workers)]
+					if !ok || counterOnly(name) {
+						continue
+					}
+					v := m.get(r)
+					if !have[ci] || (m.higher && v > best[ci]) || (!m.higher && v < best[ci]) {
+						best[ci], have[ci] = v, true
+					}
+				}
+			}
+			for _, name := range order {
+				fmt.Fprintf(md, "| %s | %s |", name, family[name])
+				for ci, w := range cols {
+					r, ok := byKey[fmt.Sprintf("%s|%s|%d", name, w.Name, workers)]
+					switch {
+					case !ok:
+						md.WriteString(" n/a |")
+					case !counterOnly(name) && m.get(r) == best[ci]:
+						fmt.Fprintf(md, " **%s** |", m.format(m.get(r)))
+					default:
+						fmt.Fprintf(md, " %s |", m.format(m.get(r)))
+					}
+				}
+				md.WriteString("\n")
+			}
+			md.WriteString("\n")
+		}
+	}
+}
+
+func counterOnly(name string) bool { return strings.Contains(name, "counter only") }
+
+// readCSV loads the results.csv that writeReport wrote.
+func readCSV(path string) ([]Result, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var results []Result
+	for i, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if i == 0 {
+			continue
+		}
+		f := strings.Split(strings.TrimSpace(line), ",")
+		if len(f) != 10 {
+			return nil, fmt.Errorf("line %d: %d fields, want 10", i+1, len(f))
+		}
+		var r Result
+		r.Workload, r.Variant = f[0], f[2]
+		var p50, p99, p999 int64
+		if _, err := fmt.Sscanf(f[1]+" "+f[3]+" "+f[4]+" "+f[5]+" "+f[6]+" "+f[7]+" "+f[8]+" "+f[9], "%d %g %d %d %d %g %g %g",
+			&r.Workers, &r.OpsPerSec, &p50, &p99, &p999, &r.Allocs, &r.Scans, &r.Spread); err != nil {
+			return nil, fmt.Errorf("line %d: %w", i+1, err)
+		}
+		r.P50, r.P99, r.P999 = time.Duration(p50), time.Duration(p99), time.Duration(p999)
+		results = append(results, r)
+	}
+	return results, nil
 }
