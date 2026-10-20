@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	_ "turso.tech/database/tursogo"
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 	created_at INTEGER NOT NULL,
 	expires_at INTEGER NOT NULL
 );
+PRAGMA temp_store = MEMORY;
 `
 
 var errNotFound = errors.New("not found")
@@ -35,17 +37,40 @@ type store struct {
 	db *sql.DB
 }
 
-func openStore(path string) (*store, error) {
-	db, err := sql.Open("turso", path)
+// openStore opens the admin database encrypted at rest with AEGIS-256.
+// hexKey is ADMIN_DB_KEY: 64 hex characters that are never written to disk.
+func openStore(path, hexKey string) (*store, error) {
+	if err := checkKey(hexKey); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("turso", encryptedDSN(path, hexKey, "encryption"))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
+	// sql.Open accepts a wrong key; the first statement is what fails.
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return &store{db: db}, nil
+}
+
+func checkKey(hexKey string) error {
+	if len(hexKey) != 64 {
+		return errors.New("ADMIN_DB_KEY must be 64 hex characters (openssl rand -hex 32)")
+	}
+	if _, err := hex.DecodeString(hexKey); err != nil {
+		return errors.New("ADMIN_DB_KEY must be hex")
+	}
+	return nil
+}
+
+// encryptedDSN carries the key, so it must never be logged. Turso gates
+// encryption (and ATTACH) behind its experimental features list.
+func encryptedDSN(path, hexKey, experimental string) string {
+	return fmt.Sprintf("%s?experimental=%s&encryption_cipher=aegis256&encryption_hexkey=%s",
+		path, experimental, hexKey)
 }
 
 func (s *store) Close() error { return s.db.Close() }

@@ -18,6 +18,8 @@ services:
       - "8091"
     environment:
       HOST_AGENT_TOKEN: ${HOST_AGENT_TOKEN}
+      # Encrypts admin.db at rest; lives in edge/.env, never in admin_data.
+      ADMIN_DB_KEY: ${ADMIN_DB_KEY}
       HOST_AGENT_URL: http://host.docker.internal:9180
     extra_hosts:
       - "host.docker.internal:host-gateway"

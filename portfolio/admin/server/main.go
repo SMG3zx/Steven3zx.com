@@ -31,7 +31,15 @@ func env(key, fallback string) string {
 }
 
 func main() {
-	st, err := openStore(env("ADMIN_DB", "data/admin.db"))
+	dbPath, dbKey := env("ADMIN_DB", "data/admin.db"), os.Getenv("ADMIN_DB_KEY")
+	migrated, err := encryptPlainStore(dbPath, dbKey)
+	if err != nil {
+		log.Fatalf("encrypt database: %v", err)
+	}
+	if migrated {
+		log.Printf("encrypted %s; the plain copy is kept at %s%s", dbPath, dbPath, plainBackupSuffix)
+	}
+	st, err := openStore(dbPath, dbKey)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
 	}

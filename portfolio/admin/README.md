@@ -19,6 +19,25 @@ Caddy routes `/admin` and `/admin/*` on `www.steven3zx.com` to `admin:8091`. The
 - POSTs must be JSON from the same origin.
 - Failed logins are limited to 5 per 15 minutes per client IP (taken from `CF-Connecting-IP`) and 20 per 15 minutes per username.
 - The agent listens only on loopback and requires `HOST_AGENT_TOKEN` from `edge/.env`.
+- `admin.db` is encrypted at rest with Turso's AEGIS-256 page encryption (experimental upstream). The key is `ADMIN_DB_KEY` in `edge/.env`: 64 hex characters from `openssl rand -hex 32`. It never goes into the `admin_data` volume. Without the key, the file does not open. If the key is lost, the database is lost too, so keep a copy in a password manager.
+
+## Database encryption
+
+On start, the server checks `admin.db`. If it is still a plain SQLite file, the server converts it once. Turso cannot encrypt a file in place, so the server builds `admin.db.encrypting` by `ATTACH`ing the plain file and copying the users and sessions into it. It then renames the plain file to `admin.db.plain-backup` and puts the encrypted file in its place. Existing accounts and sessions keep working.
+
+The backup is unencrypted and still holds the password hashes. Delete it once sign-in works:
+
+```bash
+docker run --rm -v steven3zx-edge_admin_data:/data busybox rm /data/admin.db.plain-backup
+```
+
+Turso has no rekey. To rotate the key, use the same `ATTACH` copy into a new file with the new key.
+
+### Backups
+
+Back up by **copying the encrypted file**: stop `admin`, then copy `admin.db` and any `admin.db-wal` out of the volume. The copy stays encrypted and needs the same `ADMIN_DB_KEY`.
+
+**Never use `VACUUM INTO` for a backup.** From an encrypted connection, it writes a plaintext copy.
 
 ## Managing users
 
@@ -31,7 +50,7 @@ docker compose run --rm -it admin useradd steven   # or: passwd steven
 docker compose start admin
 ```
 
-`useradd` and `passwd` prompt for the password twice without echoing it.
+`useradd` and `passwd` prompt for the password twice without echoing it. `docker compose run` passes `ADMIN_DB_KEY` to them, just as it does for the server.
 
 ## Agent
 
@@ -41,5 +60,7 @@ Run `pwsh portfolio/admin/agent/install.ps1` to build `agent/build/hostagent.exe
 
 ```bash
 cd portfolio/admin/web && npm install && npm run dev        # Vite proxies /admin/api to :8091
-cd portfolio/admin/server && HOST_AGENT_TOKEN=... ADMIN_COOKIE_SECURE=false ADMIN_WEB_DIR=../web/dist go run .
+cd portfolio/admin/server && HOST_AGENT_TOKEN=... ADMIN_DB_KEY=<64 hex> ADMIN_COOKIE_SECURE=false ADMIN_WEB_DIR=../web/dist go run .
 ```
+
+Keep the same `ADMIN_DB_KEY` between runs, or `data/admin.db` will not open.
