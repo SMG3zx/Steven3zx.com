@@ -153,3 +153,33 @@ export interface Container {
   blockWrite: number;
   pids: number;
 }
+
+// Mirrors portfolio/admin/server/jobs.go.
+
+export const JOB_STATUSES = ["saved", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
+
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+export interface Job {
+  id: string;
+  company: string;
+  title: string;
+  location: string;
+  url: string;
+  status: JobStatus;
+  salary: string;
+  applied: string;
+  notes: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type JobInput = Omit<Job, "id" | "createdAt" | "updatedAt">;
+
+// Mirrors scrapedJob in portfolio/admin/server/scrape.go. Empty means the page did not say.
+export interface ScrapedJob {
+  company: string;
+  title: string;
+  location: string;
+  salary: string;
+}

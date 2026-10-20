@@ -27,6 +27,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 	created_at INTEGER NOT NULL,
 	expires_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS jobs (
+	id TEXT PRIMARY KEY,
+	company TEXT NOT NULL,
+	title TEXT NOT NULL,
+	location TEXT NOT NULL DEFAULT '',
+	url TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL,
+	salary TEXT NOT NULL DEFAULT '',
+	applied TEXT NOT NULL DEFAULT '',
+	notes TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
 PRAGMA temp_store = MEMORY;
 `
 
