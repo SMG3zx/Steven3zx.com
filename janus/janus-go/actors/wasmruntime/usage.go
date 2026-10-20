@@ -1,6 +1,6 @@
 package wasmruntime
 
-import "janus/actors/templates"
+import "janus/internal/domain/templates"
 
 // fuelLimit is the Wasmtime fuel a single run starts with. A run that spends all
 // of it traps, so it is also the most fuel one run can consume.

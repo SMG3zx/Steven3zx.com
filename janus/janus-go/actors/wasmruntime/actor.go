@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 	actor "github.com/tochemey/goakt/v4/actor"
-	artifactpkg "janus/actors/artifact"
+	artifactpkg "janus/internal/domain/artifact"
 	"janus/actors/persistence"
-	"janus/actors/templates"
+	"janus/internal/domain/templates"
 )
 
 type Actor struct {

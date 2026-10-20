@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"janus/actors/templates"
+	"janus/internal/domain/templates"
 )
 
 // Available reports that the CGO-backed Wasmtime runtime is unavailable.

@@ -12,7 +12,7 @@ import (
 
 	wasmtime "github.com/bytecodealliance/wasmtime-go/v49"
 
-	"janus/actors/templates"
+	"janus/internal/domain/templates"
 )
 
 const maxOutput = 64 << 10

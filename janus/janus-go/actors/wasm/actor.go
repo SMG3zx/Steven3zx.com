@@ -17,12 +17,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"janus/actors/accounting"
-	"janus/actors/artifact"
+	"janus/internal/domain/artifact"
 	"janus/actors/builder"
 	"janus/actors/jobrunner"
 	"janus/actors/persistence"
 	actortrace "janus/actors/telemetry"
-	"janus/actors/templates"
+	"janus/internal/domain/templates"
 )
 
 const (

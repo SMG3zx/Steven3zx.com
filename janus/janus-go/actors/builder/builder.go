@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	"janus/actors/artifact"
+	"janus/internal/domain/artifact"
 	"janus/actors/docker"
 )
 

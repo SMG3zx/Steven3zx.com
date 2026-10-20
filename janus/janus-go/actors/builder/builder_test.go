@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"janus/actors/artifact"
+	"janus/internal/domain/artifact"
 	"janus/actors/docker"
 )
 

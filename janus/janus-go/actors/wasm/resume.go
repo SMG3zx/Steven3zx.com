@@ -9,7 +9,7 @@ import (
 	"github.com/tochemey/goakt/v4/actor"
 
 	"janus/actors/persistence"
-	"janus/actors/templates"
+	"janus/internal/domain/templates"
 )
 
 func unbuildableLanguageError(language string) error {
