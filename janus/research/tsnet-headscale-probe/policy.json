@@ -1,0 +1,11 @@
+{
+  "tagOwners": {
+    "tag:ctrl": ["janus@"],
+    "tag:acct-a": ["janus@"],
+    "tag:acct-b": ["janus@"]
+  },
+  "acls": [
+    {"action": "accept", "src": ["tag:ctrl"], "dst": ["tag:acct-a:*", "tag:acct-b:*"]},
+    {"action": "accept", "src": ["tag:acct-a"], "dst": ["tag:ctrl:8000"]}
+  ]
+}
