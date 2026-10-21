@@ -105,3 +105,9 @@ allow if {
 	input.action == "agent.enroll"
 	input.subject == ""
 }
+
+allow if {
+	input.action == "agent.control"
+	input.subject != ""
+	input.resource.owner_id == input.subject
+}

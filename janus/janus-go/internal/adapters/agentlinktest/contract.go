@@ -5,11 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"sort"
+	"sync"
 	"testing"
 	"time"
 
-	"janus/internal/adapters/localstatetest"
-	"janus/internal/adapters/runnertest"
 	"janus/internal/app"
 	"janus/internal/domain/cgi"
 )
@@ -47,15 +47,67 @@ func Run(t *testing.T, newSubject func(t *testing.T) Subject) {
 	}
 }
 
-// module is answered by the runtime's runner as a small CGI program.
+// module is what the suite deploys; helloRunner answers it as a CGI program.
 var module = []byte("\x00asm\x01\x00\x00\x00agentlinktest")
 
+// helloRunner is the suite's own app.Runner: the suite tests the link, not
+// running modules, so every run answers "hello".
+type helloRunner struct{}
+
+func (helloRunner) Run(context.Context, []byte, app.RunInput) (app.RunResult, error) {
+	return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nhello")}, nil
+}
+
+// keptState is the suite's own app.LocalState, shared by the Agents it starts
+// at one address, as a restarted Agent shares its directory.
+type keptState struct {
+	mu          sync.Mutex
+	paused      bool
+	deployments map[string]app.HostedDeployment
+}
+
+func newKeptState() *keptState { return &keptState{deployments: map[string]app.HostedDeployment{}} }
+
+func (k *keptState) SaveDeployment(_ context.Context, d app.HostedDeployment) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.deployments[d.ID] = d
+	return nil
+}
+
+func (k *keptState) DeleteDeployment(_ context.Context, id string) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.deployments, id)
+	return nil
+}
+
+func (k *keptState) Deployments(context.Context) ([]app.HostedDeployment, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	out := make([]app.HostedDeployment, 0, len(k.deployments))
+	for _, d := range k.deployments {
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (k *keptState) SetPaused(_ context.Context, paused bool) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.paused = paused
+	return nil
+}
+
+func (k *keptState) Paused(context.Context) (bool, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.paused, nil
+}
+
 func newRuntime(state app.LocalState) *app.AgentRuntime {
-	runner := runnertest.NewFake()
-	runner.Handle(module, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nhello")}, nil
-	})
-	return app.NewAgentRuntime(runner, state, "", time.Now)
+	return app.NewAgentRuntime(helloRunner{}, state, "", time.Now)
 }
 
 func deployment(id string) app.HostedDeployment {
@@ -117,7 +169,7 @@ func sendEventually(t *testing.T, s Subject, command app.AgentCommand) {
 }
 
 func testFirstEventIsState(t *testing.T, s Subject) {
-	state := localstatetest.NewMemory()
+	state := newKeptState()
 	if err := state.SetPaused(context.Background(), true); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +187,7 @@ func testFirstEventIsState(t *testing.T, s Subject) {
 }
 
 func testPauseResume(t *testing.T, s Subject) {
-	runtime := newRuntime(localstatetest.NewMemory())
+	runtime := newRuntime(newKeptState())
 	got, _, _ := connected(t, s, runtime)
 	sendEventually(t, s, app.AgentCommand{Pause: true})
 	if !runtime.State().Paused {
@@ -150,7 +202,7 @@ func testPauseResume(t *testing.T, s Subject) {
 }
 
 func testDeployAndUsage(t *testing.T, s Subject) {
-	runtime := newRuntime(localstatetest.NewMemory())
+	runtime := newRuntime(newKeptState())
 	got, _, _ := connected(t, s, runtime)
 	sendEventually(t, s, app.AgentCommand{Deploy: ptr(deployment("dep-1"))})
 	// Usage and State are separate streams, so their order is not fixed.
@@ -179,7 +231,7 @@ func testDeployAndUsage(t *testing.T, s Subject) {
 }
 
 func testRefusal(t *testing.T, s Subject) {
-	runtime := newRuntime(localstatetest.NewMemory())
+	runtime := newRuntime(newKeptState())
 	connected(t, s, runtime)
 	bad := deployment("dep-1")
 	bad.SHA256 = "0000"
@@ -197,7 +249,7 @@ func testUnreachable(t *testing.T, s Subject) {
 }
 
 func testReconnect(t *testing.T, s Subject) {
-	state := localstatetest.NewMemory()
+	state := newKeptState()
 	got, address, stop := connected(t, s, newRuntime(state))
 	stop()
 	deadline := time.Now().Add(30 * time.Second)
@@ -207,7 +259,7 @@ func testReconnect(t *testing.T, s Subject) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	restarted := newRuntime(state.Reopen())
+	restarted := newRuntime(state)
 	if err := restarted.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +272,7 @@ func testReconnect(t *testing.T, s Subject) {
 }
 
 func testDisconnect(t *testing.T, s Subject) {
-	runtime := newRuntime(localstatetest.NewMemory())
+	runtime := newRuntime(newKeptState())
 	got, _, _ := connected(t, s, runtime)
 	s.Link.Disconnect("agent-1")
 	if err := s.Link.Send(context.Background(), "agent-1", app.AgentCommand{Pause: true}); !errors.Is(err, app.ErrAgentUnreachable) {

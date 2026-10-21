@@ -72,10 +72,12 @@ type enrolledBody struct {
 }
 
 type agentBody struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Tag    string `json:"tag"`
-	Status string `json:"status"`
+	Connected bool   `json:"connected"`
+	Paused    bool   `json:"paused"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Tag       string `json:"tag"`
+	Status    string `json:"status"`
 }
 
 // enrollAgent runs the Owner's side and the Agent's side of an enrollment and

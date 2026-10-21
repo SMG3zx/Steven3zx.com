@@ -11,7 +11,7 @@ func TestOwnerScopedPolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []string{"project.build", "account.delete", "agent.code.create", "agent.read", "agent.remove"} {
+	for _, action := range []string{"project.build", "account.delete", "agent.code.create", "agent.read", "agent.remove", "agent.control"} {
 		for _, test := range []struct {
 			name    string
 			subject string

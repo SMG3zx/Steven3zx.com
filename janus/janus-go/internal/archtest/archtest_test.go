@@ -102,7 +102,7 @@ func (c checker) layerOf(path string) (layer, string) {
 	case strings.HasPrefix(rel, "internal/adapters/"):
 		name, _, _ := strings.Cut(strings.TrimPrefix(rel, "internal/adapters/"), "/")
 		return layerAdapter, name
-	case within(rel, "cmd/janus"):
+	case within(rel, "cmd/janus"), within(rel, "cmd/janus-agent"):
 		return layerComposition, ""
 	}
 	return layerOther, ""
@@ -165,7 +165,7 @@ func (c checker) checkImport(pkg, imp string) []violation {
 		}
 	default:
 		if to == layerAdapter && from != layerComposition {
-			return bad("4", "only cmd/janus imports concrete adapters")
+			return bad("4", "only cmd/janus and cmd/janus-agent import concrete adapters")
 		}
 	}
 	return nil

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/auditlog"
 	"janus/internal/adapters/dockerbuild"
 	"janus/internal/adapters/githubapi"
@@ -16,6 +18,7 @@ import (
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/sqlstore"
+	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
 )
@@ -28,16 +31,23 @@ type application struct {
 	processErrors chan error
 	lifecycle     *lifecycle
 
-	settings       settings
-	auditLog       *auditlog.Log
-	audit          app.Audit
-	telemetry      *telemetry
-	database       *sqlstore.Store
-	store          app.Store
-	identity       *app.Identity
-	projects       *app.Projects
-	github         *app.GitHub
-	agents         *app.Agents
+	settings  settings
+	auditLog  *auditlog.Log
+	audit     app.Audit
+	telemetry *telemetry
+	database  *sqlstore.Store
+	store     app.Store
+	identity  *app.Identity
+	projects  *app.Projects
+	github    *app.GitHub
+	agents    *app.Agents
+	tailnet   app.Tailnet
+	tailnode  *tailnode.Node
+	agentLink *agentgrpc.Link
+	fleet     *app.Fleet
+	// stopFleet ends the Fleet's reconcile loop; fleetDone closes when it has.
+	stopFleet      context.CancelFunc
+	fleetDone      chan struct{}
 	authentication *app.Authentication
 	authorization  *app.Policy
 	imports        *app.Imports
@@ -159,6 +169,7 @@ func (a *application) groups() []group {
 			}, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain WASM runtime", a.runs.Drain(ctx))
 			})},
+			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleetLoop)},
 		}},
 		{name: "web", components: []component{
 			{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {
@@ -292,7 +303,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Agents: a.agents, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Agents: a.agents, Fleet: a.fleet, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,
@@ -351,6 +362,60 @@ func (a *application) startAgents(ctx context.Context) error {
 		a.logger.Error("Agent enrollment is off: Headscale could not be prepared", zap.Error(err))
 		return nil
 	}
+	a.tailnet = client
 	a.agents = app.NewAgents(a.store, client, a.audit, cfg.HeadscaleControlURL, time.Now)
 	return nil
+}
+
+// fleetInterval is how often the Fleet looks for Agents to connect to.
+const fleetInterval = 15 * time.Second
+
+// startFleet puts the control plane on the tailnet as its own node, tagged
+// app.ControlTag, and keeps it connected to every enrolled Agent. It needs
+// Agent enrollment; when the node cannot join, Agents stay enrolled but cannot
+// be reached, and the reason is in the log.
+func (a *application) startFleet(ctx context.Context) error {
+	if a.agents == nil {
+		return nil
+	}
+	cfg := a.settings
+	authKey := ""
+	if !tailnode.Joined(cfg.TailnetDir) {
+		key, err := a.agents.ControlPlaneKey(ctx)
+		if err != nil {
+			a.logger.Error("Agents cannot be reached: no key for the control plane's tailnet node", zap.Error(err))
+			return nil
+		}
+		authKey = key.Key
+	}
+	node, err := tailnode.Start(ctx, tailnode.Config{Dir: cfg.TailnetDir, Hostname: "janus-control", ControlURL: cfg.HeadscaleControlURL, AuthKey: authKey})
+	if err != nil {
+		a.logger.Error("Agents cannot be reached: the control plane did not join the tailnet", zap.Error(err))
+		return nil
+	}
+	a.tailnode = node
+	a.agentLink = agentgrpc.NewLink(node.Dial)
+	a.fleet = app.NewFleet(a.store, a.tailnet, a.agentLink, a.audit)
+	loopCtx, cancel := context.WithCancel(context.Background())
+	a.stopFleet, a.fleetDone = cancel, make(chan struct{})
+	go func() {
+		defer close(a.fleetDone)
+		a.fleet.Run(loopCtx, fleetInterval)
+	}()
+	return nil
+}
+
+// stopFleetLoop ends the reconcile loop, closes every Agent connection and
+// takes the control plane off the tailnet.
+func (a *application) stopFleetLoop(ctx context.Context) error {
+	if a.fleet == nil {
+		return nil
+	}
+	a.stopFleet()
+	select {
+	case <-a.fleetDone:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return errors.Join(a.agentLink.Close(), a.tailnode.Close())
 }

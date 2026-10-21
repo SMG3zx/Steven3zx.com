@@ -231,3 +231,21 @@ func hashEnrollmentCode(code string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(code))))
 	return hex.EncodeToString(sum[:])
 }
+
+// Find returns the Owner's Agent. found is false for an Agent the Owner does
+// not have.
+func (a *Agents) Find(ctx context.Context, ownerID, agentID string) (agent AgentRecord, found bool, err error) {
+	return a.store.FindAgent(ctx, agentID, ownerID)
+}
+
+// ControlPlaneKey makes the single-use key, valid for an hour, with which the
+// control plane's own node joins the tailnet under ControlTag, so it can reach
+// Agents. The control plane asks for one only when its node has not joined.
+func (a *Agents) ControlPlaneKey(ctx context.Context) (TailnetKey, error) {
+	key, err := a.tailnet.CreatePreAuthKey(ctx, ControlTag, a.now().Add(preAuthKeyTTL))
+	if err != nil {
+		return TailnetKey{}, fmt.Errorf("create the control plane's pre-auth key: %w", err)
+	}
+	a.record(ctx, "tailnet.control.key.issued", nil)
+	return key, nil
+}

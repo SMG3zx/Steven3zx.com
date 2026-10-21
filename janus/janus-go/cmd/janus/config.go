@@ -34,6 +34,7 @@ type settings struct {
 	HeadscaleURL           string
 	HeadscaleAPIKey        string
 	HeadscaleControlURL    string
+	TailnetDir             string
 	WASMBuilderImage       string
 	GoWASMBuilderImage     string
 	JSWASMBuilderImage     string
@@ -128,6 +129,10 @@ func loadSettings(ctx context.Context) (settings, error) {
 	if headscaleControlURL == "" {
 		headscaleControlURL = headscaleURL
 	}
+	tailnetDir := strings.TrimSpace(os.Getenv("JANUS_TAILNET_DIR"))
+	if tailnetDir == "" {
+		tailnetDir = "data/tailnet"
+	}
 	span.SetAttributes(
 		attribute.String("config.http.address", addr),
 		attribute.String("config.http.address.source", source),
@@ -142,7 +147,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
-		HeadscaleURL: headscaleURL, HeadscaleAPIKey: headscaleKey, HeadscaleControlURL: headscaleControlURL,
+		HeadscaleURL: headscaleURL, HeadscaleAPIKey: headscaleKey, HeadscaleControlURL: headscaleControlURL, TailnetDir: tailnetDir,
 		WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage, JSWASMBuilderImage: jsWASMBuilderImage,
 		PyroscopeServerAddress: pyroscopeAddress,
 	}, nil

@@ -42,6 +42,9 @@ type Config struct {
 	Builds         *app.Builds
 	Accounts       *app.Accounts
 	Agents         *app.Agents
+	// Fleet is nil when the control plane is not on the tailnet; pausing and
+	// resuming Agents then answers 503.
+	Fleet          *app.Fleet
 	Runs           *app.Runs
 	JWTExpiry      time.Duration
 	CookieSecure   bool
@@ -125,7 +128,7 @@ var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
 		<h1>Welcome to Janus</h1>
 		{{if .Identity}}
 		<p class="status" role="status">Signed in as <strong>{{.Identity}}</strong></p>
-		<p><a href="/projects">Open your projects</a></p>
+		<p><a href="/projects">Open your projects</a> · <a href="/agents">Your Agents</a></p>
 		<form method="post" action="/auth/logout"><button type="submit">Sign out</button></form>
 		{{else}}
 		<p>Sign in to continue.</p>
