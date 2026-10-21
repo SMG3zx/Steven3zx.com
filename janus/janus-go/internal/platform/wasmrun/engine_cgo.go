@@ -1,6 +1,6 @@
 //go:build cgo
 
-package wasmtime
+package wasmrun
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 
 	wasmtime "github.com/bytecodealliance/wasmtime-go/v49"
 
-	"janus/internal/app"
 	"janus/internal/domain/templates"
 )
 
@@ -30,23 +29,23 @@ func Available() bool { return true }
 // when it traps, so a run that exhausts its fuel still reports the fuel spent.
 func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdout, stderr []byte, usage Usage, err error) {
 	limits := templates.Resources{Fuel: fuelLimit, MemoryBytes: templates.DefaultMemoryBytes, Timeout: timeout}
-	result, err := execute(context.Background(), moduleBytes, app.RunInput{Args: args, Limits: limits})
+	result, err := execute(context.Background(), moduleBytes, Input{Args: args, Limits: limits})
 	return result.Stdout, result.Stderr, result.Usage, err
 }
 
-// execute runs a WASI module as app.Runner describes. The run stops at
+// execute runs a WASI module as Run describes. The run stops at
 // input.Limits.Timeout or when ctx ends, whichever comes first.
-func execute(ctx context.Context, moduleBytes []byte, input app.RunInput) (result app.RunResult, err error) {
+func execute(ctx context.Context, moduleBytes []byte, input Input) (result Result, err error) {
 	limits := input.Limits
 	dir, err := os.MkdirTemp("", "janus-wasm-run-")
 	if err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	defer os.RemoveAll(dir)
 	outPath, errPath := filepath.Join(dir, "stdout"), filepath.Join(dir, "stderr")
 	stdinPath := filepath.Join(dir, "stdin")
 	if err = os.WriteFile(stdinPath, input.Stdin, 0600); err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	cfg := wasmtime.NewConfig()
 	cfg.SetConsumeFuel(true)
@@ -58,7 +57,7 @@ func execute(ctx context.Context, moduleBytes []byte, input app.RunInput) (resul
 	defer store.Close()
 	store.Limiter(limits.MemoryBytes, 10000, 1, 1, 1)
 	if err = store.SetFuel(limits.Fuel); err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	store.SetEpochDeadline(1)
 	wasi := wasmtime.NewWasiConfig()
@@ -66,39 +65,39 @@ func execute(ctx context.Context, moduleBytes []byte, input app.RunInput) (resul
 	keys, values := splitEnv(input.Env)
 	wasi.SetEnv(keys, values)
 	if err = wasi.SetStdoutFile(outPath); err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	if err = wasi.SetStderrFile(errPath); err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	if err = wasi.SetStdinFile(stdinPath); err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	if input.Dir != "" {
 		// The folder is the module's only preopened directory, and WASI resolves
 		// every path against a preopen, so nothing outside it can be named.
 		if err = wasi.PreopenDir(input.Dir, "/", true); err != nil {
-			return app.RunResult{}, fmt.Errorf("open the host folder: %w", err)
+			return Result{}, fmt.Errorf("open the host folder: %w", err)
 		}
 	}
 	store.SetWasi(wasi)
 	linker := wasmtime.NewLinker(engine)
 	defer linker.Close()
 	if err = linker.DefineWasi(); err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	module, err := loadModule(engine, moduleBytes)
 	if err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	defer module.Close()
 	instance, err := linker.Instantiate(store, module)
 	if err != nil {
-		return app.RunResult{}, err
+		return Result{}, err
 	}
 	start := instance.GetFunc(store, "_start")
 	if start == nil {
-		return app.RunResult{}, errors.New("WASM module does not export the WASI _start function")
+		return Result{}, errors.New("WASM module does not export the WASI _start function")
 	}
 	var timedOut atomic.Bool
 	timer := time.AfterFunc(limits.Timeout, func() {
@@ -149,9 +148,9 @@ func classify(err error, timedOut bool) error {
 	case code == nil:
 		return err
 	case *code == wasmtime.OutOfFuel:
-		return app.ErrOutOfFuel
+		return ErrOutOfFuel
 	case *code == wasmtime.Interrupt && timedOut:
-		return app.ErrRunTimeout
+		return ErrRunTimeout
 	case *code == wasmtime.Interrupt:
 		return fmt.Errorf("the WebAssembly run was stopped: %w", err)
 	}

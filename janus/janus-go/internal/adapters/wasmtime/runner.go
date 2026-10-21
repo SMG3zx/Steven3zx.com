@@ -1,11 +1,14 @@
 // Package wasmtime is the app.Runner adapter that executes WASI modules with the
-// Wasmtime runtime (cgo; a build without cgo reports the runtime as unavailable).
+// Wasmtime runtime of platform/wasmrun (cgo; a build without cgo reports the
+// runtime as unavailable).
 package wasmtime
 
 import (
 	"context"
+	"errors"
 
 	"janus/internal/app"
+	"janus/internal/platform/wasmrun"
 )
 
 // Wasmtime is the app.Runner backed by the CGO Wasmtime runtime. In a build
@@ -17,9 +20,21 @@ var _ app.Runner = Wasmtime{}
 
 // Run executes module as a WASI command with input.
 func (Wasmtime) Run(ctx context.Context, module []byte, input app.RunInput) (app.RunResult, error) {
-	return execute(ctx, module, input)
+	result, err := wasmrun.Run(ctx, module, wasmrun.Input{Args: input.Args, Env: input.Env, Stdin: input.Stdin,
+		Dir: input.Dir, MaxStdout: input.MaxStdout, Limits: input.Limits})
+	out := app.RunResult{Stdout: result.Stdout, Stderr: result.Stderr, StdoutTruncated: result.StdoutTruncated, Usage: result.Usage}
+	switch {
+	case errors.Is(err, wasmrun.ErrOutOfFuel):
+		err = app.ErrOutOfFuel
+	case errors.Is(err, wasmrun.ErrRunTimeout):
+		err = app.ErrRunTimeout
+	}
+	return out, err
 }
 
 // Available reports whether this build can run modules at all: it is false
 // without CGO, where every Run would fail.
 func (Wasmtime) Available() bool { return Available() }
+
+// Available reports whether this build includes the CGO-backed Wasmtime runtime.
+func Available() bool { return wasmrun.Available() }

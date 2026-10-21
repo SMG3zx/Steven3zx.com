@@ -1,6 +1,6 @@
 //go:build cgo
 
-package wasmtime
+package wasmrun
 
 import (
 	"container/list"

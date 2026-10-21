@@ -1,4 +1,4 @@
-package wasmtime
+package wasmrun
 
 import (
 	"sync"

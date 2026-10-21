@@ -1,13 +1,11 @@
 //go:build !cgo
 
-package wasmtime
+package wasmrun
 
 import (
 	"context"
 	"errors"
 	"time"
-
-	"janus/internal/app"
 )
 
 var errNoCGO = errors.New("Wasmtime runner requires a CGO-enabled build")
@@ -20,6 +18,6 @@ func ExecuteWASI([]byte, []string, time.Duration) ([]byte, []byte, Usage, error)
 	return nil, nil, Usage{}, errNoCGO
 }
 
-func execute(context.Context, []byte, app.RunInput) (app.RunResult, error) {
-	return app.RunResult{}, errNoCGO
+func execute(context.Context, []byte, Input) (Result, error) {
+	return Result{}, errNoCGO
 }
