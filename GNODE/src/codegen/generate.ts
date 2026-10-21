@@ -34,6 +34,8 @@ interface Context {
   used: Set<string>;
   // How many loop bodies the generator is inside right now.
   loops: number;
+  // Code that the program needs once, by name, in the order it was first needed.
+  helpers: Map<string, string[]>;
 }
 
 const key = (node: string, port: string) => `${node}.${port}`;
@@ -61,6 +63,7 @@ function indexGraph(graph: Graph): Context {
     emitted: new Set(),
     used: new Set(),
     loops: 0,
+    helpers: new Map(),
   };
   for (const w of graph.wires) {
     push(ctx.outgoing, key(w.from.node, w.from.port), w);
@@ -156,6 +159,7 @@ function emitNode(ctx: Context, nodeId: string, stack: string[]) {
   ctx.emitted.add(node.id);
   const result = def.emit(makeIO(ctx, node, def, stack));
   for (const i of result.imports ?? []) ctx.imports.add(i);
+  for (const h of result.helpers ?? []) if (!ctx.helpers.has(h.name)) ctx.helpers.set(h.name, h.lines);
   return { node, def, result };
 }
 
@@ -253,6 +257,9 @@ export function generate(graph: Graph): GenerateResult {
   }
   for (const d of decls) {
     out.push("", ...d);
+  }
+  for (const lines of ctx.helpers.values()) {
+    out.push("", ...lines);
   }
   out.push("");
 

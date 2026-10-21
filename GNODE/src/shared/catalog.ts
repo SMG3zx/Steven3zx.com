@@ -5,6 +5,7 @@
 // generate code), so it must not import anything from Node or Bun.
 
 import type { ParamValue } from "./graph";
+import { TRASH_HELPERS } from "./trash";
 
 export type PortKind = "exec" | "data";
 export type DataType = "int" | "float64" | "string" | "bool" | "any";
@@ -26,7 +27,7 @@ export interface ParamDef {
   placeholder?: string;
 }
 
-export type Category = "program" | "flow" | "values" | "vars" | "lists" | "io" | "calls";
+export type Category = "program" | "flow" | "values" | "vars" | "lists" | "io" | "calls" | "sites";
 
 // What an emitter may read while it works. Data values are Go expressions,
 // chain() returns the Go statements that follow an exec output port, and
@@ -51,6 +52,9 @@ export interface Emitted {
   // Something the program cannot do even though the blocks are wired. It is
   // reported as a problem on the block.
   problem?: string;
+  // Code the program needs once, however many blocks use it. Each name is
+  // written out one time, after the functions.
+  helpers?: { name: string; lines: string[] }[];
 }
 
 export interface NodeDef {
@@ -471,6 +475,78 @@ export const CATALOG: NodeDef[] = [
       const args = io.text("args").trim();
       return { expr: `fmt.Sprintf(${io.text("format")}${args ? ", " + args : ""})`, imports: ["fmt"] };
     },
+  },
+  // ---- trash sites (after Earth ReGen's Trash Site and Trash Cleaner) ----
+  {
+    kind: "trashSite",
+    title: "trash site",
+    category: "sites",
+    help: "A site that holds kilograms of trash and has slots for cleaners. Keep it in a variable, such as site := newSite(...), then stand cleaners on it.",
+    inputs: [],
+    outputs: [data("site", "any")],
+    params: [
+      { id: "name", label: "name", type: "text", default: "pit", placeholder: "pit" },
+      { id: "reserve", label: "kg of trash", type: "text", default: "500", placeholder: "500" },
+      { id: "slots", label: "slots", type: "select", default: "2", options: ["1", "2", "3"] },
+    ],
+    emit: (io) => ({
+      expr: `newSite(${JSON.stringify(io.text("name"))}, ${Number(io.text("reserve")) || 0}, ${Number(io.text("slots")) || 1})`,
+      helpers: [{ name: "trash", lines: TRASH_HELPERS }],
+    }),
+  },
+  {
+    kind: "trashCleaner",
+    title: "trash cleaner",
+    category: "sites",
+    help: "A cleaner that stands on a site and digs trash out of it into a buffer. Its buffer holds the kg it is given, and a full site refuses another cleaner. Keep it in a variable.",
+    inputs: [data("site", "any", true)],
+    outputs: [data("cleaner", "any")],
+    params: [{ id: "buffer", label: "buffer (kg)", type: "text", default: "5", placeholder: "5" }],
+    emit: (io) => ({
+      expr: `newCleaner(${io.value("site") ?? "nil"}, ${Number(io.text("buffer")) || 0})`,
+      helpers: [{ name: "trash", lines: TRASH_HELPERS }],
+    }),
+  },
+  {
+    kind: "digTrash",
+    title: "dig with cleaner",
+    category: "sites",
+    help: "Runs a cleaner for some hours with some workers. Each worker digs 1 kg an hour, as far as the buffer has room and the site has trash left.",
+    inputs: [exec("in"), data("cleaner", "any", true), data("workers", "float64", true)],
+    outputs: [exec("next")],
+    params: [{ id: "hours", label: "hours", type: "text", default: "1", placeholder: "1" }],
+    emit: (io) => ({
+      stmts: [`${io.value("cleaner") ?? "nil"}.Dig(${io.value("workers") ?? "0"}, ${Number(io.text("hours")) || 0})`],
+      helpers: [{ name: "trash", lines: TRASH_HELPERS }],
+    }),
+  },
+  {
+    kind: "unloadTrash",
+    title: "take out trash",
+    category: "sites",
+    help: "Empties a cleaner's buffer and gives the kg of trash it held. The buffer is empty afterwards.",
+    inputs: [data("cleaner", "any", true)],
+    outputs: [data("kg", "any")],
+    params: [],
+    emit: (io) => ({
+      expr: `${io.value("cleaner") ?? "nil"}.Unload()`,
+      helpers: [{ name: "trash", lines: TRASH_HELPERS }],
+    }),
+  },
+  {
+    kind: "readCleaner",
+    title: "read from cleaner",
+    category: "sites",
+    help: "Reads a number from a cleaner: the trash in its buffer, or the trash left in its site.",
+    inputs: [data("cleaner", "any", true)],
+    outputs: [data("value", "any")],
+    params: [
+      { id: "field", label: "reads", type: "select", default: "Buffer", options: ["Buffer", "Site.Reserve"] },
+    ],
+    emit: (io) => ({
+      expr: `${io.value("cleaner") ?? "nil"}.${io.text("field")}`,
+      helpers: [{ name: "trash", lines: TRASH_HELPERS }],
+    }),
   },
 ];
 

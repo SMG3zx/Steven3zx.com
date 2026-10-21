@@ -88,6 +88,11 @@ The code in `src/` is split into four parts:
 | call library | Calls | `strings.ToUpper(...)`, `strconv...`, `math...`; the package is imported for you |
 | print formatted | Input / output | `fmt.Printf(format, values)` |
 | format text | Input / output | `fmt.Sprintf(format, values)` |
+| trash site | Sites | `newSite(name, kg, slots)`: a site holding kg of trash with machine slots |
+| trash cleaner | Sites | `newCleaner(site, buffer)`: a cleaner standing on a site, with a buffer of its own |
+| dig with cleaner | Sites | `cleaner.Dig(workers, hours)`: one kg per worker-hour, as far as the buffer and the site allow |
+| take out trash | Sites | `cleaner.Unload()`: empties the buffer and gives the kg it held |
+| read from cleaner | Sites | `cleaner.Buffer` or `cleaner.Site.Reserve` |
 
 Go's own names are used where they exist, so the Go in the Go code tab can be read against the Go documentation.
 

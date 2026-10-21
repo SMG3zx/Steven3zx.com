@@ -63,6 +63,13 @@ export const SECTIONS: Section[] = [
     icon: '<path d="M4 6h16v12H4z"/><path d="M7 10l3 2-3 2M12 14h5"/>',
   },
   {
+    id: "sites",
+    title: "Sites",
+    blurb: "Trash sites and the cleaners that dig them.",
+    color: "#8fd66a",
+    icon: '<path d="M6 8h12l-1.2 12H7.2z"/><path d="M9 8V6h6v2"/>',
+  },
+  {
     id: "groups",
     title: "Groups",
     blurb: "Blocks you saved together, ready to add again.",
