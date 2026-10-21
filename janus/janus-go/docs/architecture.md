@@ -185,6 +185,7 @@ Each step ships on its own and keeps the HTTP end-to-end tests green. A step mov
 
 1. **NATS foundation (ENG-115).** Embed a JetStream server in `cmd/janus` (or connect to `JANUS_NATS_URL`), add `platform/natsx` and `platform/natstest`, trace propagation, a `nats` service in `docker-compose.yml`, and the archtest rules for the new layers.
 2. **Audit (ENG-116).** Audit Events are published to `AUDIT`; the `audit` service writes them. `auditlog` goes away.
+ Done: `contract/audit` holds the subjects and the message, `services/audit` declares `AUDIT` and writes each event with a durable consumer, and `adapters/auditnats` is the `app.Audit` the old code records through. It writes through the logger until the audit service starts and whenever a publish fails, so no event is lost; `platform/auditlog` is the writer both share. `cmd/janus` starts the service right after NATS and stops it before NATS, leaving unwritten events in the stream for the next start. `audittest` stays until ENG-124, for the old tests.
 3. **Identity (ENG-117).** `identity` owns `identity.db`. `janus migrate split` copies its tables out of `janus.db`. The gateway's sign-in and GitHub-connection handlers call it.
 4. **Projects and Imports (ENG-118).** `projects` owns `projects.db`; Imports become jobs on `JOBS`. The GitHub token comes from `identity` on request.
 5. **Builds (ENG-119).** `builds` owns `builds.db`; Builds become jobs; Artifacts go to the `artifacts` object store; source files are paged from `projects`.

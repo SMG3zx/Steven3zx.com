@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
+	"janus/internal/app"
 )
 
 func TestTheComponentTableHasTheDocumentedGroupsInStartOrder(t *testing.T) {
@@ -21,12 +27,12 @@ func TestTheComponentTableHasTheDocumentedGroupsInStartOrder(t *testing.T) {
 	}
 }
 
-func TestNATSStartsAfterTelemetryAndBeforeTheStore(t *testing.T) {
+func TestNATSAndTheAuditServiceStartAfterTelemetryAndBeforeTheStore(t *testing.T) {
 	var names []string
 	for _, c := range newApplication(nil, nil).groups()[0].components {
 		names = append(names, c.name)
 	}
-	want := []string{"audit", "telemetry", "nats", "store"}
+	want := []string{"audit", "telemetry", "nats", "audit service", "store"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("foundation = %v, want %v", names, want)
 	}
@@ -48,5 +54,51 @@ func TestTheNATSComponentEmbedsAServerAndStopsIt(t *testing.T) {
 	}
 	if !a.nats.Conn().IsClosed() {
 		t.Fatal("the connection is still open after stop")
+	}
+}
+
+func TestAuditEventsGoThroughTheAuditServiceWhileItRuns(t *testing.T) {
+	written := make(chan string, 10)
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(io.Discard), zapcore.DebugLevel)
+	logger := zap.New(core, zap.Hooks(func(entry zapcore.Entry) error {
+		written <- entry.Message
+		return nil
+	}))
+	a := newApplication(logger, nil)
+	a.settings = settings{NATSAddress: "127.0.0.1:0", NATSDir: t.TempDir()}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, start := range []func(context.Context) error{a.startAudit, a.startNATS, a.startAuditService} {
+		if err := start(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := <-written; got != "NATS is ready" {
+		t.Fatalf("first log line %q", got)
+	}
+
+	a.audit.Record(ctx, app.AuditEvent{Level: "info", Name: "through.nats"})
+	select {
+	case got := <-written:
+		if got != "through.nats" {
+			t.Fatalf("written %q", got)
+		}
+	case <-ctx.Done():
+		t.Fatal("the event was not written")
+	}
+	js, err := a.nats.JetStream()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := js.Stream(ctx, "AUDIT")
+	if err != nil || stream.CachedInfo().State.Msgs != 1 {
+		t.Fatalf("AUDIT = %v, %v; want it to hold the one event published through it", stream, err)
+	}
+
+	if err := a.stopAuditService(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.stopNATS(ctx); err != nil {
+		t.Fatal(err)
 	}
 }

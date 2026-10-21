@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"janus/internal/adapters/agentgrpc"
-	"janus/internal/adapters/auditlog"
+	"janus/internal/adapters/auditnats"
 	"janus/internal/adapters/dockerbuild"
 	"janus/internal/adapters/githubapi"
 	"janus/internal/adapters/gitsource"
@@ -22,6 +22,7 @@ import (
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
 	"janus/internal/platform/natsx"
+	auditservice "janus/internal/services/audit"
 )
 
 // application is the composition root: it builds the adapters, hands them to
@@ -33,20 +34,22 @@ type application struct {
 	lifecycle     *lifecycle
 
 	settings  settings
-	auditLog  *auditlog.Log
+	auditLog  *auditnats.Publisher
 	audit     app.Audit
 	telemetry *telemetry
 	nats      *natsx.Hub
-	database  *sqlstore.Store
-	store     app.Store
-	identity  *app.Identity
-	projects  *app.Projects
-	github    *app.GitHub
-	agents    *app.Agents
-	tailnet   app.Tailnet
-	tailnode  *tailnode.Node
-	agentLink *agentgrpc.Link
-	fleet     *app.Fleet
+	// auditService writes the Audit Events published to the AUDIT stream.
+	auditService *auditservice.Service
+	database     *sqlstore.Store
+	store        app.Store
+	identity     *app.Identity
+	projects     *app.Projects
+	github       *app.GitHub
+	agents       *app.Agents
+	tailnet      app.Tailnet
+	tailnode     *tailnode.Node
+	agentLink    *agentgrpc.Link
+	fleet        *app.Fleet
 	// stopFleet ends the Fleet's reconcile loop; fleetDone closes when it has.
 	stopFleet      context.CancelFunc
 	fleetDone      chan struct{}
@@ -127,6 +130,7 @@ func (a *application) groups() []group {
 			{name: "audit", start: a.startAudit, stop: a.tracked(a.stopAudit)},
 			{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
 			{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
+			{name: "audit service", start: a.startAuditService, stop: a.tracked(a.stopAuditService)},
 			{name: "store", start: a.openStore, stop: a.tracked(a.closeStore)},
 		}},
 		{name: "identity", components: []component{
@@ -206,10 +210,35 @@ func (a *application) tracked(stop func(context.Context) error) func(context.Con
 	}
 }
 
+// startAudit makes the Audit every component records through. It writes
+// through the logger until the audit service starts.
 func (a *application) startAudit(context.Context) error {
-	a.auditLog = auditlog.New(a.logger)
+	a.auditLog = auditnats.New(a.logger, "janus")
 	a.audit = a.auditLog
 	return nil
+}
+
+// startAuditService starts the audit service on NATS and then sends Audit
+// Events to it through the AUDIT stream.
+func (a *application) startAuditService(ctx context.Context) error {
+	service := auditservice.New(auditservice.Config{Logger: a.logger})
+	if err := service.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("start the audit service: %w", err)
+	}
+	js, err := a.nats.JetStream()
+	if err != nil {
+		return errors.Join(fmt.Errorf("open JetStream: %w", err), service.Stop(ctx))
+	}
+	a.auditService = service
+	a.auditLog.Connect(js)
+	return nil
+}
+
+// stopAuditService sends Audit Events back to the logger, then stops the
+// service. Events it has not written yet stay in AUDIT for the next start.
+func (a *application) stopAuditService(ctx context.Context) error {
+	a.auditLog.Disconnect()
+	return wrap("stop the audit service", a.auditService.Stop(ctx))
 }
 
 func (a *application) stopAudit(context.Context) error { return a.auditLog.Flush() }
