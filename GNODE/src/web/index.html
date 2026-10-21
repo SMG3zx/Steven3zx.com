@@ -27,8 +27,6 @@
   </header>
 
   <div class="workspace">
-    <aside class="palette" id="palette" aria-label="Blocks"></aside>
-
     <main class="canvas-frame">
       <div class="canvas-wrap">
         <div class="canvas" id="canvas">
@@ -42,6 +40,16 @@
 
     <aside class="inspector" id="inspector" aria-label="Selected block"></aside>
   </div>
+
+  <section class="dock" id="dock" aria-label="Blocks">
+    <div class="dock-tabs">
+      <button id="dock-toggle" class="dock-toggle" type="button" aria-expanded="true"><span class="dt-chev"></span>Blocks</button>
+      <input id="block-find" class="block-find" type="search" placeholder="Find a block" aria-label="Find a block" spellcheck="false">
+    </div>
+    <div class="dock-body" id="dock-body">
+      <div class="palette" id="palette"></div>
+    </div>
+  </section>
 
   <section class="bottom" id="bottom">
     <div class="tabs">

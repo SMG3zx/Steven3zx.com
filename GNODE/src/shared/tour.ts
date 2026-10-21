@@ -80,16 +80,16 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "palette",
     title: "The blocks",
-    text: "The list on the left holds every block. Drag one onto the canvas, or click it to add it near the middle of the view.",
-    target: "#palette",
+    text: "The dock along the bottom holds every block, sorted into sections. Open a section, then drag a block onto the canvas, or click it to add it near the middle of the view.",
+    target: "#dock",
   },
   {
     id: "add-value",
     title: "Add a value",
     text: "Add a value block. It holds a number or some text.",
-    target: '#palette button[data-kind="literal"]',
+    target: '.dock-sec[data-cat="values"]',
     check: (f) => f.graph.nodes.some(isKind("literal")),
-    hint: "Click value in the list.",
+    hint: "Open Values, then click value.",
   },
   {
     id: "select",
@@ -109,9 +109,9 @@ export const TOUR_STEPS: TourStep[] = [
     id: "add-print",
     title: "Add print",
     text: "Add a print block. It prints whatever value it receives.",
-    target: '#palette button[data-kind="print"]',
+    target: '.dock-sec[data-cat="io"]',
     check: (f) => f.graph.nodes.some(isKind("print")),
-    hint: "Click print in the list.",
+    hint: "Open Input / output, then click print.",
   },
   {
     id: "flow-wire",
@@ -167,10 +167,10 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "add-loop",
     title: "Repeat with for each",
-    text: "for each runs the blocks on its body port a set number of times. Add one from the Flow list.",
-    target: '#palette button[data-kind="loop"]',
+    text: "for each runs the blocks on its body port a set number of times. Add one from the Flow section.",
+    target: '.dock-sec[data-cat="flow"]',
     check: (f) => f.graph.nodes.some(isKind("loop")),
-    hint: "Click for each in the list.",
+    hint: "Open Flow, then click for each.",
   },
   {
     id: "loop-flow",
@@ -194,7 +194,7 @@ export const TOUR_STEPS: TourStep[] = [
     id: "counter",
     title: "Read the counter",
     text: "The loop's counter is a variable called i. Add a variable block and set its name to i.",
-    target: '#palette button[data-kind="ref"]',
+    target: '.dock-sec[data-cat="values"]',
     check: (f) => f.graph.nodes.some(namedRef("i")),
     hint: "Add a variable block named i.",
   },
@@ -202,7 +202,7 @@ export const TOUR_STEPS: TourStep[] = [
     id: "add-one",
     title: "Add to the counter",
     text: "Add an operator and set it to +. Wire the variable into its left input and a value of 1 into its right. Then wire the operator's result into print's value port, in place of the old value.",
-    target: '#palette button[data-kind="binary"]',
+    target: '.dock-sec[data-cat="values"]',
     check: (f) =>
       wired(f.graph, { node: namedRef("i"), port: "value" }, { node: hasOperator("+"), port: "a" }) &&
       wired(f.graph, { node: hasOperator("+"), port: "value" }, { node: isKind("print"), port: "value" }),

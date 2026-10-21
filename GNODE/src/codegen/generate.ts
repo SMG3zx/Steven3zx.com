@@ -32,6 +32,8 @@ interface Context {
   imports: Set<string>;
   emitted: Set<string>;
   used: Set<string>;
+  // How many loop bodies the generator is inside right now.
+  loops: number;
 }
 
 const key = (node: string, port: string) => `${node}.${port}`;
@@ -58,6 +60,7 @@ function indexGraph(graph: Graph): Context {
     imports: new Set(),
     emitted: new Set(),
     used: new Set(),
+    loops: 0,
   };
   for (const w of graph.wires) {
     push(ctx.outgoing, key(w.from.node, w.from.port), w);
@@ -131,10 +134,17 @@ function makeIO(ctx: Context, node: GNode, def: NodeDef, stack: string[]): EmitI
       const wire = ctx.outgoing.get(key(node.id, port))?.[0];
       if (!wire) return [];
       ctx.used.add(wire.id);
-      return blockLines(ctx, wire.to.node, [...stack, node.id]);
+      const inBody = def.loopBody === true && port === "body";
+      if (inBody) ctx.loops += 1;
+      try {
+        return blockLines(ctx, wire.to.node, [...stack, node.id]);
+      } finally {
+        if (inBody) ctx.loops -= 1;
+      }
     },
     param: (name) => param(ctx, node, def, name),
     text: (name) => String(param(ctx, node, def, name)),
+    inLoop: () => ctx.loops > 0,
   };
 }
 
@@ -163,6 +173,7 @@ function blockLines(ctx: Context, nodeId: string, stack: string[]): string[] {
     diag(ctx, "error", `${def.title} can only be used at the top level`, node.id);
     return [];
   }
+  if (result.problem) diag(ctx, "error", result.problem, node.id);
   const lines = [...(result.stmts ?? [])];
   if (def.outputs.some((o) => o.id === "next")) {
     lines.push(...chainFrom(ctx, node.id, "next", [...stack, node.id]));

@@ -26,16 +26,18 @@ export interface ParamDef {
   placeholder?: string;
 }
 
-export type Category = "program" | "flow" | "values" | "vars" | "io" | "calls";
+export type Category = "program" | "flow" | "values" | "vars" | "lists" | "io" | "calls";
 
 // What an emitter may read while it works. Data values are Go expressions,
 // chain() returns the Go statements that follow an exec output port, and
-// text() / param() return the block's own settings.
+// text() / param() return the block's own settings. inLoop() says whether the
+// block being emitted sits inside the body of a loop.
 export interface EmitIO {
   value(port: string): string | undefined;
   chain(port: string): string[];
   param(name: string): ParamValue;
   text(name: string): string;
+  inLoop(): boolean;
 }
 
 export interface Emitted {
@@ -46,6 +48,9 @@ export interface Emitted {
   // top-level declarations (program roots such as func main)
   decl?: string[];
   imports?: string[];
+  // Something the program cannot do even though the blocks are wired. It is
+  // reported as a problem on the block.
+  problem?: string;
 }
 
 export interface NodeDef {
@@ -57,6 +62,9 @@ export interface NodeDef {
   outputs: PortDef[];
   params: ParamDef[];
   root?: boolean;
+  // The body port of this block runs once per pass of a loop, so blocks in
+  // it are inside a loop (break and continue need that).
+  loopBody?: boolean;
   emit: (io: EmitIO) => Emitted;
 }
 
@@ -130,6 +138,7 @@ export const CATALOG: NodeDef[] = [
     inputs: [exec("in"), data("count", "int", true)],
     outputs: [exec("body"), exec("next")],
     params: [{ id: "variable", label: "counter", type: "text", default: "i", placeholder: "i" }],
+    loopBody: true,
     emit: (io) => {
       const v = io.text("variable") || "i";
       const count = io.value("count") ?? "0";
@@ -252,6 +261,216 @@ export const CATALOG: NodeDef[] = [
       { id: "args", label: "arguments", type: "text", default: "", placeholder: '"GNODE"' },
     ],
     emit: (io) => ({ stmts: [`${io.text("name")}(${io.text("args")})`] }),
+  },
+
+  // ---- more flow ----
+  {
+    kind: "while",
+    title: "repeat while",
+    category: "flow",
+    help: "Repeats its body for as long as the condition is true. Go has only one loop, written as for condition { }; this block is that loop.",
+    inputs: [exec("in"), data("cond", "bool", true, "condition")],
+    outputs: [exec("body"), exec("next")],
+    params: [],
+    loopBody: true,
+    emit: (io) => ({ stmts: [`for ${io.value("cond") ?? "false"} {`, ...indent(io.chain("body")), "}"] }),
+  },
+  {
+    kind: "range",
+    title: "for each in list",
+    category: "flow",
+    help: "Runs its body once for every item in a list. The item is read with a variable block that uses the name set here.",
+    inputs: [exec("in"), data("list", "any", true)],
+    outputs: [exec("body"), exec("next")],
+    params: [{ id: "item", label: "item name", type: "text", default: "item", placeholder: "item" }],
+    loopBody: true,
+    emit: (io) => {
+      const name = io.text("item").trim() || "item";
+      return { stmts: [`for _, ${name} := range ${io.value("list") ?? "nil"} {`, ...indent(io.chain("body")), "}"] };
+    },
+  },
+  {
+    kind: "break",
+    title: "break",
+    category: "flow",
+    help: "Leaves the loop it is inside, and carries on after the loop.",
+    inputs: [exec("in")],
+    outputs: [],
+    params: [],
+    emit: (io) => (io.inLoop() ? { stmts: ["break"] } : { stmts: ["break"], problem: "break can only be used inside a loop" }),
+  },
+  {
+    kind: "continue",
+    title: "continue",
+    category: "flow",
+    help: "Skips the rest of this pass of the loop it is inside, and starts the next pass.",
+    inputs: [exec("in")],
+    outputs: [],
+    params: [],
+    emit: (io) =>
+      io.inLoop() ? { stmts: ["continue"] } : { stmts: ["continue"], problem: "continue can only be used inside a loop" },
+  },
+
+  // ---- variables and constants ----
+  {
+    kind: "declareTyped",
+    title: "declare typed variable",
+    category: "vars",
+    help: "Creates a variable of a chosen type, written as var name type. Connect a value to set it at the start.",
+    inputs: [exec("in"), data("value", "any")],
+    outputs: [exec("next")],
+    params: [
+      { id: "name", label: "name", type: "text", default: "x", placeholder: "x" },
+      { id: "type", label: "type", type: "select", default: "int", options: ["int", "float64", "string", "bool"] },
+    ],
+    emit: (io) => {
+      const head = `var ${io.text("name")} ${io.text("type")}`;
+      const v = io.value("value");
+      return { stmts: [v === undefined ? head : `${head} = ${v}`] };
+    },
+  },
+  {
+    kind: "constant",
+    title: "constant",
+    category: "vars",
+    help: "Names a fixed value, written as const name = value. It cannot be changed later.",
+    inputs: [exec("in"), data("value", "any", true)],
+    outputs: [exec("next")],
+    params: [{ id: "name", label: "name", type: "text", default: "limit", placeholder: "limit" }],
+    emit: (io) => ({ stmts: [`const ${io.text("name")} = ${io.value("value") ?? "0"}`] }),
+  },
+
+  // ---- lists ----
+  {
+    kind: "list",
+    title: "list of",
+    category: "lists",
+    help: "A list (a slice) of values, written as []type{values}. Separate the values with commas.",
+    inputs: [],
+    outputs: [data("value", "any")],
+    params: [
+      { id: "type", label: "type", type: "select", default: "int", options: ["int", "float64", "string", "bool"] },
+      { id: "values", label: "values", type: "text", default: "1, 2, 3", placeholder: '1, 2, 3 or "a", "b"' },
+    ],
+    emit: (io) => ({ expr: `[]${io.text("type")}{${io.text("values")}}` }),
+  },
+  {
+    kind: "len",
+    title: "length",
+    category: "lists",
+    help: "The number of items in a list, or of characters in text, written as len(x).",
+    inputs: [data("of", "any", true)],
+    outputs: [data("value", "any")],
+    params: [],
+    emit: (io) => ({ expr: `len(${io.value("of") ?? "nil"})` }),
+  },
+  {
+    kind: "index",
+    title: "item at",
+    category: "lists",
+    help: "Reads the item at a position in a list. Positions start at 0.",
+    inputs: [data("list", "any", true), data("position", "int", true)],
+    outputs: [data("value", "any")],
+    params: [],
+    emit: (io) => ({ expr: `${io.value("list") ?? "nil"}[${io.value("position") ?? "0"}]` }),
+  },
+  {
+    kind: "setItem",
+    title: "set item",
+    category: "lists",
+    help: "Changes the item at a position in a list variable, written as name[position] = value.",
+    inputs: [exec("in"), data("position", "int", true), data("value", "any", true)],
+    outputs: [exec("next")],
+    params: [{ id: "name", label: "list name", type: "text", default: "xs", placeholder: "xs" }],
+    emit: (io) => ({
+      stmts: [`${io.text("name")}[${io.value("position") ?? "0"}] = ${io.value("value") ?? "nil"}`],
+    }),
+  },
+  {
+    kind: "append",
+    title: "add to list",
+    category: "lists",
+    help: "Adds a value to the end of a list variable, written as name = append(name, value).",
+    inputs: [exec("in"), data("value", "any", true)],
+    outputs: [exec("next")],
+    params: [{ id: "name", label: "list name", type: "text", default: "xs", placeholder: "xs" }],
+    emit: (io) => {
+      const name = io.text("name");
+      return { stmts: [`${name} = append(${name}, ${io.value("value") ?? "nil"})`] };
+    },
+  },
+
+  // ---- values ----
+  {
+    kind: "unary",
+    title: "not or minus",
+    category: "values",
+    help: "Flips true and false with !, or negates a number with -.",
+    inputs: [data("value", "any", true)],
+    outputs: [data("value", "any")],
+    params: [{ id: "op", label: "operator", type: "select", default: "!", options: ["!", "-"] }],
+    emit: (io) => ({ expr: `(${io.text("op")}${io.value("value") ?? "0"})` }),
+  },
+  {
+    kind: "convert",
+    title: "convert to",
+    category: "values",
+    help: "Changes a number to another number type, written as float64(x) or int(x). Converting to int drops the decimal part.",
+    inputs: [data("value", "any", true)],
+    outputs: [data("value", "any")],
+    params: [{ id: "type", label: "type", type: "select", default: "float64", options: ["int", "float64"] }],
+    emit: (io) => ({ expr: `${io.text("type")}(${io.value("value") ?? "0"})` }),
+  },
+  {
+    kind: "pkgCall",
+    title: "call library",
+    category: "calls",
+    help: "Calls a function from the standard library, such as strings.ToUpper or math.Sqrt. The package is imported for you.",
+    inputs: [],
+    outputs: [data("value", "any")],
+    params: [
+      { id: "pkg", label: "package", type: "select", default: "strings", options: ["strings", "strconv", "math"] },
+      { id: "fn", label: "function", type: "text", default: "ToUpper", placeholder: "ToUpper" },
+      { id: "args", label: "arguments", type: "text", default: "", placeholder: '"gnode"' },
+    ],
+    emit: (io) => {
+      const pkg = io.text("pkg");
+      return { expr: `${pkg}.${io.text("fn")}(${io.text("args")})`, imports: [pkg] };
+    },
+  },
+
+  // ---- printing text ----
+  {
+    kind: "printf",
+    title: "print formatted",
+    category: "io",
+    help: "Prints text built from a format with fmt.Printf. Write the format in Go quotes and end it with \\n for a new line.",
+    inputs: [exec("in")],
+    outputs: [exec("next")],
+    params: [
+      { id: "format", label: "format", type: "text", default: '"%v\\n"', placeholder: '"%v\\n"' },
+      { id: "args", label: "values", type: "text", default: "", placeholder: "total, name" },
+    ],
+    emit: (io) => {
+      const args = io.text("args").trim();
+      return { stmts: [`fmt.Printf(${io.text("format")}${args ? ", " + args : ""})`], imports: ["fmt"] };
+    },
+  },
+  {
+    kind: "sprintf",
+    title: "format text",
+    category: "io",
+    help: "Builds text from a format with fmt.Sprintf, such as \"%d items\" with a number. Use the result in print or set variable.",
+    inputs: [],
+    outputs: [data("value", "any")],
+    params: [
+      { id: "format", label: "format", type: "text", default: '"%v"', placeholder: '"%d items"' },
+      { id: "args", label: "values", type: "text", default: "", placeholder: "count" },
+    ],
+    emit: (io) => {
+      const args = io.text("args").trim();
+      return { expr: `fmt.Sprintf(${io.text("format")}${args ? ", " + args : ""})`, imports: ["fmt"] };
+    },
   },
 ];
 

@@ -2,7 +2,7 @@
 // selected block; the bottom panel shows the generated Go, the run output and
 // the problems the generator found.
 
-import { CATALOG, CATALOG_BY_KIND, type Category, type NodeDef, type PortDef } from "../shared/catalog";
+import { CATALOG, CATALOG_BY_KIND, type NodeDef, type PortDef } from "../shared/catalog";
 import {
   chainOf,
   copyFragment,
@@ -21,6 +21,7 @@ import { LESSONS, type Lesson } from "../shared/lessons";
 import { createTour } from "./tour";
 import { tourStarter } from "../shared/tour";
 import { bendSlot, wireD, type Pt } from "../shared/route";
+import { SECTIONS, SECTION_BY_ID, sectionIcon, type Section } from "./sections";
 
 interface Diagnostic {
   level: "error" | "warning";
@@ -46,14 +47,6 @@ interface RunResponse {
 
 type Selection = { kind: "node"; id: string } | { kind: "wire"; id: string } | null;
 
-const CATEGORY_TITLES: Record<Category, string> = {
-  program: "Program",
-  flow: "Flow",
-  values: "Values",
-  vars: "Variables",
-  io: "Input / output",
-  calls: "Calls",
-};
 
 const $ = <T extends Element = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -125,48 +118,148 @@ function defaultParams(def: NodeDef): Record<string, ParamValue> {
   return params;
 }
 
-// ---------- palette ----------
+// ---------- block dock ----------
 
-function buildPalette() {
-  const palette = $("palette");
-  palette.replaceChildren();
-  const order: Category[] = ["program", "flow", "values", "vars", "calls", "io"];
-  for (const cat of order) {
-    const defs = CATALOG.filter((d) => d.category === cat);
-    if (defs.length === 0) continue;
-    palette.append(el("h3", "", CATEGORY_TITLES[cat]));
-    for (const def of defs) {
-      const btn = el("button", "", def.title);
-      btn.type = "button";
-      btn.dataset.kind = def.kind;
-      btn.title = def.help;
-      btn.draggable = true;
-      btn.addEventListener("dragstart", (e) => {
-        e.dataTransfer?.setData("text/gnode-kind", def.kind);
-        e.dataTransfer?.setData("text/plain", def.kind);
-      });
-      btn.addEventListener("click", () => {
-        const wrap = canvas.parentElement as HTMLElement;
-        const x = wrap.scrollLeft + wrap.clientWidth / 2 - 80 + Math.random() * 40;
-        const y = wrap.scrollTop + wrap.clientHeight / 2 - 40 + Math.random() * 40;
-        addNode(def.kind, x, y);
-      });
-      palette.append(btn);
-    }
-  }
-  palette.append(el("h3", "", "Groups"), groupList);
-  const row = el("div", "group-save");
-  const saveBtn = el("button", "", "Save selection as group");
-  saveBtn.type = "button";
-  saveBtn.addEventListener("click", saveSelectionAsGroup);
-  groupName.placeholder = "Group name";
-  groupName.spellcheck = false;
-  groupName.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveSelectionAsGroup();
-  });
-  row.append(groupName, saveBtn);
-  palette.append(row);
+// The dock along the bottom lists the blocks by section. A section tile opens
+// its blocks, Find searches all of them, and the Groups section holds the saved groups.
+const palette = $("palette");
+const blockFind = $<HTMLInputElement>("block-find");
+// The section that is open, or null for the section tiles.
+let dockSection: string | null = null;
+// The saved groups, by name. Filled by refreshGroups.
+let groupNames: string[] = [];
+
+function sectionBlocks(id: string): NodeDef[] {
+  return CATALOG.filter((d) => d.category === id);
 }
+
+function countLabel(id: string, n: number): string {
+  if (id === "groups") return `${n} ${n === 1 ? "group" : "groups"}`;
+  return `${n} ${n === 1 ? "block" : "blocks"}`;
+}
+
+function matchesBlock(def: NodeDef, q: string): boolean {
+  const section = SECTION_BY_ID.get(def.category)?.title ?? "";
+  return [def.title, def.help, def.kind, section].join(" ").toLowerCase().includes(q);
+}
+
+function blockButton(def: NodeDef): HTMLButtonElement {
+  const btn = el("button", "dock-block", def.title);
+  btn.type = "button";
+  btn.dataset.kind = def.kind;
+  btn.title = def.help;
+  btn.draggable = true;
+  btn.style.setProperty("--accent", SECTION_BY_ID.get(def.category)?.color ?? "#5ad1c3");
+  btn.addEventListener("dragstart", (e) => {
+    e.dataTransfer?.setData("text/gnode-kind", def.kind);
+    e.dataTransfer?.setData("text/plain", def.kind);
+  });
+  btn.addEventListener("click", () => {
+    const wrap = canvas.parentElement as HTMLElement;
+    const x = wrap.scrollLeft + wrap.clientWidth / 2 - 80 + Math.random() * 40;
+    const y = wrap.scrollTop + wrap.clientHeight / 2 - 40 + Math.random() * 40;
+    addNode(def.kind, x, y);
+  });
+  return btn;
+}
+
+function groupButton(name: string): HTMLButtonElement {
+  const btn = el("button", "dock-block group-block", name);
+  btn.type = "button";
+  btn.title = "Add this group to the canvas";
+  btn.addEventListener("click", () => placeGroup(name));
+  return btn;
+}
+
+function sectionTile(section: Section): HTMLButtonElement {
+  const btn = el("button", "dock-sec");
+  btn.type = "button";
+  btn.dataset.cat = section.id;
+  btn.style.setProperty("--accent", section.color);
+  const n = section.id === "groups" ? groupNames.length : sectionBlocks(section.id).length;
+  btn.innerHTML = `<span class="ds-ic">${sectionIcon(section)}</span><span class="ds-name"></span><span class="ds-n"></span>`;
+  btn.querySelector(".ds-name")!.textContent = section.title;
+  btn.querySelector(".ds-n")!.textContent = countLabel(section.id, n);
+  btn.addEventListener("click", () => {
+    dockSection = section.id;
+    renderDock();
+  });
+  return btn;
+}
+
+function rowOf(items: HTMLElement[]): HTMLElement {
+  const row = el("div", "dock-row");
+  row.append(...items);
+  return row;
+}
+
+// The groups section: the saved groups, and the row that saves the selection.
+const groupList = el("div", "group-list");
+const groupName = el("input", "group-name-input");
+const groupSave = el("div", "group-save");
+const saveGroupBtn = el("button", "", "Save selection as group");
+saveGroupBtn.type = "button";
+saveGroupBtn.addEventListener("click", saveSelectionAsGroup);
+groupName.placeholder = "Group name";
+groupName.spellcheck = false;
+groupName.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") saveSelectionAsGroup();
+});
+groupSave.append(groupName, saveGroupBtn);
+
+function renderDock() {
+  palette.replaceChildren();
+  const q = blockFind.value.trim().toLowerCase();
+  if (q) {
+    const blocks = CATALOG.filter((d) => matchesBlock(d, q)).map(blockButton);
+    const groups = groupNames.filter((n) => n.includes(q)).map(groupButton);
+    const hits = [...blocks, ...groups];
+    if (hits.length === 0) palette.append(el("p", "dock-empty", "No block matches that."));
+    else palette.append(rowOf(hits));
+    return;
+  }
+  if (dockSection === null) {
+    const tiles = el("div", "dock-sections");
+    for (const section of SECTIONS) tiles.append(sectionTile(section));
+    palette.append(tiles);
+    return;
+  }
+  const section = SECTION_BY_ID.get(dockSection);
+  if (!section) {
+    dockSection = null;
+    renderDock();
+    return;
+  }
+  const top = el("div", "dock-top");
+  const back = el("button", "dock-back", "All sections");
+  back.type = "button";
+  back.addEventListener("click", () => {
+    dockSection = null;
+    renderDock();
+  });
+  top.append(back, el("b", "dock-title", section.title), el("span", "dock-blurb", section.blurb));
+  palette.append(top);
+  if (section.id === "groups") {
+    const view = el("div", "group-view");
+    view.append(groupList, groupSave);
+    palette.append(view);
+  } else {
+    palette.append(rowOf(sectionBlocks(section.id).map(blockButton)));
+  }
+}
+
+$("dock-toggle").addEventListener("click", () => {
+  const dock = $("dock");
+  dock.classList.toggle("collapsed");
+  $("dock-toggle").setAttribute("aria-expanded", String(!dock.classList.contains("collapsed")));
+});
+blockFind.addEventListener("input", renderDock);
+blockFind.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  blockFind.value = "";
+  renderDock();
+  blockFind.blur();
+});
 
 canvas.addEventListener("dragover", (e) => {
   if (e.dataTransfer?.types.includes("text/gnode-kind")) e.preventDefault();
@@ -572,7 +665,7 @@ function selectAll() {
 function renderInspector() {
   inspector.replaceChildren();
   if (!selection) {
-    inspector.append(el("p", "empty", "Select a block to edit it, or drag blocks from the left to add them."));
+    inspector.append(el("p", "empty", "Select a block to edit it, or drag blocks from the dock below to add them."));
     return;
   }
   if (selection.kind === "wire") {
@@ -1183,25 +1276,18 @@ function toggleChain(id: string) {
 
 // ---------- block groups ----------
 
-// A group is a saved selection. Groups are listed in the palette, and placing
+// A group is a saved selection. Groups are listed in the block dock, and placing
 // one adds its blocks and wires to the canvas with new ids.
-const groupList = el("div", "group-list");
-const groupName = el("input", "group-name-input");
-
 async function refreshGroups() {
   const res = await fetch("/api/groups");
   const data = (await res.json()) as { groups: string[] };
+  groupNames = data.groups;
   groupList.replaceChildren();
-  if (data.groups.length === 0) {
+  if (groupNames.length === 0) {
     groupList.append(el("p", "group-empty", "Select blocks, name them below and save them here."));
   }
-  for (const name of data.groups) {
-    const btn = el("button", "", name);
-    btn.type = "button";
-    btn.title = "Add this group to the canvas";
-    btn.addEventListener("click", () => placeGroup(name));
-    groupList.append(btn);
-  }
+  for (const name of groupNames) groupList.append(groupButton(name));
+  renderDock();
 }
 
 // Func main and func blocks are declarations: a program has one main, and each
@@ -1385,7 +1471,7 @@ window.addEventListener("keydown", (e) => {
   else removeWire(selection.id);
 });
 
-buildPalette();
+renderDock();
 renderInspector();
 updateHistoryButtons();
 buildLessonList();

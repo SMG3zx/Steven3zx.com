@@ -20,7 +20,7 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 
 ## Using the editor
 
-- **Add a block:** drag it from the palette onto the canvas, or click it to add it near the middle of the view.
+- **Add a block:** drag it from the dock at the bottom onto the canvas, or click it to add it near the middle of the view.
 - **Move a block:** drag its title bar.
 - **Wire blocks:** drag from one port to another port of the opposite side. White diamonds are *flow* ports, which decide the order blocks run in. Round ports carry *values*, such as numbers or text. A flow port can lead to one block; an input takes one source.
 - **Edit a block:** select it and change its settings in the right-hand panel.
@@ -38,7 +38,7 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 - **Copy and paste:** Ctrl+C copies the selected blocks and the wires between them. Ctrl+V pastes them, and Ctrl+D duplicates them in one step.
 - **Map:** the box in the bottom right of the canvas shows the whole program, with the part you can see outlined. Click or drag on it to scroll.
 - **Square wires:** the Square wires button draws wires with right-angle bends and rounded corners instead of curves. Wires leave and enter their ports horizontally. Drag a square wire to add a bend where you grab it, and drag a bend handle (shown on the selected wire) to move it. Double-click a handle to remove it.
-- **Block groups:** select some blocks and press Save selection as group, after typing a name in the palette. Groups are saved in `groups/` and listed under Groups in the palette. Press a group's name to add its blocks to the middle of the view. A group cannot hold func main or func blocks.
+- **Block groups:** select some blocks and press Save selection as group, after typing a name in the Groups section of the dock. Groups are saved in `groups/` and listed there. Press a group's name to add its blocks to the middle of the view. A group cannot hold func main or func blocks.
 - **Undo and redo:** Ctrl+Z (Cmd+Z on a Mac) undoes the last change, and Ctrl+Shift+Z or Ctrl+Y redoes it. The Undo and Redo buttons do the same. Typing in a setting counts as one change. Opening or starting a program can be undone too, but the first program you open when the editor starts cannot.
 
 ## How it works
@@ -72,10 +72,28 @@ The code in `src/` is split into four parts:
 | set variable | Variables | `name = value` |
 | print | Input / output | `fmt.Println(value)` |
 | call | Calls | a function call for its effect |
+| repeat while | Flow | `for cond { }`, the only loop Go has |
+| for each in list | Flow | `for _, item := range list { }` |
+| break | Flow | `break`, inside a loop only |
+| continue | Flow | `continue`, inside a loop only |
+| declare typed variable | Variables | `var name type = value` |
+| constant | Variables | `const name = value` |
+| list of | Lists | `[]type{values}` |
+| length | Lists | `len(x)` |
+| item at | Lists | `list[position]` |
+| set item | Lists | `name[position] = value` |
+| add to list | Lists | `name = append(name, value)` |
+| not or minus | Values | `(!x)` or `(-x)` |
+| convert to | Values | `int(x)` or `float64(x)` |
+| call library | Calls | `strings.ToUpper(...)`, `strconv...`, `math...`; the package is imported for you |
+| print formatted | Input / output | `fmt.Printf(format, values)` |
+| format text | Input / output | `fmt.Sprintf(format, values)` |
+
+Go's own names are used where they exist, so the Go in the Go code tab can be read against the Go documentation.
 
 ### Adding a block
 
-Add an entry to `CATALOG` in `src/shared/catalog.ts` with its title, ports, settings and an `emit` function that returns the Go for it. The editor picks it up automatically. Add a test in `test/codegen.test.ts` if the block has tricky output.
+Add an entry to `CATALOG` in `src/shared/catalog.ts` with its title, ports, settings and an `emit` function that returns the Go for it. The editor picks it up automatically, and its section in the bottom dock comes from its category (see `src/web/sections.ts`). If the block is a loop body, set `loopBody`. If it can only be used somewhere, return a `problem` from `emit`, which the Problems tab shows. Add tests in `test/blocks.test.ts`: the generated Go is checked, and the sample programs are run with `go run`.
 
 ## Tests
 
