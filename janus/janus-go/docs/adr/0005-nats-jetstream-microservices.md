@@ -1,0 +1,11 @@
+# Split janus-go into services that talk over NATS JetStream, each with its own Turso database
+
+Supersedes [ADR 0003](0003-ports-and-adapters.md).
+
+janus-go becomes a set of services (gateway, identity, projects, builds, runs, fleet, audit) that reach each other only through NATS: request and reply for questions and commands, JetStream streams for jobs, events and Usage. Each service owns one Turso database and is the only thing that opens it. The Janus Agent joins as a NATS leaf node over the tailnet instead of serving a gRPC stream. Inside a service there are no ports and no adapters: a service calls NATS, Turso, Docker or Wasmtime directly, and shared rules stay in `internal/domain`.
+
+We chose this because imports and builds are the work that needs to scale and survive restarts, and JetStream gives them durable work queues, redelivery and acknowledgements that `app.JobRunner` and the startup resume rebuild by hand today; because Agents on other machines need a link that queues commands and Usage while they are offline, which JetStream streams and KV do and the gRPC stream does not; because NATS answers the multi-node control-plane question that ADR 0003 left open (ENG-56) with a cluster instead of a new mechanism; and because a database per service keeps one service's schema change or slow query from stalling the others behind a single connection.
+
+The costs: a rule that used to be one SQL transaction across tables now spans databases, so Account deletion and the cascades the foreign keys did become events that each service applies idempotently, and a reader can see a half-deleted Account for a moment. Every test needs a NATS server and a Turso file; both run in-process (an embedded `nats-server` and a temp Turso file), so tests stay free of Docker, but they are slower than the in-memory test adapters they replace, and the contract suites go away with the ports. Large values (snapshot files, Artifacts) no longer pass in a function call; they travel through the JetStream Object Store or in chunks. Running Janus now means running a NATS server, which `janus serve all` embeds for development.
+
+Decided on 2026-10-21, one day after ADR 0003 was put in place. The migration in `docs/architecture.md` moves one service at a time, so it can stop at any step with the rest still running in the old process.

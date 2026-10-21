@@ -40,4 +40,4 @@ Single-context per project: `janus/janus-go/` has its own `GLOSSARY.md` and `doc
 
 ### Architecture
 
-`janus/janus-go/` is structured as ports and adapters, with no actor framework in the target. Read `janus/janus-go/docs/architecture.md` (layout, dependency rules, testing standard, migration order) before changing its structure, and see ADR 0003. The migration is tracked under ENG-61.
+`janus/janus-go/` is moving from ports and adapters to services that talk over NATS JetStream, each with its own Turso database, and no ports or adapters inside a service (ADR 0005, superseding ADR 0003). Read `janus/janus-go/docs/architecture.md` (services, subjects, streams, dependency rules, testing standard, migration order) before changing its structure. The migration is tracked under ENG-114.

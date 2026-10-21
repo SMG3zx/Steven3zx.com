@@ -75,7 +75,7 @@ OPA policy is embedded in `internal/app/policy.rego`. The default decision is de
 
 ## Structure
 
-The structure is ports and adapters, described in [docs/architecture.md](docs/architecture.md) ([ADR 0003](docs/adr/0003-ports-and-adapters.md)). There is no actor framework.
+janus-go is being split into services that talk over NATS JetStream, each with its own Turso database ([ADR 0005](docs/adr/0005-nats-jetstream-microservices.md)); the target and the migration order are in [docs/architecture.md](docs/architecture.md). Until the migration ends, the code below is still ports and adapters ([ADR 0003](docs/adr/0003-ports-and-adapters.md)). There is no actor framework.
 
 - `internal/domain` holds the pure rules; `internal/app` holds the use cases (`Accounts`, `Imports`, `Builds`, `Runs`), the authentication and authorization modules, and the ports they declare.
 - `cmd/janus` is the control plane's composition root, and `cmd/janus-agent` the Agent's. It loads settings, starts telemetry, and runs a table of components (foundation, identity, projects and builds, runtime, web) in order, then stops them in reverse, waiting for running builds and imports. A startup failure part-way stops whatever already started.

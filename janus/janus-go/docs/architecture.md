@@ -1,186 +1,201 @@
-# Architecture standard: ports and adapters
+# Architecture standard: services over NATS JetStream
 
-This is the structure janus-go is built to, and the rules new code is reviewed against. The decision is recorded in [ADR 0003](adr/0003-ports-and-adapters.md); the evidence is in [`Research/hexagonal-ports-and-adapters.md`](../../../Research/hexagonal-ports-and-adapters.md) and, for the concurrency choices, [`experiments/store-concurrency/REPORT.md`](../experiments/store-concurrency/REPORT.md).
+This is the structure janus-go is being moved to, and the rules new code is reviewed against. The decision is recorded in [ADR 0005](adr/0005-nats-jetstream-microservices.md), which supersedes ports and adapters ([ADR 0003](adr/0003-ports-and-adapters.md)).
 
-**Status:** current. The code follows this structure, there is no `actors/` folder, and GoAkt is not a dependency of the module. Section 11 records the order the migration was done in (ENG-61).
+**Status:** migrating. Until the last step of section 12, the old single process (`internal/app` and `internal/adapters`) runs next to the new services, and the HTTP end-to-end tests stay green after every step.
 
-## 1. The idea in four lines
+## 1. The idea in five lines
 
-- The **core** holds the Janus rules and use cases. It imports no I/O.
-- Everything that touches the world sits behind a **port**: a small interface named for the purpose of the conversation, declared by the core.
-- An **adapter** implements a port for one technology (SQL, Docker, GitHub, Wasmtime, in-memory), or drives the core from outside (HTTP, tests).
-- `cmd/janus` is the only place that knows which adapters exist. It wires them to the core.
+- janus-go is a set of **services**. A service owns one part of Janus and the data for it.
+- Services reach each other **only through NATS**: request and reply for questions and commands, JetStream streams for jobs, events and Usage.
+- Each service owns **one Turso database** and is the only thing that opens it. No service reads another's tables.
+- Inside a service there are **no ports and no adapters**. A service calls NATS, Turso, Docker, Git, GitHub or Wasmtime directly.
+- Rules that more than one service needs live in `internal/domain`, which stays pure.
 
 ## 2. Vocabulary
 
 | term | meaning here |
 |---|---|
-| core | `internal/domain` and `internal/app`. Pure Go, no I/O imports |
-| use case | a method on a type in `internal/app`, such as `Imports.Request`. The application's interface to the outside |
-| primary (driving) side | the world calls us: HTTP requests, tests, the startup resume. Served by driving adapters |
-| secondary (driven) side | we call the world: database, Docker, GitHub, Wasmtime, audit sink. Reached through ports |
-| port | a Go interface declared in `internal/app`, named for the purpose of the conversation |
-| adapter | a package under `internal/adapters` that implements a port or drives a use case |
-| test adapter | a real implementation of a port that runs in memory, kept in a `<port>test` package |
-| composition root | `cmd/janus`: builds adapters, passes them to use cases, starts and stops in order |
+| service | a package under `internal/services` that owns some records and answers on its subjects. It runs in any process that starts it |
+| gateway | the service that serves HTTP: HTML pages, the JSON API, cookies, sign-in redirects and authorization. It owns no data |
+| contract | the subjects, message types and error codes of one service, in `internal/contract/<service>`. The only thing another service may import from it |
+| endpoint | one request subject a service answers, registered with `nats.go/micro` |
+| event | a fact a service publishes after it changed its data, on `janus.events.<service>.<fact>`, kept in the `EVENTS` stream |
+| job | work that must outlive a restart (an Import, a Build). Its message waits in a work-queue stream until a worker acknowledges it |
+| hub | the control plane's NATS server, with JetStream domain `hub` |
+| leaf | an Agent's own embedded NATS server, connected to the hub as a leaf node, with JetStream domain `agent-<id>` |
 
-These match the module vocabulary used elsewhere in this repo: a port is the **interface** of a **seam**, an adapter is a thing that satisfies it, and a deep module hides a lot behind a small interface.
+## 3. The services
 
-## 3. Layout
+| service | owns (Turso database) | answers and does |
+|---|---|---|
+| `gateway` | nothing | HTTP, sessions as cookies, OAuth redirects, JWT checks, OPA authorization. Turns each request into NATS requests |
+| `identity` | `identity.db`: `users`, `local_credentials`, `oauth_identities`, `github_connections` | register, sign in, resolve Provider Identities, the GitHub Connection and its token, starting Account deletion |
+| `projects` | `projects.db`: `projects`, `project_snapshots`, `project_files`, `project_import_jobs` | Projects, Snapshots, Entrypoints, the GitHub repository lists, Imports (as a job worker) |
+| `builds` | `builds.db`: `project_wasm_builds`, `project_checks` | WASM Builds and Checks (as a job worker, with Docker), Artifacts |
+| `runs` | nothing; runs are kept in memory as today | one-off WASM runs with Wasmtime |
+| `fleet` | `fleet.db`: `enrollment_codes`, `agents`, `deployments`, `run_usage` | enrollment with Headscale, Agent state, Deployments, Usage, commands to Agents |
+| `audit` | nothing | consumes `AUDIT` and writes each Audit Event through zap and OpenTelemetry logs |
+
+The Janus Agent (`cmd/janus-agent`) is not a service of the control plane. It runs its own leaf server and talks to `fleet` only through the subjects in section 6.
+
+A service splits further only when one of its tables has no rule in common with the rest, as Usage will when billing arrives (M3). Say why in the commit.
+
+## 4. Messages
+
+### Subjects
+
+| kind | subject | example |
+|---|---|---|
+| request | `janus.<service>.<noun>.<verb>` | `janus.projects.snapshot.files` |
+| event | `janus.events.<service>.<fact>` | `janus.events.identity.account_deleted` |
+| job | `janus.jobs.<kind>` | `janus.jobs.import` |
+| audit | `janus.audit.<service>` | `janus.audit.builds` |
+| Agent | `janus.agent.<agent id>.<what>` | `janus.agent.7f3c….command` |
+
+Every subject a service uses is a constant in its contract package. Nothing builds a subject from a string literal elsewhere.
+
+### Encoding
+
+Bodies are JSON, one Go struct per request, reply and event in the contract package. JSON keeps the `nats` command line useful for debugging, and the volumes are small. The Agent protocol may move to protobuf later if its traffic shows up in profiles.
+
+### Errors
+
+A failed request answers with the `nats.go/micro` error headers. The code is one of `400` (invalid), `403` (not allowed), `404` (not found or not the caller's), `409` (conflict, such as a job already active), `503` (a dependency is down) and `500`. The contract package turns each code back into a typed Go error, so a caller writes `errors.Is(err, contract.ErrNotFound)`. A request with no responder is `503`.
+
+### Ownership
+
+Every request about an Owner's records carries `owner_id`. The gateway takes it from the verified session and nothing else; other services trust it because only control-plane credentials can publish on `janus.*` (section 7). A record that is not the caller's answers `404`, never `403`, as today.
+
+### Large values
+
+A NATS message stays under 1 MiB. Snapshot files are paged (`janus.projects.snapshot.files` takes a cursor). Artifacts and Deployment modules go into the JetStream Object Store, and messages carry the object name. Turso stays the record of truth; an object is a copy for transport and may be deleted and rebuilt from Turso.
+
+### Tracing
+
+Every request, event and job carries the W3C trace context in NATS headers (`traceparent`, `tracestate`). `internal/platform/natsx` injects it on publish and starts a span from it on receive, so one HTTP request is one trace across services.
+
+## 5. JetStream
+
+| name | kind | subjects | retention | consumer |
+|---|---|---|---|---|
+| `JOBS` | stream | `janus.jobs.>` | work queue | `projects` (imports) and `builds` (builds), each a durable pull consumer on its own subject |
+| `EVENTS` | stream | `janus.events.>` | limits, 7 days | one durable consumer per interested service |
+| `AUDIT` | stream | `janus.audit.>` | limits, 7 days | `audit` |
+| `artifacts` | object store | | | written by `builds`, read by `runs` and `fleet` |
+| `modules-<owner id>` | object store | | | written by `fleet`, read by that Owner's Agents |
+
+The job rules:
+
+- Turso keeps the job's status and its state machine (`domain/jobs`, compare-and-swap on `status`, as today). The stream only holds the work.
+- A worker keeps a job it is running alive with in-progress acknowledgements, and acknowledges it only after its final status is stored. A worker that dies leaves the job unacknowledged, and JetStream hands it to another worker after `AckWait`. This replaces `Resume` at startup.
+- A job message carries the job ID only. A worker that receives a job whose stored status is already final acknowledges it and does nothing, so redelivery is safe.
+- `MaxDeliver` bounds retries. A job that runs out of deliveries is marked failed by the advisory consumer of the owning service.
+- Cancelling an Owner's jobs is an event (`janus.events.identity.account_deleting`); each worker stops the matching running jobs and marks the queued ones cancelled.
+
+The event rules:
+
+- A service publishes an event after its transaction commits. If publishing fails, the change stands and the service retries the publish from an `outbox` table in its own database, so an event is never lost and may arrive twice.
+- A consumer applies each event idempotently, keyed by the event's `Nats-Msg-Id`.
+
+## 6. Agents
+
+The Agent embeds a NATS server with JetStream (domain `agent-<id>`) and connects it to the hub as a leaf node over the tailnet. Its local stream `USAGE` keeps Usage while the hub is out of reach, which replaces `Requeue` and the gRPC stream.
+
+| what | how |
+|---|---|
+| commands (deploy, stop, pause, resume) | request to `janus.agent.<id>.command`, answered by the Agent. No responder means the Agent is offline, as today |
+| module bytes | the deploy command names an object in `modules-<owner id>`; the Agent reads it through domain `hub` |
+| state | the Agent puts its state (paused, hosted Deployments) under key `<id>` of the hub KV bucket `agent_state`; `fleet` watches the bucket |
+| Usage | the Agent publishes to its local `USAGE` stream; `fleet` reads it through domain `agent-<id>` with one durable consumer per Agent, and acknowledges each report after it is stored |
+| edge requests | unchanged: HTTP to port 7101 on the tailnet (ADR 0002, ADR 0004) |
+
+tsnet gives a `net.Listener` and a dialer, not a socket the NATS server can bind. Each side bridges: the hub accepts leaf connections on its tsnet node and copies them to the hub's local leaf port; the Agent's leaf remote points at a local port that dials the hub through its own tsnet node. Only nodes tagged `tag:ctrl` are reachable from Agents, as the Headscale policy already enforces.
+
+## 7. Security
+
+- NATS uses decentralised JWT authentication. The operator and the `JANUS` account keys are configuration of the hub; `fleet` holds the signing key of the `AGENTS` account.
+- Control-plane services connect as users of `JANUS`, which may publish and subscribe on `janus.>` and the JetStream API.
+- At enrollment, `fleet` issues the Agent a user JWT in `AGENTS` that allows only `janus.agent.<id>.>`, its own reply inbox, the `agent_state` key `<id>`, and reading `modules-<owner id>`. The `JANUS` account imports `janus.agent.>` from `AGENTS`. An Agent cannot see another Agent's subjects, a service's subjects or another Owner's modules.
+- An Agent's credentials are revoked when it is removed or its Account is deleted, by adding its user key to the account's revocation list.
+
+## 8. Layout
 
 ```
-cmd/janus/                      composition root: config, wiring, ordered start and stop
-cmd/janus-agent/                the Agent's composition root: enroll, run, pause, resume
+cmd/janus/                  one binary. `janus serve <service>...` starts the named services;
+                            `janus serve all` also embeds a NATS server, for development and tests.
+                            `janus migrate split` copies janus.db into the per-service databases
+cmd/janus-agent/            the Agent
 internal/
-  domain/                       pure types and rules (job state machines, Artifact format,
-                                Templates, scan, Usage). Standard library and pure libraries only
-  app/                          use cases and the ports they need (ports.go)
-  adapters/
-    httpapi/                    driving: JSON API, HTML pages, HTTP server lifecycle
-    sqlstore/                   driven: Store over *sql.DB (Turso)
-    storetest/                  test adapter and contract suite for Store
-    dockerbuild/                driven: Builder, one adapter per Template
-    buildertest/                test adapter and contract suite for Builder
-    wasmtime/                   driven: Runner (cgo; the no-cgo stub is a build-tagged file)
-    runnertest/
-    githubapi/                  driven: GitHost
-    gitsource/                  driven: Source (clone and list files)
-    hosttest/                   test adapter for GitHost and Source
-    auditlog/                   driven: Audit (zap)
-    audittest/                  recorder
-    headscale/                  driven: Tailnet over the Headscale REST API
-    tailnettest/                test adapter and contract suite for Tailnet
-    tailnode/                   a process's own tailnet node (tsnet); used by both roots
-    agentgrpc/                  AgentLink (control plane) and its server (Agent): the
-                                gRPC stream of ENG-78, messages in agentpb/agent.proto
-    agentlinktest/              test adapter and contract suite for AgentLink
-    agenthttp/                  driving: the Agent's HTTP endpoint for the edge
-    agentdisk/                  driven: LocalState in the Agent's state directory
-    localstatetest/             test adapter and contract suite for LocalState
+  domain/                   pure types and rules, unchanged: jobs, artifact, cgi, templates, scan,
+                            usage, manifest, deployments
+  contract/<service>/       subjects, message types, error codes of one service
+  platform/
+    natsx/                  connect, the embedded server, micro helpers, trace headers, stream setup
+    natstest/               starts an embedded JetStream server for a test
+    tursodb/                open a service's database, run its migrations, the outbox
+    telemetry/              OpenTelemetry and Pyroscope setup
+    lifecycle/              ordered start and reverse stop
+  services/
+    gateway/  identity/  projects/  builds/  runs/  fleet/  audit/
+  agent/                    the Agent's runtime, local state and edge endpoint
 ```
 
 Rules for the tree:
 
-- Everything is under `internal/`, as Go's server-project guidance recommends. Nothing here is a public API.
-- Package names say what the package provides. No `util`, `common`, `types`, `interfaces` or `model`.
-- `app` is one package until it hurts. Split a use case into its own package only when its files and tests are hard to navigate, and say why in the commit.
-- A port with a single adapter and no test adapter stays a concrete type until a second one exists (section 5).
+- A service package holds its endpoints, its SQL and schema, and its work. Split it into sub-packages only when it is hard to navigate.
+- A service is built with `New(Config)` and exposes `Start(ctx, *nats.Conn) error` and `Stop(ctx) error`. Configuration arrives through `Config`; a service does not read environment variables.
+- Package names say what the package provides. No `util`, `common`, `types` or `model`.
 
-## 4. Dependency rules
+## 9. Dependency rules
 
-1. `domain` imports only the standard library and pure libraries. It imports nothing else from this repository.
-2. `app` imports `domain` and pure libraries (uuid, argon2, JWT, OPA, zstd, the OpenTelemetry API). It never imports an adapter, `net/http`, `database/sql`, `os/exec`, a Docker or Git client, Wasmtime, or any actor framework.
-3. An adapter imports `app` and `domain`. An adapter never imports another adapter, `cmd`, or a test adapter, except that a `<port>test` package may be imported by tests. `internal/archtest` checks non-test imports only, so that exception holds by construction.
-4. `cmd/janus` and `cmd/janus-agent`, the two composition roots, are the only packages that import concrete adapters.
-5. Dependencies point inward: `cmd` and adapters toward `app`, `app` toward `domain`.
+1. `domain` imports only the standard library and pure libraries.
+2. `contract` imports the standard library and `domain`.
+3. `platform` imports no service and no contract.
+4. A service imports `contract`, `domain` and `platform`. **A service never imports another service.** It may import another service's contract.
+5. `cmd/janus` is the only package that imports services. `cmd/janus-agent` imports `agent`, `platform`, `domain` and `contract/fleet`.
 
-`internal/archtest` ([archtest_test.go](../internal/archtest/archtest_test.go)) enforces rules 1 to 4 with a Go test over the `go list` import graph and fails the build on a violation. Fixture packages under its `testdata/` break each rule to prove the check works. The allow-list of pure libraries lives in that test, so adding one is a visible review decision.
+`internal/archtest` enforces these over the `go list` import graph. During the migration it also keeps enforcing ADR 0003's rules on `internal/app` and `internal/adapters`, until those packages are gone.
 
-## 5. Ports
+## 10. Concurrency inside a service
 
-**Declare ports where they are used.** A port is a Go interface in `internal/app/ports.go`, because `app` is its consumer. It lists only the methods `app` calls, and the implementing adapter returns its concrete type.
+The measured rules from ADR 0003 still hold inside one process:
 
-**Name a port for the purpose of its conversation**, not for the technology: `Store`, `Builder`, `Runner`, `Source`, `GitHost`, `Audit`. The count is not a target; add a port when a new kind of conversation appears.
+- Shared state gets a mutex with short critical sections; never do I/O or a NATS request while holding one.
+- Counters and flags are atomics; a channel is for a real hand-off.
+- Each database has one connection, so a service's writes take turns. That is now a limit per service, not for the whole of Janus.
+- Every goroutine has an owner that waits for it, and `Stop` waits for running work. A subscription is drained, not closed, on `Stop`, so a message being handled finishes.
+- A handler that runs untrusted or fallible work recovers panics and answers `500` or fails the job.
 
-**A seam earns a port when something varies across it.** One real adapter and no test adapter means the seam is hypothetical: use a concrete type. Two adapters, a real one and a test adapter, or two real ones, make it real. Authentication (argon2, JWT) and authorization (OPA) have one implementation each and stay concrete modules inside `app`.
+Across services there is no lock. A rule that spans services is a sequence of events, and each step must be safe to repeat.
 
-**Keep interfaces small and document the contract:** ordering, error values, what absence looks like (a found flag, not an error), concurrency expectations, and timeouts. A port's contract is tested by its contract suite (section 9).
+## 11. Testing standard
 
-### The current ports
+**Service tests** start an embedded JetStream server (`natstest.Start(t)`), a temp Turso file and the service, then drive it through its contract: requests, published events and job messages. They are the main tests. Outside systems are replaced at the wire: `httptest` servers for GitHub and Headscale, a temporary Git repository for sources, and the real Wasmtime. Nothing polls with `time.Sleep`; wait on the reply, a published event or the job's final status.
 
-| port | purpose | real adapter | test adapter |
-|---|---|---|---|
-| `Store` | persist Accounts, Projects, Snapshots, jobs, Builds | `sqlstore` | `storetest.Memory` |
-| `Builder` | compile a workspace to an Artifact | `dockerbuild` | `buildertest.Fake` |
-| `Checker` | run a compiled workspace's check and test commands | `dockerbuild` | `checktest.Fake` |
-| `Runner` | run a WASM module with limits | `wasmtime` (cgo, no-cgo stub) | `runnertest.Fake` |
-| `Source` | fetch a repository at a commit | `gitsource` | `hosttest.Source` (local directory) |
-| `GitHost` | list repositories, branches, commits | `githubapi` | `hosttest.Host` |
-| `Audit` | record an Audit Event | `auditlog` | `audittest.Recorder` |
-| `Tailnet` | issue pre-auth keys, list and remove the nodes Agents join | `headscale` | `tailnettest.Fake` |
-| `AgentLink` | carry commands to Agents and their state and Usage back | `agentgrpc.Link` | `agentlinktest.Loopback` |
-| `LocalState` | keep an Agent's Deployments and pause on its machine | `agentdisk` | `localstatetest.Memory` |
+**Flow tests** start every service in one process with `janus serve all` against an embedded server and drive them through the gateway's HTTP API, as the end-to-end tests do now.
 
-### One Store
+**Live tests** are tagged `live` and use the real outside systems: Docker builders, GitHub with a test Account, a real Headscale, the real Agent binary as a leaf on a real tailnet. They clean up what they create.
 
-Persistence is one `Store` port. It stays one until splitting proves its worth. Revisit when any of these happens:
+Each contract package has a test that encodes and decodes every message, so a field rename is caught before two services disagree.
 
-- a new family of records with no references to the others arrives (the billing ledger in M3 is the expected one) and would add methods to every test adapter;
-- a use case needs only a small fraction of `Store` and its tests spend most of their setup on the rest;
-- one family needs a second storage technology.
+## 12. Migration
 
-Splitting follows ENG-67 (identity, projects and files, jobs) and keeps `DeleteAccount` as a method of the port that owns the cascade.
+Each step ships on its own and keeps the HTTP end-to-end tests green. A step moves a part of `internal/app` into a service and points the old code, or the gateway's handlers, at it over NATS. The tickets are under ENG-114, one per step (ENG-115 to ENG-124).
 
-### Job state
+1. **NATS foundation (ENG-115).** Embed a JetStream server in `cmd/janus` (or connect to `JANUS_NATS_URL`), add `platform/natsx` and `platform/natstest`, trace propagation, a `nats` service in `docker-compose.yml`, and the archtest rules for the new layers.
+2. **Audit (ENG-116).** Audit Events are published to `AUDIT`; the `audit` service writes them. `auditlog` goes away.
+3. **Identity (ENG-117).** `identity` owns `identity.db`. `janus migrate split` copies its tables out of `janus.db`. The gateway's sign-in and GitHub-connection handlers call it.
+4. **Projects and Imports (ENG-118).** `projects` owns `projects.db`; Imports become jobs on `JOBS`. The GitHub token comes from `identity` on request.
+5. **Builds (ENG-119).** `builds` owns `builds.db`; Builds become jobs; Artifacts go to the `artifacts` object store; source files are paged from `projects`.
+6. **Runs (ENG-120).** `runs` reads Artifacts from the object store.
+7. **Fleet (ENG-121).** `fleet` owns `fleet.db`: enrollment, Agents, Deployments, Usage. It still reaches Agents through `agentgrpc`.
+8. **Agent link (ENG-122).** The Agent becomes a leaf node with NATS credentials from enrollment; `agentgrpc` and `agentpb` go away.
+9. **Account deletion (ENG-123).** `identity` publishes `account_deleting`, each service tears down and confirms with its own event, and `identity` deletes the Account when all have confirmed. Refusal while jobs are active is a question `identity` asks `projects` and `builds` first.
+10. **Retire the monolith (ENG-124).** The gateway is the last caller of `internal/app`; once it calls only NATS, `internal/app`, `internal/adapters` and the ADR 0003 archtest rules are deleted, and each service can run as its own process.
 
-The legal moves of an import or build live in `domain` as data and a `CanMove(from, to)` rule. The port only compares and swaps: `Transition(id, from, to, ...)` succeeds if the stored status is still `from`. The SQL adapter does `UPDATE ... WHERE status = ?` and the in-memory adapter does a plain compare. Neither adapter owns the state machine.
+## 13. Open points
 
-## 6. Use cases (the primary side)
-
-- A use case is a method on a struct in `app` (`Accounts`, `Projects`, `Imports`, `Builds`, `Runs`, `Agents`, `Fleet`, and on the Agent, `AgentRuntime`). The struct holds its ports and is built with a constructor that takes them. Its methods are the application's interface; tests and HTTP call the same ones.
-- No interface for a use case until a second caller needs to substitute it. HTTP is not a reason.
-- `context.Context` is the first parameter and is never stored in a struct. Methods return domain values and typed errors, never HTTP types, SQL rows or adapter errors.
-- A use case does not read the environment or the clock directly; take a function or a value when time matters.
-- Rules live in `domain` or in the use case, never in an adapter.
-
-## 7. Adapters
-
-- An adapter translates: it maps domain values to its technology and its failures to the port's documented errors. It contains no business rules.
-- A driving adapter (`httpapi`) turns a request into a use-case call and a result into a response. It owns sessions-as-cookies, status codes, pagination parameters and HTML. Authorization is a use-case concern.
-- Configuration arrives through the constructor. An adapter does not read environment variables; `cmd/janus` does.
-- Isolation settings for untrusted code (no network, read-only root, capped memory and processes) belong to the adapter that runs it, with a test that pins them.
-- A build-tagged alternative (Wasmtime with cgo, the stub without) is one adapter package with tagged files, not two adapters.
-- Where a real client has a server, test it against a test server (`httptest`, a temp Git repository) rather than a hand-written client double.
-
-## 8. Concurrency inside the core
-
-GoAkt is not used. The rules come from [the measurements](../experiments/store-concurrency/REPORT.md):
-
-- **Shared state gets a mutex.** Keep critical sections to map or field operations. Never call a port, do I/O or block on a channel while holding a lock.
-- **Counters and flags are atomics** (`atomic.Int32`, `atomic.Bool`). Use compare-and-swap when a limit is involved.
-- **A channel is for a real hand-off:** a queue with a drop-or-block policy, a shutdown signal, a semaphore. Do not build a goroutine that owns a map and answers over a channel; that is a slower mutex.
-- **Atomic slots and copy-on-write snapshots are for hot, read-mostly, single-record data** such as the edge-proxy route table or per-Deployment usage counters. They cannot protect a rule that spans records; those use a lock or a transaction.
-- **The single database connection is the throughput limit** for anything backed by `Store`; do not add sharding or caching in front of it without a measurement.
-- Every goroutine has an owner that can wait for it. Types that start work expose `Drain(ctx)` or `Close()`, and `cmd/janus` stops them in reverse order of starting.
-- A goroutine that runs untrusted or fallible work recovers panics and reports them as a failed job; an unrecovered panic in the process is a bug.
-
-## 9. Testing standard
-
-Two layers, both required.
-
-**Fast tests** drive the core through the use-case methods with test adapters behind the ports. They are deterministic, need no Docker, network or database file, and do not poll with `time.Sleep`: use the use case's own wait or drain method. Driving adapters are tested with `httptest` against use cases built on test adapters.
-
-**Live tests** exercise each real adapter against the real thing: Turso, Docker builders, Wasmtime, GitHub with a dedicated test Account and repository, and, for M1, a real Headscale, the real Janus Agent on a real tailnet and real Cloudflare DNS and TLS on a test subdomain (ENG-79). They are tagged so the normal suite skips them, and they clean up what they create. A test adapter never counts as the live test of the behaviour it stands in for.
-
-**Contract suites.** Each port with more than one adapter has a suite in its `<port>test` package, shaped like `testing/fstest`: the package ships a test adapter and an exported `Run(t, newAdapter)` that checks the port's documented contract. Every adapter, real and test, runs it. `storetest.Run` is the suite for `Store`, and `sqlstore` and `storetest.Memory` both call it. A behaviour that differs between adapters is a bug in one of them or a gap in the contract; fix the suite first.
-
-**Test adapters are real implementations**, not hooks inside production packages. Production packages export nothing only for tests.
-
-## 10. Adding something new
-
-1. Is it a rule or a type with no I/O? Put it in `domain`.
-2. Is it a new thing the application does? Add or extend a use case in `app`, driven by a test through its method.
-3. Does it need the outside world? Check the table in section 5. Reuse a port, or add one named for the conversation, with a contract and a test adapter in the same change.
-4. Add the adapter and wire it in `cmd/janus`. Nothing else imports it.
-5. Run the architecture test. Add a live test if the adapter is new.
-
-## 11. Migration
-
-Each step ships on its own and keeps the HTTP end-to-end tests green. Until the last step the old and new layouts coexist.
-
-1. **Guard rail:** add `internal/archtest` with today's violations allow-listed, so the rules only tighten.
-2. **Domain:** move the job state machines, Artifact packing, Templates and scan into `internal/domain` (pure moves). Done in ENG-103 as the subpackages `domain/artifact`, `domain/templates`, `domain/jobs`, `domain/scan` and `domain/usage`; the old packages keep aliases where callers still use them.
-3. **Ports:** declare `Store`, `Builder`, `Runner`, `Source`, `GitHost` and `Audit` in `internal/app/ports.go`, starting from the interfaces that already exist. Move the in-memory Store and its contract tests (added by ENG-66) to `storetest`. Done in ENG-104: the ports and their types are in `internal/app`, and each has a `<port>test` package with a test adapter and an exported `Run` suite (`storetest`, `buildertest`, `runnertest`, `hosttest` with `RunSource` and `RunHost`, `audittest`). The real adapters run the same suites: `dockerbuild.Docker`, `wasmtime.Wasmtime`, `gitsource.Git`, `githubapi.Client` and `auditlog.Log`.
-4. **Store:** replace the persistence actor with `sqlstore` over `*sql.DB`; delete the messages, the client and the actor switch (ENG-66, ENG-67). Done: `internal/adapters/sqlstore` implements `app.Store` over one connection, with each multi-statement operation in a transaction, and passes `storetest.Run`. `actors/persistence` is gone and `application` opens and closes the database itself. Job status changes are compare-and-swap on the port (`TransitionImportJob`, `TransitionWASMBuild`: legal under `domain/jobs`, and the stored status must still be `From`), and `storetest.Run` calls every method from many goroutines to catch a deadlock on the single connection. `go test -tags contention ./internal/adapters/sqlstore` repeats the contention measurement.
-5. **Use cases:** turn the `projects`, `wasm` and `wasmruntime` actors into `Imports`, `Builds` and `Runs`; keep `jobrunner` as shared support inside `app`. Account deletion becomes its own use case (ENG-69).
- Done in ENG-106: `app.Imports`, `app.Builds`, `app.Runs` and `app.Accounts` replace the `projects`, `wasm` and `wasmruntime` actors, and `app.JobRunner` replaces `jobrunner`. A job that panics becomes a failed job, a job still queued when shutdown starts is left queued in the Store, and deleting an Account with `cancel_active_jobs` now also stops the imports and builds that are running. `app` imports `os` to build the temporary workspace a `Builder` compiles in; the `Builder` port takes a directory, so that I/O stays until the port takes files.
-6. **HTTP:** move `routes` and `web` to `adapters/httpapi`, calling use cases directly. Done in ENG-107: `httpapi.Server` (`New(Config)`, `Start`, `Shutdown(ctx)`, `Failed()`) replaces the `routes` and `httpserver` actors and the `web` package; a serve failure comes back on `Failed()` instead of a `ServeFailed` message. It no longer imports any actor: authentication, authorization and the GitHub service are `app.Authentication`, `app.Policy` and `app.GitHub`, the tracing helpers are `app.StartSpan`, `app.StartSpanWithScope` and `app.RecordError`, the request metric arrives through `Config.RecordRequest`, and the GitHub client and Git source are `githubapi` and `gitsource` adapters. Identity and project routes go through `app.Identity` and `app.Projects`, so no handler reads the `Store` directly.
-7. **Root:** done in ENG-65, ENG-70 and ENG-71. The builder and docker actors are `internal/adapters/dockerbuild` (one `Docker` builder with an adapter per Template, plus plain `EnsureRunning` and `PrepareImages` startup calls). `internal/adapters/auditlog` writes Audit Events through zap with no actor. Authentication, authorization and the GitHub service are in `app`, the GitHub client and Git source are `githubapi` and `gitsource`, Wasmtime is `internal/adapters/wasmtime`, and the tracing helpers are in `app`. `cmd/janus` loads settings, starts telemetry, and runs an ordered table of components in groups (foundation, identity, projects and builds, runtime, web), stopping them in reverse; adding a component is one table entry, and a failed start stops what already started. The `application` and `httpserver` actors and the `actors/` folder are gone, and GoAkt is removed from `go.mod`. The store-concurrency experiment keeps GoAkt in its own module under `experiments/store-concurrency`, so the evidence behind ADR 0003 can still be rerun.
-
-The old actor packages mapped as follows: `persistence` to `sqlstore` and `storetest`; `projects`, `wasm`, `wasmruntime`, `jobrunner` to `app`; `artifact`, `templates` to `domain`; `builder` and `docker` to `dockerbuild`; `github` to `githubapi` and `gitsource`; `accounting` to `Audit` and `auditlog`; `authentication` and `authorization` to `app`; `routes`, `httpserver` and `web` to `httpapi`; `application` and `config` to `cmd/janus`; `telemetry` helpers stay importable (OpenTelemetry API only) with setup in `cmd/janus`.
-
-## 12. Open points
-
-- **Package split of `app`.** Revisit when a use case's files and tests are hard to navigate.
-- **Store split.** See section 5 for the triggers.
-- **Multi-node control plane.** GoAkt's clustering was the one thing actors offered that Janus does not have elsewhere. If the Distributed Network (ENG-56) needs more than one control-plane node, decide the mechanism then; it will be an adapter or a new port, not a reason to put actors back in the core.
+- **Hosting the hub.** One NATS server is enough for M1. A three-node cluster answers ENG-56 when the control plane needs more than one machine.
+- **Turso replicas.** Each database is a local file. Turso's sync can replicate a service's database later without changing its SQL.
+- **Edge over NATS.** Edge requests could become NATS requests to the Agent, which would remove port 7101. Not before the Distributed Network needs it.
