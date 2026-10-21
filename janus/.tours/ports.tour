@@ -4,61 +4,61 @@
   "description": "One step per outbound port declared in internal/app. Every port has a real adapter and a test adapter, and both pass the same contract suite.",
   "steps": [
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 16,
       "title": "Store",
       "description": "`type Store interface`. Real: sqlstore.Store. Test: storetest.Memory. Contract: storetest.Run."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 112,
       "title": "Builder",
       "description": "`type Builder interface`. Real: dockerbuild.Docker. Test: buildertest.Fake."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 120,
       "title": "Checker",
       "description": "`type Checker interface`. Real: dockerbuild.Docker. Test: checktest.Fake. The checktest package has no contract suite yet."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 138,
       "title": "Runner",
       "description": "`type Runner interface`. Real: wasmtime.Wasmtime. Test: runnertest.Fake."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 146,
       "title": "Source",
       "description": "`type Source interface`. Real: gitsource.Git. Test: hosttest.Source."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 163,
       "title": "GitHost",
       "description": "`type GitHost interface`. Real: githubapi.Client. Test: hosttest.Host."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 174,
       "title": "Audit",
       "description": "`type Audit interface`. Real: auditlog.Log. Test: audittest.Recorder."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 195,
       "title": "Tailnet",
       "description": "`type Tailnet interface`. Real: headscale.Client. Test: tailnettest.Fake."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 213,
       "title": "LocalState",
       "description": "`type LocalState interface`. Real: agentdisk. Test: localstatetest.Memory."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 243,
       "title": "AgentLink",
       "description": "`type AgentLink interface`. Real: agentgrpc.Link. Test: agentlinktest.Loopback."

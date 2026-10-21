@@ -25,19 +25,19 @@ type tour struct {
 // step points at must still contain it.
 var anchor = regexp.MustCompile("`([^`]+)`")
 
-// TestTourStepsPointAtTheirSymbols keeps the tours in .tours/ honest. A step
-// fails when its file is gone, its line is past the end of the file, or the
-// line no longer contains the symbol its description names.
+// ownTours are the tours this repo generates. They live in janus/.tours, and
+// their file paths are relative to the janus folder that holds janus-go.
+var ownTours = []string{"request-flow.tour", "deployment-flow.tour", "build-pipeline.tour", "ports.tour"}
+
+// TestTourStepsPointAtTheirSymbols keeps the tours in janus/.tours honest. A
+// step fails when its file is gone, its line is past the end of the file, or the
+// line no longer contains the symbol its description names. A step with no file
+// is an introduction and is not checked.
 func TestTourStepsPointAtTheirSymbols(t *testing.T) {
-	root := filepath.Join("..", "..")
-	tours, err := filepath.Glob(filepath.Join(root, ".tours", "*.tour"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tours) == 0 {
-		t.Fatal("no tours found in .tours/")
-	}
-	for _, file := range tours {
+	tourDir := filepath.Join("..", "..", "..", ".tours")
+	root := filepath.Join("..", "..", "..")
+	for _, name := range ownTours {
+		file := filepath.Join(tourDir, name)
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
@@ -50,7 +50,10 @@ func TestTourStepsPointAtTheirSymbols(t *testing.T) {
 			t.Errorf("%s has no steps", file)
 		}
 		for i, step := range parsed.Steps {
-			where := filepath.Base(file) + " step " + strconv.Itoa(i+1)
+			if step.File == "" {
+				continue
+			}
+			where := name + " step " + strconv.Itoa(i+1)
 			source, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(step.File)))
 			if err != nil {
 				t.Errorf("%s: %s does not exist", where, step.File)

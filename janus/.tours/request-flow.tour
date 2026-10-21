@@ -4,61 +4,61 @@
   "description": "Follows POST /api/projects/:id/deployments from the router, through the use case, to the adapters behind its ports.",
   "steps": [
     {
-      "file": "internal/adapters/httpapi/projects.go",
+      "file": "janus-go/internal/adapters/httpapi/projects.go",
       "line": 39,
       "title": "The router",
       "description": "`app.Post(\"/api/projects/:id/deployments\"` maps the route to startDeployment. The HTTP layer is a driving adapter."
     },
     {
-      "file": "internal/adapters/httpapi/deployments.go",
+      "file": "janus-go/internal/adapters/httpapi/deployments.go",
       "line": 20,
       "title": "The driving adapter",
       "description": "`func (a *Server) startDeployment` reads the body, checks the project.deploy policy, and calls the use case. It never touches the Store."
     },
     {
-      "file": "internal/app/deployments.go",
+      "file": "janus-go/internal/app/deployments.go",
       "line": 67,
       "title": "The use case",
       "description": "`func (d *Deployments) Create` checks the build, its Check and the Agent. The business rules live here, in the core."
     },
     {
-      "file": "internal/app/deployments.go",
+      "file": "janus-go/internal/app/deployments.go",
       "line": 102,
       "title": "Calling an outbound port",
       "description": "`d.deployer.Ready(` asks the Agent port whether it can take a Deploy. The use case depends on the interface, not on Fleet."
     },
     {
-      "file": "internal/app/deployments.go",
+      "file": "janus-go/internal/app/deployments.go",
       "line": 22,
       "title": "The port the use case needs",
       "description": "`type AgentDeployer interface` is declared in the core. Fleet implements it, and a test fake can too."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 16,
       "title": "The Store port",
       "description": "`type Store interface` is what the core reads and writes. It returns typed values and plain errors, and every adapter must pass the contract suite."
     },
     {
-      "file": "internal/adapters/sqlstore/deployments.go",
+      "file": "janus-go/internal/adapters/sqlstore/deployments.go",
       "line": 64,
       "title": "The SQLite adapter",
       "description": "`func (s *Store) CreateDeployment` implements the Store port over SQLite, and enforces the one-in-flight rule inside one transaction."
     },
     {
-      "file": "internal/domain/deployments/deployments.go",
+      "file": "janus-go/internal/domain/deployments/deployments.go",
       "line": 29,
       "title": "A domain rule",
       "description": "`func CanMove` is the legal-moves rule. Adapters call it rather than reimplementing it."
     },
     {
-      "file": "internal/app/ports.go",
+      "file": "janus-go/internal/app/ports.go",
       "line": 174,
       "title": "The Audit port",
       "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
     },
     {
-      "file": "cmd/janus/services.go",
+      "file": "janus-go/cmd/janus/services.go",
       "line": 294,
       "title": "The composition root",
       "description": "`func (a *application) startDeployments` is where the core is wired to its adapters. Only cmd/janus knows which adapters exist."
