@@ -30,6 +30,8 @@ Any folder named `cold-storage` holds ideas for much later. Do not read, search,
 
 Linear: issues live in the Engineering team (`ENG`) under the Janus project (`P-ENG-7`). Older local markdown specs under `.scratch/` are history. See `docs/agents/issue-tracker.md`.
 
+Linear status can lag the code. Before implementing an `ENG-NNN` ticket, run `git log --oneline --grep=ENG-NNN` and check the matching step in `janus/janus-go/docs/architecture.md`; a commit may already do the work.
+
 ### Triage labels
 
 Canonical five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
