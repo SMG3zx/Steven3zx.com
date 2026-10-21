@@ -24,6 +24,7 @@ import (
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
+	"janus/internal/platform/leafbridge"
 	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natsx"
 	auditservice "janus/internal/services/audit"
@@ -73,6 +74,7 @@ type application struct {
 	tailnet       *headscale.Client
 	tailnode      *tailnode.Node
 	agentLink     *agentgrpc.Link
+	leafBridge    *leafbridge.Bridge
 	fleetService  *fleetservice.Service
 	// fleet is the fleet service as the single process uses it; nil when Agent
 	// enrollment is off.
@@ -545,6 +547,9 @@ func (a *application) startFleet(ctx context.Context) error {
 		a.tailnode = node
 		a.agentLink = agentgrpc.NewLink(node.Dial)
 		link = a.agentLink
+		if err := a.startLeafBridge(); err != nil {
+			return errors.Join(err, a.stopAgentLink())
+		}
 	}
 	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link, Agents: a.agents, OnRevoke: a.nats.UpdateAccount})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
@@ -589,10 +594,29 @@ func (a *application) stopFleet(ctx context.Context) error {
 	return errors.Join(wrap("stop the fleet service", a.fleetService.Stop(ctx)), a.stopAgentLink())
 }
 
-// stopAgentLink closes the Agent link and the control plane's node, when they
-// were started.
+// startLeafBridge carries the Agents' leaf connections from the control plane's
+// tailnet node to the hub's leaf port. It runs only when the hub trusts its keys,
+// since only then does the hub take leaf connections.
+func (a *application) startLeafBridge() error {
+	if a.agents == nil || a.settings.NATSLeafAddress == "" {
+		return nil
+	}
+	listener, err := a.tailnode.Listen(contractfleet.AgentLeafPort)
+	if err != nil {
+		return fmt.Errorf("listen for Agents' leaf connections: %w", err)
+	}
+	a.leafBridge = leafbridge.ServeHub(listener, a.settings.NATSLeafAddress)
+	return nil
+}
+
+// stopAgentLink closes the leaf bridge, the Agent link and the control plane's
+// node, when they were started.
 func (a *application) stopAgentLink() error {
 	var errs []error
+	if a.leafBridge != nil {
+		a.leafBridge.Close()
+		a.leafBridge = nil
+	}
 	if a.agentLink != nil {
 		errs = append(errs, a.agentLink.Close())
 	}

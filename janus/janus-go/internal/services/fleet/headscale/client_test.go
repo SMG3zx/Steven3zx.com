@@ -116,9 +116,10 @@ func TestPrepareCreatesTheUserAndInstallsADefaultDenyPolicy(t *testing.T) {
 	if err := json.Unmarshal([]byte(policy.body["policy"].(string)), &document); err != nil {
 		t.Fatalf("the policy is not JSON: %v", err)
 	}
-	if len(document.ACLs) != 1 || document.ACLs[0].Action != "accept" ||
-		strings.Join(document.ACLs[0].Src, ",") != "tag:ctrl" || strings.Join(document.ACLs[0].Dst, ",") != "autogroup:tagged:*" {
-		t.Fatalf("policy rules = %#v, want only tag:ctrl to every tagged node", document.ACLs)
+	if len(document.ACLs) != 2 || document.ACLs[0].Action != "accept" ||
+		strings.Join(document.ACLs[0].Src, ",") != "tag:ctrl" || strings.Join(document.ACLs[0].Dst, ",") != "autogroup:tagged:*" ||
+		strings.Join(document.ACLs[1].Src, ",") != "autogroup:tagged" || strings.Join(document.ACLs[1].Dst, ",") != "tag:ctrl:7102" {
+		t.Fatalf("policy rules = %#v, want tag:ctrl to every tagged node and every tagged node to the control plane's leaf port", document.ACLs)
 	}
 	if len(document.TagOwners["tag:ctrl"]) != 1 {
 		t.Fatalf("tag owners = %#v, want tag:ctrl owned by the Janus user", document.TagOwners)

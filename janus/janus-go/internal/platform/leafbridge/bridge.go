@@ -1,6 +1,9 @@
-// Package leafbridge is a throwaway prototype for ENG-122: an Agent's embedded
-// NATS server connects to the hub as a leaf node, through a byte bridge that
-// stands in for tsnet. See README.md for what it does and does not prove.
+// Package leafbridge carries an Agent's leaf connection to the hub over the
+// tailnet. The hub's NATS server and the Agent's each speak plain TCP to a
+// loopback address, and two bridges carry the bytes between them: the hub's
+// listens on its tailnet node and copies each connection to the hub's leaf port,
+// and the Agent's listens on loopback and copies each connection over its own
+// tailnet node to the hub. See docs/architecture.md section 6.
 package leafbridge
 
 import (
@@ -8,6 +11,25 @@ import (
 	"net"
 	"sync"
 )
+
+// ServeHub copies every connection accepted on ln to the hub's leaf port at
+// leafAddress, the host:port the embedded server takes leaf connections on.
+func ServeHub(ln net.Listener, leafAddress string) *Bridge {
+	return NewBridge(ln, func() (net.Conn, error) {
+		return net.Dial("tcp", leafAddress)
+	})
+}
+
+// DialHub listens on a loopback port and copies each connection to the hub
+// through dial, which reaches the hub over the tailnet. It returns the bridge and
+// the loopback address the Agent's leaf remote dials.
+func DialHub(dial func() (net.Conn, error)) (*Bridge, string, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, "", err
+	}
+	return NewBridge(ln, dial), ln.Addr().String(), nil
+}
 
 // Bridge accepts connections on a listener and copies each one to a fresh
 // connection from dial. SetUp(false) makes the link go down: new connections

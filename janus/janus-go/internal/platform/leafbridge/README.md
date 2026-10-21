@@ -1,10 +1,16 @@
-# Leaf-node bridge prototype (ENG-122)
+# Leaf-node bridge (ENG-122)
 
-Throwaway probe for the first step of ENG-122: can an Agent's embedded NATS server join the hub as a leaf node through a byte bridge, and does the hub reach the Agent's JetStream across that leaf? Run it from `janus/janus-go`:
+`leafbridge` carries an Agent's leaf connection to the hub over the tailnet. `ServeHub` runs on the control plane and copies each tailnet connection to the hub's leaf port. `DialHub` runs on an Agent and gives its leaf remote a loopback address, carried to the hub through the Agent's tailnet node.
 
-    go test -count=1 -v ./experiments/leafbridge/
+The unit test uses loopback in place of tsnet:
 
-## What it builds
+    go test -count=1 -v ./internal/platform/leafbridge/
+
+The live test joins a Docker Headscale with real tsnet nodes:
+
+    go test -tags live -count=1 -v ./internal/platform/leafbridge/
+
+## What the loopback test builds
 
 - Hub: NATS with JetStream, domain `hub`, leaf port open.
 - Agent: NATS with JetStream, domain `agent-1`, one leaf remote.
@@ -18,9 +24,9 @@ Throwaway probe for the first step of ENG-122: can an Agent's embedded NATS serv
 4. With the link down, the hub cannot reach the Agent, and the Agent keeps recording Usage into `USAGE`.
 5. When the link comes back, the leaf reconnects on its own and the hub's consumer receives the three reports recorded while it was down, in order.
 
-## What it does not prove
+## What the loopback test does not prove
 
-- **tsnet.** Both bridges run over loopback TCP. The real bridge runs over tsnet listen and dial, which needs a Headscale and a tailnet, so it belongs to the live test. Nothing here exercises tsnet's behaviour.
+- **tsnet.** Both bridges run over loopback TCP here. The live test covers tsnet.
 - **Credentials.** The servers run in the default account with no JWTs, so nothing checks that an Agent is limited to `janus.agent.<id>.>`, its inbox, `agent_state` key `<id>`, and `modules-<owner id>`. That needs the `JANUS` and `AGENTS` accounts and a test that one Agent cannot read another's subjects.
 - **Revocation.** Not covered.
 - **Polling.** `waitFor` polls with a sleep, which the service tests must not do. It is fine in a probe.

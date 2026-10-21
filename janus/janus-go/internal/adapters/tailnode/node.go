@@ -66,6 +66,30 @@ func (n *Node) Dial(ctx context.Context, address string) (net.Conn, error) {
 	return n.server.Dial(ctx, "tcp", address)
 }
 
+// PeerAddress returns the IPv4 address of the tailnet node named hostname, as
+// the tailnet reports it. It fails when no such node is on the tailnet.
+func (n *Node) PeerAddress(ctx context.Context, hostname string) (string, error) {
+	local, err := n.server.LocalClient()
+	if err != nil {
+		return "", err
+	}
+	status, err := local.Status(ctx)
+	if err != nil {
+		return "", fmt.Errorf("read the tailnet status: %w", err)
+	}
+	for _, peer := range status.Peer {
+		if peer.HostName != hostname {
+			continue
+		}
+		for _, ip := range peer.TailscaleIPs {
+			if ip.Is4() {
+				return ip.String(), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no node %s is on the tailnet", hostname)
+}
+
 // HTTPClient returns a client whose requests go over the tailnet.
 func (n *Node) HTTPClient() *http.Client { return n.server.HTTPClient() }
 

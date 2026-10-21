@@ -105,11 +105,12 @@ func New(config Config) *Client {
 }
 
 // Prepare makes sure the Headscale user exists and installs the policy the Tailnet
-// port requires: nodes tagged contractfleet.ControlTag may open connections to any tagged
-// node, and nothing else is allowed, so an Agent cannot reach the control plane
-// or another Agent. A tag
-// need not be listed for a node to carry it, so enrolling an Account needs no
-// policy change. Prepare is safe to call again.
+// needs. Nodes tagged contractfleet.ControlTag may open connections to any
+// tagged node. Every tagged node, an Agent included, may open connections to the
+// control plane's leaf port and nothing else there. No other connection is
+// allowed, so an Agent cannot reach another Agent. A tag need not be listed for a
+// node to carry it, so enrolling an Account needs no policy change. Prepare is
+// safe to call again.
 func (c *Client) Prepare(ctx context.Context) error {
 	if _, err := c.ensureUser(ctx); err != nil {
 		return err
@@ -118,6 +119,7 @@ func (c *Client) Prepare(ctx context.Context) error {
 		"tagOwners": map[string][]string{contractfleet.ControlTag: {c.user + "@"}},
 		"acls": []map[string]any{
 			{"action": "accept", "src": []string{contractfleet.ControlTag}, "dst": []string{"autogroup:tagged:*"}},
+			{"action": "accept", "src": []string{"autogroup:tagged"}, "dst": []string{fmt.Sprintf("%s:%d", contractfleet.ControlTag, contractfleet.AgentLeafPort)}},
 		},
 	})
 	if err != nil {

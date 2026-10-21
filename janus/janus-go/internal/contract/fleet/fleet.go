@@ -22,6 +22,11 @@ const ServiceName = "fleet"
 // tagged ControlTag may open connections to every other tagged node.
 const ControlTag = "tag:ctrl"
 
+// AgentLeafPort is the port on the control plane's node that an Agent's leaf
+// connection reaches. It is the only port of the control plane an Agent may open,
+// so an Agent can join the hub and reach nothing else there.
+const AgentLeafPort = 7102
+
 // The subjects the fleet service answers.
 const (
 	SubjectIssueCode           = "janus.fleet.code.issue"
