@@ -3,8 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"janus/internal/adapters/githubapi"
-	"janus/internal/adapters/gitsource"
+	"janus/internal/adapters/catalogtest"
 	"net/http"
 	"strings"
 	"testing"
@@ -16,30 +15,29 @@ import (
 	"janus/internal/app"
 )
 
-func newLifecycleApp(t *testing.T) (http.Handler, app.Store) {
+func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
-	gh := app.NewGitHub(identities, githubapi.NewClient())
+	catalog := catalogtest.NewMemory()
+	gh := app.NewGitHub(identities, catalog)
 	audit := audittest.NewRecorder()
-	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audit)
-	builds := app.NewBuilds(store, nil, nil, audit)
+	imports := app.NewImports(catalog)
+	builds := app.NewBuilds(store, catalog, nil, nil, audit)
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return New(Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, imports, builds),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog, builds),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
-	}).Handler(), store
+	}).Handler(), catalog
 }
 
 func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testing.T) {
-	handler, store := newLifecycleApp(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	handler, catalog := newLifecycleApp(t)
 
 	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"dana@example.com","password":"correct horse battery staple"}`, nil)
 	if register.Code != http.StatusCreated {
@@ -51,9 +49,7 @@ func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testin
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &project); err != nil || project.ID == "" {
 		t.Fatalf("project create = %d %s", projectResponse.Code, projectResponse.Body.String())
 	}
-	if err := store.CreateImportJob(ctx, app.CreateImportJob{ID: "running-import", OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "dana/repo", Branch: "main", Commit: strings.Repeat("d", 40)}); err != nil {
-		t.Fatal(err)
-	}
+	catalog.SeedImport(project.OwnerID, project.ID, "running-import", "cloning")
 
 	blocked := perform(handler, http.MethodDelete, "/api/account", "", session)
 	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "running-import") {

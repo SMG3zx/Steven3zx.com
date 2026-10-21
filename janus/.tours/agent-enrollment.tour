@@ -23,7 +23,7 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 217,
+      "line": 220,
       "title": "The Tailnet port",
       "description": "`type Tailnet interface` issues keys, lists nodes, and removes a node. The control server behind it enforces who may connect to whom."
     },

@@ -176,7 +176,7 @@ func TestDeletingAnAccountKeepsItWhenItsDeploymentsCannotBeStopped(t *testing.T)
 	f := newDeployFixture(t)
 	id := f.deployHealthy()
 	f.deployer.setStopErr(errors.New("the Agent is offline"))
-	accounts := app.NewAccounts(f.store, users(t, "owner")).WithDeployments(f.deployments)
+	accounts := app.NewAccounts(f.store, users(t, "owner"), f.catalog).WithDeployments(f.deployments)
 
 	if _, err := accounts.Delete(context.Background(), "owner", false); err == nil {
 		t.Fatal("an Account was deleted while its deployment still runs")

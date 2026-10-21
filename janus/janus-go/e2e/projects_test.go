@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"io"
 	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/githubapi"
-	"janus/internal/adapters/gitsource"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
@@ -68,7 +67,7 @@ func TestProjectBrowserActions(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	store, identities, handler := startJanus(t, ctx)
+	catalog, identities, handler := startJanus(t, ctx)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 	userID, sessionCookie := registerUser(t, server.URL)
@@ -141,7 +140,7 @@ func TestProjectBrowserActions(t *testing.T) {
 		attempt := importAttempts.Add(1)
 		jobID := fmt.Sprintf("playwright-import-%d", attempt)
 		snapshotID := fmt.Sprintf("playwright-snapshot-%d", attempt)
-		if err := seedSnapshot(ctx, store, userID, projectID, jobID, snapshotID, importCommit, `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"Go service entrypoint"}]}}`); err != nil {
+		if err := seedSnapshot(catalog, userID, projectID, jobID, snapshotID, importCommit, `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"Go service entrypoint"}]}}`); err != nil {
 			t.Errorf("seed imported snapshot for owner=%q project=%q URL=%s: %v", userID, projectID, requestURL.Path, err)
 			_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusInternalServerError), Body: `{}`})
 			return
@@ -239,7 +238,7 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 
 	// Snapshot activation switches the project's active repository revision.
-	if err := seedSnapshot(ctx, store, userID, projectID, "older-snapshot-job", "older-snapshot", secondCommit, `{}`); err != nil {
+	if err := seedSnapshot(catalog, userID, projectID, "older-snapshot-job", "older-snapshot", secondCommit, `{}`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := page.Reload(); err != nil {
@@ -319,16 +318,18 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 }
 
-func startJanus(t *testing.T, ctx context.Context) (app.Store, app.Identities, http.Handler) {
+func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, http.Handler) {
 	t.Helper()
-	store, identities, _, handler := startJanusWith(t, ctx, e2eWASMBuilder{})
-	return store, identities, handler
+	catalog, identities, _, handler := startJanusWith(t, ctx, e2eWASMBuilder{})
+	return catalog, identities, handler
 }
 
 // startJanusWith starts the application in-process with b as its WASM builder,
-// and the identity service on an embedded NATS server. It returns the Store,
-// the Identities, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store, app.Identities, *app.Builds, http.Handler) {
+// and the identity service on an embedded NATS server. Projects live in an
+// in-memory Catalog, so a test can seed the Snapshot an Import would make;
+// the real projects service is tested through its adapter. It returns the
+// Catalog, the Identities, the Builds use case and the HTTP handler.
+func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (*catalogtest.Memory, app.Identities, *app.Builds, http.Handler) {
 	t.Helper()
 	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"))
 	if err != nil {
@@ -347,17 +348,18 @@ func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}
-	gh := app.NewGitHub(identities, githubapi.NewClient())
+	catalog := catalogtest.NewMemory()
+	gh := app.NewGitHub(identities, catalog)
 	audit := audittest.NewRecorder()
-	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audit)
-	builds := app.NewBuilds(store, b, nil, audit)
+	imports := app.NewImports(catalog)
+	builds := app.NewBuilds(store, catalog, b, nil, audit)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, imports, builds),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog, builds),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
 	})
-	return store, identities, builds, server.Handler()
+	return catalog, identities, builds, server.Handler()
 }
 
 func registerUser(t *testing.T, baseURL string) (string, string) {
@@ -392,38 +394,19 @@ func connectGitHub(t *testing.T, ctx context.Context, identities app.Identities,
 	}
 }
 
-func seedSnapshot(ctx context.Context, store app.Store, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
-	return seedLanguageSnapshot(ctx, store, ownerID, projectID, jobID, snapshotID, commit, metadata, "Rust", "Cargo.toml", "[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n")
+func seedSnapshot(catalog *catalogtest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
+	return seedLanguageSnapshot(catalog, ownerID, projectID, jobID, snapshotID, commit, metadata, "Rust", "Cargo.toml", "[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n")
 }
 
-// seedLanguageSnapshot stores a completed Snapshot of language whose manifest
-// file is manifest with the given content.
-func seedLanguageSnapshot(ctx context.Context, store app.Store, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
-	if err := store.CreateImportJob(ctx, app.CreateImportJob{ID: jobID, OwnerID: ownerID, ProjectID: projectID, Repository: "SMG3zx/demo", Branch: "main", Commit: commit}); err != nil {
-		return fmt.Errorf("create import job: %w", err)
-	}
-	if err := store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshotID, JobID: jobID, OwnerID: ownerID, ProjectID: projectID, RepositoryID: 42, Repository: "SMG3zx/demo", Branch: "main", Commit: commit, DefaultBranch: "main", Language: language, Stars: 3, Forks: 1, MetadataJSON: metadata}); err != nil {
-		return fmt.Errorf("begin snapshot: %w", err)
-	}
-	if err := store.AddSnapshotFiles(ctx, snapshotID, []app.SnapshotFile{
-		{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
-		{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
-	}); err != nil {
-		return fmt.Errorf("add snapshot files: %w", err)
-	}
-	from := "queued"
-	for _, step := range []struct {
-		status   string
-		progress int
-	}{{"cloning", 20}, {"scanning", 50}, {"storing", 80}} {
-		if err := store.TransitionImportJob(ctx, app.JobTransition{ID: jobID, From: from, To: step.status, Progress: step.progress}); err != nil {
-			return fmt.Errorf("move import job to %s: %w", step.status, err)
-		}
-		from = step.status
-	}
-	if err := store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshotID, JobID: jobID, FileCount: 2, TotalBytes: 1_234_567}); err != nil {
-		return fmt.Errorf("complete snapshot: %w", err)
-	}
+// seedLanguageSnapshot records a finished Import and the Snapshot it made, of
+// language, whose manifest file is manifest with the given content.
+func seedLanguageSnapshot(catalog *catalogtest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
+	catalog.SeedImport(ownerID, projectID, jobID, "complete")
+	catalog.SeedSnapshot(ownerID, projectID, catalogtest.Seed{ID: snapshotID, Repository: "SMG3zx/demo", Commit: commit, Language: language, MetadataJSON: metadata, TotalBytes: 1_234_567,
+		Files: []app.SnapshotFile{
+			{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
+			{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
+		}})
 	return nil
 }
 

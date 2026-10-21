@@ -1,31 +1,37 @@
 {
   "$schema": "https://aka.ms/codetour-schema",
   "title": "Project import: from a GitHub branch to an active Snapshot",
-  "description": "How a repository commit becomes an active Snapshot: the import is queued, its files are fetched through the Source port, scanned for language and entrypoints, and stored.",
+  "description": "How a repository commit becomes an active Snapshot in the projects service: the Import is recorded and its job queued through the outbox, a worker takes the job from the JOBS stream, clones and scans the commit, stores a Staging Snapshot, and completes it.",
   "steps": [
     {
-      "file": "janus-go/internal/app/imports.go",
-      "line": 68,
-      "title": "An import is requested",
-      "description": "`func (i *Imports) Request` records the import as queued and starts it. The HTTP request returns before any files are fetched."
+      "file": "janus-go/internal/services/projects/imports.go",
+      "line": 28,
+      "title": "An Import is requested",
+      "description": "`func (s *Service) requestImport` checks the repository, branch and commit with GitHub, then records the Import and adds its job message to the outbox in one transaction. The request returns before any file is fetched."
     },
     {
-      "file": "janus-go/internal/app/imports.go",
-      "line": 351,
-      "title": "The import runs",
-      "description": "`func (i *Imports) run` fetches the commit, scans it, and stores a Staging Snapshot, then completes it."
+      "file": "janus-go/internal/platform/outbox/outbox.go",
+      "line": 140,
+      "title": "The job reaches JOBS",
+      "description": "`func (r *Relay) Flush` publishes the outbox to JetStream with each message's ID, so the job is sent if and only if the Import was stored."
     },
     {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 168,
-      "title": "The Source port",
-      "description": "`type Source interface` opens a repository at a commit and lists its files. The core never calls git or GitHub directly."
+      "file": "janus-go/internal/services/projects/imports.go",
+      "line": 200,
+      "title": "A worker takes the job",
+      "description": "`func (s *Service) handleImport` runs one delivery of the job, keeps it alive while it runs, and acknowledges it only once the Import has finished."
     },
     {
-      "file": "janus-go/internal/adapters/gitsource/git.go",
-      "line": 42,
-      "title": "The real Source adapter",
-      "description": "`func New() *Git` returns the adapter that fetches the commit over git."
+      "file": "janus-go/internal/services/projects/pipeline.go",
+      "line": 40,
+      "title": "The Import runs",
+      "description": "`func (s *Service) runImport` gets the Owner's GitHub token from the identity service, then resumes from a Staging Snapshot or starts from a fresh clone."
+    },
+    {
+      "file": "janus-go/internal/services/projects/source.go",
+      "line": 48,
+      "title": "The commit is cloned",
+      "description": "`func (g *gitSource) open` clones the branch's last 50 commits and opens the commit's tree. No repository code runs."
     },
     {
       "file": "janus-go/internal/domain/scan/scan.go",
@@ -34,16 +40,22 @@
       "description": "`func Files` picks the language with the most files and lists entrypoint candidates. It runs no repository code."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/jobs.go",
-      "line": 50,
+      "file": "janus-go/internal/services/projects/pipeline.go",
+      "line": 202,
       "title": "The Staging Snapshot is kept",
-      "description": "`func (s *Store) BeginSnapshot` records the Staging Snapshot before any file is written, so a restart can resume it."
+      "description": "`func (s *Service) importFromClone` records the Staging Snapshot with its manifest before any file is written, so a redelivered job resumes it."
     },
     {
-      "file": "janus-go/internal/app/imports.go",
-      "line": 159,
-      "title": "Resuming after a restart",
-      "description": "`func (i *Imports) Resume` restarts the imports that a shutdown interrupted. See the job resume tour for the rest."
+      "file": "janus-go/internal/services/projects/pipeline.go",
+      "line": 286,
+      "title": "The Snapshot becomes active",
+      "description": "`func (s *Service) completeImport` makes the Snapshot active, completes the Import and keeps the newest five, adding a snapshot_deleted event for each one dropped."
+    },
+    {
+      "file": "janus-go/internal/adapters/projectevents/projectevents.go",
+      "line": 70,
+      "title": "The single process follows",
+      "description": "`func (e *Events) handle` applies project_deleted and snapshot_deleted to janus.db, so WASM Builds of a deleted Project or Snapshot go too."
     }
   ]
 }

@@ -11,154 +11,6 @@ import (
 	"janus/internal/domain/jobs"
 )
 
-// CreateImportJob queues an import of a repository into a Project.
-func (s *Store) CreateImportJob(ctx context.Context, job app.CreateImportJob) error {
-	ctx, done := s.start(ctx, "CreateImportJob")
-	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO project_import_jobs(id,owner_id,project_id,repository,branch,commit_sha,status) SELECT ?,owner_id,id,?,?,?,'queued' FROM projects WHERE id=? AND owner_id=?`, job.ID, job.Repository, job.Branch, job.Commit, job.ProjectID, job.OwnerID); err != nil {
-			return err
-		}
-		var id string
-		err := tx.QueryRowContext(ctx, `SELECT id FROM project_import_jobs WHERE id=?`, job.ID).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("project not found")
-		}
-		return err
-	}))
-}
-
-// TransitionImportJob moves an import job to a new status when the import
-// state machine allows it and the job is still in the status the caller saw.
-func (s *Store) TransitionImportJob(ctx context.Context, t app.JobTransition) error {
-	ctx, done := s.start(ctx, "TransitionImportJob")
-	return done(s.transition(ctx, "project_import_jobs", jobs.Import, t,
-		`UPDATE project_import_jobs SET status=?,progress=?,error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`,
-		[]any{t.To, t.Progress, t.Error, t.ID, t.From}, "job"))
-}
-
-// FindImportJob returns one of an Account's import jobs.
-func (s *Store) FindImportJob(ctx context.Context, id, ownerID string) (job app.ImportJob, found bool, err error) {
-	ctx, done := s.start(ctx, "FindImportJob")
-	err = s.db.QueryRowContext(ctx, `SELECT id,owner_id,project_id,repository,branch,commit_sha,status,progress,error,created_at,updated_at FROM project_import_jobs WHERE id=? AND owner_id=?`, id, ownerID).Scan(&job.ID, &job.OwnerID, &job.ProjectID, &job.Repository, &job.Branch, &job.Commit, &job.Status, &job.Progress, &job.Error, &job.CreatedAt, &job.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return app.ImportJob{}, false, done(nil)
-	}
-	return job, err == nil, done(err)
-}
-
-// BeginSnapshot starts the Staging Snapshot an import job writes into.
-func (s *Store) BeginSnapshot(ctx context.Context, snapshot app.BeginSnapshot) error {
-	ctx, done := s.start(ctx, "BeginSnapshot")
-	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,default_branch,language,runtime,stars,forks,metadata_json,manifest_json,job_id,state) SELECT ?,p.id,p.owner_id,?,?,?,?,?,?,?,?,?,?,?,?,'staging' FROM projects p WHERE p.id=? AND p.owner_id=?`, snapshot.ID, snapshot.RepositoryID, snapshot.Repository, snapshot.Branch, snapshot.Commit, snapshot.DefaultBranch, snapshot.Language, snapshot.Runtime, snapshot.Stars, snapshot.Forks, snapshot.MetadataJSON, snapshot.Manifest, snapshot.JobID, snapshot.ProjectID, snapshot.OwnerID); err != nil {
-			return err
-		}
-		var status string
-		err := tx.QueryRowContext(ctx, `SELECT state FROM project_snapshots WHERE id=?`, snapshot.ID).Scan(&status)
-		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("project not found")
-		}
-		return err
-	}))
-}
-
-// AddSnapshotFiles stores files in a Staging Snapshot.
-func (s *Store) AddSnapshotFiles(ctx context.Context, snapshotID string, files []app.SnapshotFile) error {
-	ctx, done := s.start(ctx, "AddSnapshotFiles")
-	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		stmt, err := tx.PrepareContext(ctx, `INSERT INTO project_files(snapshot_id,path,mode,content,sha) VALUES(?,?,?,?,?)`)
-		if err != nil {
-			return err
-		}
-		defer stmt.Close()
-		for _, file := range files {
-			if _, err = stmt.ExecContext(ctx, snapshotID, file.Path, file.Mode, file.Content, file.Hash); err != nil {
-				return err
-			}
-		}
-		return nil
-	}))
-}
-
-// CompleteSnapshot makes a Staging Snapshot the active ready Snapshot of its
-// Project, completes its import job and drops all but the newest five Snapshots.
-func (s *Store) CompleteSnapshot(ctx context.Context, snapshot app.CompleteSnapshot) error {
-	ctx, done := s.start(ctx, "CompleteSnapshot")
-	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `UPDATE project_snapshots SET is_active=0 WHERE project_id=(SELECT project_id FROM project_snapshots WHERE id=?) AND state='ready'`, snapshot.SnapshotID); err != nil {
-			return err
-		}
-		result, err := tx.ExecContext(ctx, `UPDATE project_snapshots SET entry_point=?,file_count=?,total_bytes=?,state='ready',is_active=1 WHERE id=? AND state='staging'`, snapshot.EntryPoint, snapshot.FileCount, snapshot.TotalBytes, snapshot.SnapshotID)
-		if err != nil {
-			return err
-		}
-		if n, _ := result.RowsAffected(); n != 1 {
-			return errors.New("staging snapshot not found")
-		}
-		if _, err = tx.ExecContext(ctx, `UPDATE projects SET updated_at=CURRENT_TIMESTAMP WHERE id=(SELECT project_id FROM project_snapshots WHERE id=?)`, snapshot.SnapshotID); err != nil {
-			return err
-		}
-		result, err = tx.ExecContext(ctx, `UPDATE project_import_jobs SET status='complete',progress=100,error='',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='storing'`, snapshot.JobID)
-		if err == nil {
-			if n, _ := result.RowsAffected(); n != 1 {
-				err = errors.New("import was cancelled before it completed")
-			}
-		}
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM project_snapshots WHERE project_id=(SELECT project_id FROM project_snapshots WHERE id=?) AND state='ready' AND id NOT IN (SELECT id FROM project_snapshots WHERE project_id=(SELECT project_id FROM project_snapshots WHERE id=?) AND state='ready' ORDER BY created_at DESC,id DESC LIMIT 5)`, snapshot.SnapshotID, snapshot.SnapshotID)
-		return err
-	}))
-}
-
-// DeleteStagingSnapshot deletes a Snapshot that is still staging.
-func (s *Store) DeleteStagingSnapshot(ctx context.Context, snapshotID string) error {
-	ctx, done := s.start(ctx, "DeleteStagingSnapshot")
-	_, err := s.db.ExecContext(ctx, `DELETE FROM project_snapshots WHERE id=? AND state='staging'`, snapshotID)
-	return done(err)
-}
-
-// FindStagingSnapshot returns the Staging Snapshot an import job is writing, its
-// manifest, and the path and hash of each file already stored in it.
-func (s *Store) FindStagingSnapshot(ctx context.Context, jobID string) (app.StagingSnapshotFound, error) {
-	ctx, done := s.start(ctx, "FindStagingSnapshot")
-	var result app.StagingSnapshotFound
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		err := tx.QueryRowContext(ctx, `SELECT id,manifest_json FROM project_snapshots WHERE job_id=? AND state='staging' LIMIT 1`, jobID).Scan(&result.SnapshotID, &result.Manifest)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		rows, err := tx.QueryContext(ctx, `SELECT path,sha FROM project_files WHERE snapshot_id=?`, result.SnapshotID)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		result.Files = make(map[string]string)
-		for rows.Next() {
-			var path, sha string
-			if err = rows.Scan(&path, &sha); err != nil {
-				return err
-			}
-			result.Files[path] = sha
-		}
-		result.Found = true
-		return rows.Err()
-	})
-	return result, done(err)
-}
-
-// DiscardJobStaging deletes the Staging Snapshot of an import job that has
-// failed for good.
-func (s *Store) DiscardJobStaging(ctx context.Context, jobID string) error {
-	ctx, done := s.start(ctx, "DiscardJobStaging")
-	_, err := s.db.ExecContext(ctx, `DELETE FROM project_snapshots WHERE job_id=? AND state='staging'`, jobID)
-	return done(err)
-}
-
 // CreateWASMBuild queues a build of a ready Snapshot.
 func (s *Store) CreateWASMBuild(ctx context.Context, build app.CreateWASMBuild) error {
 	ctx, done := s.start(ctx, "CreateWASMBuild")
@@ -255,7 +107,6 @@ func migrateAndRecoverJobs(db *sql.DB) error {
 		{"project_snapshots", "job_id", "TEXT NOT NULL DEFAULT ''"},
 		{"project_snapshots", "runtime", "TEXT NOT NULL DEFAULT ''"},
 		{"project_snapshots", "manifest_json", "TEXT NOT NULL DEFAULT ''"},
-		{"project_import_jobs", "resume_count", "INTEGER NOT NULL DEFAULT 0"},
 		{"project_wasm_builds", "resume_count", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, c := range columns {
@@ -302,23 +153,17 @@ func ensureColumn(db *sql.DB, table, column, definition string) error {
 	return err
 }
 
-// recoverInterruptedJobs runs once at startup. Each import or WASM build that
-// was still running is interrupted. It returns to queued and counts one resume,
-// unless it has already used all of its resumes, in which case it fails. Only
-// the Staging Snapshots of imports that will resume are kept.
+// recoverInterruptedJobs runs once at startup. Each WASM build that was still
+// running is interrupted. It returns to queued and counts one resume, unless it
+// has already used all of its resumes, in which case it fails. Imports are the
+// projects service's, which resumes its own.
 func recoverInterruptedJobs(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if err = recoverJobTable(tx, "project_import_jobs", []string{"queued", "cloning", "scanning", "storing"}, "resume limit reached after repeated server restarts during import"); err != nil {
-		return err
-	}
 	if err = recoverJobTable(tx, "project_wasm_builds", []string{"queued", "building"}, "resume limit reached after repeated server restarts during WASM build"); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(`DELETE FROM project_snapshots WHERE state='staging' AND job_id NOT IN (SELECT id FROM project_import_jobs WHERE status='queued')`); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -359,11 +204,6 @@ func recoverJobTable(tx *sql.Tx, table string, running []string, exhausted strin
 			if _, err = tx.Exec(`UPDATE `+table+` SET status='failed',progress=100,error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`, exhausted, job.id); err != nil {
 				return err
 			}
-			if table == "project_import_jobs" {
-				if _, err = tx.Exec(`DELETE FROM project_snapshots WHERE state='staging' AND job_id=?`, job.id); err != nil {
-					return err
-				}
-			}
 			continue
 		}
 		if _, err = tx.Exec(`UPDATE `+table+` SET status='queued',progress=0,error='',resume_count=resume_count+1,updated_at=CURRENT_TIMESTAMP WHERE id=?`, job.id); err != nil {
@@ -371,29 +211,6 @@ func recoverJobTable(tx *sql.Tx, table string, running []string, exhausted strin
 		}
 	}
 	return nil
-}
-
-// ListResumableImports returns queued import jobs with their repository data.
-// It is used at startup, when every queued job is one that was interrupted.
-func (s *Store) ListResumableImports(ctx context.Context) ([]app.ResumableImport, error) {
-	ctx, done := s.start(ctx, "ListResumableImports")
-	imports, err := func() ([]app.ResumableImport, error) {
-		rows, err := s.db.QueryContext(ctx, `SELECT id,owner_id,project_id,repository,branch,commit_sha FROM project_import_jobs WHERE status='queued' ORDER BY created_at,id`)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var imports []app.ResumableImport
-		for rows.Next() {
-			var job app.ResumableImport
-			if err = rows.Scan(&job.JobID, &job.OwnerID, &job.ProjectID, &job.Repository, &job.Branch, &job.Commit); err != nil {
-				return nil, err
-			}
-			imports = append(imports, job)
-		}
-		return imports, rows.Err()
-	}()
-	return imports, done(err)
 }
 
 // ListResumableBuilds returns queued WASM builds with the language of the
@@ -419,8 +236,8 @@ func (s *Store) ListResumableBuilds(ctx context.Context) ([]app.ResumableBuild, 
 	return builds, done(err)
 }
 
-// ListActiveJobs returns the Owner's imports and WASM builds that have not
-// finished.
+// ListActiveJobs returns the Owner's WASM builds that have not finished.
+// Imports are the projects service's.
 func (s *Store) ListActiveJobs(ctx context.Context, ownerID string) ([]app.ActiveJob, error) {
 	ctx, done := s.start(ctx, "ListActiveJobs")
 	active, err := activeJobs(ctx, s.db, ownerID)
@@ -450,9 +267,6 @@ func (s *Store) DeleteAccount(ctx context.Context, userID string, cancelActiveJo
 			return nil
 		}
 		if len(active) > 0 {
-			if _, err = tx.ExecContext(ctx, `UPDATE project_import_jobs SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE owner_id=? AND status IN ('queued','cloning','scanning','storing')`, userID); err != nil {
-				return err
-			}
 			if _, err = tx.ExecContext(ctx, `UPDATE project_wasm_builds SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE owner_id=? AND status IN ('queued','building')`, userID); err != nil {
 				return err
 			}
@@ -470,8 +284,7 @@ func (s *Store) DeleteAccount(ctx context.Context, userID string, cancelActiveJo
 }
 
 func activeJobs(ctx context.Context, q querier, ownerID string) ([]app.ActiveJob, error) {
-	rows, err := q.QueryContext(ctx, `SELECT 'import',id,project_id,status FROM project_import_jobs WHERE owner_id=? AND status IN ('queued','cloning','scanning','storing')
-		UNION ALL SELECT 'wasm_build',id,project_id,status FROM project_wasm_builds WHERE owner_id=? AND status IN ('queued','building')`, ownerID, ownerID)
+	rows, err := q.QueryContext(ctx, `SELECT 'wasm_build',id,project_id,status FROM project_wasm_builds WHERE owner_id=? AND status IN ('queued','building')`, ownerID)
 	if err != nil {
 		return nil, err
 	}

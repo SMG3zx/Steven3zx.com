@@ -11,9 +11,8 @@ import (
 
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/buildertest"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/checktest"
-	"janus/internal/adapters/githubapi"
-	"janus/internal/adapters/gitsource"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
@@ -54,19 +53,20 @@ func newDeployApp(t *testing.T, deployer agentDeployer) *deployApp {
 	t.Cleanup(cancel)
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
-	gh := app.NewGitHub(identities, githubapi.NewClient())
+	catalog := catalogtest.NewMemory()
+	gh := app.NewGitHub(identities, catalog)
 	audit := audittest.NewRecorder()
-	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audit)
+	imports := app.NewImports(catalog)
 	checks := checktest.NewFake()
-	builds := app.NewBuilds(store, buildertest.NewFake(), checks, audit)
+	builds := app.NewBuilds(store, catalog, buildertest.NewFake(), checks, audit)
 	deployments := app.NewDeployments(store, deployer, audit)
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds,
-		Accounts: app.NewAccounts(store, identities, imports, builds), Deployments: deployments,
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds,
+		Accounts: app.NewAccounts(store, identities, catalog, builds), Deployments: deployments,
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
@@ -84,7 +84,7 @@ func newDeployApp(t *testing.T, deployer agentDeployer) *deployApp {
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &env.project); err != nil || env.project.ID == "" {
 		t.Fatalf("project create = %d %s", projectResponse.Code, projectResponse.Body.String())
 	}
-	completeRustSnapshot(t, store, env.project)
+	completeRustSnapshot(catalog, env.project)
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -101,22 +101,10 @@ func app2Agent(owner string) app.CreateAgent {
 }
 
 // completeRustSnapshot gives project an active, complete Rust Snapshot.
-func completeRustSnapshot(t *testing.T, store app.Store, project app.Project) {
-	t.Helper()
-	ctx := context.Background()
-	const commit = "cccccccccccccccccccccccccccccccccccccccc"
-	job, snapshot := project.ID+"-import", project.ID+"-snapshot"
-	must := func(err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	must(store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "owen/shipped", Branch: "main", Commit: commit}))
-	must(store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshot, JobID: job, OwnerID: project.OwnerID, ProjectID: project.ID, Repository: "owen/shipped", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Rust"}))
-	must(store.AddSnapshotFiles(ctx, snapshot, []app.SnapshotFile{{Path: "Cargo.toml", Content: []byte("[package]\nname='shipped'\n"), Mode: "100644"}}))
-	storetest.AdvanceImport(t, store, job, "queued", "cloning", "scanning", "storing")
-	must(store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job, FileCount: 1, TotalBytes: 20}))
+func completeRustSnapshot(catalog *catalogtest.Memory, project app.Project) {
+	catalog.SeedSnapshot(project.OwnerID, project.ID, catalogtest.Seed{ID: project.ID + "-snapshot", Repository: "owen/shipped",
+		Commit: "cccccccccccccccccccccccccccccccccccccccc", Language: "Rust", Runtime: "rust",
+		Files: []app.SnapshotFile{{Path: "Cargo.toml", Content: []byte("[package]\nname='shipped'\n"), Mode: "100644"}}})
 }
 
 // buildRust compiles the project's active Snapshot and waits for the Build and its checks.

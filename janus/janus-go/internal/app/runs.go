@@ -249,17 +249,12 @@ func runnableBuild(ctx context.Context, store Store, owner, buildID string) (WAS
 // or the defaults when its Snapshot cannot be found.
 func templateLimits(ctx context.Context, store Store, owner string, build WASMBuild) RunLimits {
 	limits := RunLimits{Fuel: templates.DefaultFuel, MemoryBytes: templates.DefaultMemoryBytes, Timeout: templates.DefaultTimeout}
-	snapshots, err := store.ListSnapshots(ctx, owner, build.ProjectID)
-	if err != nil {
+	snapshot, found, err := store.FindSnapshot(ctx, build.SnapshotID, owner)
+	if err != nil || !found {
 		return limits
 	}
-	for _, snapshot := range snapshots {
-		if snapshot.ID != build.SnapshotID {
-			continue
-		}
-		if template, found := templates.Find(snapshot.Language, snapshot.Runtime); found {
-			return template.Resources
-		}
+	if template, found := templates.Find(snapshot.Language, snapshot.Runtime); found {
+		return template.Resources
 	}
 	return limits
 }

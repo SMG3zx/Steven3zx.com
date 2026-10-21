@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/adapters/tailnettest"
@@ -29,12 +30,13 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 	t.Cleanup(cancel)
 	store, audit, tailnet := storetest.NewMemory(), audittest.NewRecorder(), tailnettest.NewFake()
 	identities := identitytest.NewMemory()
+	catalog := catalogtest.NewMemory()
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	config := Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), Accounts: app.NewAccounts(store, identities),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
 	if withAgents {

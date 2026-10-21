@@ -13,11 +13,11 @@ import (
 	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/auditnats"
 	"janus/internal/adapters/dockerbuild"
-	"janus/internal/adapters/githubapi"
-	"janus/internal/adapters/gitsource"
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
+	"janus/internal/adapters/projectevents"
+	"janus/internal/adapters/projectsnats"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
@@ -25,6 +25,7 @@ import (
 	"janus/internal/platform/natsx"
 	auditservice "janus/internal/services/audit"
 	identityservice "janus/internal/services/identity"
+	projectsservice "janus/internal/services/projects"
 )
 
 // application is the composition root: it builds the adapters, hands them to
@@ -47,6 +48,11 @@ type application struct {
 	// identityService owns identity.db; identities reaches it over NATS.
 	identityService *identityservice.Service
 	identities      app.Identities
+	// projectsService owns projects.db and runs Imports; catalog reaches it
+	// over NATS, and projectEvents applies its deletions to the Store.
+	projectsService *projectsservice.Service
+	catalog         app.Catalog
+	projectEvents   *projectevents.Events
 	identity        *app.Identity
 	projects        *app.Projects
 	github          *app.GitHub
@@ -158,19 +164,20 @@ func (a *application) groups() []group {
 			{name: "agents", start: a.startAgents},
 		}},
 		{name: "projects and builds", components: []component{
+			{name: "projects service", start: a.startProjectsService, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("stop the projects service", a.projectsService.Stop(ctx))
+			})},
 			{name: "projects", start: func(context.Context) error {
-				a.projects = app.NewProjects(a.store)
+				a.projects = app.NewProjects(a.catalog)
+				a.github = app.NewGitHub(a.identities, a.catalog)
+				a.imports = app.NewImports(a.catalog)
 				return nil
 			}},
-			{name: "imports", start: func(context.Context) error {
-				a.github = app.NewGitHub(a.identities, githubapi.NewClient())
-				a.imports = app.NewImports(a.store, a.identities, a.github.API, gitsource.New(), a.audit)
-				return nil
-			}, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("drain project imports", a.imports.Drain(ctx))
-			})},
 			{name: "builds", start: a.startBuilds, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain WASM builds", a.builds.Drain(ctx))
+			})},
+			{name: "project events", start: a.startProjectEvents, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("stop applying project events", a.projectEvents.Stop(ctx))
 			})},
 			{name: "resume", start: a.resumeInterruptedJobs},
 		}},
@@ -187,7 +194,7 @@ func (a *application) groups() []group {
 			})},
 			// Accounts come last in runtime: deleting one stops its Deployments first.
 			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.identities, a.imports, a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
+				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog, a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
 				return nil
 			}},
 		}},
@@ -364,7 +371,7 @@ func (a *application) startBuilds(context.Context) error {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
 	docker := dockerbuild.NewDocker(images)
-	a.builds = app.NewBuilds(a.store, docker, docker, a.audit)
+	a.builds = app.NewBuilds(a.store, a.catalog, docker, docker, a.audit)
 	return nil
 }
 
@@ -379,18 +386,47 @@ func (a *application) startDeployments(context.Context) error {
 	return nil
 }
 
-// resumeInterruptedJobs restarts the imports and WASM builds that the previous
-// shutdown interrupted. It runs before the routes accept requests.
+// resumeInterruptedJobs restarts the WASM builds that the previous shutdown
+// interrupted. It runs before the routes accept requests. Imports are jobs of
+// the projects service, which JetStream hands out again by itself.
 func (a *application) resumeInterruptedJobs(context.Context) error {
-	imports, err := a.imports.Resume(a.startCtx)
-	if err != nil {
-		return fmt.Errorf("resume project imports: %w", err)
-	}
 	builds, err := a.builds.Resume(a.startCtx)
 	if err != nil {
 		return fmt.Errorf("resume WASM builds: %w", err)
 	}
-	a.logger.Info("resumed interrupted jobs", zap.Int("imports", imports), zap.Int("wasm_builds", builds))
+	a.logger.Info("resumed interrupted jobs", zap.Int("wasm_builds", builds))
+	return nil
+}
+
+// startProjectsService starts the projects service on projects.db. It refuses
+// to start while janus.db still holds Projects that were never copied out;
+// `janus migrate split` copies them.
+func (a *application) startProjectsService(ctx context.Context) error {
+	cfg := a.settings
+	needed, err := projectsservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.ProjectsDatabasePath)
+	if err != nil {
+		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
+	}
+	if needed {
+		return fmt.Errorf("%s holds Projects that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.ProjectsDatabasePath)
+	}
+	service := projectsservice.New(projectsservice.Config{DatabasePath: cfg.ProjectsDatabasePath})
+	if err := service.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("start the projects service: %w", err)
+	}
+	a.projectsService = service
+	a.catalog = projectsnats.New(a.nats.Conn())
+	return nil
+}
+
+// startProjectEvents applies the projects service's deletions to the WASM
+// Builds the Store keeps, from where it left off.
+func (a *application) startProjectEvents(ctx context.Context) error {
+	events := projectevents.New(a.builds)
+	if err := events.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("apply project events: %w", err)
+	}
+	a.projectEvents = events
 	return nil
 }
 

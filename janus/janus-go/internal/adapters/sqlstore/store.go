@@ -145,6 +145,11 @@ CREATE TABLE IF NOT EXISTS users (
 	 display_name TEXT NOT NULL DEFAULT '',
 	 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- projects and project_snapshots are references to the projects service's
+-- records, for the WASM Builds and Deployments that refer to them: deleting
+-- one deletes what refers to it. A reference row fills only the IDs and, for
+-- a Snapshot, its language and runtime. A database from before the split has
+-- the full rows, and project_files and project_import_jobs, no longer read.
 CREATE TABLE IF NOT EXISTS projects (
 	 id TEXT PRIMARY KEY,
 	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -176,29 +181,6 @@ CREATE TABLE IF NOT EXISTS project_snapshots (
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now'))
 );
 CREATE INDEX IF NOT EXISTS project_snapshots_latest ON project_snapshots(project_id, state, created_at DESC);
-CREATE TABLE IF NOT EXISTS project_files (
-	 snapshot_id TEXT NOT NULL REFERENCES project_snapshots(id) ON DELETE CASCADE,
-	 path TEXT NOT NULL,
-	 mode TEXT NOT NULL,
-	 content BLOB NOT NULL,
-	 sha TEXT NOT NULL,
-	 PRIMARY KEY(snapshot_id, path)
-);
-CREATE TABLE IF NOT EXISTS project_import_jobs (
-	 id TEXT PRIMARY KEY,
-	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	 project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-	 repository TEXT NOT NULL,
-	 branch TEXT NOT NULL,
-	 commit_sha TEXT NOT NULL,
-	 status TEXT NOT NULL,
-	 progress INTEGER NOT NULL DEFAULT 0,
-	 error TEXT NOT NULL DEFAULT '',
- created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
- updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now'))
-);
-CREATE INDEX IF NOT EXISTS import_jobs_owner ON project_import_jobs(owner_id, updated_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_import_per_project ON project_import_jobs(project_id) WHERE status IN ('queued','cloning','scanning','storing');
 CREATE TABLE IF NOT EXISTS project_wasm_builds (
 	 id TEXT PRIMARY KEY,
 	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

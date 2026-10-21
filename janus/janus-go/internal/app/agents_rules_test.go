@@ -204,7 +204,7 @@ func TestDeletingAnAccountRemovesItsAgentsFromTheTailnet(t *testing.T) {
 	ctx := context.Background()
 	env.enroll(t, "alice", "laptop")
 	env.enroll(t, "bob", "server")
-	accounts := app.NewAccounts(env.store, env.identities).WithAgents(env.agents)
+	accounts := app.NewAccounts(env.store, env.identities, env.catalog).WithAgents(env.agents)
 
 	deleted, err := accounts.Delete(ctx, "alice", false)
 	if err != nil || !deleted.Deleted {
@@ -232,7 +232,7 @@ func TestAnAccountIsKeptWhenItsAgentsCannotBeRemovedFromTheTailnet(t *testing.T)
 	enrollment := env.enroll(t, "alice", "laptop")
 	flaky := &failingTailnet{Tailnet: env.tailnet, broken: true}
 	agents := app.NewAgents(env.store, flaky, env.audit, "https://tailnet.example.test", func() time.Time { return env.now })
-	accounts := app.NewAccounts(env.store, env.identities).WithAgents(agents)
+	accounts := app.NewAccounts(env.store, env.identities, env.catalog).WithAgents(agents)
 
 	deleted, err := accounts.Delete(ctx, "alice", false)
 	if err == nil || deleted.Deleted {
@@ -257,10 +257,10 @@ func TestAnAccountIsKeptWhenItsAgentsCannotBeRemovedFromTheTailnet(t *testing.T)
 func TestARefusedAccountDeletionLeavesItsAgentsOnTheTailnet(t *testing.T) {
 	env := newAgentEnv(t, "alice")
 	ctx := context.Background()
-	importedProject(t, env.store, "alice", "alice-project", "Rust")
-	must(t, env.store.CreateImportJob(ctx, app.CreateImportJob{ID: "alice-job", OwnerID: "alice", ProjectID: "alice-project", Repository: "alice/r", Branch: "main", Commit: "c"}))
+	importedProject(t, env.catalog, env.store, "alice", "alice-project", "Rust")
+	env.catalog.SeedImport("alice", "alice-project", "alice-job", "queued")
 	env.enroll(t, "alice", "laptop")
-	accounts := app.NewAccounts(env.store, env.identities).WithAgents(env.agents)
+	accounts := app.NewAccounts(env.store, env.identities, env.catalog).WithAgents(env.agents)
 
 	refused, err := accounts.Delete(ctx, "alice", false)
 	if err != nil || refused.Deleted || len(refused.ActiveJobs) != 1 {

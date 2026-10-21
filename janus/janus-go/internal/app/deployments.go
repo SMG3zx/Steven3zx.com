@@ -198,12 +198,12 @@ func (d *Deployments) stopOnAgent(ctx context.Context, owner, agentID, id string
 // recorded stopped. If an Agent refuses, the error comes back, and the
 // Deployments already stopped stay stopped.
 func (d *Deployments) Teardown(ctx context.Context, owner string) error {
-	projects, err := d.store.ListProjects(ctx, owner)
+	projects, err := d.store.ListOwnedProjects(ctx, owner)
 	if err != nil {
 		return err
 	}
 	for _, project := range projects {
-		listed, err := d.store.ListDeployments(ctx, project.ID, owner)
+		listed, err := d.store.ListDeployments(ctx, project, owner)
 		if err != nil {
 			return err
 		}
@@ -219,7 +219,7 @@ func (d *Deployments) Teardown(ctx context.Context, owner string) error {
 			if err = d.store.TransitionDeployment(ctx, DeploymentTransition{ID: dep.ID, From: dep.State, To: string(deployments.Stopped), Reason: string(deployments.AccountDeleted)}); err != nil {
 				return err
 			}
-			d.record(ctx, "info", "project.deployment.stopped", map[string]string{"user_id": owner, "project_id": project.ID,
+			d.record(ctx, "info", "project.deployment.stopped", map[string]string{"user_id": owner, "project_id": project,
 				"deployment_id": dep.ID, "reason": string(deployments.AccountDeleted)})
 		}
 	}

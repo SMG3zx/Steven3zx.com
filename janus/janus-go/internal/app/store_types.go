@@ -81,14 +81,6 @@ type CreateProject struct {
 
 type UpdateProject struct{ ID, OwnerID, Name, Description string }
 
-type CreateImportJob struct {
-	ID, OwnerID, ProjectID string
-	RepositoryID           int64
-	Repository             string
-	Branch, Commit         string
-	MetadataJSON           string
-}
-
 // JobTransition moves a job from the status From to the status To, if the job
 // is still in From. Error is the reason shown when To is failed, and Log is the
 // build log a WASM build keeps; an import ignores it.
@@ -111,34 +103,19 @@ type ImportJob struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
-type BeginSnapshot struct {
-	ID, JobID, OwnerID, ProjectID string
-	Repository                    string
-	RepositoryID                  int64
-	Branch, Commit                string
-	DefaultBranch, Language       string
-	Runtime                       string
-	Stars, Forks                  int
-	MetadataJSON                  string
-	// Manifest lists every file of the commit, so that a resumed import can
-	// finish without scanning or cloning the repository again.
-	Manifest string
-}
-
 type SnapshotFile struct {
 	Path, Mode, Hash string
 	Content          []byte
 }
 
-type CompleteSnapshot struct {
-	SnapshotID, JobID string
-	EntryPoint        string
-	FileCount         int
-	TotalBytes        int64
-}
+// ProjectRef is the Store's reference to a Project of the projects service.
+type ProjectRef struct{ ID, OwnerID string }
 
-type SetProjectEntryPoint struct {
-	OwnerID, ProjectID, SnapshotID, EntryPoint string
+// SnapshotRef is the Store's reference to a ready Snapshot of the projects
+// service, with what WASM Builds need to know of it.
+type SnapshotRef struct {
+	ID, ProjectID, OwnerID string
+	Language, Runtime      string
 }
 
 type ListProjectFiles struct {
@@ -270,17 +247,6 @@ type UserFound struct {
 	Err         error
 }
 
-// ResumableImport is a queued import job found at startup. It is an interrupted
-// job waiting to resume.
-type ResumableImport struct {
-	JobID      string
-	OwnerID    string
-	ProjectID  string
-	Repository string
-	Branch     string
-	Commit     string
-}
-
 // ResumableBuild is a queued WASM build found at startup, with the language of
 // the Snapshot it compiles.
 type ResumableBuild struct {
@@ -290,14 +256,6 @@ type ResumableBuild struct {
 	SnapshotID string
 	Target     string
 	Language   string
-}
-
-type StagingSnapshotFound struct {
-	SnapshotID string
-	Found      bool
-	Files      map[string]string
-	Manifest   string
-	Err        error
 }
 
 type AccountDeleted struct {

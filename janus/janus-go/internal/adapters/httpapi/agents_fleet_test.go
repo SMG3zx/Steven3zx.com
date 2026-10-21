@@ -13,6 +13,7 @@ import (
 
 	"janus/internal/adapters/agentlinktest"
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
@@ -36,6 +37,7 @@ func newFleetApp(t *testing.T) *fleetApp {
 	t.Cleanup(cancel)
 	store, audit, tailnet, link := storetest.NewMemory(), audittest.NewRecorder(), tailnettest.NewFake(), agentlinktest.NewLoopback()
 	identities := identitytest.NewMemory()
+	catalog := catalogtest.NewMemory()
 	t.Cleanup(func() { link.Close() })
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
@@ -43,7 +45,7 @@ func newFleetApp(t *testing.T) *fleetApp {
 	}
 	fleet := app.NewFleet(store, tailnet, link, audit)
 	config := Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), Accounts: app.NewAccounts(store, identities),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 		Agents: app.NewAgents(store, tailnet, audit, "https://tailnet.example.test", time.Now), Fleet: fleet,
 	}

@@ -42,20 +42,8 @@ func compressedArtifact(t *testing.T, module []byte) (name string, data []byte) 
 func completedBuild(t *testing.T, store app.Store, owner, id string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
-	must(t, store.AddOwner(ctx, owner))
-	if _, found, err := store.GetProject(ctx, owner+"-project", owner); err != nil {
-		t.Fatal(err)
-	} else if !found {
-		_, err = store.CreateProject(ctx, app.CreateProject{ID: owner + "-project", OwnerID: owner, Name: "p"})
-		must(t, err)
-	}
 	project := owner + "-project"
-	commit := strings.Repeat("a", 40)
-	job, snapshot := id+"-job", id+"-snapshot"
-	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: owner, ProjectID: project, Repository: "o/r", Branch: "main", Commit: commit}))
-	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshot, JobID: job, OwnerID: owner, ProjectID: project, Repository: "o/r", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Go"}))
-	storetest.AdvanceImport(t, store, job, "queued", "cloning", "scanning", "storing")
-	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job}))
+	snapshot := storetest.ReadySnapshot(t, store, owner, project, id+"-snapshot", "Go")
 	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: id, OwnerID: owner, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm"}))
 	name, data := compressedArtifact(t, module)
 	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: id, ArtifactName: name, Artifact: data, Log: []byte("ok")}))

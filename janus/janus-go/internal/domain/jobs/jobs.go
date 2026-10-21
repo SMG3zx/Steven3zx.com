@@ -27,6 +27,13 @@ var WASM = Machine{
 	"building": {"complete", "queued", "failed", "cancelled"},
 }
 
+// Terminal reports whether a job in status has finished for good: the machine
+// has no move out of it.
+func (m Machine) Terminal(status string) bool {
+	_, ok := m[status]
+	return !ok
+}
+
 // CanMove reports whether a job may move from one status to another. Staying
 // in the same non-terminal status is allowed so that progress can be reported.
 func (m Machine) CanMove(from, to string) bool {

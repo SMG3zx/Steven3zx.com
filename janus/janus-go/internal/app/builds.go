@@ -35,16 +35,18 @@ type NewBuild struct {
 // as it moves through its states.
 type Builds struct {
 	store   Store
+	catalog Catalog
 	builder Builder
 	checker Checker
 	audit   Audit
 	jobs    *JobRunner
 }
 
-// NewBuilds returns a Builds that reads source and records Builds in store,
-// compiles with builder and runs each completed Build's checks with checker.
-func NewBuilds(store Store, builder Builder, checker Checker, audit Audit) *Builds {
-	return &Builds{store: store, builder: builder, checker: checker, audit: audit, jobs: NewJobRunner(maxConcurrentBuilds)}
+// NewBuilds returns a Builds that reads Projects and source from catalog,
+// records Builds in store, compiles with builder and runs each completed
+// Build's checks with checker.
+func NewBuilds(store Store, catalog Catalog, builder Builder, checker Checker, audit Audit) *Builds {
+	return &Builds{store: store, catalog: catalog, builder: builder, checker: checker, audit: audit, jobs: NewJobRunner(maxConcurrentBuilds)}
 }
 
 // buildJob is one Build to run.
@@ -71,29 +73,37 @@ func (b *Builds) Request(ctx context.Context, request NewBuild) (string, error) 
 	if request.OwnerID == "" || request.ProjectID == "" {
 		return "", errors.New("project is required")
 	}
-	project, found, err := b.store.GetProject(ctx, request.ProjectID, request.OwnerID)
+	project, found, err := b.catalog.GetProject(ctx, request.ProjectID, request.OwnerID)
 	if err != nil {
 		return "", err
 	}
 	if !found {
 		return "", errors.New("project not found")
 	}
-	snapshotID, source, err := b.buildSource(ctx, request, project)
+	snapshot, err := b.buildSource(ctx, request, project)
 	if err != nil {
 		return "", err
 	}
-	template, ok := templates.Buildable(source)
+	template, ok := templates.Buildable(snapshot.Language)
 	if !ok {
-		return "", unbuildableLanguageError(source)
+		return "", unbuildableLanguageError(snapshot.Language)
 	}
 	if err = template.CheckTarget(request.Target); err != nil {
 		return "", err
 	}
-	jobID := uuid.NewString()
-	if err = b.store.CreateWASMBuild(ctx, CreateWASMBuild{ID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshotID, Target: request.Target}); err != nil {
+	// The Build refers to the Project and Snapshot, which live in the projects
+	// service; the Store keeps a reference to each first.
+	if err = b.store.AddProject(ctx, ProjectRef{ID: request.ProjectID, OwnerID: request.OwnerID}); err != nil {
 		return "", err
 	}
-	job := &buildJob{OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshotID, JobID: jobID, Target: request.Target, Language: strings.ToLower(template.Language), status: "queued"}
+	if err = b.store.AddSnapshot(ctx, snapshot); err != nil {
+		return "", err
+	}
+	jobID := uuid.NewString()
+	if err = b.store.CreateWASMBuild(ctx, CreateWASMBuild{ID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshot.ID, Target: request.Target}); err != nil {
+		return "", err
+	}
+	job := &buildJob{OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshot.ID, JobID: jobID, Target: request.Target, Language: strings.ToLower(template.Language), status: "queued"}
 	if err = b.jobs.Start(b.runner(job), b.crashed(job)); err != nil {
 		if errors.Is(err, ErrBusy) {
 			_ = b.update(ctx, job, "failed", 100, "two WASM builds are already running")
@@ -170,25 +180,42 @@ func unbuildableLanguageError(language string) error {
 	return fmt.Errorf("WASM builds are not available for %s projects yet", language)
 }
 
-// buildSource returns the Snapshot a Build compiles and its detected language.
-// The Project's active Snapshot is used unless the request names one.
-func (b *Builds) buildSource(ctx context.Context, request NewBuild, project Project) (string, string, error) {
+// buildSource returns the Snapshot a Build compiles, with its detected
+// language and runtime. The Project's active Snapshot is used unless the
+// request names one.
+func (b *Builds) buildSource(ctx context.Context, request NewBuild, project Project) (SnapshotRef, error) {
+	ref := SnapshotRef{ID: project.SnapshotID, ProjectID: project.ID, OwnerID: request.OwnerID, Language: project.Language, Runtime: project.Runtime}
 	if request.SnapshotID == "" {
 		if project.SnapshotID == "" {
-			return "", "", errors.New("import a repository before building it")
+			return SnapshotRef{}, errors.New("import a repository before building it")
 		}
-		return project.SnapshotID, project.Language, nil
+		return ref, nil
 	}
-	snapshots, err := b.store.ListSnapshots(ctx, request.OwnerID, request.ProjectID)
+	snapshots, err := b.catalog.ListSnapshots(ctx, request.OwnerID, request.ProjectID)
 	if err != nil {
-		return "", "", err
+		return SnapshotRef{}, err
 	}
 	for _, snapshot := range snapshots {
 		if snapshot.ID == request.SnapshotID {
-			return snapshot.ID, snapshot.Language, nil
+			ref.ID, ref.Language, ref.Runtime = snapshot.ID, snapshot.Language, snapshot.Runtime
+			return ref, nil
 		}
 	}
-	return "", "", errors.New("snapshot not found")
+	return SnapshotRef{}, errors.New("snapshot not found")
+}
+
+// ForgetProject deletes the WASM Builds of a Project the projects service
+// deleted, with their Artifacts, Checks and Deployments. A Build of it that is
+// running fails at its next step. Forgetting a Project the Store never heard
+// of changes nothing.
+func (b *Builds) ForgetProject(ctx context.Context, projectID string) error {
+	return b.store.RemoveProject(ctx, projectID)
+}
+
+// ForgetSnapshot deletes the WASM Builds of a Snapshot the projects service
+// deleted, like ForgetProject.
+func (b *Builds) ForgetSnapshot(ctx context.Context, snapshotID string) error {
+	return b.store.RemoveSnapshot(ctx, snapshotID)
 }
 
 // runner returns the function that runs job, records how it ended and audits it.
@@ -229,7 +256,7 @@ func (b *Builds) run(parent context.Context, job *buildJob) error {
 	}
 	defer os.RemoveAll(workspace)
 	for offset := 0; ; offset += buildPageSize {
-		files, listErr := b.store.ListProjectFiles(ctx, ListProjectFiles{OwnerID: job.OwnerID, ProjectID: job.ProjectID, SnapshotID: job.SnapshotID, Offset: offset, Limit: buildPageSize})
+		files, listErr := b.catalog.ListProjectFiles(ctx, ListProjectFiles{OwnerID: job.OwnerID, ProjectID: job.ProjectID, SnapshotID: job.SnapshotID, Offset: offset, Limit: buildPageSize})
 		if listErr != nil {
 			return b.fail(ctx, job, "could not read the imported source snapshot", listErr)
 		}
@@ -306,7 +333,7 @@ func (b *Builds) check(ctx context.Context, job *buildJob, workspace string) {
 // snapshotEntrypoint returns the Entrypoint the Account confirmed for the
 // Build's Snapshot, or "" when there is none or it cannot be read.
 func (b *Builds) snapshotEntrypoint(ctx context.Context, job *buildJob) string {
-	snapshots, err := b.store.ListSnapshots(ctx, job.OwnerID, job.ProjectID)
+	snapshots, err := b.catalog.ListSnapshots(ctx, job.OwnerID, job.ProjectID)
 	if err != nil {
 		return ""
 	}

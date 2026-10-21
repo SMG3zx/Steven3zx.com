@@ -24,10 +24,12 @@ import (
 
 	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
+	"janus/internal/adapters/storetest"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/app"
 	"janus/internal/domain/artifact"
@@ -60,6 +62,8 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	must(t, identityService.Start(ctx, hub.Conn()))
 	t.Cleanup(func() { identityService.Stop(context.Background()) })
 	identities := identitynats.New(hub.Conn())
+	// Projects are not what this test is about; the Build it deploys is seeded.
+	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
 	agents := app.NewAgents(store, tailnet, audit, controlURL, time.Now)
 	key, err := agents.ControlPlaneKey(ctx)
@@ -79,7 +83,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	policy, err := app.NewPolicy(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), Accounts: app.NewAccounts(store, identities),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Agents: agents, Fleet: fleet,
 	}).Handler())
@@ -376,16 +380,7 @@ func aliceID(t *testing.T, identities app.Identities) string {
 func seedBuild(t *testing.T, store *sqlstore.Store, owner string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
-	_, err := store.CreateProject(ctx, app.CreateProject{ID: "live-project", OwnerID: owner, Name: "live"})
-	must(t, err)
-	commit := strings.Repeat("a", 40)
-	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "live-job", OwnerID: owner, ProjectID: "live-project", Repository: "o/r", Branch: "main", Commit: commit}))
-	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: "live-snapshot", JobID: "live-job", OwnerID: owner, ProjectID: "live-project",
-		Repository: "o/r", Branch: "main", Commit: commit, MetadataJSON: "{}", Language: "Go"}))
-	for _, step := range [][2]string{{"queued", "cloning"}, {"cloning", "scanning"}, {"scanning", "storing"}} {
-		must(t, store.TransitionImportJob(ctx, app.JobTransition{ID: "live-job", From: step[0], To: step[1]}))
-	}
-	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: "live-snapshot", JobID: "live-job"}))
+	storetest.ReadySnapshot(t, store, owner, "live-project", "live-snapshot", "Go")
 	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "live-build", OwnerID: owner, ProjectID: "live-project", SnapshotID: "live-snapshot", Target: "wasip1-wasm"}))
 	var archive bytes.Buffer
 	writer := zip.NewWriter(&archive)

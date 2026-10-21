@@ -20,39 +20,32 @@ type Store interface {
 	// themselves live behind Identities.
 	AddOwner(ctx context.Context, id string) error
 
-	// Projects, Snapshots, files and Entrypoints.
-	CreateProject(ctx context.Context, project CreateProject) (Project, error)
-	UpdateProject(ctx context.Context, project UpdateProject) (Project, error)
-	DeleteProject(ctx context.Context, id, ownerID string) (deleted bool, err error)
-	ListProjects(ctx context.Context, ownerID string) ([]Project, error)
-	GetProject(ctx context.Context, id, ownerID string) (project Project, found bool, err error)
-	ListSnapshots(ctx context.Context, ownerID, projectID string) ([]ProjectSnapshot, error)
-	ActivateSnapshot(ctx context.Context, ownerID, projectID, snapshotID string) (activated bool, err error)
-	SetProjectEntryPoint(ctx context.Context, entry SetProjectEntryPoint) error
-	ListProjectFiles(ctx context.Context, page ListProjectFiles) ([]SnapshotFile, error)
+	// The Projects and Snapshots WASM Builds and Deployments belong to. They
+	// live in the projects service; the Store keeps a reference to each one it
+	// has records for, so those records can refer to it and go with it.
+	// AddProject and AddSnapshot change nothing when the reference exists.
+	// RemoveProject and RemoveSnapshot delete the reference and everything that
+	// refers to it, and change nothing when there is none.
+	AddProject(ctx context.Context, project ProjectRef) error
+	AddSnapshot(ctx context.Context, snapshot SnapshotRef) error
+	FindSnapshot(ctx context.Context, id, ownerID string) (snapshot SnapshotRef, found bool, err error)
+	// ListOwnedProjects returns the IDs of the Owner's referenced Projects.
+	ListOwnedProjects(ctx context.Context, ownerID string) ([]string, error)
+	RemoveProject(ctx context.Context, id string) error
+	RemoveSnapshot(ctx context.Context, id string) error
 
-	// Jobs: imports, Staging Snapshots, WASM Builds and Resume.
-	CreateImportJob(ctx context.Context, job CreateImportJob) error
-	// TransitionImportJob and TransitionWASMBuild compare and swap a job's status.
-	// The move must be legal under the job's state machine in domain/jobs, and the
-	// stored status must still be transition.From; otherwise the job is left as it
-	// is and the error says "job cannot move from X to Y", "job not found" or
-	// "job changed while it was being updated". Staying in a non-terminal status
-	// is a legal move, so progress can be reported.
-	TransitionImportJob(ctx context.Context, transition JobTransition) error
-	FindImportJob(ctx context.Context, id, ownerID string) (job ImportJob, found bool, err error)
-	BeginSnapshot(ctx context.Context, snapshot BeginSnapshot) error
-	AddSnapshotFiles(ctx context.Context, snapshotID string, files []SnapshotFile) error
-	CompleteSnapshot(ctx context.Context, snapshot CompleteSnapshot) error
-	DeleteStagingSnapshot(ctx context.Context, snapshotID string) error
-	FindStagingSnapshot(ctx context.Context, jobID string) (StagingSnapshotFound, error)
-	DiscardJobStaging(ctx context.Context, jobID string) error
+	// WASM Builds and Resume.
+	// TransitionWASMBuild compares and swaps a build's status. The move must be
+	// legal under the build state machine in domain/jobs, and the stored status
+	// must still be transition.From; otherwise the build is left as it is and
+	// the error says "WASM build cannot move from X to Y", "WASM build not
+	// found" or "WASM build changed while it was being updated". Staying in a
+	// non-terminal status is a legal move, so progress can be reported.
 	CreateWASMBuild(ctx context.Context, build CreateWASMBuild) error
 	TransitionWASMBuild(ctx context.Context, transition JobTransition) error
 	CompleteWASMBuild(ctx context.Context, build CompleteWASMBuild) error
 	FindWASMBuild(ctx context.Context, id, ownerID string) (build WASMBuild, found bool, err error)
 	FindWASMBuildArtifact(ctx context.Context, id, ownerID string) (WASMBuildArtifact, error)
-	ListResumableImports(ctx context.Context) ([]ResumableImport, error)
 	ListResumableBuilds(ctx context.Context) ([]ResumableBuild, error)
 	ListActiveJobs(ctx context.Context, ownerID string) ([]ActiveJob, error)
 
@@ -161,32 +154,42 @@ type Runner interface {
 	Run(ctx context.Context, module []byte, input RunInput) (RunResult, error)
 }
 
-// Source fetches a repository at a commit. Open makes the commit's file tree
-// readable and Close releases whatever Open holds; callers read the tree before
-// closing it. An unknown commit or an unreadable repository fails Open with a
-// *SourceError. A tree that breaks a size limit fails Files with an error.
-type Source interface {
-	Open(ctx context.Context, request SourceRequest) (SourceTree, error)
-}
+// Catalog is where Projects, their Snapshots and files, and their Imports
+// live: the projects service. It also lists the GitHub repositories, branches
+// and commits an Account can import, with the Account's GitHub Connection.
+//
+// Every call is scoped to the Owner, and another Owner's record is absent. A
+// request the service refused, such as an absent Project, an import that
+// cannot run or a deletion while an import is in progress, fails with a
+// *ReplyError whose text is a sentence for the Account; any other error is a
+// failure to reach the service.
+type Catalog interface {
+	CreateProject(ctx context.Context, project CreateProject) (Project, error)
+	UpdateProject(ctx context.Context, project UpdateProject) (Project, error)
+	DeleteProject(ctx context.Context, id, ownerID string) (deleted bool, err error)
+	ListProjects(ctx context.Context, ownerID string) ([]Project, error)
+	GetProject(ctx context.Context, id, ownerID string) (project Project, found bool, err error)
+	ListSnapshots(ctx context.Context, ownerID, projectID string) ([]ProjectSnapshot, error)
+	ActivateSnapshot(ctx context.Context, ownerID, projectID, snapshotID string) (activated bool, err error)
+	SetEntryPoint(ctx context.Context, ownerID, projectID, snapshotID, entryPoint string) error
+	// ListProjectFiles returns up to page.Limit whole files of a ready Snapshot
+	// from page.Offset on, ordered by path; fewer means there are no more.
+	ListProjectFiles(ctx context.Context, page ListProjectFiles) ([]SnapshotFile, error)
 
-// SourceTree is the file tree of one commit.
-type SourceTree interface {
-	// Files returns the regular files and submodule pointers of the tree, in no
-	// particular order. When want is not nil only the files whose slash-separated
-	// paths it lists are read. Paths are clean and relative.
-	Files(want map[string]bool) ([]SnapshotFile, error)
-	Close() error
-}
+	// RequestImport checks the repository, branch and commit and queues an
+	// Import of them, returning its job ID. RetryImport queues a new Import like
+	// a failed one.
+	RequestImport(ctx context.Context, request ImportRequest) (jobID string, err error)
+	RetryImport(ctx context.Context, ownerID, jobID string) (string, error)
+	FindImportJob(ctx context.Context, id, ownerID string) (job ImportJob, found bool, err error)
+	// ActiveImports lists the Owner's unfinished Imports, as kind "import".
+	ActiveImports(ctx context.Context, ownerID string) ([]ActiveJob, error)
+	// DeleteOwner cancels the Owner's Imports and deletes its Projects.
+	DeleteOwner(ctx context.Context, ownerID string) error
 
-// GitHost reads repository metadata from a code host on behalf of an Account,
-// using the Account's access token. Repository, Branches and Commits fail with
-// an error for a name that is not "owner/name". Commits lists at most the 50
-// newest commits of a branch, newest first.
-type GitHost interface {
-	Repositories(ctx context.Context, token string) ([]Repository, error)
-	Repository(ctx context.Context, token, fullName string) (Repository, error)
-	Branches(ctx context.Context, token, fullName string) ([]Branch, error)
-	Commits(ctx context.Context, token, fullName, branch string) ([]Commit, error)
+	Repositories(ctx context.Context, ownerID string) (RepositoryList, error)
+	Branches(ctx context.Context, ownerID, repository string) ([]Branch, error)
+	Commits(ctx context.Context, ownerID, repository, branch string) ([]Commit, error)
 }
 
 // Audit records Audit Events. Recording never fails the caller and never

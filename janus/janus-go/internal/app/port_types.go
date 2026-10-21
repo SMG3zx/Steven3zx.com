@@ -61,11 +61,6 @@ var (
 	ErrRunTimeout = errors.New("the WebAssembly run timed out")
 )
 
-// SourceRequest names the commit to fetch. Repository is the full name, such as
-// "owner/name". Token is the access token of the Account, which a host that
-// needs none ignores.
-type SourceRequest struct{ Repository, Branch, Commit, Token string }
-
 // Repository is host repository metadata available to an authenticated user.
 type Repository struct {
 	ID            int64  `json:"id"`
@@ -116,16 +111,6 @@ func IsConflict(err error) bool {
 	var conflict *Conflict
 	return errors.As(err, &conflict)
 }
-
-// SourceError is a failure to open a repository's tree. Message is the sentence
-// an Account sees, such as "repository clone failed"; Err is the underlying cause.
-type SourceError struct {
-	Message string
-	Err     error
-}
-
-func (e *SourceError) Error() string { return e.Message + ": " + e.Err.Error() }
-func (e *SourceError) Unwrap() error { return e.Err }
 
 // TailnetKey is a pre-auth key. ID names it for later calls; Key is the secret
 // an Agent presents to join, and must not be logged or stored.

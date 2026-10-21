@@ -5,18 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 
 	identityservice "janus/internal/services/identity"
+	projectsservice "janus/internal/services/projects"
 )
 
 // migrateUsage is printed for a `janus migrate` that names no known migration.
 const migrateUsage = `usage: janus migrate split
 
-split  copies the identity tables of JANUS_DATABASE_PATH (data/janus.db) into
-       a new JANUS_IDENTITY_DATABASE_PATH (data/identity.db) for the identity
-       service. It runs once: it refuses when the identity database exists.
-       Stop janus first.`
+split  copies the tables each service now owns out of JANUS_DATABASE_PATH
+       (data/janus.db): the identity tables into a new
+       JANUS_IDENTITY_DATABASE_PATH (data/identity.db) and the project tables
+       into a new JANUS_PROJECTS_DATABASE_PATH (data/projects.db). A service
+       whose database exists is skipped, so running it again only does what is
+       left. Stop janus first.`
 
 // runMigrate runs `janus migrate <args>` and writes what it did to out.
 func runMigrate(ctx context.Context, args []string, out io.Writer) error {
@@ -30,19 +34,36 @@ func runMigrate(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	copied, err := identityservice.Split(ctx, cfg.DatabasePath, cfg.IdentityDatabasePath)
-	if err != nil {
-		return fmt.Errorf("split %s: %w", cfg.DatabasePath, err)
+	splits := []struct {
+		service, path string
+		split         func(ctx context.Context, legacy, path string) (map[string]int, error)
+	}{
+		{"identity", cfg.IdentityDatabasePath, func(ctx context.Context, legacy, path string) (map[string]int, error) {
+			return identityservice.Split(ctx, legacy, path)
+		}},
+		{"projects", cfg.ProjectsDatabasePath, func(ctx context.Context, legacy, path string) (map[string]int, error) {
+			return projectsservice.Split(ctx, legacy, path)
+		}},
 	}
-	tables := make([]string, 0, len(copied))
-	for table := range copied {
-		tables = append(tables, table)
+	for _, step := range splits {
+		if _, err := os.Stat(step.path); err == nil {
+			fmt.Fprintf(out, "%s: %s exists, skipped\n", step.service, step.path)
+			continue
+		}
+		copied, err := step.split(ctx, cfg.DatabasePath, step.path)
+		if err != nil {
+			return fmt.Errorf("split %s for the %s service: %w", cfg.DatabasePath, step.service, err)
+		}
+		names := make([]string, 0, len(copied))
+		for name := range copied {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		fmt.Fprintf(out, "%s: copied into %s:\n", step.service, step.path)
+		for _, name := range names {
+			fmt.Fprintf(out, "  %-20s %d rows\n", name, copied[name])
+		}
 	}
-	sort.Strings(tables)
-	fmt.Fprintf(out, "copied into %s:\n", cfg.IdentityDatabasePath)
-	for _, table := range tables {
-		fmt.Fprintf(out, "  %-20s %d rows\n", table, copied[table])
-	}
-	fmt.Fprintf(out, "%s is unchanged; its identity tables are no longer read.\n", cfg.DatabasePath)
+	fmt.Fprintf(out, "%s is unchanged; what was copied out is no longer read from it.\n", cfg.DatabasePath)
 	return nil
 }

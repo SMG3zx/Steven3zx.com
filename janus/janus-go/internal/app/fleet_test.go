@@ -27,9 +27,6 @@ func newFleetEnv(t *testing.T) *fleetEnv {
 	t.Helper()
 	env := &fleetEnv{agentEnv: newAgentEnv(t, "alice", "bob"), link: agentlinktest.NewLoopback()}
 	t.Cleanup(func() { env.link.Close() })
-	// completedBuild puts alice's builds in this Project.
-	_, err := env.store.CreateProject(context.Background(), app.CreateProject{ID: "alice-project", OwnerID: "alice", Name: "p"})
-	must(t, err)
 	enrollment := env.enroll(t, "alice", "laptop")
 	env.agentID = enrollment.AgentID
 	env.runtime = app.NewAgentRuntime(cgiRunner(), localstatetest.NewMemory(), "/home/alice/janus", time.Now)

@@ -53,13 +53,13 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 196,
+      "line": 199,
       "title": "The Audit port",
       "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 373,
+      "line": 380,
       "title": "The composition root",
       "description": "`func (a *application) startDeployments` is where the core is wired to its adapters. Only cmd/janus knows which adapters exist."
     }

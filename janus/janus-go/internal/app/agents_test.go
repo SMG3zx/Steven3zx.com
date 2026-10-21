@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/adapters/tailnettest"
@@ -18,6 +19,7 @@ type agentEnv struct {
 	agents     *app.Agents
 	store      *storetest.Memory
 	identities *identitytest.Memory
+	catalog    *catalogtest.Memory
 	tailnet    *tailnettest.Fake
 	audit      *audittest.Recorder
 	now        time.Time
@@ -30,6 +32,7 @@ func newAgentEnv(t *testing.T, owners ...string) *agentEnv {
 		now: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC),
 	}
 	env.identities = users(t, owners...)
+	env.catalog = catalogtest.NewMemory()
 	for _, id := range owners {
 		must(t, env.store.AddOwner(context.Background(), id))
 	}

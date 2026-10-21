@@ -27,3 +27,19 @@ func TestCanMove(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminal(t *testing.T) {
+	for _, status := range []string{"complete", "failed", "cancelled"} {
+		if !Import.Terminal(status) || !WASM.Terminal(status) {
+			t.Errorf("%s is not terminal", status)
+		}
+	}
+	for _, status := range []string{"queued", "cloning", "scanning", "storing"} {
+		if Import.Terminal(status) {
+			t.Errorf("import status %s is terminal", status)
+		}
+	}
+	if WASM.Terminal("building") {
+		t.Error("building is terminal")
+	}
+}

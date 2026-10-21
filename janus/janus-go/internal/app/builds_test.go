@@ -10,45 +10,43 @@ import (
 
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/buildertest"
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
 
 const rustTarget = "wasm32-unknown-unknown"
 
-// importedProject creates owner's project whose active Snapshot is complete,
-// was detected as language, and holds the Cargo.toml a Rust build needs.
-func importedProject(t *testing.T, store app.Store, owner, project, language string) {
+// importedProject gives owner a project in catalog whose active Snapshot is
+// complete, was detected as language, and holds the Cargo.toml a Rust build
+// needs, and records the project and Snapshot in store as a Build would.
+func importedProject(t *testing.T, catalog *catalogtest.Memory, store app.Store, owner, project, language string) {
 	t.Helper()
 	ctx := context.Background()
 	must(t, store.AddOwner(ctx, owner))
-	commit := strings.Repeat("b", 40)
-	job, snapshot := project+"-import", project+"-snapshot"
-	_, err := store.CreateProject(ctx, app.CreateProject{ID: project, OwnerID: owner, Name: project})
+	_, err := catalog.CreateProject(ctx, app.CreateProject{ID: project, OwnerID: owner, Name: project})
 	must(t, err)
-	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: job, OwnerID: owner, ProjectID: project, Repository: owner + "/" + project, Branch: "main", Commit: commit}))
-	must(t, store.BeginSnapshot(ctx, app.BeginSnapshot{ID: snapshot, JobID: job, OwnerID: owner, ProjectID: project, Repository: owner + "/" + project, Branch: "main", Commit: commit, MetadataJSON: "{}", Language: language}))
-	must(t, store.AddSnapshotFiles(ctx, snapshot, []app.SnapshotFile{
+	catalog.SeedSnapshot(owner, project, catalogtest.Seed{ID: project + "-snapshot", Repository: owner + "/" + project, Commit: strings.Repeat("b", 40), Language: language, Files: []app.SnapshotFile{
 		{Path: "Cargo.toml", Content: []byte("[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n"), Mode: "100644"},
 		{Path: "src/lib.rs", Content: []byte("#![no_std]\n"), Mode: "100644"},
-	}))
-	storetest.AdvanceImport(t, store, job, "queued", "cloning", "scanning", "storing")
-	must(t, store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: snapshot, JobID: job, FileCount: 2, TotalBytes: 70}))
+	}})
+	storetest.ReadySnapshot(t, store, owner, project, project+"-snapshot", language)
 }
 
 type buildFixture struct {
-	t      *testing.T
-	store  app.Store
-	audit  *audittest.Recorder
-	builds *app.Builds
+	t       *testing.T
+	store   app.Store
+	catalog *catalogtest.Memory
+	audit   *audittest.Recorder
+	builds  *app.Builds
 }
 
 func newBuildFixture(t *testing.T, language string, builder app.Builder) *buildFixture {
 	t.Helper()
-	store := storetest.NewMemory()
-	importedProject(t, store, "owner", "project", language)
+	store, catalog := storetest.NewMemory(), catalogtest.NewMemory()
+	importedProject(t, catalog, store, "owner", "project", language)
 	audit := audittest.NewRecorder()
-	return &buildFixture{t: t, store: store, audit: audit, builds: app.NewBuilds(store, builder, nil, audit)}
+	return &buildFixture{t: t, store: store, catalog: catalog, audit: audit, builds: app.NewBuilds(store, catalog, builder, nil, audit)}
 }
 
 func (f *buildFixture) wait() {
@@ -135,7 +133,7 @@ func TestBuildRefusesWhatItCannotBuild(t *testing.T) {
 			t.Errorf("%s: error = %v, want %q", c.name, err, c.want)
 		}
 	}
-	nobuilder := app.NewBuilds(f.store, nil, nil, f.audit)
+	nobuilder := app.NewBuilds(f.store, f.catalog, nil, nil, f.audit)
 	if _, err := nobuilder.Request(ctx, app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget}); err == nil || err.Error() != "WASM build runner is not configured" {
 		t.Errorf("no builder: %v", err)
 	}
@@ -248,7 +246,7 @@ func TestBuildsOverlapUpToTwoAndAThirdIsRefused(t *testing.T) {
 	blocking := newBlockingBuilder()
 	f := newBuildFixture(t, "Rust", blocking)
 	for _, project := range []string{"second", "third"} {
-		importedProject(t, f.store, "owner", project, "Rust")
+		importedProject(t, f.catalog, f.store, "owner", project, "Rust")
 	}
 	ctx := context.Background()
 	request := func(project string) (string, error) {
@@ -288,7 +286,7 @@ func TestResumedBuildsQueueBehindTheLimitAndStartWhenASlotFrees(t *testing.T) {
 	blocking := newBlockingBuilder()
 	f := newBuildFixture(t, "Rust", blocking)
 	for _, project := range []string{"second", "third"} {
-		importedProject(t, f.store, "owner", project, "Rust")
+		importedProject(t, f.catalog, f.store, "owner", project, "Rust")
 	}
 	for _, project := range []string{"project", "second", "third"} {
 		must(t, f.store.CreateWASMBuild(context.Background(), app.CreateWASMBuild{ID: project + "-build", OwnerID: "owner", ProjectID: project, SnapshotID: project + "-snapshot", Target: rustTarget}))
@@ -398,4 +396,26 @@ type panicBuilder struct{}
 
 func (panicBuilder) Build(context.Context, string, app.BuildRequest) (app.BuildResult, error) {
 	panic("boom")
+}
+
+func TestABuildIsForgottenWithItsSnapshotOrProject(t *testing.T) {
+	f := newBuildFixture(t, "Rust", buildertest.NewFake())
+	ctx := context.Background()
+	first, err := f.builds.Request(ctx, app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget})
+	must(t, err)
+	f.wait()
+	must(t, f.builds.ForgetSnapshot(ctx, "project-snapshot"))
+	if _, found, _ := f.builds.Find(ctx, "owner", first); found {
+		t.Fatal("a Build outlived its Snapshot")
+	}
+
+	// A new Build of the Project records the Snapshot again.
+	second, err := f.builds.Request(ctx, app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget})
+	must(t, err)
+	f.wait()
+	must(t, f.builds.ForgetProject(ctx, "project"))
+	if _, found, _ := f.builds.Find(ctx, "owner", second); found {
+		t.Fatal("a Build outlived its Project")
+	}
+	must(t, f.builds.ForgetProject(ctx, "project")) // already gone: nothing to do
 }

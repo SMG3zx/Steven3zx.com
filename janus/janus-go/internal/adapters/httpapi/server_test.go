@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"janus/internal/adapters/githubapi"
-	"janus/internal/adapters/gitsource"
+	"janus/internal/adapters/catalogtest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,14 +22,15 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	defer cancel()
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
-	gh := app.NewGitHub(identities, githubapi.NewClient())
-	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audittest.NewRecorder())
+	catalog := catalogtest.NewMemory()
+	gh := app.NewGitHub(identities, catalog)
+	imports := app.NewImports(catalog)
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audittest.NewRecorder(), Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, identities, imports),
+		Audit: audittest.NewRecorder(), Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
@@ -60,16 +60,9 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	}
 	const entrypointSnapshotID = "entrypoint-snapshot"
 	const entrypointCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	must := func(err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	must(store.CreateImportJob(ctx, app.CreateImportJob{ID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit}))
-	must(store.BeginSnapshot(ctx, app.BeginSnapshot{ID: entrypointSnapshotID, JobID: "entrypoint-job", OwnerID: createdProject.OwnerID, ProjectID: createdProject.ID, RepositoryID: 1, Repository: "alice/repo", Branch: "main", Commit: entrypointCommit, DefaultBranch: "main", MetadataJSON: `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"fixture"}]}}`}))
-	storetest.AdvanceImport(t, store, "entrypoint-job", "queued", "cloning", "scanning", "storing")
-	must(store.CompleteSnapshot(ctx, app.CompleteSnapshot{SnapshotID: entrypointSnapshotID, JobID: "entrypoint-job", FileCount: 1, TotalBytes: 10_591_486}))
+	catalog.SeedSnapshot(createdProject.OwnerID, createdProject.ID, catalogtest.Seed{ID: entrypointSnapshotID, Repository: "alice/repo", Commit: entrypointCommit, TotalBytes: 10_591_486,
+		MetadataJSON: `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"fixture"}]}}`,
+		Files:        []app.SnapshotFile{{Path: "cmd/server/main.go", Mode: "100644", Content: []byte("package main")}}})
 	listedProjects := perform(handler, http.MethodGet, "/api/projects", "", session[0])
 	if listedProjects.Code != http.StatusOK || !bytes.Contains(listedProjects.Body.Bytes(), []byte(createdProject.ID)) {
 		t.Fatalf("project list status = %d body=%s", listedProjects.Code, listedProjects.Body.String())

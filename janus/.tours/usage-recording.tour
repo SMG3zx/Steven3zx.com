@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/internal/app/port_types.go",
-      "line": 184,
+      "line": 169,
       "title": "What an Agent reports",
       "description": "`type RunReport struct` is one run as the Agent measured it, including network bytes and the status. A run that failed still reports what it spent."
     },
@@ -23,7 +23,7 @@
     },
     {
       "file": "janus-go/internal/app/store_types.go",
-      "line": 359,
+      "line": 317,
       "title": "What the Store keeps",
       "description": "`type RunUsageRecord struct` pairs a run with its Owner and Agent. The Owner is always the Agent's, never a value the Agent sent."
     },

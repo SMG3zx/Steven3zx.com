@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
@@ -27,13 +28,13 @@ func (c *cancelCounter) CancelOwner(owner string) int {
 }
 
 func TestDeleteRefusesWhileJobsAreActiveUnlessTheOwnerCancelsThem(t *testing.T) {
-	store := storetest.NewMemory()
-	importedProject(t, store, "bob", "bob-project", "Rust")
+	store, catalog := storetest.NewMemory(), catalogtest.NewMemory()
+	importedProject(t, catalog, store, "bob", "bob-project", "Rust")
 	ctx := context.Background()
-	must(t, store.CreateImportJob(ctx, app.CreateImportJob{ID: "bob-job", OwnerID: "bob", ProjectID: "bob-project", Repository: "bob/r", Branch: "main", Commit: "c"}))
+	catalog.SeedImport("bob", "bob-project", "bob-job", "queued")
 	running := &cancelCounter{}
 	identities := users(t, "bob")
-	accounts := app.NewAccounts(store, identities, running)
+	accounts := app.NewAccounts(store, identities, catalog, running)
 
 	blocked, err := accounts.Delete(ctx, "bob", false)
 	if err != nil || blocked.Deleted || len(blocked.ActiveJobs) != 1 || blocked.ActiveJobs[0].ID != "bob-job" {
@@ -52,8 +53,11 @@ func TestDeleteRefusesWhileJobsAreActiveUnlessTheOwnerCancelsThem(t *testing.T) 
 	if found, _ := identities.FindUser(ctx, "bob"); found.Found {
 		t.Fatal("the account still exists")
 	}
-	if _, found, _ := store.GetProject(ctx, "bob-project", "bob"); found {
+	if _, found, _ := catalog.GetProject(ctx, "bob-project", "bob"); found {
 		t.Fatal("the account's project still exists")
+	}
+	if projects, _ := store.ListOwnedProjects(ctx, "bob"); len(projects) != 0 {
+		t.Fatal("the account's project is still recorded for its Builds")
 	}
 	if again, err := accounts.Delete(ctx, "bob", true); err != nil || again.Deleted {
 		t.Fatalf("deleting a missing account = %+v, %v", again, err)
@@ -61,10 +65,10 @@ func TestDeleteRefusesWhileJobsAreActiveUnlessTheOwnerCancelsThem(t *testing.T) 
 }
 
 func TestDeleteWithoutActiveJobsStopsNothing(t *testing.T) {
-	store := storetest.NewMemory()
-	importedProject(t, store, "carol", "carol-project", "Rust")
+	store, catalog := storetest.NewMemory(), catalogtest.NewMemory()
+	importedProject(t, catalog, store, "carol", "carol-project", "Rust")
 	running := &cancelCounter{}
-	deleted, err := app.NewAccounts(store, users(t, "carol"), running).Delete(context.Background(), "carol", false)
+	deleted, err := app.NewAccounts(store, users(t, "carol"), catalog, running).Delete(context.Background(), "carol", false)
 	if err != nil || !deleted.Deleted || len(running.owners) != 0 {
 		t.Fatalf("deleted = %+v, %v, stopped %v", deleted, err, running.owners)
 	}

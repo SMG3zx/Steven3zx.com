@@ -5,19 +5,19 @@
   "steps": [
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 61,
+      "line": 63,
       "title": "A build is requested",
       "description": "`func (b *Builds) Request` checks the target and the Language, records the build as queued, and starts it on the bounded job runner."
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 218,
+      "line": 222,
       "title": "The build runs",
       "description": "`func (b *Builds) run` copies the snapshot files into a temporary workspace, then compiles them."
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 252,
+      "line": 279,
       "title": "The Builder port compiles",
       "description": "`b.builder.Build(` is the outbound call. The core does not know that Docker is behind it."
     },
@@ -29,19 +29,19 @@
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 266,
+      "line": 293,
       "title": "The Artifact is stored",
       "description": "`b.store.CompleteWASMBuild(` runs only after the compile finished, so an unfinished build never has an Artifact."
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 278,
+      "line": 305,
       "title": "The Check runs after a successful build",
       "description": "`func (b *Builds) check` runs the Language's checks on the same workspace. A failed Check holds back Deploy; the build stays complete."
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 292,
+      "line": 319,
       "title": "The Checker port runs the tests",
       "description": "`b.checker.Check(` is the outbound call for the test commands."
     },
@@ -59,13 +59,13 @@
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 209,
+      "line": 236,
       "title": "The outcome is audited",
       "description": "`func (b *Builds) finish` writes the audit event for how the build ended."
     },
     {
       "file": "janus-go/internal/adapters/sqlstore/jobs.go",
-      "line": 192,
+      "line": 44,
       "title": "The Store keeps the Artifact",
       "description": "`func (s *Store) CompleteWASMBuild` writes the Artifact and its log, and only for a build that is still running."
     }

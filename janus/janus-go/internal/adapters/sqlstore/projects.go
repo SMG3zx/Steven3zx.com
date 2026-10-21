@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 
 	"janus/internal/app"
 )
@@ -60,216 +59,68 @@ func migrateProjectSnapshotActiveColumn(db *sql.DB) error {
 	return tx.Commit()
 }
 
-// CreateProject creates a Project and returns it.
-func (s *Store) CreateProject(ctx context.Context, project app.CreateProject) (app.Project, error) {
-	ctx, done := s.start(ctx, "CreateProject")
-	var created app.Project
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO projects(id,owner_id,name,description) VALUES(?,?,?,?)`, project.ID, project.OwnerID, strings.TrimSpace(project.Name), strings.TrimSpace(project.Description)); err != nil {
-			return err
-		}
-		var err error
-		created, _, err = getProject(ctx, tx, project.ID, project.OwnerID)
-		return err
-	})
-	return created, done(err)
+// AddProject records a reference to a Project of the projects service, so its
+// WASM Builds and Deployments can refer to it. The row keeps only the IDs.
+func (s *Store) AddProject(ctx context.Context, project app.ProjectRef) error {
+	ctx, done := s.start(ctx, "AddProject")
+	_, err := s.db.ExecContext(ctx, `INSERT INTO projects(id,owner_id,name) VALUES(?,?,'') ON CONFLICT(id) DO NOTHING`, project.ID, project.OwnerID)
+	return done(err)
 }
 
-// UpdateProject renames a Project and returns it.
-func (s *Store) UpdateProject(ctx context.Context, project app.UpdateProject) (app.Project, error) {
-	ctx, done := s.start(ctx, "UpdateProject")
-	var updated app.Project
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `UPDATE projects SET name=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND owner_id=?`, strings.TrimSpace(project.Name), strings.TrimSpace(project.Description), project.ID, project.OwnerID)
-		if err != nil {
-			return err
-		}
-		if n, _ := result.RowsAffected(); n != 1 {
-			return errors.New("project not found")
-		}
-		updated, _, err = getProject(ctx, tx, project.ID, project.OwnerID)
-		return err
-	})
-	return updated, done(err)
+// AddSnapshot records a reference to a ready Snapshot of the projects service,
+// with the language and runtime its Builds and runs need.
+func (s *Store) AddSnapshot(ctx context.Context, snapshot app.SnapshotRef) error {
+	ctx, done := s.start(ctx, "AddSnapshot")
+	_, err := s.db.ExecContext(ctx, `INSERT INTO project_snapshots(id,project_id,owner_id,repository_id,repository,branch,commit_sha,language,runtime,state) VALUES(?,?,?,0,'','','',?,?,'ready') ON CONFLICT(id) DO NOTHING`,
+		snapshot.ID, snapshot.ProjectID, snapshot.OwnerID, snapshot.Language, snapshot.Runtime)
+	return done(err)
 }
 
-// DeleteProject deletes a Project and everything in it, unless an import of it
-// is in progress.
-func (s *Store) DeleteProject(ctx context.Context, id, ownerID string) (deleted bool, err error) {
-	ctx, done := s.start(ctx, "DeleteProject")
-	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		var active int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM project_import_jobs WHERE project_id=? AND owner_id=? AND status IN ('queued','cloning','scanning','storing')`, id, ownerID).Scan(&active); err != nil {
-			return err
-		}
-		if active > 0 {
-			return errors.New("project has an import in progress")
-		}
-		result, err := tx.ExecContext(ctx, `DELETE FROM projects WHERE id=? AND owner_id=?`, id, ownerID)
-		if err != nil {
-			return err
-		}
-		count, _ := result.RowsAffected()
-		deleted = count == 1
-		return nil
-	})
-	return deleted, done(err)
+// FindSnapshot returns the reference to one of an Account's Snapshots.
+func (s *Store) FindSnapshot(ctx context.Context, id, ownerID string) (app.SnapshotRef, bool, error) {
+	ctx, done := s.start(ctx, "FindSnapshot")
+	var ref app.SnapshotRef
+	err := s.db.QueryRowContext(ctx, `SELECT id,project_id,owner_id,language,runtime FROM project_snapshots WHERE id=? AND owner_id=?`, id, ownerID).Scan(&ref.ID, &ref.ProjectID, &ref.OwnerID, &ref.Language, &ref.Runtime)
+	if errors.Is(err, sql.ErrNoRows) {
+		return app.SnapshotRef{}, false, done(nil)
+	}
+	return ref, err == nil, done(err)
 }
 
-const projectSelect = `SELECT p.id,p.owner_id,p.name,p.description,p.created_at,p.updated_at,COALESCE(s.id,''),
-COALESCE(s.repository_id,0),COALESCE(s.repository,''),COALESCE(s.default_branch,''),COALESCE(s.branch,''),COALESCE(s.commit_sha,''),COALESCE(s.entry_point,''),COALESCE(s.language,''),COALESCE(s.runtime,''),COALESCE(s.stars,0),COALESCE(s.forks,0),COALESCE(s.file_count,0),COALESCE(s.total_bytes,0),COALESCE(s.metadata_json,'{}'),
-(SELECT COUNT(*) FROM project_snapshots all_s WHERE all_s.project_id=p.id AND all_s.state='ready')
-FROM projects p LEFT JOIN project_snapshots s ON s.id=(SELECT id FROM project_snapshots WHERE project_id=p.id AND state='ready' AND is_active=1 LIMIT 1)`
-
-func scanProject(row interface{ Scan(...any) error }) (app.Project, error) {
-	var p app.Project
-	err := row.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt, &p.SnapshotID, &p.RepositoryID, &p.Repository, &p.DefaultBranch, &p.Branch, &p.Commit, &p.EntryPoint, &p.Language, &p.Runtime, &p.Stars, &p.Forks, &p.FileCount, &p.TotalBytes, &p.MetadataJSON, &p.SnapshotCount)
-	return p, err
-}
-
-// ListProjects lists an Account's Projects, most recently updated first.
-func (s *Store) ListProjects(ctx context.Context, ownerID string) ([]app.Project, error) {
-	ctx, done := s.start(ctx, "ListProjects")
-	projects, err := func() ([]app.Project, error) {
-		rows, err := s.db.QueryContext(ctx, projectSelect+` WHERE p.owner_id=? ORDER BY p.updated_at DESC`, ownerID)
+// ListOwnedProjects returns the IDs of the Projects an Owner has references to.
+func (s *Store) ListOwnedProjects(ctx context.Context, ownerID string) ([]string, error) {
+	ctx, done := s.start(ctx, "ListOwnedProjects")
+	ids, err := func() ([]string, error) {
+		rows, err := s.db.QueryContext(ctx, `SELECT id FROM projects WHERE owner_id=? ORDER BY id`, ownerID)
 		if err != nil {
 			return nil, err
 		}
 		defer rows.Close()
-		projects := make([]app.Project, 0)
+		ids := make([]string, 0)
 		for rows.Next() {
-			p, scanErr := scanProject(rows)
-			if scanErr != nil {
-				return nil, scanErr
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return nil, err
 			}
-			projects = append(projects, p)
+			ids = append(ids, id)
 		}
-		return projects, rows.Err()
+		return ids, rows.Err()
 	}()
-	return projects, done(err)
+	return ids, done(err)
 }
 
-// GetProject returns one of an Account's Projects.
-func (s *Store) GetProject(ctx context.Context, id, ownerID string) (project app.Project, found bool, err error) {
-	ctx, done := s.start(ctx, "GetProject")
-	project, found, err = getProject(ctx, s.db, id, ownerID)
-	return project, found, done(err)
+// RemoveProject deletes the reference to a Project, and with it its Snapshot
+// references, WASM Builds, Checks and Deployments.
+func (s *Store) RemoveProject(ctx context.Context, id string) error {
+	ctx, done := s.start(ctx, "RemoveProject")
+	_, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id=?`, id)
+	return done(err)
 }
 
-func getProject(ctx context.Context, q querier, id, ownerID string) (app.Project, bool, error) {
-	p, err := scanProject(q.QueryRowContext(ctx, projectSelect+` WHERE p.id=? AND p.owner_id=?`, id, ownerID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return app.Project{}, false, nil
-	}
-	if err != nil {
-		return app.Project{}, false, err
-	}
-	return p, true, nil
-}
-
-// ListSnapshots lists the ready Snapshots of a Project, newest first.
-func (s *Store) ListSnapshots(ctx context.Context, ownerID, projectID string) ([]app.ProjectSnapshot, error) {
-	ctx, done := s.start(ctx, "ListSnapshots")
-	var snapshots []app.ProjectSnapshot
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, found, err := getProject(ctx, tx, projectID, ownerID); err != nil {
-			return err
-		} else if !found {
-			return errors.New("project not found")
-		}
-		rows, err := tx.QueryContext(ctx, `SELECT id,repository,branch,commit_sha,entry_point,language,runtime,default_branch,stars,forks,file_count,total_bytes,created_at,is_active FROM project_snapshots WHERE project_id=? AND owner_id=? AND state='ready' ORDER BY created_at DESC,id DESC`, projectID, ownerID)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		snapshots = make([]app.ProjectSnapshot, 0, 5)
-		for rows.Next() {
-			var snapshot app.ProjectSnapshot
-			var active int
-			if err = rows.Scan(&snapshot.ID, &snapshot.Repository, &snapshot.Branch, &snapshot.Commit, &snapshot.EntryPoint, &snapshot.Language, &snapshot.Runtime, &snapshot.DefaultBranch, &snapshot.Stars, &snapshot.Forks, &snapshot.FileCount, &snapshot.TotalBytes, &snapshot.CreatedAt, &active); err != nil {
-				return err
-			}
-			snapshot.Active = active != 0
-			snapshots = append(snapshots, snapshot)
-		}
-		return rows.Err()
-	})
-	return snapshots, done(err)
-}
-
-// ActivateSnapshot makes a ready Snapshot the active one of its Project.
-func (s *Store) ActivateSnapshot(ctx context.Context, ownerID, projectID, snapshotID string) (activated bool, err error) {
-	ctx, done := s.start(ctx, "ActivateSnapshot")
-	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		var exists int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM project_snapshots WHERE id=? AND project_id=? AND owner_id=? AND state='ready'`, snapshotID, projectID, ownerID).Scan(&exists); err != nil {
-			return err
-		}
-		if exists == 0 {
-			return nil
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE project_snapshots SET is_active=0 WHERE project_id=? AND owner_id=? AND state='ready'`, projectID, ownerID); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE project_snapshots SET is_active=1 WHERE id=? AND project_id=? AND owner_id=? AND state='ready'`, snapshotID, projectID, ownerID); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE projects SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND owner_id=?`, projectID, ownerID); err != nil {
-			return err
-		}
-		activated = true
-		return nil
-	})
-	return activated && err == nil, done(err)
-}
-
-// SetProjectEntryPoint records the Entrypoint an Account confirmed for a ready Snapshot.
-func (s *Store) SetProjectEntryPoint(ctx context.Context, entry app.SetProjectEntryPoint) error {
-	ctx, done := s.start(ctx, "SetProjectEntryPoint")
-	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `UPDATE project_snapshots SET entry_point=? WHERE id=? AND project_id=? AND owner_id=? AND state='ready'`, entry.EntryPoint, entry.SnapshotID, entry.ProjectID, entry.OwnerID)
-		if err != nil {
-			return err
-		}
-		if n, _ := result.RowsAffected(); n != 1 {
-			return errors.New("project snapshot not found")
-		}
-		_, err = tx.ExecContext(ctx, `UPDATE projects SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND owner_id=?`, entry.ProjectID, entry.OwnerID)
-		return err
-	}))
-}
-
-// ListProjectFiles returns one page of a ready Snapshot's files, ordered by path.
-func (s *Store) ListProjectFiles(ctx context.Context, page app.ListProjectFiles) ([]app.SnapshotFile, error) {
-	ctx, done := s.start(ctx, "ListProjectFiles")
-	if page.Offset < 0 {
-		return nil, done(errors.New("file page offset cannot be negative"))
-	}
-	limit := page.Limit
-	if limit <= 0 || limit > 500 {
-		limit = 200
-	}
-	var files []app.SnapshotFile
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, found, err := getProject(ctx, tx, page.ProjectID, page.OwnerID); err != nil {
-			return err
-		} else if !found {
-			return errors.New("project not found")
-		}
-		rows, err := tx.QueryContext(ctx, `SELECT f.path,f.mode,f.content,f.sha FROM project_files f JOIN project_snapshots s ON s.id=f.snapshot_id WHERE s.id=? AND s.project_id=? AND s.owner_id=? AND s.state='ready' ORDER BY f.path LIMIT ? OFFSET ?`, page.SnapshotID, page.ProjectID, page.OwnerID, limit, page.Offset)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		files = make([]app.SnapshotFile, 0)
-		for rows.Next() {
-			var f app.SnapshotFile
-			if err = rows.Scan(&f.Path, &f.Mode, &f.Content, &f.Hash); err != nil {
-				return err
-			}
-			files = append(files, f)
-		}
-		return rows.Err()
-	})
-	return files, done(err)
+// RemoveSnapshot deletes the reference to a Snapshot, and with it its WASM
+// Builds and what refers to them.
+func (s *Store) RemoveSnapshot(ctx context.Context, id string) error {
+	ctx, done := s.start(ctx, "RemoveSnapshot")
+	_, err := s.db.ExecContext(ctx, `DELETE FROM project_snapshots WHERE id=?`, id)
+	return done(err)
 }

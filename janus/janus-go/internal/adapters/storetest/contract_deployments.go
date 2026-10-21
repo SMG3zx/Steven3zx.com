@@ -15,12 +15,12 @@ func testChecksAndDeployments(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	must(t, store.AddOwner(ctx, "alice"))
 	must(t, store.AddOwner(ctx, "bob"))
-	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
-	must(t, err)
-	snapshot := importSnapshot(t, store, "alice", "p1", "one")
+	must(t, store.AddProject(ctx, app.ProjectRef{ID: "p1", OwnerID: "alice"}))
+	snapshot := ReadySnapshot(t, store, "alice", "p1", "one-snapshot", "Rust")
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "laptop", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "key-alice"}))
 	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
 
+	var err error
 	if err = store.StartCheck(ctx, app.StartCheck{BuildID: "b1"}); err == nil {
 		t.Fatal("a check started for a build that has not completed")
 	}
@@ -96,9 +96,8 @@ func testRedeployAndStop(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	must(t, store.AddOwner(ctx, "carol"))
 	must(t, store.AddOwner(ctx, "dana"))
-	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p9", OwnerID: "carol", Name: "P"})
-	must(t, err)
-	snapshot := importSnapshot(t, store, "carol", "p9", "nine")
+	must(t, store.AddProject(ctx, app.ProjectRef{ID: "p9", OwnerID: "carol"}))
+	snapshot := ReadySnapshot(t, store, "carol", "p9", "nine-snapshot", "Rust")
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "desk", OwnerID: "carol", Name: "desk", Tag: "tag:acct-carol", KeyID: "key-carol"}))
 	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b9", OwnerID: "carol", ProjectID: "p9", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
 	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b9", From: "queued", To: "building", Progress: 5}))

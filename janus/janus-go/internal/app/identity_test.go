@@ -13,8 +13,7 @@ import (
 // for an Owner it was told about.
 func owns(t *testing.T, store app.Store, owner string) bool {
 	t.Helper()
-	_, err := store.CreateProject(context.Background(), app.CreateProject{ID: owner + "-probe", OwnerID: owner, Name: "probe"})
-	return err == nil
+	return store.AddProject(context.Background(), app.ProjectRef{ID: owner + "-probe", OwnerID: owner}) == nil
 }
 
 func TestEverySignInMakesTheUserAnOwner(t *testing.T) {

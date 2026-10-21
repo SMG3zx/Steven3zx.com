@@ -1,7 +1,7 @@
 {
   "$schema": "https://aka.ms/codetour-schema",
   "title": "Job resume: what a restart does to imports and builds",
-  "description": "How the job runner bounds concurrency, how a crash is recorded, and how jobs a shutdown interrupted are recovered at startup.",
+  "description": "How a restart affects jobs: WASM Builds run under the job runner and are recovered from janus.db at startup; Imports are JetStream jobs of the projects service that are handed out again.",
   "steps": [
     {
       "file": "janus-go/internal/app/jobrunner.go",
@@ -17,25 +17,25 @@
     },
     {
       "file": "janus-go/internal/adapters/sqlstore/jobs.go",
-      "line": 253,
+      "line": 105,
       "title": "Recovery at startup",
-      "description": "`func migrateAndRecoverJobs` moves jobs that were running at the last shutdown back to queued, so they can resume."
+      "description": "`func migrateAndRecoverJobs` moves WASM Builds that were running at the last shutdown back to queued, so they can resume."
     },
     {
       "file": "janus-go/internal/adapters/sqlstore/jobs.go",
-      "line": 327,
+      "line": 172,
       "title": "The resume limit",
       "description": "`func recoverJobTable` counts resumes and fails a job that has been interrupted too many times, instead of retrying it forever."
     },
     {
-      "file": "janus-go/internal/app/imports.go",
-      "line": 159,
-      "title": "Imports resume",
-      "description": "`func (i *Imports) Resume` restarts each interrupted import. An import resumes from its Staging Snapshot and redoes only the stage it was in."
+      "file": "janus-go/internal/services/projects/imports.go",
+      "line": 200,
+      "title": "Imports resume on redelivery",
+      "description": "`func (s *Service) handleImport` gets an Import's job again when its worker stopped. It moves the Import back to queued and resumes from its Staging Snapshot, and on the last delivery fails it instead of retrying forever."
     },
     {
       "file": "janus-go/internal/app/builds.go",
-      "line": 137,
+      "line": 147,
       "title": "Builds resume",
       "description": "`func (b *Builds) Resume` restarts each interrupted build from scratch. A build whose language no longer has a builder fails instead."
     },

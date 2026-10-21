@@ -61,7 +61,7 @@ func newConcurrencyFixture(t *testing.T) *concurrencyFixture {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
 	blocking := newBlockingBuilder()
-	store, _, buildsPID, handler := startJanusWith(t, ctx, blocking)
+	catalog, _, buildsPID, handler := startJanusWith(t, ctx, blocking)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	userID, cookie := registerUser(t, server.URL)
@@ -77,7 +77,7 @@ func newConcurrencyFixture(t *testing.T) *concurrencyFixture {
 		if err := json.Unmarshal([]byte(body), &project); err != nil || project.ID == "" {
 			t.Fatalf("create project %s: %q: %v", name, body, err)
 		}
-		if err := seedLanguageSnapshot(ctx, store, userID, project.ID, "import-"+name, "snapshot-"+name, importCommit, `{}`, language, manifest, content); err != nil {
+		if err := seedLanguageSnapshot(catalog, userID, project.ID, "import-"+name, "snapshot-"+name, importCommit, `{}`, language, manifest, content); err != nil {
 			t.Fatalf("seed %s: %v", name, err)
 		}
 		return project.ID
