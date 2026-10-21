@@ -33,6 +33,8 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 - **Practice rooms:** the Practice tab in the bottom panel has short programs with a goal. Press Start to load the starting blocks, use Hint if you are stuck, and press Check to run the program and compare its output with the goal. Finished rooms are marked in this browser only. The rooms are in `src/shared/lessons.ts`.
 - **Select several blocks:** drag on empty canvas to select the blocks the box touches, or Ctrl+A for all of them. Shift-click adds a block to the selection or takes it out. Dragging one selected block moves them all, and Delete removes them all.
 - **Copy and paste:** Ctrl+C copies the selected blocks and the wires between them. Ctrl+V pastes them, and Ctrl+D duplicates them in one step.
+- **Map:** the box in the bottom right of the canvas shows the whole program, with the part you can see outlined. Click or drag on it to scroll.
+- **Square wires:** the Square wires button draws wires with right-angle bends instead of curves.
 - **Undo and redo:** Ctrl+Z (Cmd+Z on a Mac) undoes the last change, and Ctrl+Shift+Z or Ctrl+Y redoes it. The Undo and Redo buttons do the same. Typing in a setting counts as one change. Opening or starting a program can be undone too, but the first program you open when the editor starts cannot.
 
 ## How it works

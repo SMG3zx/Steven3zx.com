@@ -74,6 +74,7 @@ const history = new History<Graph>();
 // Every selected block. `selection` is the one the inspector shows.
 const multi = new Set<string>();
 let clipboard: Fragment | null = null;
+let squareWires = false;
 let pasteCount = 0;
 let selection: Selection = null;
 let diagnostics: Diagnostic[] = [];
@@ -390,12 +391,17 @@ function portCenter(nodeId: string, portId: string, dir: "in" | "out"): { x: num
 }
 
 function curve(a: { x: number; y: number }, b: { x: number; y: number }, fromOut = true): string {
+  if (squareWires) {
+    const midX = (a.x + b.x) / 2;
+    return `M ${a.x} ${a.y} H ${midX} V ${b.y} H ${b.x}`;
+  }
   const reach = Math.max(60, Math.abs(b.x - a.x) * 0.5);
   const dir = fromOut ? 1 : -1;
   return `M ${a.x} ${a.y} C ${a.x + reach * dir} ${a.y}, ${b.x - reach * dir} ${b.y}, ${b.x} ${b.y}`;
 }
 
 function renderWires() {
+  drawMinimap();
   wiresSvg.replaceChildren();
   for (const w of graph.wires) {
     const from = nodeById(w.from.node);
@@ -531,6 +537,68 @@ function setParam(n: GNode, id: string, value: string) {
   n.params[id] = value;
   scheduleGenerate();
 }
+
+// ---------- wire style and map ----------
+
+function toggleSquareWires() {
+  squareWires = !squareWires;
+  const btn = $("btn-square");
+  btn.setAttribute("aria-pressed", String(squareWires));
+  btn.classList.toggle("active", squareWires);
+  renderWires();
+}
+
+// The map is a scaled copy of the whole canvas. The outline shows the part
+// you can see; click or drag on the map to scroll there.
+const MAP_SCALE = 0.08;
+const scroller = (): HTMLElement => canvas.parentElement as HTMLElement;
+
+function drawMinimap() {
+  const map = $("minimap");
+  for (const old of map.querySelectorAll(".mini-node")) old.remove();
+  for (const n of graph.nodes) {
+    const elt = nodeEls.get(n.id);
+    const mini = el("div", "mini-node" + (multi.has(n.id) ? " on" : ""));
+    mini.style.left = `${n.x * MAP_SCALE}px`;
+    mini.style.top = `${n.y * MAP_SCALE}px`;
+    mini.style.width = `${Math.max(3, (elt?.offsetWidth ?? 170) * MAP_SCALE)}px`;
+    mini.style.height = `${Math.max(3, (elt?.offsetHeight ?? 80) * MAP_SCALE)}px`;
+    map.insertBefore(mini, $("minimap-view"));
+  }
+  drawViewport();
+}
+
+function drawViewport() {
+  const wrap = scroller();
+  const view = $("minimap-view");
+  view.style.left = `${wrap.scrollLeft * MAP_SCALE}px`;
+  view.style.top = `${wrap.scrollTop * MAP_SCALE}px`;
+  view.style.width = `${wrap.clientWidth * MAP_SCALE}px`;
+  view.style.height = `${wrap.clientHeight * MAP_SCALE}px`;
+}
+
+function scrollToMap(e: PointerEvent) {
+  const r = $("minimap").getBoundingClientRect();
+  const wrap = scroller();
+  wrap.scrollTo({
+    left: (e.clientX - r.left) / MAP_SCALE - wrap.clientWidth / 2,
+    top: (e.clientY - r.top) / MAP_SCALE - wrap.clientHeight / 2,
+  });
+}
+
+let mapDragging = false;
+$("minimap").addEventListener("pointerdown", (e) => {
+  mapDragging = true;
+  scrollToMap(e);
+});
+window.addEventListener("pointermove", (e) => {
+  if (mapDragging) scrollToMap(e);
+});
+window.addEventListener("pointerup", () => {
+  mapDragging = false;
+});
+scroller().addEventListener("scroll", drawViewport);
+$("btn-square").addEventListener("click", toggleSquareWires);
 
 // ---------- marquee, copy and paste ----------
 

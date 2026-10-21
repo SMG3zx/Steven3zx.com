@@ -16,6 +16,7 @@
     <button id="btn-new" type="button">New</button>
     <span class="spacer"></span>
     <input id="find" class="find" type="search" placeholder="Find block (Ctrl+F)" aria-label="Find block" spellcheck="false">
+    <button id="btn-square" type="button" aria-pressed="false" title="Draw wires with right-angle bends">Square wires</button>
     <button id="btn-trace" type="button" aria-pressed="false" title="Highlight the blocks and wires that run from func main">Trace flow</button>
     <button id="btn-undo" type="button" title="Undo (Ctrl+Z)" disabled>Undo</button>
     <button id="btn-redo" type="button" title="Redo (Ctrl+Shift+Z or Ctrl+Y)" disabled>Redo</button>
@@ -26,9 +27,14 @@
   <div class="workspace">
     <aside class="palette" id="palette" aria-label="Blocks"></aside>
 
-    <main class="canvas-wrap">
-      <div class="canvas" id="canvas">
-        <svg class="wires" id="wires" aria-hidden="true"></svg>
+    <main class="canvas-frame">
+      <div class="canvas-wrap">
+        <div class="canvas" id="canvas">
+          <svg class="wires" id="wires" aria-hidden="true"></svg>
+        </div>
+      </div>
+      <div class="minimap" id="minimap" aria-label="Map of the program">
+        <div class="minimap-view" id="minimap-view"></div>
       </div>
     </main>
 

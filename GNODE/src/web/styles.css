@@ -98,10 +98,44 @@ button.active { border-color: var(--accent); color: var(--accent); }
 }
 
 /* canvas */
+.canvas-frame {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
 .canvas-wrap {
   position: relative;
+  flex: 1;
   overflow: auto;
   min-height: 0;
+}
+.minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 240px;
+  height: 160px;
+  background: rgba(23, 28, 37, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  z-index: 5;
+}
+.mini-node {
+  position: absolute;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.mini-node.on { border-color: var(--accent); }
+.minimap-view {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: rgba(90, 209, 195, 0.1);
+  pointer-events: none;
 }
 .canvas {
   position: relative;
