@@ -40,11 +40,23 @@
       <button type="button" data-tab="code" class="active">Go code</button>
       <button type="button" data-tab="output">Output</button>
       <button type="button" data-tab="problems">Problems <span id="problem-count"></span></button>
+      <button type="button" data-tab="practice">Practice</button>
       <button type="button" id="btn-toggle-bottom" class="toggle" aria-label="Toggle panel">&#x25BE;</button>
     </div>
     <pre id="code-view" class="panel-body" data-panel="code"></pre>
     <pre id="output-view" class="panel-body hidden" data-panel="output"></pre>
     <ul id="problem-list" class="panel-body hidden" data-panel="problems"></ul>
+    <div id="practice" class="panel-body lesson hidden" data-panel="practice">
+      <div class="lesson-bar">
+        <select id="lesson-list" aria-label="Practice rooms"></select>
+        <button id="btn-lesson-start" type="button">Start</button>
+        <button id="btn-lesson-hint" type="button">Hint</button>
+        <button id="btn-lesson-check" type="button" class="primary">Check</button>
+      </div>
+      <p id="lesson-goal"></p>
+      <p id="lesson-hint" class="hidden"></p>
+      <p id="lesson-result"></p>
+    </div>
   </section>
 
   <script type="module" src="./app.js"></script>

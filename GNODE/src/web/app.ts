@@ -5,6 +5,7 @@
 import { CATALOG, CATALOG_BY_KIND, type Category, type NodeDef, type PortDef } from "../shared/catalog";
 import { emptyGraph, newId, type GNode, type Graph, type ParamValue, type PortRef, type Wire } from "../shared/graph";
 import { History } from "./history";
+import { LESSONS, type Lesson } from "../shared/lessons";
 
 interface Diagnostic {
   level: "error" | "warning";
@@ -592,6 +593,92 @@ function gotoMatch(step: number) {
   setStatus(`Match ${findIndex + 1} of ${hits.length}`);
 }
 
+// ---------- practice rooms ----------
+
+const DONE_KEY = "gnode.lessonsDone";
+let currentLesson: Lesson = LESSONS[0];
+
+// Finished rooms are remembered in this browser only.
+function lessonsDone(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DONE_KEY) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+function markLessonDone(id: string) {
+  try {
+    localStorage.setItem(DONE_KEY, JSON.stringify([...new Set([...lessonsDone(), id])]));
+  } catch {
+    // Storage can be unavailable; the room still works without the mark.
+  }
+}
+
+function buildLessonList() {
+  const list = $<HTMLSelectElement>("lesson-list");
+  const done = lessonsDone();
+  list.replaceChildren();
+  for (const lesson of LESSONS) {
+    const o = el("option", "", `${lesson.title}${done.includes(lesson.id) ? " ✓" : ""}`);
+    o.value = lesson.id;
+    list.append(o);
+  }
+  list.value = currentLesson.id;
+}
+
+function showLesson(id: string) {
+  currentLesson = LESSONS.find((l) => l.id === id) ?? LESSONS[0];
+  $("lesson-goal").textContent = currentLesson.goal;
+  $("lesson-hint").textContent = currentLesson.hint;
+  $("lesson-hint").classList.add("hidden");
+  $("lesson-result").textContent = "Press Start to load the starting blocks, wire the program, then press Check.";
+}
+
+function startLesson() {
+  loadGraph(structuredClone(currentLesson.starter));
+  setStatus(`Started: ${currentLesson.title}`);
+  $("lesson-result").textContent = "Wire the blocks, then press Check.";
+}
+
+async function checkLesson() {
+  const result = $("lesson-result");
+  result.textContent = "Checking...";
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ graph }),
+    });
+    const data = (await res.json()) as RunResponse & { source?: string };
+    if (res.status === 422) {
+      diagnostics = data.diagnostics ?? diagnostics;
+      renderProblems();
+      refreshNodeStates();
+      result.textContent = "The program has errors. See the Problems tab.";
+      return;
+    }
+    if (!res.ok) throw new Error(data.error ?? res.statusText);
+    const printed = (data.output ?? "").trim();
+    outputView.textContent = printed || "(no output)";
+    if (data.source) codeView.textContent = data.source;
+    if (data.ok && printed === currentLesson.expected.trim()) {
+      markLessonDone(currentLesson.id);
+      buildLessonList();
+      result.textContent = "Correct.";
+    } else {
+      result.textContent = `Not yet. The program printed:\n${printed || "(nothing)"}`;
+    }
+  } catch (err) {
+    result.textContent = `Could not check: ${(err as Error).message}`;
+  }
+}
+
+$("lesson-list").addEventListener("change", (e) => showLesson((e.target as HTMLSelectElement).value));
+$("btn-lesson-start").addEventListener("click", startLesson);
+$("btn-lesson-hint").addEventListener("click", () => $("lesson-hint").classList.toggle("hidden"));
+$("btn-lesson-check").addEventListener("click", checkLesson);
+
 // ---------- files ----------
 
 function sanitizeName(raw: string): string {
@@ -760,6 +847,8 @@ window.addEventListener("keydown", (e) => {
 buildPalette();
 renderInspector();
 updateHistoryButtons();
+buildLessonList();
+showLesson(LESSONS[0].id);
 (async () => {
   await refreshGraphList();
   const first = graphList.options[0]?.value;

@@ -58,6 +58,11 @@ button.toggle { padding: 2px 8px; }
 .brand { font-weight: 800; letter-spacing: 0.12em; color: var(--accent); margin-right: 6px; }
 .graph-name { width: 180px; }
 .find { width: 180px; }
+.lesson p { margin: 8px 0; white-space: pre-wrap; }
+.lesson-bar { display: flex; gap: 8px; align-items: center; }
+.lesson-bar select { min-width: 220px; }
+.lesson #lesson-hint { color: var(--muted); }
+.lesson #lesson-result { font-weight: 600; }
 button.active { border-color: var(--accent); color: var(--accent); }
 .spacer { flex: 1; }
 .status { color: var(--muted); margin-right: 8px; }
