@@ -65,7 +65,14 @@ button.toggle { padding: 2px 8px; }
 .lesson #lesson-result { font-weight: 600; }
 button.active { border-color: var(--accent); color: var(--accent); }
 .spacer { flex: 1; }
-.status { color: var(--muted); margin-right: 8px; }
+.status {
+  color: var(--muted);
+  margin-right: 8px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* layout */
 .workspace {
@@ -168,6 +175,19 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .wire.traced { stroke-width: 3; }
 .wire.traced.exec { stroke: var(--accent); }
 .wire.off-path { opacity: 0.2; }
+.wire.chain-off { opacity: 0.15; }
+.wire-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+.bend-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 2; pointer-events: all; cursor: move; }
+.bend-handle:hover { fill: var(--accent); }
+.packets { pointer-events: none; }
+.packet { fill: var(--any); }
+.packet.exec { fill: var(--exec); }
+.node.chain-off { opacity: 0.35; }
+#btn-problem[hidden] { display: none; }
+.group-empty { margin: 0 4px 8px; color: var(--muted); font-size: 12px; }
+.group-save { display: flex; gap: 6px; margin-top: 8px; }
+.group-name-input { flex: 1; min-width: 0; }
+.group-save button { flex: 0 0 auto; width: auto; margin-bottom: 0; }
 
 .node {
   position: absolute;

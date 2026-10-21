@@ -4,6 +4,7 @@
 
 import { CATALOG, CATALOG_BY_KIND, type Category, type NodeDef, type PortDef } from "../shared/catalog";
 import {
+  chainOf,
   copyFragment,
   emptyGraph,
   newId,
@@ -19,6 +20,7 @@ import { History } from "./history";
 import { LESSONS, type Lesson } from "../shared/lessons";
 import { createTour } from "./tour";
 import { tourStarter } from "../shared/tour";
+import { bendSlot, wireD, type Pt } from "../shared/route";
 
 interface Diagnostic {
   level: "error" | "warning";
@@ -86,11 +88,20 @@ let tracing = false;
 let findQuery = "";
 let findIndex = -1;
 let runs = 0;
+// The block whose chain is lit up, if any. Set by double-clicking a block.
+let chainFocus: string | null = null;
+// Flow packets run until this time (performance.now), when a run has just finished.
+let packetsUntil = 0;
+let packetFrame = 0;
+// The index of the problem that Next problem shows last.
+let problemAt = -1;
 const nodeEls = new Map<string, HTMLElement>();
 let generateTimer: ReturnType<typeof setTimeout> | undefined;
 
 function setStatus(text: string) {
   statusEl.textContent = text;
+  // The toolbar cuts long messages short, so the whole text is in the tooltip.
+  statusEl.title = text;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -143,6 +154,18 @@ function buildPalette() {
       palette.append(btn);
     }
   }
+  palette.append(el("h3", "", "Groups"), groupList);
+  const row = el("div", "group-save");
+  const saveBtn = el("button", "", "Save selection as group");
+  saveBtn.type = "button";
+  saveBtn.addEventListener("click", saveSelectionAsGroup);
+  groupName.placeholder = "Group name";
+  groupName.spellcheck = false;
+  groupName.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveSelectionAsGroup();
+  });
+  row.append(groupName, saveBtn);
+  palette.append(row);
 }
 
 canvas.addEventListener("dragover", (e) => {
@@ -258,6 +281,10 @@ function buildNodeEl(n: GNode): HTMLElement {
     if (e.shiftKey) toggleInSelection(n.id);
     else if (!multi.has(n.id)) select({ kind: "node", id: n.id });
   });
+  box.addEventListener("dblclick", (e) => {
+    if ((e.target as HTMLElement).closest(".port")) return;
+    toggleChain(n.id);
+  });
   return box;
 }
 
@@ -330,7 +357,7 @@ function startWireDrag(e: PointerEvent, from: PortRef, dir: "in" | "out", kind: 
   const start = portCenter(from.node, from.port, dir);
   const move = (ev: PointerEvent) => {
     const end = pointInCanvas(ev);
-    draft.setAttribute("d", curve(start, end, dir === "out"));
+    draft.setAttribute("d", dir === "out" ? wirePath(start, end) : wirePath(end, start));
   };
   const up = (ev: PointerEvent) => {
     window.removeEventListener("pointermove", move);
@@ -395,36 +422,104 @@ function portCenter(nodeId: string, portId: string, dir: "in" | "out"): { x: num
   return { x: rect.left - canvasRect.left + rect.width / 2, y: rect.top - canvasRect.top + rect.height / 2 };
 }
 
-function curve(a: { x: number; y: number }, b: { x: number; y: number }, fromOut = true): string {
-  if (squareWires) {
-    const midX = (a.x + b.x) / 2;
-    return `M ${a.x} ${a.y} H ${midX} V ${b.y} H ${b.x}`;
-  }
-  const reach = Math.max(60, Math.abs(b.x - a.x) * 0.5);
-  const dir = fromOut ? 1 : -1;
-  return `M ${a.x} ${a.y} C ${a.x + reach * dir} ${a.y}, ${b.x - reach * dir} ${b.y}, ${b.x} ${b.y}`;
+// The path of a wire from its output point to its input point. Square wires
+// turn at their bends; curved wires ignore them.
+function wirePath(out: Pt, inn: Pt, bends: Pt[] = []): string {
+  return wireD(out, inn, bends, squareWires);
+}
+
+// A wire's bends as canvas points. They are stored relative to the block the wire leaves.
+function bendPoints(w: Wire): Pt[] {
+  const from = nodeById(w.from.node);
+  if (!from || !w.bends) return [];
+  return w.bends.map((b) => ({ x: from.x + b.dx, y: from.y + b.dy }));
 }
 
 function renderWires() {
   drawMinimap();
   wiresSvg.replaceChildren();
+  const chain = chainFocus ? chainOf(graph, chainFocus) : null;
   for (const w of graph.wires) {
     const from = nodeById(w.from.node);
     const to = nodeById(w.to.node);
     if (!from || !to) continue;
     const isExec = defOf(from)?.outputs.find((p) => p.id === w.from.port)?.kind === "exec";
     const traceClass = !tracing ? "" : usedWires.has(w.id) ? " traced" : " off-path";
-    const path = svgEl("path", "wire" + (isExec ? " exec" : "") + traceClass + (selection?.kind === "wire" && selection.id === w.id ? " selected" : ""));
+    const chainClass = chain && !chain.wires.has(w.id) ? " chain-off" : "";
+    const isSelected = selection?.kind === "wire" && selection.id === w.id;
+    const path = svgEl("path", "wire" + (isExec ? " exec" : "") + traceClass + chainClass + (isSelected ? " selected" : ""));
     path.dataset.id = w.id;
     const a = portCenter(w.from.node, w.from.port, "out");
     const b = portCenter(w.to.node, w.to.port, "in");
-    path.setAttribute("d", curve(a, b));
-    path.addEventListener("pointerdown", (e) => {
-      e.stopPropagation();
-      select({ kind: "wire", id: w.id });
-    });
-    wiresSvg.append(path);
+    const d = wirePath(a, b, bendPoints(w));
+    path.setAttribute("d", d);
+    // A wider, invisible copy of the wire, so it is easy to grab.
+    const hit = svgEl("path", "wire-hit");
+    hit.setAttribute("d", d);
+    hit.addEventListener("pointerdown", (e) => startWireGrab(e, w));
+    wiresSvg.append(path, hit);
+    if (isSelected && squareWires) {
+      bendPoints(w).forEach((p, i) => {
+        const handle = svgEl("circle", "bend-handle");
+        handle.setAttribute("cx", String(p.x));
+        handle.setAttribute("cy", String(p.y));
+        handle.setAttribute("r", "5");
+        handle.addEventListener("pointerdown", (e) => startWireGrab(e, w, i));
+        handle.addEventListener("dblclick", (e) => {
+          e.stopPropagation();
+          removeBend(w, i);
+        });
+        wiresSvg.append(handle);
+      });
+    }
   }
+  wiresSvg.append(packetLayer);
+}
+
+// Grabbing a wire selects it. In square mode, dragging the wire adds a bend
+// where it was grabbed, and dragging a bend handle moves that bend. A press
+// without a drag only selects.
+function startWireGrab(e: PointerEvent, w: Wire, index?: number) {
+  if (e.button !== 0) return;
+  e.stopPropagation();
+  e.preventDefault();
+  if (!(selection?.kind === "wire" && selection.id === w.id)) select({ kind: "wire", id: w.id });
+  const from = nodeById(w.from.node);
+  if (!from || !squareWires) return;
+
+  const before = structuredClone(graph);
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let at = index ?? -1;
+  const move = (ev: PointerEvent) => {
+    if (at < 0) {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
+      const out = portCenter(w.from.node, w.from.port, "out");
+      const inn = portCenter(w.to.node, w.to.port, "in");
+      at = bendSlot(out, inn, bendPoints(w), pointInCanvas({ clientX: startX, clientY: startY }));
+      w.bends = [...(w.bends ?? [])];
+      w.bends.splice(at, 0, { dx: 0, dy: 0 });
+    }
+    const p = pointInCanvas(ev);
+    w.bends![at] = { dx: Math.round(p.x - from.x), dy: Math.round(p.y - from.y) };
+    renderWires();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    if (JSON.stringify(before.wires) === JSON.stringify(graph.wires)) return;
+    history.record(before);
+    updateHistoryButtons();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+function removeBend(w: Wire, i: number) {
+  checkpoint();
+  w.bends = (w.bends ?? []).filter((_, j) => j !== i);
+  if (w.bends.length === 0) delete w.bends;
+  renderWires();
 }
 
 // ---------- selection and inspector ----------
@@ -681,7 +776,10 @@ function pasteClipboard() {
 
 function refreshNodeStates() {
   const hits = findMatches();
+  if (chainFocus && !nodeById(chainFocus)) chainFocus = null;
+  const chain = chainFocus ? chainOf(graph, chainFocus) : null;
   for (const [id, node] of nodeEls) {
+    node.classList.toggle("chain-off", !!chain && !chain.nodes.has(id));
     node.classList.toggle("traced", tracing && emitted.has(id));
     node.classList.toggle("match", hits.includes(id));
     node.classList.toggle("current", hits[findIndex] === id);
@@ -735,16 +833,37 @@ function renderProblems() {
   problemList.replaceChildren();
   for (const d of diagnostics) {
     const li = el("li", d.level, `${d.level === "error" ? "Error" : "Warning"}: ${d.message}`);
-    li.addEventListener("click", () => {
-      if (!d.nodeId) return;
-      const node = nodeEls.get(d.nodeId);
-      select({ kind: "node", id: d.nodeId });
-      node?.scrollIntoView({ block: "center", inline: "center" });
-    });
+    li.addEventListener("click", () => showProblem(d));
     problemList.append(li);
   }
   if (diagnostics.length === 0) problemList.append(el("li", "", "No problems."));
   problemCount.textContent = diagnostics.length ? `(${diagnostics.length})` : "";
+  const linked = linkedProblems();
+  $("btn-problem").hidden = linked.length === 0;
+  $("problem-badge").textContent = String(linked.length);
+}
+
+// The problems that point at a block that is on the canvas.
+function linkedProblems(): Diagnostic[] {
+  return diagnostics.filter((d) => d.nodeId !== undefined && nodeEls.has(d.nodeId));
+}
+
+function showProblem(d: Diagnostic) {
+  if (!d.nodeId) return;
+  select({ kind: "node", id: d.nodeId });
+  nodeEls.get(d.nodeId)?.scrollIntoView({ block: "center", inline: "center" });
+  setStatus(`${d.level === "error" ? "Error" : "Warning"}: ${d.message}`);
+}
+
+// Steps through the problems that point at a block, one press at a time.
+function nextProblem() {
+  const linked = linkedProblems();
+  if (linked.length === 0) {
+    setStatus("No problems point at a block");
+    return;
+  }
+  problemAt = (problemAt + 1) % linked.length;
+  showProblem(linked[problemAt]);
 }
 
 async function run() {
@@ -766,6 +885,8 @@ async function run() {
     }
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     runs += 1;
+    packetsUntil = performance.now() + PACKET_RUN_MS;
+    startPackets();
     outputView.textContent = [data.output ?? "", data.error ? `\n${data.error}` : ""].join("").trimEnd() || "(no output)";
     if (data.source) codeView.textContent = data.source;
   } catch (err) {
@@ -785,6 +906,7 @@ function toggleTrace() {
   btn.classList.toggle("active", tracing);
   refreshNodeStates();
   renderWires();
+  if (tracing) startPackets();
 }
 
 // The blocks whose title, kind or settings contain the find text.
@@ -1002,6 +1124,156 @@ async function saveGraph() {
   setStatus(`Saved ${name}`);
 }
 
+// ---------- flow packets ----------
+
+// While Trace flow is on, and for a moment after a run, small dots travel along
+// the wires the program uses, in the direction the program runs them. Turned
+// off when the user asks for reduced motion.
+const PACKET_SPEED = 90; // pixels per second
+const PACKETS_PER_WIRE = 3;
+const PACKET_RUN_MS = 2500;
+const packetLayer = svgEl("g", "packets");
+
+function packetsWanted(now: number): boolean {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  return tracing || now < packetsUntil;
+}
+
+function startPackets() {
+  if (packetFrame === 0) packetFrame = requestAnimationFrame(stepPackets);
+}
+
+function stepPackets() {
+  packetFrame = 0;
+  const now = performance.now();
+  if (!packetsWanted(now)) {
+    packetLayer.replaceChildren();
+    return;
+  }
+  const dots: SVGElement[] = [];
+  for (const path of wiresSvg.querySelectorAll<SVGPathElement>("path.wire")) {
+    if (!usedWires.has(path.dataset.id ?? "")) continue;
+    const length = path.getTotalLength();
+    if (length <= 0) continue;
+    const exec = path.classList.contains("exec");
+    for (let k = 0; k < PACKETS_PER_WIRE; k++) {
+      const along = ((now / 1000) * PACKET_SPEED + (k * length) / PACKETS_PER_WIRE) % length;
+      const p = path.getPointAtLength(along);
+      const dot = svgEl("circle", exec ? "packet exec" : "packet");
+      dot.setAttribute("cx", String(p.x));
+      dot.setAttribute("cy", String(p.y));
+      dot.setAttribute("r", "3.5");
+      dots.push(dot);
+    }
+  }
+  packetLayer.replaceChildren(...dots);
+  packetFrame = requestAnimationFrame(stepPackets);
+}
+
+// ---------- chain focus ----------
+
+// Double-click a block to light up the blocks that feed it and the blocks it
+// feeds. Everything else is dimmed. Escape clears it.
+function toggleChain(id: string) {
+  chainFocus = chainFocus === id ? null : id;
+  setStatus(chainFocus ? "Chain lit. Esc clears." : "Chain cleared");
+  refreshNodeStates();
+  renderWires();
+}
+
+// ---------- block groups ----------
+
+// A group is a saved selection. Groups are listed in the palette, and placing
+// one adds its blocks and wires to the canvas with new ids.
+const groupList = el("div", "group-list");
+const groupName = el("input", "group-name-input");
+
+async function refreshGroups() {
+  const res = await fetch("/api/groups");
+  const data = (await res.json()) as { groups: string[] };
+  groupList.replaceChildren();
+  if (data.groups.length === 0) {
+    groupList.append(el("p", "group-empty", "Select blocks, name them below and save them here."));
+  }
+  for (const name of data.groups) {
+    const btn = el("button", "", name);
+    btn.type = "button";
+    btn.title = "Add this group to the canvas";
+    btn.addEventListener("click", () => placeGroup(name));
+    groupList.append(btn);
+  }
+}
+
+// Func main and func blocks are declarations: a program has one main, and each
+// function name appears once. A group cannot hold them, or placing it would
+// declare them twice.
+function holdsDeclaration(nodes: GNode[]): boolean {
+  return nodes.some((n) => CATALOG_BY_KIND.get(n.kind)?.root);
+}
+
+async function saveSelectionAsGroup() {
+  if (multi.size === 0) {
+    setStatus("Select the blocks to save, then name the group");
+    return;
+  }
+  const name = sanitizeName(groupName.value);
+  const frag = copyFragment(graph, multi);
+  if (holdsDeclaration(frag.nodes)) {
+    setStatus("A group cannot hold func main or func blocks");
+    return;
+  }
+  // Stored from the top left corner, so the group can be placed anywhere.
+  const minX = Math.min(...frag.nodes.map((n) => n.x));
+  const minY = Math.min(...frag.nodes.map((n) => n.y));
+  for (const n of frag.nodes) {
+    n.x -= minX;
+    n.y -= minY;
+  }
+  const group: Graph = { version: 1, name, nodes: frag.nodes, wires: frag.wires };
+  const res = await fetch(`/api/groups/${name}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(group),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    setStatus(`Could not save group: ${data.error ?? res.statusText}`);
+    return;
+  }
+  groupName.value = name;
+  await refreshGroups();
+  setStatus(`Saved group ${name}`);
+}
+
+async function placeGroup(name: string) {
+  const res = await fetch(`/api/groups/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    setStatus(`Could not open group ${name}`);
+    return;
+  }
+  const group = (await res.json()) as Graph;
+  if (group.nodes.length === 0) return;
+  if (holdsDeclaration(group.nodes)) {
+    setStatus("A group cannot hold func main or func blocks");
+    return;
+  }
+  const wrap = scroller();
+  checkpoint();
+  const pasted = pasteFragment(
+    { nodes: group.nodes, wires: group.wires },
+    Math.round(wrap.scrollLeft + wrap.clientWidth / 2 - 80),
+    Math.round(wrap.scrollTop + wrap.clientHeight / 2 - 40),
+  );
+  graph.nodes.push(...pasted.nodes);
+  graph.wires.push(...pasted.wires);
+  multi.clear();
+  for (const n of pasted.nodes) multi.add(n.id);
+  renderNodes();
+  select({ kind: "node", id: pasted.nodes[pasted.nodes.length - 1].id });
+  scheduleGenerate();
+  setStatus(`Added group ${name}`);
+}
+
 // ---------- chrome ----------
 
 function showTab(name: string) {
@@ -1018,6 +1290,7 @@ $("btn-run").addEventListener("click", run);
 $("btn-undo").addEventListener("click", undo);
 $("btn-redo").addEventListener("click", redo);
 $("btn-trace").addEventListener("click", toggleTrace);
+$("btn-problem").addEventListener("click", nextProblem);
 const tour = createTour({
   facts: () => ({ graph, tracing, selected: selection !== null, runs }),
   newProgram: () => {
@@ -1061,6 +1334,18 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (target.closest("input, select, textarea")) return;
+  if (e.key === "F8") {
+    e.preventDefault();
+    nextProblem();
+    return;
+  }
+  if (e.key === "Escape" && chainFocus) {
+    chainFocus = null;
+    setStatus("Chain cleared");
+    refreshNodeStates();
+    renderWires();
+    return;
+  }
   if (mod && key === "z") {
     e.preventDefault();
     if (e.shiftKey) redo();
@@ -1107,6 +1392,7 @@ buildLessonList();
 showLesson(LESSONS[0].id);
 (async () => {
   await refreshGraphList();
+  await refreshGroups();
   const first = graphList.options[0]?.value;
   if (first) {
     graphList.value = first;
