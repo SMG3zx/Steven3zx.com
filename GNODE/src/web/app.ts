@@ -3,7 +3,18 @@
 // the problems the generator found.
 
 import { CATALOG, CATALOG_BY_KIND, type Category, type NodeDef, type PortDef } from "../shared/catalog";
-import { emptyGraph, newId, type GNode, type Graph, type ParamValue, type PortRef, type Wire } from "../shared/graph";
+import {
+  copyFragment,
+  emptyGraph,
+  newId,
+  pasteFragment,
+  type Fragment,
+  type GNode,
+  type Graph,
+  type ParamValue,
+  type PortRef,
+  type Wire,
+} from "../shared/graph";
 import { History } from "./history";
 import { LESSONS, type Lesson } from "../shared/lessons";
 
@@ -60,6 +71,10 @@ const bottom = $("bottom");
 
 let graph: Graph = emptyGraph("hello");
 const history = new History<Graph>();
+// Every selected block. `selection` is the one the inspector shows.
+const multi = new Set<string>();
+let clipboard: Fragment | null = null;
+let pasteCount = 0;
 let selection: Selection = null;
 let diagnostics: Diagnostic[] = [];
 let emitted = new Set<string>();
@@ -136,7 +151,8 @@ canvas.addEventListener("drop", (e) => {
   addNode(kind, e.clientX - rect.left - 80, e.clientY - rect.top - 16);
 });
 canvas.addEventListener("pointerdown", (e) => {
-  if (e.target === canvas || e.target === wiresSvg) select(null);
+  if (e.button !== 0 || (e.target !== canvas && e.target !== wiresSvg)) return;
+  startMarquee(e);
 });
 
 // ---------- nodes ----------
@@ -159,12 +175,21 @@ function addNode(kind: string, x: number, y: number) {
 }
 
 function removeNode(id: string) {
+  removeNodes([id]);
+}
+
+function removeNodes(ids: string[]) {
   checkpoint();
-  graph.nodes = graph.nodes.filter((n) => n.id !== id);
-  graph.wires = graph.wires.filter((w) => w.from.node !== id && w.to.node !== id);
-  nodeEls.get(id)?.remove();
-  nodeEls.delete(id);
-  if (selection && (selection.kind === "node" ? selection.id === id : true)) select(null);
+  const gone = new Set(ids);
+  graph.nodes = graph.nodes.filter((n) => !gone.has(n.id));
+  graph.wires = graph.wires.filter((w) => !gone.has(w.from.node) && !gone.has(w.to.node));
+  for (const id of gone) {
+    nodeEls.get(id)?.remove();
+    nodeEls.delete(id);
+    multi.delete(id);
+  }
+  const rest = [...multi];
+  select(rest.length ? { kind: "node", id: rest[rest.length - 1] } : null);
   renderWires();
   scheduleGenerate();
 }
@@ -183,6 +208,7 @@ function portEl(nodeId: string, portId: string, dir: "in" | "out"): HTMLElement 
 
 function renderNodes() {
   const alive = new Set(graph.nodes.map((n) => n.id));
+  for (const id of [...multi]) if (!alive.has(id)) multi.delete(id);
   for (const [id, node] of nodeEls) {
     if (!alive.has(id)) {
       node.remove();
@@ -200,6 +226,7 @@ function renderNodes() {
     node.style.top = `${n.y}px`;
   }
   refreshNodeStates();
+  paintSelection();
   renderWires();
 }
 
@@ -221,8 +248,9 @@ function buildNodeEl(n: GNode): HTMLElement {
 
   head.addEventListener("pointerdown", (e) => startNodeDrag(e, n, box));
   box.addEventListener("pointerdown", (e) => {
-    if ((e.target as HTMLElement).closest(".port")) return;
-    select({ kind: "node", id: n.id });
+    if ((e.target as HTMLElement).closest(".port, .node-head")) return;
+    if (e.shiftKey) toggleInSelection(n.id);
+    else if (!multi.has(n.id)) select({ kind: "node", id: n.id });
   });
   return box;
 }
@@ -245,23 +273,38 @@ function portRow(nodeId: string, p: PortDef, dir: "in" | "out"): HTMLElement {
 function startNodeDrag(e: PointerEvent, n: GNode, box: HTMLElement) {
   if (e.button !== 0) return;
   e.preventDefault();
+  if (e.shiftKey) {
+    toggleInSelection(n.id);
+    return;
+  }
+  if (!multi.has(n.id)) select({ kind: "node", id: n.id });
+  // Every selected block moves together.
+  const group = graph.nodes.filter((g) => multi.has(g.id));
+  const origins = new Map(group.map((g) => [g.id, { x: g.x, y: g.y }]));
   const startX = e.clientX;
   const startY = e.clientY;
-  const origX = n.x;
-  const origY = n.y;
   const before = structuredClone(graph);
-  select({ kind: "node", id: n.id });
   const move = (ev: PointerEvent) => {
-    n.x = Math.max(0, origX + ev.clientX - startX);
-    n.y = Math.max(0, origY + ev.clientY - startY);
-    box.style.left = `${n.x}px`;
-    box.style.top = `${n.y}px`;
+    for (const g of group) {
+      const o = origins.get(g.id)!;
+      g.x = Math.max(0, o.x + ev.clientX - startX);
+      g.y = Math.max(0, o.y + ev.clientY - startY);
+      const elt = g.id === n.id ? box : nodeEls.get(g.id);
+      if (elt) {
+        elt.style.left = `${g.x}px`;
+        elt.style.top = `${g.y}px`;
+      }
+    }
     renderWires();
   };
   const up = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
-    if (n.x !== origX || n.y !== origY) {
+    const moved = group.some((g) => {
+      const o = origins.get(g.id)!;
+      return g.x !== o.x || g.y !== o.y;
+    });
+    if (moved) {
       history.record(before);
       updateHistoryButtons();
     }
@@ -377,7 +420,45 @@ function renderWires() {
 
 function select(next: Selection) {
   selection = next;
-  for (const [id, node] of nodeEls) node.classList.toggle("selected", next?.kind === "node" && next.id === id);
+  if (next?.kind === "node") {
+    // Picking a block that is already in a group keeps the group.
+    if (!multi.has(next.id)) {
+      multi.clear();
+      multi.add(next.id);
+    }
+  } else {
+    multi.clear();
+  }
+  paintSelection();
+  renderWires();
+  renderInspector();
+}
+
+function paintSelection() {
+  for (const [id, node] of nodeEls) node.classList.toggle("selected", multi.has(id));
+}
+
+// Shift-click: add the block to the selection, or take it out again.
+function toggleInSelection(id: string) {
+  if (multi.has(id)) {
+    multi.delete(id);
+    const rest = [...multi];
+    selection = rest.length ? { kind: "node", id: rest[rest.length - 1] } : null;
+  } else {
+    multi.add(id);
+    selection = { kind: "node", id };
+  }
+  paintSelection();
+  renderWires();
+  renderInspector();
+}
+
+function selectAll() {
+  multi.clear();
+  for (const n of graph.nodes) multi.add(n.id);
+  const last = graph.nodes[graph.nodes.length - 1];
+  selection = last ? { kind: "node", id: last.id } : null;
+  paintSelection();
   renderWires();
   renderInspector();
 }
@@ -448,6 +529,78 @@ function setParam(n: GNode, id: string, value: string) {
   // Typing a value updates it on every key press; the key merges those into one undo step.
   checkpoint(`param:${n.id}:${id}`);
   n.params[id] = value;
+  scheduleGenerate();
+}
+
+// ---------- marquee, copy and paste ----------
+
+// Drag on empty canvas to select the blocks the rectangle touches. Shift adds to the selection.
+function startMarquee(e: PointerEvent) {
+  const additive = e.shiftKey;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const box = el("div", "marquee");
+  canvas.append(box);
+  const bounds = (ev: PointerEvent) => ({
+    x0: Math.min(startX, ev.clientX),
+    x1: Math.max(startX, ev.clientX),
+    y0: Math.min(startY, ev.clientY),
+    y1: Math.max(startY, ev.clientY),
+  });
+  const move = (ev: PointerEvent) => {
+    const r = canvas.getBoundingClientRect();
+    const b = bounds(ev);
+    box.style.left = `${b.x0 - r.left}px`;
+    box.style.top = `${b.y0 - r.top}px`;
+    box.style.width = `${b.x1 - b.x0}px`;
+    box.style.height = `${b.y1 - b.y0}px`;
+  };
+  const up = (ev: PointerEvent) => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    box.remove();
+    const b = bounds(ev);
+    if (b.x1 - b.x0 < 4 && b.y1 - b.y0 < 4) {
+      if (!additive) select(null);
+      return;
+    }
+    const hit: string[] = [];
+    for (const [id, node] of nodeEls) {
+      const r = node.getBoundingClientRect();
+      if (r.right > b.x0 && r.left < b.x1 && r.bottom > b.y0 && r.top < b.y1) hit.push(id);
+    }
+    if (!additive) multi.clear();
+    for (const id of hit) multi.add(id);
+    selection = hit.length ? { kind: "node", id: hit[hit.length - 1] } : null;
+    paintSelection();
+    renderWires();
+    renderInspector();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+function copySelection() {
+  if (multi.size === 0) return;
+  clipboard = copyFragment(graph, multi);
+  pasteCount = 0;
+  const count = clipboard.nodes.length;
+  setStatus(`Copied ${count} block${count === 1 ? "" : "s"}`);
+}
+
+// Each paste lands a little further along, so repeated pastes do not stack.
+function pasteClipboard() {
+  if (!clipboard || clipboard.nodes.length === 0) return;
+  checkpoint();
+  pasteCount += 1;
+  const offset = 40 * pasteCount;
+  const pasted = pasteFragment(clipboard, offset, offset);
+  graph.nodes.push(...pasted.nodes);
+  graph.wires.push(...pasted.wires);
+  multi.clear();
+  for (const n of pasted.nodes) multi.add(n.id);
+  renderNodes();
+  select({ kind: "node", id: pasted.nodes[pasted.nodes.length - 1].id });
   scheduleGenerate();
 }
 
@@ -837,10 +990,31 @@ window.addEventListener("keydown", (e) => {
     redo();
     return;
   }
+  if (mod && key === "a") {
+    e.preventDefault();
+    selectAll();
+    return;
+  }
+  if (mod && key === "c") {
+    e.preventDefault();
+    copySelection();
+    return;
+  }
+  if (mod && key === "v") {
+    e.preventDefault();
+    pasteClipboard();
+    return;
+  }
+  if (mod && key === "d") {
+    e.preventDefault();
+    copySelection();
+    pasteClipboard();
+    return;
+  }
   if (e.key !== "Delete" && e.key !== "Backspace") return;
   if (!selection) return;
   e.preventDefault();
-  if (selection.kind === "node") removeNode(selection.id);
+  if (selection.kind === "node") removeNodes([...multi]);
   else removeWire(selection.id);
 });
 

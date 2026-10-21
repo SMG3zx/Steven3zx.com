@@ -148,6 +148,12 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .node.root { border-top: 3px solid var(--accent); }
 .node.unused { opacity: 0.6; }
 .node.traced { box-shadow: 0 0 0 1px var(--accent), 0 6px 18px rgba(0, 0, 0, 0.35); }
+.marquee {
+  position: absolute;
+  border: 1px dashed var(--accent);
+  background: rgba(90, 209, 195, 0.08);
+  pointer-events: none;
+}
 .node.match { outline: 1px dashed var(--warn); outline-offset: 3px; }
 .node.current { outline: 2px solid var(--warn); }
 .node-head {
