@@ -18,6 +18,9 @@ export interface GenerateResult {
   source: string;
   diagnostics: Diagnostic[];
   emittedNodeIds: string[];
+  // Wires the generator read while it built the program: the flow that runs
+  // from func main, and the values that feed it.
+  usedWireIds: string[];
 }
 
 interface Context {
@@ -28,6 +31,7 @@ interface Context {
   diagnostics: Diagnostic[];
   imports: Set<string>;
   emitted: Set<string>;
+  used: Set<string>;
 }
 
 const key = (node: string, port: string) => `${node}.${port}`;
@@ -53,6 +57,7 @@ function indexGraph(graph: Graph): Context {
     diagnostics: [],
     imports: new Set(),
     emitted: new Set(),
+    used: new Set(),
   };
   for (const w of graph.wires) {
     push(ctx.outgoing, key(w.from.node, w.from.port), w);
@@ -119,11 +124,13 @@ function makeIO(ctx: Context, node: GNode, def: NodeDef, stack: string[]): EmitI
     value(port) {
       const wire = ctx.incoming.get(key(node.id, port))?.[0];
       if (!wire) return undefined;
+      ctx.used.add(wire.id);
       return exprOf(ctx, wire.from.node, wire.from.port, [...stack, node.id]);
     },
     chain(port) {
       const wire = ctx.outgoing.get(key(node.id, port))?.[0];
       if (!wire) return [];
+      ctx.used.add(wire.id);
       return blockLines(ctx, wire.to.node, [...stack, node.id]);
     },
     param: (name) => param(ctx, node, def, name),
@@ -166,6 +173,7 @@ function blockLines(ctx: Context, nodeId: string, stack: string[]): string[] {
 function chainFrom(ctx: Context, nodeId: string, port: string, stack: string[]): string[] {
   const wire = ctx.outgoing.get(key(nodeId, port))?.[0];
   if (!wire) return [];
+  ctx.used.add(wire.id);
   return blockLines(ctx, wire.to.node, stack);
 }
 
@@ -241,6 +249,7 @@ export function generate(graph: Graph): GenerateResult {
     source: out.join("\n"),
     diagnostics: ctx.diagnostics,
     emittedNodeIds: [...ctx.emitted],
+    usedWireIds: [...ctx.used],
   };
 }
 

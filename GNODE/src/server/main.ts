@@ -52,6 +52,7 @@ const server = Bun.serve({
             formatError: formatted.error,
             diagnostics: result.diagnostics,
             emittedNodeIds: result.emittedNodeIds,
+            usedWireIds: result.usedWireIds,
           });
         } catch (err) {
           return errorResponse(err);

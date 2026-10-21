@@ -18,6 +18,7 @@ interface GenerateResponse {
   formatError?: string;
   diagnostics: Diagnostic[];
   emittedNodeIds: string[];
+  usedWireIds: string[];
 }
 
 interface RunResponse {
@@ -61,6 +62,10 @@ const history = new History<Graph>();
 let selection: Selection = null;
 let diagnostics: Diagnostic[] = [];
 let emitted = new Set<string>();
+let usedWires = new Set<string>();
+let tracing = false;
+let findQuery = "";
+let findIndex = -1;
 const nodeEls = new Map<string, HTMLElement>();
 let generateTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -353,7 +358,8 @@ function renderWires() {
     const to = nodeById(w.to.node);
     if (!from || !to) continue;
     const isExec = defOf(from)?.outputs.find((p) => p.id === w.from.port)?.kind === "exec";
-    const path = svgEl("path", "wire" + (isExec ? " exec" : "") + (selection?.kind === "wire" && selection.id === w.id ? " selected" : ""));
+    const traceClass = !tracing ? "" : usedWires.has(w.id) ? " traced" : " off-path";
+    const path = svgEl("path", "wire" + (isExec ? " exec" : "") + traceClass + (selection?.kind === "wire" && selection.id === w.id ? " selected" : ""));
     path.dataset.id = w.id;
     const a = portCenter(w.from.node, w.from.port, "out");
     const b = portCenter(w.to.node, w.to.port, "in");
@@ -447,7 +453,11 @@ function setParam(n: GNode, id: string, value: string) {
 // ---------- generation and problems ----------
 
 function refreshNodeStates() {
+  const hits = findMatches();
   for (const [id, node] of nodeEls) {
+    node.classList.toggle("traced", tracing && emitted.has(id));
+    node.classList.toggle("match", hits.includes(id));
+    node.classList.toggle("current", hits[findIndex] === id);
     const here = diagnostics.filter((d) => d.nodeId === id);
     node.classList.toggle("has-error", here.some((d) => d.level === "error"));
     node.classList.toggle("has-warning", !here.some((d) => d.level === "error") && here.length > 0);
@@ -480,11 +490,13 @@ async function generate() {
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     diagnostics = data.diagnostics;
     emitted = new Set(data.emittedNodeIds);
+    usedWires = new Set(data.usedWireIds);
     codeView.textContent = data.formatError && !data.formatted
       ? `${data.source}\n\n// gofmt: ${data.formatError}`
       : data.source;
     renderProblems();
     refreshNodeStates();
+    renderWires();
     const errors = diagnostics.filter((d) => d.level === "error").length;
     setStatus(errors === 0 ? "Code is up to date" : `${errors} error${errors === 1 ? "" : "s"} to fix`);
   } catch (err) {
@@ -531,6 +543,53 @@ async function run() {
   } catch (err) {
     outputView.textContent = `Could not run: ${(err as Error).message}`;
   }
+}
+
+// ---------- trace and find ----------
+
+// Trace marks the blocks and wires the generated program uses, which run from
+// func main, and dims the rest. The dimming is applied by renderWires and
+// refreshNodeStates.
+function toggleTrace() {
+  tracing = !tracing;
+  const btn = $("btn-trace");
+  btn.setAttribute("aria-pressed", String(tracing));
+  btn.classList.toggle("active", tracing);
+  refreshNodeStates();
+  renderWires();
+}
+
+// The blocks whose title, kind or settings contain the find text.
+function findMatches(): string[] {
+  const q = findQuery.trim().toLowerCase();
+  if (!q) return [];
+  return graph.nodes
+    .filter((n) => {
+      const title = defOf(n)?.title ?? "";
+      return [title, n.kind, ...Object.values(n.params).map(String)].join(" ").toLowerCase().includes(q);
+    })
+    .map((n) => n.id);
+}
+
+function setFind(query: string) {
+  findQuery = query;
+  findIndex = -1;
+  refreshNodeStates();
+}
+
+function gotoMatch(step: number) {
+  const hits = findMatches();
+  if (hits.length === 0) {
+    setStatus("No matching blocks");
+    return;
+  }
+  if (findIndex < 0) findIndex = step > 0 ? 0 : hits.length - 1;
+  else findIndex = (findIndex + step + hits.length) % hits.length;
+  const id = hits[findIndex];
+  select({ kind: "node", id });
+  refreshNodeStates();
+  nodeEls.get(id)?.scrollIntoView({ block: "center", inline: "center" });
+  setStatus(`Match ${findIndex + 1} of ${hits.length}`);
 }
 
 // ---------- files ----------
@@ -644,6 +703,19 @@ $("btn-toggle-bottom").addEventListener("click", () => bottom.classList.toggle("
 $("btn-run").addEventListener("click", run);
 $("btn-undo").addEventListener("click", undo);
 $("btn-redo").addEventListener("click", redo);
+$("btn-trace").addEventListener("click", toggleTrace);
+const findInput = $<HTMLInputElement>("find");
+findInput.addEventListener("input", () => setFind(findInput.value));
+findInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    gotoMatch(e.shiftKey ? -1 : 1);
+  } else if (e.key === "Escape") {
+    findInput.value = "";
+    setFind("");
+    findInput.blur();
+  }
+});
 $("btn-save").addEventListener("click", saveGraph);
 $("btn-open").addEventListener("click", () => openGraph(graphList.value));
 $("btn-new").addEventListener("click", () => {
@@ -658,9 +730,15 @@ graphNameInput.addEventListener("change", () => {
 
 window.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
-  if (target.closest("input, select, textarea")) return;
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
+  if (mod && key === "f") {
+    e.preventDefault();
+    $<HTMLInputElement>("find").focus();
+    $<HTMLInputElement>("find").select();
+    return;
+  }
+  if (target.closest("input, select, textarea")) return;
   if (mod && key === "z") {
     e.preventDefault();
     if (e.shiftKey) redo();

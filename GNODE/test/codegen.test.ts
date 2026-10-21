@@ -74,3 +74,26 @@ describe("parseGraph", () => {
     expect(parseGraph(hello).name).toBe("hello");
   });
 });
+
+describe("usedWireIds", () => {
+  test("includes the wires the program runs through, and leaves out a block that is not connected", () => {
+    const withLoose: Graph = {
+      ...hello,
+      nodes: [
+        ...hello.nodes,
+        { id: "loose", kind: "literal", x: 0, y: 0, params: { type: "int", value: "1" } },
+        { id: "loosePrint", kind: "print", x: 0, y: 0, params: {} },
+      ],
+      wires: [
+        ...hello.wires,
+        { id: "wLoose", from: { node: "loose", port: "value" }, to: { node: "loosePrint", port: "value" } },
+      ],
+    };
+    const { usedWireIds, diagnostics } = generate(withLoose);
+    const mainWires = hello.wires.filter((w) => w.from.node === "main").map((w) => w.id);
+    expect(mainWires.length).toBeGreaterThan(0);
+    for (const id of mainWires) expect(usedWireIds).toContain(id);
+    expect(usedWireIds).not.toContain("wLoose");
+    expect(diagnostics.some((d) => d.nodeId === "loosePrint")).toBe(true);
+  });
+});

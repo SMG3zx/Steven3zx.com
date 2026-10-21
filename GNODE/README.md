@@ -28,6 +28,8 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 - **Save and open:** programs are saved as JSON in `graphs/`. Pick one in the list and press Open.
 - **Read the code:** the bottom panel shows the Go source as you edit it. The Problems tab lists anything that would stop the program from building. Click a problem to jump to its block.
 - **Run:** press Run to generate, build and run the program with `go run`. The Output tab shows what it printed.
+- **Trace flow:** the Trace flow button highlights the blocks and wires the program runs from func main, and dims the rest. Blocks that are not part of the program are already dimmed.
+- **Find a block:** Ctrl+F focuses the Find box. It matches block names and settings. Enter goes to the next match, Shift+Enter to the previous one, and Escape clears it.
 - **Undo and redo:** Ctrl+Z (Cmd+Z on a Mac) undoes the last change, and Ctrl+Shift+Z or Ctrl+Y redoes it. The Undo and Redo buttons do the same. Typing in a setting counts as one change. Opening or starting a program can be undone too, but the first program you open when the editor starts cannot.
 
 ## How it works

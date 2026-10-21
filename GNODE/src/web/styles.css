@@ -57,6 +57,8 @@ button.toggle { padding: 2px 8px; }
 }
 .brand { font-weight: 800; letter-spacing: 0.12em; color: var(--accent); margin-right: 6px; }
 .graph-name { width: 180px; }
+.find { width: 180px; }
+button.active { border-color: var(--accent); color: var(--accent); }
 .spacer { flex: 1; }
 .status { color: var(--muted); margin-right: 8px; }
 
@@ -124,6 +126,9 @@ button.toggle { padding: 2px 8px; }
 .wire.exec { stroke: var(--exec); }
 .wire.selected { stroke: var(--accent); stroke-width: 3; }
 .wire.draft { stroke-dasharray: 6 4; opacity: 0.8; pointer-events: none; }
+.wire.traced { stroke-width: 3; }
+.wire.traced.exec { stroke: var(--accent); }
+.wire.off-path { opacity: 0.2; }
 
 .node {
   position: absolute;
@@ -137,6 +142,9 @@ button.toggle { padding: 2px 8px; }
 .node.selected { border-color: var(--accent); }
 .node.root { border-top: 3px solid var(--accent); }
 .node.unused { opacity: 0.6; }
+.node.traced { box-shadow: 0 0 0 1px var(--accent), 0 6px 18px rgba(0, 0, 0, 0.35); }
+.node.match { outline: 1px dashed var(--warn); outline-offset: 3px; }
+.node.current { outline: 2px solid var(--warn); }
 .node-head {
   padding: 6px 10px;
   font-weight: 600;
