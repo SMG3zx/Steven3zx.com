@@ -10,6 +10,9 @@ import { parseGraph, type Graph } from "../shared/graph";
 import { ROOT } from "./go";
 
 export const GRAPHS_DIR = resolve(ROOT, "graphs");
+// Block groups saved from a selection. A group is stored in the same format as
+// a program, with its blocks placed from the top left corner.
+export const GROUPS_DIR = resolve(ROOT, "groups");
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const BACKUPS_KEPT = 20;
@@ -19,14 +22,22 @@ export function safeName(name: string): string {
   return name;
 }
 
-export async function listGraphs(): Promise<string[]> {
-  const files = await readdir(GRAPHS_DIR).catch(() => [] as string[]);
+export async function listGraphsIn(dir: string): Promise<string[]> {
+  const files = await readdir(dir).catch(() => [] as string[]);
   return files.filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
 }
 
-export async function readGraph(name: string): Promise<Graph> {
-  const text = await readFile(join(GRAPHS_DIR, safeName(name) + ".json"), "utf8");
+export async function readGraphIn(dir: string, name: string): Promise<Graph> {
+  const text = await readFile(join(dir, safeName(name) + ".json"), "utf8");
   return parseGraph(JSON.parse(text));
+}
+
+export async function listGraphs(): Promise<string[]> {
+  return listGraphsIn(GRAPHS_DIR);
+}
+
+export async function readGraph(name: string): Promise<Graph> {
+  return readGraphIn(GRAPHS_DIR, name);
 }
 
 export async function writeGraph(name: string, graph: Graph): Promise<void> {
@@ -41,6 +52,7 @@ export async function saveGraphIn(dir: string, name: string, graph: Graph): Prom
   const text = JSON.stringify(checked, null, 2) + "\n";
   const previous = await readFile(file, "utf8").catch(() => null);
   if (previous !== null && previous !== text) await backUp(dir, name, previous);
+  await mkdir(dir, { recursive: true });
   await writeFile(file, text);
 }
 

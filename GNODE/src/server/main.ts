@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { generate } from "../codegen/generate";
 import { parseGraph } from "../shared/graph";
 import { formatSource, runProgram, ROOT } from "./go";
-import { listGraphs, readGraph, safeName, writeGraph } from "./graphs";
+import { GROUPS_DIR, listGraphs, listGraphsIn, readGraph, readGraphIn, safeName, saveGraphIn, writeGraph } from "./graphs";
 
 const PORT = Number(Bun.env.PORT ?? 4830);
 const WEB_DIR = join(ROOT, "dist", "web");
@@ -76,6 +76,28 @@ const server = Bun.serve({
 
     "/api/graphs": {
       GET: async () => json({ graphs: await listGraphs() }),
+    },
+
+    "/api/groups": {
+      GET: async () => json({ groups: await listGraphsIn(GROUPS_DIR) }),
+    },
+
+    "/api/groups/:name": {
+      GET: async (req) => {
+        try {
+          return json(await readGraphIn(GROUPS_DIR, req.params.name));
+        } catch (err) {
+          return errorResponse(err, 404);
+        }
+      },
+      PUT: async (req) => {
+        try {
+          await saveGraphIn(GROUPS_DIR, safeName(req.params.name), parseGraph(await readJson(req)));
+          return json({ saved: req.params.name });
+        } catch (err) {
+          return errorResponse(err);
+        }
+      },
     },
 
     "/api/graphs/:name": {
