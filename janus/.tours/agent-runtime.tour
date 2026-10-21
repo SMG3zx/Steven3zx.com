@@ -1,0 +1,55 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Agent runtime: serving a Deployment on the user's machine",
+  "description": "How the Janus Agent starts, keeps its Deployments across restarts, and serves each HTTP request by running the module.",
+  "steps": [
+    {
+      "file": "janus-go/cmd/janus-agent/main.go",
+      "line": 41,
+      "title": "The Agent starts",
+      "description": "`func main` is the Agent's entry point. It hands its arguments to run, which wires the runtime to the machine."
+    },
+    {
+      "file": "janus-go/cmd/janus-agent/main.go",
+      "line": 50,
+      "title": "Wiring the runtime",
+      "description": "`func run` builds the runner, the local state and the host folder, then starts the runtime."
+    },
+    {
+      "file": "janus-go/internal/app/agent_runtime.go",
+      "line": 92,
+      "title": "The runtime keeps its state locally",
+      "description": "`func NewAgentRuntime` takes the runner and the LocalState port, so the Deployments and the pause survive a restart on this machine."
+    },
+    {
+      "file": "janus-go/internal/app/agent_runtime.go",
+      "line": 105,
+      "title": "After a restart",
+      "description": "`func (r *AgentRuntime) Start` loads the kept Deployments and serves them again, without a new Deploy. A module whose hash no longer matches is not served."
+    },
+    {
+      "file": "janus-go/internal/app/agent_runtime.go",
+      "line": 133,
+      "title": "A Deploy is checked and probed",
+      "description": "`func (r *AgentRuntime) Deploy` checks the module against its hash and runs one GET / probe. The Deployment is kept only if the probe ends cleanly."
+    },
+    {
+      "file": "janus-go/internal/app/agent_runtime.go",
+      "line": 273,
+      "title": "Serving one request",
+      "description": "`func (r *AgentRuntime) Serve` runs the module once for one request. Each request starts a fresh run."
+    },
+    {
+      "file": "janus-go/internal/domain/cgi/cgi.go",
+      "line": 43,
+      "title": "The request goes in as CGI",
+      "description": "`func Env` turns the request into the CGI environment the module reads. The body goes in on stdin."
+    },
+    {
+      "file": "janus-go/internal/domain/cgi/cgi.go",
+      "line": 93,
+      "title": "The response comes out of stdout",
+      "description": "`func ParseResponse` reads the module's output as the HTTP response. The status the module returns is passed through without judgement."
+    }
+  ]
+}

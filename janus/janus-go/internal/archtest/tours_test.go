@@ -27,7 +27,11 @@ var anchor = regexp.MustCompile("`([^`]+)`")
 
 // ownTours are the tours this repo generates. They live in janus/.tours, and
 // their file paths are relative to the janus folder that holds janus-go.
-var ownTours = []string{"request-flow.tour", "deployment-flow.tour", "build-pipeline.tour", "ports.tour"}
+var ownTours = []string{
+	"request-flow.tour", "deployment-flow.tour", "build-pipeline.tour", "ports.tour",
+	"sign-in.tour", "authorization.tour", "project-import.tour", "job-resume.tour",
+	"agent-enrollment.tour", "agent-runtime.tour", "usage-recording.tour", "startup-shutdown.tour",
+}
 
 // TestTourStepsPointAtTheirSymbols keeps the tours in janus/.tours honest. A
 // step fails when its file is gone, its line is past the end of the file, or the

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Startup and shutdown: the ordered component table",
+  "description": "How cmd/janus starts its components in order, stops them in reverse, and rolls back a failed start.",
+  "steps": [
+    {
+      "file": "janus-go/cmd/janus/main.go",
+      "line": 16,
+      "title": "The server starts",
+      "description": "`func main` loads the settings and runs the application until it is told to stop."
+    },
+    {
+      "file": "janus-go/cmd/janus/services.go",
+      "line": 121,
+      "title": "The ordered table",
+      "description": "`func (a *application) groups` lists the groups in order: foundation, identity, projects and builds, runtime, web. Adding a component is one entry here."
+    },
+    {
+      "file": "janus-go/cmd/janus/lifecycle.go",
+      "line": 19,
+      "title": "A component",
+      "description": "`type component struct` has a name, a start and a stop. Either can be missing."
+    },
+    {
+      "file": "janus-go/cmd/janus/lifecycle.go",
+      "line": 47,
+      "title": "Starting in order",
+      "description": "`func (l *lifecycle) Start` runs the groups in order, and rolls back what already started if one fails."
+    },
+    {
+      "file": "janus-go/cmd/janus/services.go",
+      "line": 79,
+      "title": "The application's start",
+      "description": "`func (a *application) Start` opens the telemetry and the store, then starts the groups through the lifecycle."
+    },
+    {
+      "file": "janus-go/cmd/janus/lifecycle.go",
+      "line": 83,
+      "title": "Stopping in reverse",
+      "description": "`func (l *lifecycle) Stop` stops the components in reverse order, so the HTTP server stops taking requests before the stores and jobs drain."
+    },
+    {
+      "file": "janus-go/cmd/janus/services.go",
+      "line": 107,
+      "title": "The application's stop",
+      "description": "`func (a *application) Stop` records the shutdown in a span and calls the lifecycle's stop."
+    }
+  ]
+}
