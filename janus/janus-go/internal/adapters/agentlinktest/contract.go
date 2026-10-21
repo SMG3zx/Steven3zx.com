@@ -153,6 +153,8 @@ func connected(t *testing.T, s Subject, runtime *app.AgentRuntime) (events, stri
 	return got, address, stop
 }
 
+// sendEventually retries while the connection comes up: over a network it
+// opens on the link's own goroutine, after Connect has returned.
 func sendEventually(t *testing.T, s Subject, command app.AgentCommand) {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
@@ -221,7 +223,9 @@ func testDeployAndUsage(t *testing.T, s Subject) {
 		t.Fatalf("serve: %q, %v", response.Body, err)
 	}
 	usage := got.next(t, "the request's usage", func(event app.AgentEvent) bool { return event.Usage != nil && !event.Usage.Probe })
-	if usage.Usage.DeploymentID != "dep-1" || usage.Usage.RunID == "" || usage.Usage.NetworkBytesIn != 3 || usage.Usage.NetworkBytesOut != 5 || usage.Usage.Status != "ok" {
+	// The response is the Content-Type header and its line break, then the body.
+	wantOut := uint64(len("Content-Type: text/plain") + 2 + len("hello"))
+	if usage.Usage.DeploymentID != "dep-1" || usage.Usage.RunID == "" || usage.Usage.NetworkBytesIn != 3 || usage.Usage.NetworkBytesOut != wantOut || usage.Usage.Status != "ok" {
 		t.Fatalf("usage = %+v", usage.Usage)
 	}
 	sendEventually(t, s, app.AgentCommand{Stop: "dep-1"})

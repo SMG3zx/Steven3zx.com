@@ -152,9 +152,9 @@ type AgentState struct {
 type DeploymentHash struct{ ID, SHA256 string }
 
 // RunReport is what one run of a Deployment's module consumed, as its Agent
-// measured it. NetworkBytesIn and NetworkBytesOut are the request body the
-// module read and the response body it wrote. Status is one of the usage
-// statuses, and Error says why a run that was not ok ended. Probe marks the
+// measured it. NetworkBytesIn and NetworkBytesOut are the size of the request
+// and of the response, headers and body. Status is one of the usage statuses,
+// and Error says why a run that was not ok ended. Probe marks the
 // GET / run that decides whether a Deployment is healthy.
 type RunReport struct {
 	RunID, DeploymentID             string

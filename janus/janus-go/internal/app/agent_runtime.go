@@ -137,8 +137,17 @@ func (r *AgentRuntime) Deploy(ctx context.Context, deployment HostedDeployment) 
 	if hashOf(deployment.Module) != deployment.SHA256 {
 		return ErrModuleHash
 	}
+	// The probe is a request like any other, so it waits for one of the 16
+	// slots rather than adding a 17th run.
+	select {
+	case r.slots <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	probe := ServeRequest{Request: cgi.Request{Method: "GET", Path: "/", Host: "localhost", RemoteAddr: "127.0.0.1"}}
-	if _, err := r.run(ctx, deployment, probe, true); err != nil {
+	_, err := r.run(ctx, deployment, probe, true)
+	<-r.slots
+	if err != nil {
 		return fmt.Errorf("the GET / probe failed: %w", err)
 	}
 	if err := r.state.SaveDeployment(ctx, deployment); err != nil {
@@ -165,6 +174,21 @@ func (r *AgentRuntime) Stop(ctx context.Context, deploymentID string) error {
 		r.changed()
 	}
 	return nil
+}
+
+// Apply carries out one command from the control plane.
+func (r *AgentRuntime) Apply(ctx context.Context, command AgentCommand) error {
+	switch {
+	case command.Deploy != nil:
+		return r.Deploy(ctx, *command.Deploy)
+	case command.Stop != "":
+		return r.Stop(ctx, command.Stop)
+	case command.Pause:
+		return r.Pause(ctx)
+	case command.Resume:
+		return r.Resume(ctx)
+	}
+	return errors.New("the command has no action")
 }
 
 // Pause stops serving every Deployment until Resume. Requests already running
@@ -232,6 +256,11 @@ func (r *AgentRuntime) State() AgentState {
 // Reports delivers a RunReport for every run, the probes included.
 func (r *AgentRuntime) Reports() <-chan RunReport { return r.reports }
 
+// Requeue puts back a report taken from Reports that could not be delivered,
+// so the next connection sends it. The control plane keeps a run once, so a
+// report that did arrive and is sent again changes nothing.
+func (r *AgentRuntime) Requeue(report RunReport) { r.report(report) }
+
 // Changes receives a value after the AgentState changes. Changes that happen
 // before it is read are merged into one.
 func (r *AgentRuntime) Changes() <-chan struct{} { return r.changes }
@@ -293,8 +322,13 @@ func (r *AgentRuntime) run(ctx context.Context, deployment HostedDeployment, req
 		MaxStdout: MaxBodyBytes + maxHeaderBytes, Limits: limits,
 	})
 	report := RunReport{RunID: uuid.NewString(), DeploymentID: deployment.ID, Usage: result.Usage,
-		NetworkBytesIn: uint64(len(request.Body)), Status: usage.StatusOK, Probe: probe, StartedAt: started.UTC()}
+		NetworkBytesIn: messageBytes(request.Header, request.Body), Status: usage.StatusOK, Probe: probe, StartedAt: started.UTC()}
 	var response ServeResponse
+	var parsed ServeResponse
+	var parseErr error
+	if err == nil && !result.StdoutTruncated {
+		parsed, parseErr = cgi.ParseResponse(result.Stdout)
+	}
 	switch {
 	case errors.Is(err, ErrRunTimeout):
 		report.Status, report.Error = usage.StatusTimeout, err.Error()
@@ -305,25 +339,31 @@ func (r *AgentRuntime) run(ctx context.Context, deployment HostedDeployment, req
 	case err != nil:
 		report.Status, report.Error = usage.StatusFailed, err.Error()
 		response = plainResponse(500, "The application failed.")
-	case result.StdoutTruncated:
+	case result.StdoutTruncated, len(parsed.Body) > MaxBodyBytes:
 		report.Status, report.Error = usage.StatusFailed, "the response is larger than 10 MiB"
 		response = plainResponse(500, "The application's response is larger than 10 MiB.")
+	case parseErr != nil:
+		report.Status, report.Error = usage.StatusFailed, parseErr.Error()
+		response = plainResponse(502, "The application's response could not be read.")
 	default:
-		parsed, parseErr := cgi.ParseResponse(result.Stdout)
-		switch {
-		case parseErr != nil:
-			report.Status, report.Error = usage.StatusFailed, parseErr.Error()
-			response = plainResponse(502, "The application's response could not be read.")
-		case len(parsed.Body) > MaxBodyBytes:
-			report.Status, report.Error = usage.StatusFailed, "the response is larger than 10 MiB"
-			response = plainResponse(500, "The application's response is larger than 10 MiB.")
-		default:
-			response = parsed
-			report.NetworkBytesOut = uint64(len(parsed.Body))
-		}
+		response = parsed
 	}
+	report.NetworkBytesOut = messageBytes(response.Header, response.Body)
 	r.report(report)
 	return response, err
+}
+
+// messageBytes is the size of an HTTP message's headers and body, which is
+// what Usage counts as network bytes: each header as "Name: value\r\n", then
+// the body.
+func messageBytes(header map[string][]string, body []byte) uint64 {
+	n := len(body)
+	for name, values := range header {
+		for _, value := range values {
+			n += len(name) + len(": ") + len(value) + len("\r\n")
+		}
+	}
+	return uint64(n)
 }
 
 func plainResponse(status int, text string) ServeResponse {

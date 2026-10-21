@@ -232,12 +232,6 @@ func hashEnrollmentCode(code string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Find returns the Owner's Agent. found is false for an Agent the Owner does
-// not have.
-func (a *Agents) Find(ctx context.Context, ownerID, agentID string) (agent AgentRecord, found bool, err error) {
-	return a.store.FindAgent(ctx, agentID, ownerID)
-}
-
 // ControlPlaneKey makes the single-use key, valid for an hour, with which the
 // control plane's own node joins the tailnet under ControlTag, so it can reach
 // Agents. The control plane asks for one only when its node has not joined.

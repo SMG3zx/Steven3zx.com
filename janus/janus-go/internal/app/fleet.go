@@ -176,24 +176,9 @@ func (f *Fleet) StopDeployment(ctx context.Context, ownerID, agentID, deployment
 // reason when it failed there, and an error matching ErrAgentUnreachable when
 // the Agent cannot be reached.
 func (f *Fleet) Deploy(ctx context.Context, ownerID, agentID, deploymentID, buildID string) error {
-	build, found, err := f.store.FindWASMBuild(ctx, buildID, ownerID)
-	if err != nil && !IsReply(err) {
+	build, stored, err := runnableBuild(ctx, f.store, ownerID, buildID)
+	if err != nil {
 		return err
-	}
-	switch {
-	case err != nil || !found:
-		return errors.New("completed WASM build not found")
-	case build.Status != "complete":
-		return errors.New("WASM build is not complete")
-	case build.Target != "wasm32-wasip1" && build.Target != "wasip1-wasm":
-		return errors.New("only WASI WebAssembly targets can be deployed")
-	}
-	stored, err := f.store.FindWASMBuildArtifact(ctx, buildID, ownerID)
-	if err != nil && !IsReply(err) {
-		return err
-	}
-	if err != nil || !stored.Found {
-		return errors.New("WASM artifact not found")
 	}
 	module, _, err := artifact.Module(stored.Data, stored.Name)
 	if err != nil {
@@ -204,8 +189,16 @@ func (f *Fleet) Deploy(ctx context.Context, ownerID, agentID, deploymentID, buil
 	return f.command(ctx, ownerID, agentID, AgentCommand{Deploy: &deployment}, "agent.deployment.started")
 }
 
-// Usage returns the Owner's recorded runs that match query, newest first.
+// Usage returns the Owner's recorded runs that match query, newest first. A
+// query for an Agent the Owner does not have fails with ErrAgentNotFound.
 func (f *Fleet) Usage(ctx context.Context, query RunUsageQuery) ([]RunUsageRecord, error) {
+	if query.AgentID != "" {
+		if _, found, err := f.store.FindAgent(ctx, query.AgentID, query.OwnerID); err != nil {
+			return nil, err
+		} else if !found {
+			return nil, ErrAgentNotFound
+		}
+	}
 	return f.store.ListRunUsage(ctx, query)
 }
 

@@ -656,7 +656,7 @@ func (x *HostedDeployment) GetSha256() string {
 }
 
 // RunUsage is what one run of a Deployment's module consumed. Network bytes
-// are the request body the module read and the response body it wrote.
+// are the request and the response, headers and body.
 type RunUsage struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	RunId           string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`

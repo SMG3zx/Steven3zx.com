@@ -59,39 +59,24 @@ func (e *fleetEnv) addressOf(t *testing.T, agentID string) string {
 	return ""
 }
 
-// eventually waits for an event the link delivers on its own goroutine.
-func eventually(t *testing.T, what string, done func() bool) {
+// settled waits until the link has delivered every event the Agent has
+// produced, then checks done.
+func (e *fleetEnv) settled(t *testing.T, what string, done func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !done() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-// send retries while the link's connection is still coming up.
-func send(t *testing.T, call func() error) error {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		err := call()
-		if !errors.Is(err, app.ErrAgentUnreachable) || time.Now().After(deadline) {
-			return err
-		}
-		time.Sleep(5 * time.Millisecond)
+	e.link.Settle(e.agentID)
+	if !done() {
+		t.Fatalf("after the link settled, still no %s", what)
 	}
 }
 
 func TestFleetPausesAndResumesAnAgent(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
-	must(t, send(t, func() error { return env.fleet.Pause(ctx, "alice", env.agentID) }))
+	must(t, env.fleet.Pause(ctx, "alice", env.agentID))
 	if !env.runtime.State().Paused {
 		t.Fatal("the Agent is not paused")
 	}
-	eventually(t, "the paused state to be reported", func() bool {
+	env.settled(t, "paused state reported", func() bool {
 		status, err := env.fleet.Status(ctx, "alice")
 		must(t, err)
 		return status[env.agentID].Connected && status[env.agentID].Paused
@@ -127,14 +112,14 @@ func TestFleetDeploysABuildAndRecordsItsUsageUnderTheOwner(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
 	build := completedBuild(t, env.store, "alice", "build-1", cgiModule)
-	must(t, send(t, func() error { return env.fleet.Deploy(ctx, "alice", env.agentID, "dep-1", build) }))
+	must(t, env.fleet.Deploy(ctx, "alice", env.agentID, "dep-1", build))
 	response, err := env.runtime.Serve(ctx, "dep-1", get("/hi"))
 	must(t, err)
 	if string(response.Body) != "GET /hi? body=" {
 		t.Fatalf("served %q", response.Body)
 	}
 	var records []app.RunUsageRecord
-	eventually(t, "both runs to be recorded", func() bool {
+	env.settled(t, "record of both runs", func() bool {
 		records, err = env.fleet.Usage(ctx, app.RunUsageQuery{OwnerID: "alice", DeploymentID: "dep-1"})
 		must(t, err)
 		return len(records) == 2
@@ -171,7 +156,7 @@ func TestFleetReportsAFailedProbeAsAnAgentError(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
 	build := completedBuild(t, env.store, "alice", "build-1", []byte("\x00asm\x01\x00\x00\x00unknown to the runner"))
-	err := send(t, func() error { return env.fleet.Deploy(ctx, "alice", env.agentID, "dep-1", build) })
+	err := env.fleet.Deploy(ctx, "alice", env.agentID, "dep-1", build)
 	var refused *app.AgentError
 	if !errors.As(err, &refused) {
 		t.Fatalf("err = %v, want an AgentError", err)
@@ -189,7 +174,7 @@ func TestFleetCannotReachAnAgentThatIsNotRunning(t *testing.T) {
 func TestFleetDisconnectsARemovedAgent(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
-	must(t, send(t, func() error { return env.link.Send(ctx, env.agentID, app.AgentCommand{Resume: true}) }))
+	must(t, env.link.Send(ctx, env.agentID, app.AgentCommand{Resume: true}))
 	removed, err := env.agents.Remove(ctx, "alice", env.agentID)
 	must(t, err)
 	if !removed {

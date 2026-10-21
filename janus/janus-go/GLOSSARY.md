@@ -77,7 +77,7 @@ One execution of a WASM Build's Artifact. It records its Usage.
 _Avoid_: Execution
 
 **Usage**:
-What a WASM Run consumed, measured by the host: the fuel it spent, the peak size of its linear memory, how long it ran, and the active CPU time it used. Active CPU time leaves out time spent waiting, and it is what the CPU layer bills. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent. A run of a Deployment on an Agent also reports its network bytes (the request body it read and the response body it wrote) and its status: ok, failed, out of fuel, or timeout.
+What a WASM Run consumed, measured by the host: the fuel it spent, the peak size of its linear memory, how long it ran, and the active CPU time it used. Active CPU time leaves out time spent waiting, and it is what the CPU layer bills. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent. A run of a Deployment on an Agent also reports its network bytes (the headers and body of the request and of the response) and its status: ok, failed, out of fuel, or timeout.
 _Avoid_: Metrics, billing
 
 ## Deployments
@@ -101,7 +101,7 @@ _Avoid_: Release, instance, rollout
 A Deployment is healthy once its Agent has fetched the Artifact, verified its hash, compiled it, and one probe invocation (`GET /`) ends without a trap, timeout, or running out of fuel. The HTTP status the module returns is not judged.
 
 **Request limits**:
-Each request starts with the Template's fuel, memory and stack limits and a 30-second wall-clock timeout. An Agent runs up to 16 requests at once; beyond that the edge answers 503. Request and response bodies are capped at 10 MiB. A limit hit returns a 5xx and still records Usage. These are starting values.
+The module speaks CGI/1.1 (ADR 0004). Each request starts with the Template's fuel, memory and stack limits and a 30-second wall-clock timeout. An Agent runs up to 16 requests at once; beyond that the edge answers 503. Request and response bodies are capped at 10 MiB. A limit hit returns a 5xx and still records Usage. These are starting values.
 
 **Temporary Domain**:
 The public name of a Project's live Deployment: a random 8-character label under `steven3zx.com`. The Project gets one at its first Deploy, and it moves to each new Deployment once that one is healthy, so the URL stays stable across redeploys and rollbacks. It expires 7 days after the last successful Deploy. When it expires or the Deployment is removed, the name is retired and never reissued, and the next Deploy gets a new one. While a first Deployment is starting, the domain answers 503 with a short "deploying" page.

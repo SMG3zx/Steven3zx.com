@@ -71,21 +71,20 @@ func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledB
 	if err = f.fleet.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the Agent to report", func() bool {
+	f.settled(t, enrolled.AgentID, "report from the Agent", func() bool {
 		agents := decode[[]agentBody](t, perform(f.handler, http.MethodGet, "/api/agents", "", owner))
 		return len(agents) == 1 && agents[0].Connected
 	})
 	return runtime
 }
 
-func waitFor(t *testing.T, what string, done func() bool) {
+// settled waits until the link has delivered every event the Agent has
+// produced, then checks done.
+func (f *fleetApp) settled(t *testing.T, agentID, what string, done func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !done() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
+	f.link.Settle(agentID)
+	if !done() {
+		t.Fatalf("after the link settled, still no %s", what)
 	}
 }
 
@@ -111,7 +110,7 @@ func TestTheOwnerPausesAndResumesAnAgentFromTheWebUI(t *testing.T) {
 	if !runtime.State().Paused {
 		t.Fatal("the Agent did not pause")
 	}
-	waitFor(t, "the list to show the pause", func() bool {
+	f.settled(t, enrolled.AgentID, "pause in the list", func() bool {
 		return decode[[]agentBody](t, perform(f.handler, http.MethodGet, "/api/agents", "", alice))[0].Paused
 	})
 	if resumed := perform(f.handler, http.MethodPost, path+"/resume", "", alice); resumed.Code != http.StatusOK {
@@ -149,7 +148,7 @@ func TestAnOwnerReadsTheirAgentsRuns(t *testing.T) {
 	}
 	path := "/api/agents/" + enrolled.AgentID + "/runs"
 	var runs []runView
-	waitFor(t, "both runs to be recorded", func() bool {
+	f.settled(t, enrolled.AgentID, "record of both runs", func() bool {
 		runs = decode[[]runView](t, perform(f.handler, http.MethodGet, path, "", alice))
 		return len(runs) == 2
 	})
@@ -158,7 +157,8 @@ func TestAnOwnerReadsTheirAgentsRuns(t *testing.T) {
 	if request.Probe {
 		request, probe = probe, request
 	}
-	if request.Probe || request.NetworkBytesIn != 3 || request.NetworkBytesOut != 2 || request.Status != "ok" || !probe.Probe {
+	wantOut := uint64(len("Content-Type: text/plain") + 2 + len("ok"))
+	if request.Probe || request.NetworkBytesIn != 3 || request.NetworkBytesOut != wantOut || request.Status != "ok" || !probe.Probe {
 		t.Fatalf("runs = %+v, want the request and the probe", runs)
 	}
 	if foreign := perform(f.handler, http.MethodGet, path, "", bob); foreign.Code != http.StatusNotFound {

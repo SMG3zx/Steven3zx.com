@@ -90,27 +90,11 @@ func (r *Runs) Request(ctx context.Context, owner, buildID string, args []string
 			r.active.Add(-1)
 		}
 	}()
-	build, found, err := r.store.FindWASMBuild(ctx, buildID, owner)
-	if err != nil && !IsReply(err) {
+	build, stored, err := runnableBuild(ctx, r.store, owner, buildID)
+	if err != nil {
 		return "", err
 	}
-	if err != nil || !found {
-		return "", errors.New("completed WASM build not found")
-	}
-	if build.Status != "complete" {
-		return "", errors.New("WASM build is not complete")
-	}
-	if build.Target != "wasm32-wasip1" && build.Target != "wasip1-wasm" {
-		return "", errors.New("only WASI WebAssembly targets can run")
-	}
-	stored, err := r.store.FindWASMBuildArtifact(ctx, buildID, owner)
-	if err != nil && !IsReply(err) {
-		return "", err
-	}
-	if err != nil || !stored.Found {
-		return "", errors.New("WASM artifact not found")
-	}
-	limits := r.limitsFor(ctx, owner, build)
+	limits := templateLimits(ctx, r.store, owner, build)
 
 	id := uuid.NewString()
 	now := time.Now().UTC()
@@ -236,10 +220,29 @@ func (r *Runs) complete(id, module string, result RunResult, err error) {
 	r.active.Add(-1)
 }
 
-// limitsFor returns the resource limits of the template that built build, or
-// the defaults when its Snapshot cannot be found.
-func (r *Runs) limitsFor(ctx context.Context, owner string, build WASMBuild) RunLimits {
-	return templateLimits(ctx, r.store, owner, build)
+// runnableBuild returns the owner's completed WASI build and its Artifact. Its
+// errors are meant for the Account, except a Store failure, which is passed on.
+func runnableBuild(ctx context.Context, store Store, owner, buildID string) (WASMBuild, WASMBuildArtifact, error) {
+	build, found, err := store.FindWASMBuild(ctx, buildID, owner)
+	if err != nil && !IsReply(err) {
+		return WASMBuild{}, WASMBuildArtifact{}, err
+	}
+	switch {
+	case err != nil || !found:
+		return WASMBuild{}, WASMBuildArtifact{}, errors.New("completed WASM build not found")
+	case build.Status != "complete":
+		return WASMBuild{}, WASMBuildArtifact{}, errors.New("WASM build is not complete")
+	case build.Target != "wasm32-wasip1" && build.Target != "wasip1-wasm":
+		return WASMBuild{}, WASMBuildArtifact{}, errors.New("only WASI WebAssembly targets can run")
+	}
+	stored, err := store.FindWASMBuildArtifact(ctx, buildID, owner)
+	if err != nil && !IsReply(err) {
+		return WASMBuild{}, WASMBuildArtifact{}, err
+	}
+	if err != nil || !stored.Found {
+		return WASMBuild{}, WASMBuildArtifact{}, errors.New("WASM artifact not found")
+	}
+	return build, stored, nil
 }
 
 // templateLimits returns the resource limits of the template that built build,

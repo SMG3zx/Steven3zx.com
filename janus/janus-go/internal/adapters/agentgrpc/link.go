@@ -53,8 +53,11 @@ func NewLink(dial func(ctx context.Context, address string) (net.Conn, error), o
 type linkConn struct {
 	address string
 	events  func(app.AgentEvent)
-	cancel  context.CancelFunc
-	client  *grpc.ClientConn
+	// queue hands events to their own goroutine, so a slow receiver never
+	// holds up the replies that arrive on the same stream.
+	queue  chan app.AgentEvent
+	cancel context.CancelFunc
+	client *grpc.ClientConn
 
 	mu      sync.Mutex
 	stream  agentpb.Agent_ConnectClient
@@ -90,7 +93,7 @@ func (l *Link) Connect(agentID, address string, events func(app.AgentEvent)) {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	conn := &linkConn{address: address, events: events, cancel: cancel, client: client, pending: map[string]chan *agentpb.Reply{}}
+	conn := &linkConn{address: address, events: events, queue: make(chan app.AgentEvent, eventBacklog), cancel: cancel, client: client, pending: map[string]chan *agentpb.Reply{}}
 	l.conns[agentID] = conn
 	l.wg.Go(func() { l.run(ctx, conn) })
 }
@@ -119,6 +122,14 @@ func (l *Link) Close() error {
 // ctx ends.
 func (l *Link) run(ctx context.Context, conn *linkConn) {
 	defer conn.client.Close()
+	var deliver sync.WaitGroup
+	deliver.Go(func() {
+		for event := range conn.queue {
+			conn.events(event)
+		}
+	})
+	defer deliver.Wait()
+	defer close(conn.queue)
 	agent := agentpb.NewAgentClient(conn.client)
 	delay := 200 * time.Millisecond
 	for ctx.Err() == nil {
@@ -161,10 +172,10 @@ func (c *linkConn) read(stream agentpb.Agent_ConnectClient) {
 			}
 		case *agentpb.Event_State:
 			state := stateFromProto(kind.State)
-			c.events(app.AgentEvent{State: &state})
+			c.queue <- app.AgentEvent{State: &state}
 		case *agentpb.Event_Usage:
 			report := reportFromProto(kind.Usage)
-			c.events(app.AgentEvent{Usage: &report})
+			c.queue <- app.AgentEvent{Usage: &report}
 		}
 	}
 }

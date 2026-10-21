@@ -131,14 +131,21 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 		return len(runs) >= 6
 	})
 	statuses := map[string]int{}
+	sawRequestBytes := false
 	for _, run := range runs {
 		statuses[run.Status]++
 		if run.Fuel == 0 || run.PeakMemoryBytes == 0 {
 			t.Errorf("a run without fuel or memory: %+v", run)
 		}
-		if run.NetworkBytesIn == 15 && run.NetworkBytesOut != uint64(len("wrote 15 bytes")) {
-			t.Errorf("the write's network bytes: %+v", run)
+		if run.NetworkBytesOut == 0 {
+			t.Errorf("a run that answered nothing: %+v", run)
 		}
+		if run.NetworkBytesIn > 0 {
+			sawRequestBytes = true
+		}
+	}
+	if !sawRequestBytes {
+		t.Error("no run counted the bytes of its request")
 	}
 	if statuses["ok"] != 5 || statuses["out_of_fuel"] != 1 {
 		t.Fatalf("run statuses = %v, want the probe and four requests ok and one out of fuel", statuses)

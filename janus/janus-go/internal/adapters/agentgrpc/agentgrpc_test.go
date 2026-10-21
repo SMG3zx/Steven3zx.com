@@ -70,16 +70,21 @@ func TestGRPCPassesTheAgentLinkContract(t *testing.T) {
 
 func TestServerRefusesACallerItDoesNotAuthorize(t *testing.T) {
 	runtime := app.NewAgentRuntime(runnertest.NewFake(), localstatetest.NewMemory(), "", time.Now)
-	var asked string
+	asked := make(chan string, 16)
 	address, _ := start(t, runtime, "", func(_ context.Context, remoteAddr string) error {
-		asked = remoteAddr
+		asked <- remoteAddr
 		return errors.New("not the control plane")
 	})
 	link := NewLink(dialTCP, WithMaxRetryDelay(100*time.Millisecond))
 	defer link.Close()
 	events := make(chan app.AgentEvent, 8)
 	link.Connect("agent-1", address, func(event app.AgentEvent) { events <- event })
-	time.Sleep(time.Second)
+	// Wait until the Agent has refused the link twice: once it has, the link
+	// knows the stream did not come up.
+	var caller string
+	for range 2 {
+		caller = <-asked
+	}
 	if err := link.Send(context.Background(), "agent-1", app.AgentCommand{Pause: true}); !errors.Is(err, app.ErrAgentUnreachable) {
 		t.Fatalf("send through a refused stream: %v", err)
 	}
@@ -91,8 +96,8 @@ func TestServerRefusesACallerItDoesNotAuthorize(t *testing.T) {
 	if runtime.State().Paused {
 		t.Fatal("a refused caller paused the Agent")
 	}
-	if host, _, err := net.SplitHostPort(asked); err != nil || host != "127.0.0.1" {
-		t.Fatalf("authorize was asked about %q", asked)
+	if host, _, err := net.SplitHostPort(caller); err != nil || host != "127.0.0.1" {
+		t.Fatalf("authorize was asked about %q", caller)
 	}
 }
 

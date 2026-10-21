@@ -12,6 +12,10 @@ import (
 // module, so it is far above gRPC's 4 MiB default.
 const maxMessageBytes = 128 << 20
 
+// eventBacklog is how many events from one Agent wait for their receiver
+// before reading the stream waits too.
+const eventBacklog = 1024
+
 func commandToProto(id string, command app.AgentCommand) *agentpb.Command {
 	out := &agentpb.Command{Id: id}
 	switch {

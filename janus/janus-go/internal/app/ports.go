@@ -196,9 +196,10 @@ type LocalState interface {
 	DeleteDeployment(ctx context.Context, id string) error
 	// Deployments returns every kept Deployment, ordered by ID.
 	Deployments(ctx context.Context) ([]HostedDeployment, error)
-	// SetPaused records whether the Agent is paused. Paused is false until it
-	// is first set.
+	// SetPaused records whether the Agent is paused.
 	SetPaused(ctx context.Context, paused bool) error
+	// Paused reads the pause as last recorded through any handle on the same
+	// storage. It is false until SetPaused is first called.
 	Paused(ctx context.Context) (bool, error)
 }
 

@@ -86,7 +86,7 @@ message HostedDeployment {
 }
 
 // RunUsage is what one run of a Deployment's module consumed. Network bytes
-// are the request body the module read and the response body it wrote.
+// are the request and the response, headers and body.
 message RunUsage {
   string run_id = 1;
   string deployment_id = 2;

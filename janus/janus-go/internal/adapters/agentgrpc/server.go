@@ -100,6 +100,9 @@ func (s *Server) Connect(stream agentpb.Agent_ConnectServer) error {
 
 	received := make(chan *agentpb.Command)
 	recvErr := make(chan error, 1)
+	// The receiver cannot be waited for here: Recv returns only once this
+	// handler has returned and gRPC has ended the stream. It exits then, since
+	// it never blocks on received after ctx ends, and gRPC owns the stream.
 	go func() {
 		for {
 			command, err := stream.Recv()
@@ -126,7 +129,7 @@ func (s *Server) Connect(stream agentpb.Agent_ConnectServer) error {
 			// Deploy's probe. Each Reply names its Command.
 			handlers.Go(func() {
 				reply := &agentpb.Reply{Id: command.Id}
-				if err := s.apply(ctx, commandFromProto(command)); err != nil {
+				if err := s.runtime.Apply(ctx, commandFromProto(command)); err != nil {
 					reply.Error = err.Error()
 				}
 				_ = send(&agentpb.Event{Kind: &agentpb.Event_Reply{Reply: reply}})
@@ -143,6 +146,8 @@ func (s *Server) forward(ctx context.Context, send func(*agentpb.Event) error) {
 			return
 		case report := <-s.runtime.Reports():
 			if err := send(reportToProto(report)); err != nil {
+				// The next stream sends it.
+				s.runtime.Requeue(report)
 				return
 			}
 		case <-s.runtime.Changes():
@@ -151,18 +156,4 @@ func (s *Server) forward(ctx context.Context, send func(*agentpb.Event) error) {
 			}
 		}
 	}
-}
-
-func (s *Server) apply(ctx context.Context, command app.AgentCommand) error {
-	switch {
-	case command.Deploy != nil:
-		return s.runtime.Deploy(ctx, *command.Deploy)
-	case command.Stop != "":
-		return s.runtime.Stop(ctx, command.Stop)
-	case command.Pause:
-		return s.runtime.Pause(ctx)
-	case command.Resume:
-		return s.runtime.Resume(ctx)
-	}
-	return errors.New("the command has no action")
 }

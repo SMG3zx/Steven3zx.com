@@ -92,7 +92,7 @@ func TestAgentRuntimeDeploysAndServesThroughCGI(t *testing.T) {
 	}
 	report := nextReport(t, runtime)
 	want := app.RunReport{DeploymentID: "dep-1", Usage: usage.Usage{Fuel: 42, PeakMemoryBytes: 65536, DurationMS: 3},
-		NetworkBytesIn: 4, NetworkBytesOut: uint64(len(response.Body)), Status: usage.StatusOK}
+		NetworkBytesIn: 4, NetworkBytesOut: wireBytes(response), Status: usage.StatusOK}
 	if report.RunID == "" || report.Probe || report.StartedAt.IsZero() {
 		t.Fatalf("report = %+v", report)
 	}
@@ -410,4 +410,16 @@ func TestAgentRuntimeKeepsTheNewestReports(t *testing.T) {
 	if count != 1000 || last.NetworkBytesIn != uint64(len(fmt.Sprint(runs-1))) {
 		t.Fatalf("got %d reports, last %+v", count, last)
 	}
+}
+
+// wireBytes is the size of a response as Usage counts it: each header as
+// "Name: value" and a line break, then the body.
+func wireBytes(response app.ServeResponse) uint64 {
+	n := len(response.Body)
+	for name, values := range response.Header {
+		for _, value := range values {
+			n += len(name) + 2 + len(value) + 2
+		}
+	}
+	return uint64(n)
 }

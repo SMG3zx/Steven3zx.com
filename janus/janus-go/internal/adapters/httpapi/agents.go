@@ -192,14 +192,11 @@ func (a *Server) listAgentRuns(c *call) any {
 	if a.dependencies.Fleet == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "the control plane is not on the tailnet, so it has no Agent runs"})
 	}
-	ctx := c.Request.Context()
-	if _, found, err := a.dependencies.Agents.Find(ctx, owner, c.Param("id")); err != nil {
-		return internalError()
-	} else if !found {
+	records, err := a.dependencies.Fleet.Usage(c.Request.Context(), app.RunUsageQuery{OwnerID: owner, AgentID: c.Param("id")})
+	switch {
+	case errors.Is(err, app.ErrAgentNotFound):
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "Agent not found"})
-	}
-	records, err := a.dependencies.Fleet.Usage(ctx, app.RunUsageQuery{OwnerID: owner, AgentID: c.Param("id")})
-	if err != nil {
+	case err != nil:
 		return internalError()
 	}
 	views := make([]runView, 0, len(records))
