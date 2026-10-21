@@ -40,6 +40,31 @@ func NewOperator(name string) (*Operator, error) {
 	return &Operator{key: key, Claims: claims, JWT: token}, nil
 }
 
+// OperatorFromSeed restores the operator whose key seed Seed returned, and signs
+// its JWT under name. Its system account is set again with SetSystemAccount.
+func OperatorFromSeed(seed []byte, name string) (*Operator, error) {
+	key, err := nkeys.FromSeed(seed)
+	if err != nil {
+		return nil, fmt.Errorf("read operator seed: %w", err)
+	}
+	pub, err := key.PublicKey()
+	if err != nil {
+		return nil, err
+	}
+	claims := jwt.NewOperatorClaims(pub)
+	claims.Name = name
+	token, err := claims.Encode(key)
+	if err != nil {
+		return nil, fmt.Errorf("sign operator JWT: %w", err)
+	}
+	return &Operator{key: key, Claims: claims, JWT: token}, nil
+}
+
+// Seed is the operator's key seed. It is a secret: keep it encrypted.
+func (o *Operator) Seed() ([]byte, error) {
+	return o.key.Seed()
+}
+
 // SetSystemAccount names the account the server runs its own traffic and
 // JetStream control under. It is re-signed into the operator's JWT.
 func (o *Operator) SetSystemAccount(sys *Account) error {
@@ -78,6 +103,49 @@ func NewAccount(op *Operator, name string) (*Account, error) {
 		return nil, err
 	}
 	return a, nil
+}
+
+// AccountFromSeed restores the account whose key seed Seed returned, signed by
+// op. Its claims start empty, so the caller sets the limits, exports and imports
+// again, in the same order it set them the first time, before it signs.
+func AccountFromSeed(op *Operator, seed []byte, name string) (*Account, error) {
+	key, err := nkeys.FromSeed(seed)
+	if err != nil {
+		return nil, fmt.Errorf("read account seed: %w", err)
+	}
+	pub, err := key.PublicKey()
+	if err != nil {
+		return nil, err
+	}
+	a := &Account{operator: op, key: key, Pub: pub, Claims: jwt.NewAccountClaims(pub)}
+	a.Claims.Name = name
+	if err := a.sign(); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// Seed is the account's key seed. It is a secret: keep it encrypted.
+func (a *Account) Seed() ([]byte, error) {
+	return a.key.Seed()
+}
+
+// NewAccountSeed makes a new account key and returns its seed, for storing.
+func NewAccountSeed() ([]byte, error) {
+	key, err := nkeys.CreateAccount()
+	if err != nil {
+		return nil, fmt.Errorf("create account key: %w", err)
+	}
+	return key.Seed()
+}
+
+// NewOperatorSeed makes a new operator key and returns its seed, for storing.
+func NewOperatorSeed() ([]byte, error) {
+	key, err := nkeys.CreateOperator()
+	if err != nil {
+		return nil, fmt.Errorf("create operator key: %w", err)
+	}
+	return key.Seed()
 }
 
 // sign re-encodes the account JWT from Claims. Changing Claims needs a sign
