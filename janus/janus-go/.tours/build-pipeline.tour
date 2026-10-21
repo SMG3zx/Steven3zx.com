@@ -1,0 +1,73 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Build pipeline: compile, then Check, then the Artifact",
+  "description": "Follows a WASM build from its request, through the compile and the Check that gates Deploy, to the stored Artifact.",
+  "steps": [
+    {
+      "file": "internal/app/builds.go",
+      "line": 61,
+      "title": "A build is requested",
+      "description": "`func (b *Builds) Request` checks the target and the Language, records the build as queued, and starts it on the bounded job runner."
+    },
+    {
+      "file": "internal/app/builds.go",
+      "line": 216,
+      "title": "The build runs",
+      "description": "`func (b *Builds) run` copies the snapshot files into a temporary workspace, then compiles them."
+    },
+    {
+      "file": "internal/app/builds.go",
+      "line": 250,
+      "title": "The Builder port compiles",
+      "description": "`b.builder.Build(` is the outbound call. The core does not know that Docker is behind it."
+    },
+    {
+      "file": "internal/adapters/dockerbuild/builder.go",
+      "line": 69,
+      "title": "The Docker adapter",
+      "description": "`func (d *Docker) Build` picks the command for the Language and runs it in an isolated container with no network."
+    },
+    {
+      "file": "internal/app/builds.go",
+      "line": 264,
+      "title": "The Artifact is stored",
+      "description": "`b.store.CompleteWASMBuild(` runs only after the compile finished, so an unfinished build never has an Artifact."
+    },
+    {
+      "file": "internal/app/builds.go",
+      "line": 276,
+      "title": "The Check runs after a successful build",
+      "description": "`func (b *Builds) check` runs the Language's checks on the same workspace. A failed Check holds back Deploy; the build stays complete."
+    },
+    {
+      "file": "internal/app/builds.go",
+      "line": 290,
+      "title": "The Checker port runs the tests",
+      "description": "`b.checker.Check(` is the outbound call for the test commands."
+    },
+    {
+      "file": "internal/adapters/dockerbuild/check.go",
+      "line": 32,
+      "title": "Each Language's test command",
+      "description": "`var checkSpecs` holds the test command for each Language, and how that Language's output shows that no test ran."
+    },
+    {
+      "file": "internal/adapters/dockerbuild/check.go",
+      "line": 41,
+      "title": "A failing test is a result",
+      "description": "`func (d *Docker) Check` treats a failing test as a result, and a container that cannot run as an error. The check records both."
+    },
+    {
+      "file": "internal/app/builds.go",
+      "line": 207,
+      "title": "The outcome is audited",
+      "description": "`func (b *Builds) finish` writes the audit event for how the build ended."
+    },
+    {
+      "file": "internal/adapters/sqlstore/jobs.go",
+      "line": 192,
+      "title": "The Store keeps the Artifact",
+      "description": "`func (s *Store) CompleteWASMBuild` writes the Artifact and its log, and only for a build that is still running."
+    }
+  ]
+}
