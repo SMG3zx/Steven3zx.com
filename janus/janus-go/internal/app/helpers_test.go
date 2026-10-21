@@ -2,9 +2,7 @@ package app_test
 
 import (
 	"context"
-	"errors"
 	"strings"
-	"sync"
 	"testing"
 
 	"janus/internal/adapters/catalogtest"
@@ -30,58 +28,9 @@ func importedProject(t *testing.T, catalog *catalogtest.Memory, store app.Store,
 	storetest.ReadySnapshot(t, store, owner, project, project+"-snapshot", language)
 }
 
-// storedBuilds is an app.WASMBuilds that serves the Artifacts the tests put in
-// it, so a test controls the bytes a Run or a Deployment gets. The Build
-// operations are not used by those tests and refuse.
-type storedBuilds struct {
-	mu        sync.Mutex
-	artifacts map[string]storedArtifact
-}
-
-type storedArtifact struct {
-	owner string
-	app.WASMBuildArtifact
-}
-
-func newStoredBuilds() *storedBuilds {
-	return &storedBuilds{artifacts: map[string]storedArtifact{}}
-}
-
-// put stores the Artifact of a Build of owner.
-func (b *storedBuilds) put(owner, buildID string, artifact app.WASMBuildArtifact) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.artifacts[buildID] = storedArtifact{owner: owner, WASMBuildArtifact: artifact}
-}
-
-func (b *storedBuilds) Artifact(_ context.Context, owner, buildID string) (app.WASMBuildArtifact, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	stored, ok := b.artifacts[buildID]
-	if !ok || stored.owner != owner {
-		return app.WASMBuildArtifact{}, nil
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
-	return stored.WASMBuildArtifact, nil
 }
-
-var errNotUsed = errors.New("the test does not build")
-
-func (b *storedBuilds) StartBuild(context.Context, app.StartBuild) (app.WASMBuild, error) {
-	return app.WASMBuild{}, errNotUsed
-}
-
-func (b *storedBuilds) RetryBuild(context.Context, string, string) (app.WASMBuild, error) {
-	return app.WASMBuild{}, errNotUsed
-}
-
-func (b *storedBuilds) FindCheck(context.Context, string, string) (app.Check, bool, error) {
-	return app.Check{}, false, errNotUsed
-}
-
-func (b *storedBuilds) FindBuild(context.Context, string, string) (app.WASMBuild, bool, error) {
-	return app.WASMBuild{}, false, errNotUsed
-}
-
-func (b *storedBuilds) DeleteOwner(context.Context, string) error { return errNotUsed }
-
-var _ app.BuildArtifacts = (*storedBuilds)(nil)

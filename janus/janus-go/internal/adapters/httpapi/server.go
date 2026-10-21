@@ -45,7 +45,7 @@ type Config struct {
 	// nil when the control plane is not on the tailnet; Agent and Deployment
 	// routes then answer 503.
 	Fleet          app.Fleet
-	Runs           *app.Runs
+	Runs           app.WASMRuns
 	JWTExpiry      time.Duration
 	CookieSecure   bool
 	GoogleEnabled  bool

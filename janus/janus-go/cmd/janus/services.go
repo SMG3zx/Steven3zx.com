@@ -20,9 +20,9 @@ import (
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/projectevents"
 	"janus/internal/adapters/projectsnats"
+	"janus/internal/adapters/runsnats"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/tailnode"
-	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/leafbridge"
@@ -35,6 +35,7 @@ import (
 	"janus/internal/services/fleet/headscale"
 	identityservice "janus/internal/services/identity"
 	projectsservice "janus/internal/services/projects"
+	runsservice "janus/internal/services/runs"
 )
 
 // application is the composition root: it builds the adapters, hands them to
@@ -74,12 +75,15 @@ type application struct {
 	// events to the Store, and builds is the single process's use of it.
 	buildsService *buildsservice.Service
 	buildEvents   *buildevents.Events
-	identity      *app.Identity
-	projects      *app.Projects
-	github        *app.GitHub
-	tailnet       *headscale.Client
-	tailnode      *tailnode.Node
-	agentLink     *agentnats.Link
+	// runsService answers the runs subjects and runs WASM Runs; runs is the
+	// single process's use of it.
+	runsService *runsservice.Service
+	identity    *app.Identity
+	projects    *app.Projects
+	github      *app.GitHub
+	tailnet     *headscale.Client
+	tailnode    *tailnode.Node
+	agentLink   *agentnats.Link
 	// agentsConn is the fleet service's connection as a user of AGENTS, which
 	// reaches the Agents' state, modules and Usage. It is nil without NATS trust.
 	agentsConn   *nats.Conn
@@ -93,7 +97,7 @@ type application struct {
 	imports        *app.Imports
 	builds         *app.Builds
 	accounts       *app.Accounts
-	runs           *app.Runs
+	runs           app.WASMRuns
 	httpServer     *httpapi.Server
 
 	// startCtx carries the application.start span once telemetry is running.
@@ -205,14 +209,12 @@ func (a *application) groups() []group {
 			{name: "project events", start: a.startProjectEvents, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("stop applying project events", a.projectEvents.Stop(ctx))
 			})},
+			{name: "runs service", start: a.startRunsService, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("stop the runs service", a.runsService.Stop(ctx))
+			})},
 		}},
 		{name: "runtime", components: []component{
-			{name: "runs", start: func(context.Context) error {
-				a.runs = app.NewRuns(a.store, a.builds, wasmtime.Wasmtime{})
-				return nil
-			}, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("drain WASM runtime", a.runs.Drain(ctx))
-			})},
+			{name: "runs", start: a.startRuns},
 			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)},
 			// Accounts come last in runtime: deleting one stops its Deployments first.
 			{name: "accounts", start: func(context.Context) error {
@@ -441,6 +443,23 @@ func (a *application) startBuilds(ctx context.Context) error {
 		return fmt.Errorf("open the artifacts store: %w", err)
 	}
 	a.builds = app.NewBuilds(a.store, a.catalog, client)
+	return nil
+}
+
+// startRunsService starts the runs service. It owns no database, so it has
+// nothing to split; it runs WASM Runs in this process with Wasmtime.
+func (a *application) startRunsService(ctx context.Context) error {
+	service := runsservice.New(runsservice.Config{})
+	if err := service.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("start the runs service: %w", err)
+	}
+	a.runsService = service
+	return nil
+}
+
+// startRuns makes the WASM Runs use case, which asks the runs service over NATS.
+func (a *application) startRuns(context.Context) error {
+	a.runs = runsnats.New(a.nats.Conn())
 	return nil
 }
 

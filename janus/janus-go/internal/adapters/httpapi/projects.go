@@ -369,6 +369,20 @@ func wasmBuildErrorStatus(err error) int {
 	}
 }
 
+// wasmRunErrorStatus is the status a refused run request is answered with. A Build
+// that is not the Account's is not found; two active runs are a conflict.
+func wasmRunErrorStatus(err error) int {
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "not found"):
+		return http.StatusNotFound
+	case strings.Contains(message, "already active"):
+		return http.StatusConflict
+	default:
+		return wasmBuildErrorStatus(err)
+	}
+}
+
 func (a *Server) getWASMBuild(c *call) any {
 	owner, ok := a.authorizedSubject(c, "project.read", nil)
 	if !ok {
@@ -422,7 +436,7 @@ func (a *Server) startWASMRun(c *call) any {
 	}
 	runID, err := a.dependencies.Runs.Request(c.Request.Context(), owner, c.Param("id"), input.Args)
 	if err != nil {
-		return jsonResponse(wasmBuildErrorStatus(err), map[string]string{"error": err.Error()})
+		return jsonResponse(wasmRunErrorStatus(err), map[string]string{"error": err.Error()})
 	}
 	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"run_id": runID, "status": "running"}}
 }
@@ -435,7 +449,10 @@ func (a *Server) getWASMRun(c *call) any {
 	if a.dependencies.Runs == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "WASM runtime unavailable"})
 	}
-	run, found := a.dependencies.Runs.Get(owner, c.Param("id"))
+	run, found, err := a.dependencies.Runs.Get(c.Request.Context(), owner, c.Param("id"))
+	if err != nil {
+		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "WASM runtime unavailable"})
+	}
 	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "WASM run not found"})
 	}
