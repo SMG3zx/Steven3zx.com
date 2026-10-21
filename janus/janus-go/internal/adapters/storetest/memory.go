@@ -26,17 +26,19 @@ type Memory struct {
 	mu   sync.Mutex
 	last time.Time
 
-	users      map[string]*memUser
-	creds      map[string]memCredential // by user ID
-	identities map[memIdentity]string   // provider and subject to user ID
-	github     map[string]memGitHub     // by user ID
-	projects   map[string]*memProject
-	snapshots  map[string]*memSnapshot
-	imports    map[string]*memImport
-	builds     map[string]*memBuild
-	codes      map[string]memCode // by code hash
-	agents     map[string]app.AgentRecord
-	runs       map[string]app.RunUsageRecord // by run ID
+	users       map[string]*memUser
+	creds       map[string]memCredential // by user ID
+	identities  map[memIdentity]string   // provider and subject to user ID
+	github      map[string]memGitHub     // by user ID
+	projects    map[string]*memProject
+	snapshots   map[string]*memSnapshot
+	imports     map[string]*memImport
+	builds      map[string]*memBuild
+	codes       map[string]memCode // by code hash
+	agents      map[string]app.AgentRecord
+	runs        map[string]app.RunUsageRecord // by run ID
+	checks      map[string]*memCheck          // by WASM Build ID
+	deployments map[string]*memDeployment     // by Deployment ID
 }
 
 var _ app.Store = (*Memory)(nil)
@@ -44,17 +46,19 @@ var _ app.Store = (*Memory)(nil)
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		users:      map[string]*memUser{},
-		creds:      map[string]memCredential{},
-		identities: map[memIdentity]string{},
-		github:     map[string]memGitHub{},
-		projects:   map[string]*memProject{},
-		snapshots:  map[string]*memSnapshot{},
-		imports:    map[string]*memImport{},
-		builds:     map[string]*memBuild{},
-		codes:      map[string]memCode{},
-		agents:     map[string]app.AgentRecord{},
-		runs:       map[string]app.RunUsageRecord{},
+		users:       map[string]*memUser{},
+		creds:       map[string]memCredential{},
+		identities:  map[memIdentity]string{},
+		github:      map[string]memGitHub{},
+		projects:    map[string]*memProject{},
+		snapshots:   map[string]*memSnapshot{},
+		imports:     map[string]*memImport{},
+		builds:      map[string]*memBuild{},
+		codes:       map[string]memCode{},
+		agents:      map[string]app.AgentRecord{},
+		runs:        map[string]app.RunUsageRecord{},
+		checks:      map[string]*memCheck{},
+		deployments: map[string]*memDeployment{},
 	}
 }
 

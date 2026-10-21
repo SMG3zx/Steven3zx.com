@@ -166,6 +166,64 @@ type WASMBuild struct {
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 }
+
+// Check statuses. A Check is running until its commands end, then passed or failed.
+const (
+	CheckRunning = "running"
+	CheckPassed  = "passed"
+	CheckFailed  = "failed"
+)
+
+// StartCheck begins the Check of a completed WASM Build.
+type StartCheck struct{ BuildID string }
+
+// FinishCheck records how the Check of a WASM Build ended. Status is CheckPassed
+// or CheckFailed; Error is set when the checks could not run to an answer.
+type FinishCheck struct {
+	BuildID, Status, Error, Log string
+	NoTests                     bool
+}
+
+// Check is the result of the checks run on one WASM Build.
+type Check struct {
+	BuildID string `json:"build_id"`
+	Status  string `json:"status"`
+	Error   string `json:"error,omitempty"`
+	Log     string `json:"log,omitempty"`
+	NoTests bool   `json:"no_tests"`
+}
+
+// CreateDeployment queues a Deployment of a WASM Build on one of the Owner's
+// Agents. DeployAnyway records that the Owner chose to deploy despite failing
+// checks.
+type CreateDeployment struct {
+	ID, OwnerID, ProjectID, BuildID, AgentID string
+	DeployAnyway                             bool
+}
+
+// DeploymentTransition moves a Deployment to a new state, when it is still in
+// From. Error and Reason are set when the move ends the Deployment.
+type DeploymentTransition struct {
+	ID, From, To, Error, Reason string
+}
+
+// Deployment is a Deployment as its Owner sees it.
+type Deployment struct {
+	ID           string `json:"id"`
+	ProjectID    string `json:"project_id"`
+	BuildID      string `json:"build_id"`
+	AgentID      string `json:"agent_id"`
+	State        string `json:"state"`
+	Reason       string `json:"reason,omitempty"`
+	Error        string `json:"error,omitempty"`
+	DeployAnyway bool   `json:"deploy_anyway"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	// Check is the Check of the Deployment's WASM Build, when it has one. Its
+	// error is the checks' own stage error.
+	Check *Check `json:"check,omitempty"`
+}
+
 type WASMBuildArtifact struct {
 	Name  string
 	Data  []byte

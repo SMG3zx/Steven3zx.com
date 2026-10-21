@@ -339,7 +339,7 @@ func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store
 	gh := app.NewGitHub(store, githubapi.NewClient())
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
-	builds := app.NewBuilds(store, b, audit)
+	builds := app.NewBuilds(store, b, nil, audit)
 	server := httpapi.New(httpapi.Config{
 		Audit: audit, Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
 		Authentication: authentication, Authorization: authorization,

@@ -23,7 +23,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, app.Store) {
 	gh := app.NewGitHub(store, githubapi.NewClient())
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
-	builds := app.NewBuilds(store, nil, audit)
+	builds := app.NewBuilds(store, nil, nil, audit)
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)

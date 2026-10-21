@@ -52,6 +52,12 @@ allow if {
 }
 
 allow if {
+	input.action == "project.deploy"
+	input.subject != ""
+	input.resource.owner_id == input.subject
+}
+
+allow if {
 	input.action == "project.build"
 	input.subject != ""
 	input.resource.owner_id == input.subject

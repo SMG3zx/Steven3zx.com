@@ -261,4 +261,29 @@ CREATE TABLE IF NOT EXISTS run_usage (
 	 probe INTEGER NOT NULL DEFAULT 0,
 	 started_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS run_usage_owner ON run_usage(owner_id, started_at DESC, run_id DESC);`
+CREATE INDEX IF NOT EXISTS run_usage_owner ON run_usage(owner_id, started_at DESC, run_id DESC);
+CREATE TABLE IF NOT EXISTS project_checks (
+	 build_id TEXT PRIMARY KEY REFERENCES project_wasm_builds(id) ON DELETE CASCADE,
+	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	 status TEXT NOT NULL,
+	 error TEXT NOT NULL DEFAULT '',
+	 check_log TEXT NOT NULL DEFAULT '',
+	 no_tests INTEGER NOT NULL DEFAULT 0,
+	 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
+	 updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now'))
+);
+CREATE TABLE IF NOT EXISTS deployments (
+	 id TEXT PRIMARY KEY,
+	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	 project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+	 build_id TEXT NOT NULL REFERENCES project_wasm_builds(id) ON DELETE CASCADE,
+	 agent_id TEXT NOT NULL,
+	 state TEXT NOT NULL,
+	 reason TEXT NOT NULL DEFAULT '',
+	 error TEXT NOT NULL DEFAULT '',
+	 deploy_anyway INTEGER NOT NULL DEFAULT 0,
+	 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
+	 updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now'))
+);
+CREATE INDEX IF NOT EXISTS deployments_owner ON deployments(owner_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS one_inflight_deployment_per_project ON deployments(project_id) WHERE state IN ('queued','starting');`

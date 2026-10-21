@@ -60,6 +60,20 @@ type Store interface {
 	ListResumableBuilds(ctx context.Context) ([]ResumableBuild, error)
 	ListActiveJobs(ctx context.Context, ownerID string) ([]ActiveJob, error)
 
+	// Checks of WASM Builds. A Build has at most one Check, started when the Build
+	// completes and finished when its commands end.
+	StartCheck(ctx context.Context, check StartCheck) error
+	FinishCheck(ctx context.Context, check FinishCheck) error
+	FindCheck(ctx context.Context, buildID, ownerID string) (check Check, found bool, err error)
+
+	// Deployments. A Project has at most one Deployment in flight, one that is
+	// queued or starting; CreateDeployment fails with a plain error while another
+	// one is. TransitionDeployment is a compare and swap on the state, following
+	// domain/deployments.
+	CreateDeployment(ctx context.Context, deployment CreateDeployment) error
+	TransitionDeployment(ctx context.Context, transition DeploymentTransition) error
+	FindDeployment(ctx context.Context, id, ownerID string) (deployment Deployment, found bool, err error)
+
 	// Agents and Enrollment Codes. A code is stored by hash and can be consumed
 	// once; every Agent lookup is scoped to its owner.
 	CreateEnrollmentCode(ctx context.Context, code CreateEnrollmentCode) error
@@ -97,6 +111,14 @@ type Store interface {
 // compressed ZIP that artifact.Module can open.
 type Builder interface {
 	Build(ctx context.Context, language string, request BuildRequest) (BuildResult, error)
+}
+
+// Checker runs the check and test commands of a compiled workspace in an
+// isolated container, the same way Builder compiles it. A failing command is a
+// Passed of false, not an error. An error means the checks could not run to an
+// answer, such as a container that crashed or timed out.
+type Checker interface {
+	Check(ctx context.Context, language string, request CheckRequest) (CheckResult, error)
 }
 
 // Runner runs a WASI module under input.Limits. Limits.Timeout bounds the run,

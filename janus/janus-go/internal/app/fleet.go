@@ -165,6 +165,25 @@ func (f *Fleet) Resume(ctx context.Context, ownerID, agentID string) error {
 	return f.command(ctx, ownerID, agentID, AgentCommand{Resume: true}, "agent.resumed")
 }
 
+// Ready returns nil when the Owner's Agent is connected and not paused, so a
+// Deploy can reach it. Otherwise it returns an error that says why not.
+func (f *Fleet) Ready(ctx context.Context, ownerID, agentID string) error {
+	states, err := f.Status(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	state, ok := states[agentID]
+	switch {
+	case !ok:
+		return ErrAgentNotFound
+	case state.Paused:
+		return errors.New("the Agent is paused, so it cannot take a Deploy")
+	case !state.Connected:
+		return errors.New("the Agent is offline, so it cannot take a Deploy")
+	}
+	return nil
+}
+
 // StopDeployment tells the Owner's Agent to stop serving a Deployment.
 func (f *Fleet) StopDeployment(ctx context.Context, ownerID, agentID, deploymentID string) error {
 	return f.command(ctx, ownerID, agentID, AgentCommand{Stop: deploymentID}, "agent.deployment.stopped")

@@ -31,7 +31,9 @@ import (
 // environment variables.
 type Config struct {
 	// Addr is the listen address; "127.0.0.1:0" picks a free port.
-	Addr           string
+	Addr string
+	// Deployments queues Deployments of WASM builds. Nil refuses Deploy with 503.
+	Deployments    *app.Deployments
 	Authentication *app.Authentication
 	Authorization  *app.Policy
 	Audit          app.Audit

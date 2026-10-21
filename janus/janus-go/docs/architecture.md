@@ -92,6 +92,7 @@ Rules for the tree:
 |---|---|---|---|
 | `Store` | persist Accounts, Projects, Snapshots, jobs, Builds | `sqlstore` | `storetest.Memory` |
 | `Builder` | compile a workspace to an Artifact | `dockerbuild` | `buildertest.Fake` |
+| `Checker` | run a compiled workspace's check and test commands | `dockerbuild` | `checktest.Fake` |
 | `Runner` | run a WASM module with limits | `wasmtime` (cgo, no-cgo stub) | `runnertest.Fake` |
 | `Source` | fetch a repository at a commit | `gitsource` | `hosttest.Source` (local directory) |
 | `GitHost` | list repositories, branches, commits | `githubapi` | `hosttest.Host` |

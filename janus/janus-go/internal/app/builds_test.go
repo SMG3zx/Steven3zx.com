@@ -52,7 +52,7 @@ func newBuildFixture(t *testing.T, language string, builder app.Builder) *buildF
 	store := storetest.NewMemory()
 	importedProject(t, store, "owner", "project", language)
 	audit := audittest.NewRecorder()
-	return &buildFixture{t: t, store: store, audit: audit, builds: app.NewBuilds(store, builder, audit)}
+	return &buildFixture{t: t, store: store, audit: audit, builds: app.NewBuilds(store, builder, nil, audit)}
 }
 
 func (f *buildFixture) wait() {
@@ -139,7 +139,7 @@ func TestBuildRefusesWhatItCannotBuild(t *testing.T) {
 			t.Errorf("%s: error = %v, want %q", c.name, err, c.want)
 		}
 	}
-	nobuilder := app.NewBuilds(f.store, nil, f.audit)
+	nobuilder := app.NewBuilds(f.store, nil, nil, f.audit)
 	if _, err := nobuilder.Request(ctx, app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget}); err == nil || err.Error() != "WASM build runner is not configured" {
 		t.Errorf("no builder: %v", err)
 	}

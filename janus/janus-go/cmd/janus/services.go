@@ -52,6 +52,7 @@ type application struct {
 	authorization  *app.Policy
 	imports        *app.Imports
 	builds         *app.Builds
+	deployments    *app.Deployments
 	accounts       *app.Accounts
 	runs           *app.Runs
 	httpServer     *httpapi.Server
@@ -170,6 +171,9 @@ func (a *application) groups() []group {
 				return wrap("drain WASM runtime", a.runs.Drain(ctx))
 			})},
 			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleetLoop)},
+			{name: "deployments", start: a.startDeployments, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("drain Deployments", a.deployments.Drain(ctx))
+			})},
 		}},
 		{name: "web", components: []component{
 			{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {
@@ -280,7 +284,19 @@ func (a *application) startBuilds(context.Context) error {
 	for _, image := range built {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
-	a.builds = app.NewBuilds(a.store, dockerbuild.NewDocker(images), a.audit)
+	docker := dockerbuild.NewDocker(images)
+	a.builds = app.NewBuilds(a.store, docker, docker, a.audit)
+	return nil
+}
+
+// startDeployments makes the Deployments use case. It hands Deployments to the
+// Fleet, when Agent enrollment is on; without it Deploy is refused.
+func (a *application) startDeployments(context.Context) error {
+	var deployer app.AgentDeployer
+	if a.fleet != nil {
+		deployer = a.fleet
+	}
+	a.deployments = app.NewDeployments(a.store, deployer, a.audit)
 	return nil
 }
 
@@ -303,7 +319,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Agents: a.agents, Fleet: a.fleet, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Agents: a.agents, Fleet: a.fleet, Runs: a.runs, Deployments: a.deployments,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,

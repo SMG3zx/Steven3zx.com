@@ -132,6 +132,18 @@ type TailnetNode struct {
 	LastSeen        time.Time
 }
 
+// CheckRequest asks for the checks of a compiled workspace. The workspace is the
+// same source tree the build compiled.
+type CheckRequest struct{ Workspace string }
+
+// CheckResult is the outcome of a Check. Passed is false when a check or test
+// command failed. NoTests is true when the Language's test command ran no tests,
+// so the Check rests on the compile-level check alone. Log is bounded output.
+type CheckResult struct {
+	Passed, NoTests bool
+	Log             []byte
+}
+
 // HostedDeployment is a Deployment as an Agent serves it: the module, its
 // SHA-256 as lower-case hex, and the Template's fuel and memory limits.
 // Limits.Timeout is not used; every request gets the same timeout.

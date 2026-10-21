@@ -36,14 +36,15 @@ type NewBuild struct {
 type Builds struct {
 	store   Store
 	builder Builder
+	checker Checker
 	audit   Audit
 	jobs    *JobRunner
 }
 
-// NewBuilds returns a Builds that reads source and records Builds in store and
-// compiles with builder.
-func NewBuilds(store Store, builder Builder, audit Audit) *Builds {
-	return &Builds{store: store, builder: builder, audit: audit, jobs: NewJobRunner(maxConcurrentBuilds)}
+// NewBuilds returns a Builds that reads source and records Builds in store,
+// compiles with builder and runs each completed Build's checks with checker.
+func NewBuilds(store Store, builder Builder, checker Checker, audit Audit) *Builds {
+	return &Builds{store: store, builder: builder, checker: checker, audit: audit, jobs: NewJobRunner(maxConcurrentBuilds)}
 }
 
 // buildJob is one Build to run.
@@ -264,7 +265,40 @@ func (b *Builds) run(parent context.Context, job *buildJob) error {
 	if err != nil {
 		return b.failWithLog(ctx, job, "WASM artifact could not be stored", log, err)
 	}
+	b.check(ctx, job, workspace)
 	return nil
+}
+
+// check runs the checks of a completed Build on its workspace and records the
+// result on the Build. A Check that cannot run to an answer is recorded as failed
+// and keeps its error. The Build stays complete either way, so a failed Check
+// only holds back a Deploy.
+func (b *Builds) check(ctx context.Context, job *buildJob, workspace string) {
+	if b.checker == nil {
+		return
+	}
+	// The Check's records use their own context, so a timeout or a shutdown during
+	// the checks cannot leave the Check running and block Deploy.
+	records, cancel := context.WithTimeout(context.Background(), recordTimeout)
+	defer cancel()
+	fields := map[string]string{"user_id": job.OwnerID, "project_id": job.ProjectID, "job_id": job.JobID}
+	if err := b.store.StartCheck(records, StartCheck{BuildID: job.JobID}); err != nil {
+		fields["reason"] = "check_not_started"
+		b.record(records, "error", "project.wasm.check.failed", fields)
+		return
+	}
+	result, err := b.checker.Check(ctx, job.Language, CheckRequest{Workspace: workspace})
+	finish := FinishCheck{BuildID: job.JobID, Status: CheckPassed, Log: string(result.Log), NoTests: result.NoTests}
+	switch {
+	case err != nil:
+		finish.Status, finish.Error = CheckFailed, err.Error()
+	case !result.Passed:
+		finish.Status = CheckFailed
+	}
+	if err = b.store.FinishCheck(records, finish); err != nil {
+		fields["reason"] = "check_not_finished"
+		b.record(records, "error", "project.wasm.check.failed", fields)
+	}
 }
 
 // snapshotEntrypoint returns the Entrypoint the Account confirmed for the

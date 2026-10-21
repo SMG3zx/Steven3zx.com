@@ -36,6 +36,8 @@ func (a *Server) registerProjectRoutes(app *mux) {
 	app.Get("/api/wasm-builds/:id", a.getWASMBuild)
 	app.Get("/api/wasm-builds/:id/artifact", a.getWASMArtifact)
 	app.Post("/api/wasm-builds/:id/runs", a.startWASMRun)
+	app.Post("/api/projects/:id/deployments", a.startDeployment)
+	app.Get("/api/deployments/:id", a.getDeployment)
 	app.Get("/api/wasm-runs/:id", a.getWASMRun)
 }
 
