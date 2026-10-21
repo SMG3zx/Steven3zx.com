@@ -17,6 +17,8 @@ import {
 } from "../shared/graph";
 import { History } from "./history";
 import { LESSONS, type Lesson } from "../shared/lessons";
+import { createTour } from "./tour";
+import { tourStarter } from "../shared/tour";
 
 interface Diagnostic {
   level: "error" | "warning";
@@ -83,6 +85,7 @@ let usedWires = new Set<string>();
 let tracing = false;
 let findQuery = "";
 let findIndex = -1;
+let runs = 0;
 const nodeEls = new Map<string, HTMLElement>();
 let generateTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -124,6 +127,7 @@ function buildPalette() {
     for (const def of defs) {
       const btn = el("button", "", def.title);
       btn.type = "button";
+      btn.dataset.kind = def.kind;
       btn.title = def.help;
       btn.draggable = true;
       btn.addEventListener("dragstart", (e) => {
@@ -235,6 +239,7 @@ function buildNodeEl(n: GNode): HTMLElement {
   const def = defOf(n);
   const box = el("div", "node" + (def?.root ? " root" : ""));
   box.dataset.id = n.id;
+  box.dataset.kind = n.kind;
   const head = el("div", "node-head", def?.title ?? `unknown: ${n.kind}`);
   head.title = def?.help ?? "";
   box.append(head);
@@ -760,6 +765,7 @@ async function run() {
       return;
     }
     if (!res.ok) throw new Error(data.error ?? res.statusText);
+    runs += 1;
     outputView.textContent = [data.output ?? "", data.error ? `\n${data.error}` : ""].join("").trimEnd() || "(no output)";
     if (data.source) codeView.textContent = data.source;
   } catch (err) {
@@ -1012,6 +1018,14 @@ $("btn-run").addEventListener("click", run);
 $("btn-undo").addEventListener("click", undo);
 $("btn-redo").addEventListener("click", redo);
 $("btn-trace").addEventListener("click", toggleTrace);
+const tour = createTour({
+  facts: () => ({ graph, tracing, selected: selection !== null, runs }),
+  newProgram: () => {
+    loadGraph(tourStarter());
+    setStatus("New program for the tour.");
+  },
+});
+$("btn-tour").addEventListener("click", () => tour.start());
 const findInput = $<HTMLInputElement>("find");
 findInput.addEventListener("input", () => setFind(findInput.value));
 findInput.addEventListener("keydown", (e) => {
@@ -1105,6 +1119,7 @@ showLesson(LESSONS[0].id);
   updateHistoryButtons();
   bottom.classList.remove("collapsed");
   showTab("code");
+  tour.startIfNew();
 })();
 
 
