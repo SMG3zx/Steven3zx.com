@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/adapters/tailnettest"
 	"janus/internal/app"
@@ -14,11 +15,12 @@ import (
 // agentEnv is the Agents use case wired to test adapters, with a clock the
 // test moves.
 type agentEnv struct {
-	agents  *app.Agents
-	store   *storetest.Memory
-	tailnet *tailnettest.Fake
-	audit   *audittest.Recorder
-	now     time.Time
+	agents     *app.Agents
+	store      *storetest.Memory
+	identities *identitytest.Memory
+	tailnet    *tailnettest.Fake
+	audit      *audittest.Recorder
+	now        time.Time
 }
 
 func newAgentEnv(t *testing.T, owners ...string) *agentEnv {
@@ -27,8 +29,9 @@ func newAgentEnv(t *testing.T, owners ...string) *agentEnv {
 		store: storetest.NewMemory(), tailnet: tailnettest.NewFake(), audit: audittest.NewRecorder(),
 		now: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC),
 	}
+	env.identities = users(t, owners...)
 	for _, id := range owners {
-		must(t, env.store.CreateLocalUser(context.Background(), app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, env.store.AddOwner(context.Background(), id))
 	}
 	env.tailnet.Now = func() time.Time { return env.now }
 	env.agents = app.NewAgents(env.store, env.tailnet, env.audit, "https://tailnet.example.test", func() time.Time { return env.now })

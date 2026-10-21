@@ -9,8 +9,11 @@ import (
 	"janus/internal/adapters/githubapi"
 	"janus/internal/adapters/gitsource"
 	"janus/internal/adapters/httpapi"
+	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
+	"janus/internal/platform/natstest"
+	"janus/internal/services/identity"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -65,11 +68,11 @@ func TestProjectBrowserActions(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	store, handler := startJanus(t, ctx)
+	store, identities, handler := startJanus(t, ctx)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 	userID, sessionCookie := registerUser(t, server.URL)
-	connectGitHub(t, ctx, store, userID)
+	connectGitHub(t, ctx, identities, userID)
 
 	browserContext, err := browser.NewContext()
 	if err != nil {
@@ -316,37 +319,45 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 }
 
-func startJanus(t *testing.T, ctx context.Context) (app.Store, http.Handler) {
+func startJanus(t *testing.T, ctx context.Context) (app.Store, app.Identities, http.Handler) {
 	t.Helper()
-	store, _, handler := startJanusWith(t, ctx, e2eWASMBuilder{})
-	return store, handler
+	store, identities, _, handler := startJanusWith(t, ctx, e2eWASMBuilder{})
+	return store, identities, handler
 }
 
-// startJanusWith starts the application in-process with b as its WASM builder.
-// It returns the Store, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store, *app.Builds, http.Handler) {
+// startJanusWith starts the application in-process with b as its WASM builder,
+// and the identity service on an embedded NATS server. It returns the Store,
+// the Identities, the Builds use case and the HTTP handler.
+func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (app.Store, app.Identities, *app.Builds, http.Handler) {
 	t.Helper()
-	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"), sqlstore.WithTokenSecret(jwtSecret))
+	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
+	hub := natstest.Start(t)
+	identityService := identity.New(identity.Config{DatabasePath: path.Join(t.TempDir(), "identity.db"), TokenSecret: jwtSecret})
+	if err := identityService.Start(ctx, hub.Conn()); err != nil {
+		t.Fatalf("start the identity service: %v", err)
+	}
+	t.Cleanup(func() { _ = identityService.Stop(context.Background()) })
+	identities := identitynats.New(hub.Conn())
 	authentication := app.NewAuthentication([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}
-	gh := app.NewGitHub(store, githubapi.NewClient())
+	gh := app.NewGitHub(identities, githubapi.NewClient())
 	audit := audittest.NewRecorder()
-	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
+	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audit)
 	builds := app.NewBuilds(store, b, nil, audit)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, imports, builds),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, imports, builds),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
 	})
-	return store, builds, server.Handler()
+	return store, identities, builds, server.Handler()
 }
 
 func registerUser(t *testing.T, baseURL string) (string, string) {
@@ -374,9 +385,9 @@ func registerUser(t *testing.T, baseURL string) (string, string) {
 	return "", ""
 }
 
-func connectGitHub(t *testing.T, ctx context.Context, store app.Store, userID string) {
+func connectGitHub(t *testing.T, ctx context.Context, identities app.Identities, userID string) {
 	t.Helper()
-	if err := store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
+	if err := identities.ConnectGitHub(ctx, app.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
 		t.Fatalf("connect GitHub fixture: %v", err)
 	}
 }

@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	"janus/internal/app"
 	"janus/internal/domain/jobs"
 )
@@ -20,16 +18,11 @@ import (
 // uniqueness, the job state machines and the cascade when something is deleted.
 // Like the SQL store, every error it returns is a *ReplyError, and a constraint
 // violation reads "constraint failed: ..." as SQLite's does.
-//
-// It stores GitHub tokens as given, since there is no database to protect.
 type Memory struct {
 	mu   sync.Mutex
 	last time.Time
 
-	users       map[string]*memUser
-	creds       map[string]memCredential // by user ID
-	identities  map[memIdentity]string   // provider and subject to user ID
-	github      map[string]memGitHub     // by user ID
+	users       map[string]struct{} // the Owners
 	projects    map[string]*memProject
 	snapshots   map[string]*memSnapshot
 	imports     map[string]*memImport
@@ -47,10 +40,7 @@ var _ app.Store = (*Memory)(nil)
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		users:       map[string]*memUser{},
-		creds:       map[string]memCredential{},
-		identities:  map[memIdentity]string{},
-		github:      map[string]memGitHub{},
+		users:       map[string]struct{}{},
 		projects:    map[string]*memProject{},
 		snapshots:   map[string]*memSnapshot{},
 		imports:     map[string]*memImport{},
@@ -63,10 +53,6 @@ func NewMemory() *Memory {
 	}
 }
 
-type memUser struct{ id, email, displayName string }
-type memCredential struct{ email, passwordHash string }
-type memIdentity struct{ provider, subject string }
-type memGitHub struct{ subject, token string }
 type memCode struct {
 	ownerID   string
 	expiresAt time.Time
@@ -125,119 +111,12 @@ func (m *Memory) now() string {
 	return t.Format("2006-01-02 15:04:05.000")
 }
 
-// Identity.
+// Owners.
 
-func (m *Memory) CreateLocalUser(_ context.Context, user app.CreateLocalUser) error {
+func (m *Memory) AddOwner(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	email := strings.TrimSpace(user.Email)
-	if _, ok := m.users[user.ID]; ok {
-		return constraint("UNIQUE constraint failed: users.id")
-	}
-	for _, c := range m.creds {
-		if strings.EqualFold(c.email, email) {
-			return constraint("UNIQUE constraint failed: local_credentials.email")
-		}
-	}
-	m.users[user.ID] = &memUser{id: user.ID, email: email}
-	m.creds[user.ID] = memCredential{email: email, passwordHash: user.PasswordHash}
-	return nil
-}
-
-func (m *Memory) FindLocalUser(_ context.Context, email string) (app.LocalUserFound, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	email = strings.TrimSpace(email)
-	for id, c := range m.creds {
-		if strings.EqualFold(c.email, email) {
-			return app.LocalUserFound{ID: id, Email: c.email, PasswordHash: c.passwordHash, Found: true}, nil
-		}
-	}
-	return app.LocalUserFound{}, nil
-}
-
-func (m *Memory) FindUser(_ context.Context, id string) (app.UserFound, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	u, ok := m.users[id]
-	if !ok {
-		return app.UserFound{}, nil
-	}
-	return app.UserFound{ID: u.id, Email: u.email, DisplayName: u.displayName, Found: true}, nil
-}
-
-func (m *Memory) ResolveGoogleIdentity(_ context.Context, identity app.ResolveGoogleIdentity) (app.GoogleIdentityResolved, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := memIdentity{"google", identity.Subject}
-	if id, ok := m.identities[key]; ok {
-		u := m.users[id]
-		return app.GoogleIdentityResolved{ID: u.id, Email: u.email, DisplayName: u.displayName}, nil
-	}
-	id := uuid.NewString()
-	m.users[id] = &memUser{id: id, email: identity.Email, displayName: identity.DisplayName}
-	m.identities[key] = id
-	return app.GoogleIdentityResolved{ID: id, Email: identity.Email, DisplayName: identity.DisplayName}, nil
-}
-
-func (m *Memory) ResolveGitHubLogin(_ context.Context, login app.ResolveGitHubLogin) (app.GitHubLoginResolved, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := memIdentity{"github", login.Subject}
-	if id, ok := m.identities[key]; ok {
-		u := m.users[id]
-		return app.GitHubLoginResolved{ID: u.id, Email: u.email, DisplayName: u.displayName}, nil
-	}
-	email := strings.TrimSpace(login.Email)
-	if email == "" {
-		return app.GitHubLoginResolved{}, fail("GitHub did not return a verified primary email")
-	}
-	for _, u := range m.users {
-		if u.email != "" && strings.EqualFold(u.email, email) {
-			return app.GitHubLoginResolved{EmailInUse: true}, nil
-		}
-	}
-	id := uuid.NewString()
-	name := strings.TrimSpace(login.DisplayName)
-	m.users[id] = &memUser{id: id, email: email, displayName: name}
-	m.identities[key] = id
-	return app.GitHubLoginResolved{ID: id, Email: email, DisplayName: name}, nil
-}
-
-func (m *Memory) ConnectGitHub(_ context.Context, connection app.ConnectGitHub) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if connection.UserID == "" || connection.Subject == "" || connection.Token == "" {
-		return fail("incomplete GitHub connection")
-	}
-	key := memIdentity{"github", connection.Subject}
-	if linked, ok := m.identities[key]; ok && linked != connection.UserID {
-		return fail("GitHub account is connected to another Janus account")
-	}
-	if existing, ok := m.github[connection.UserID]; ok && existing.subject != connection.Subject {
-		return fail("a different GitHub account is already connected")
-	}
-	if _, ok := m.users[connection.UserID]; !ok {
-		return constraint("FOREIGN KEY constraint failed")
-	}
-	if _, ok := m.identities[key]; !ok {
-		m.identities[key] = connection.UserID
-	}
-	m.github[connection.UserID] = memGitHub{subject: connection.Subject, token: connection.Token}
-	return nil
-}
-
-func (m *Memory) FindGitHubToken(_ context.Context, userID string) (string, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	connection, ok := m.github[userID]
-	return connection.token, ok, nil
-}
-
-func (m *Memory) DisconnectGitHub(_ context.Context, userID string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.github, userID)
+	m.users[id] = struct{}{}
 	return nil
 }
 
@@ -790,11 +669,6 @@ func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJob
 			delete(m.builds, id)
 		}
 	}
-	for key, owner := range m.identities {
-		if owner == userID {
-			delete(m.identities, key)
-		}
-	}
 	for id, agent := range m.agents {
 		if agent.OwnerID == userID {
 			delete(m.agents, id)
@@ -810,8 +684,6 @@ func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJob
 			delete(m.runs, id)
 		}
 	}
-	delete(m.github, userID)
-	delete(m.creds, userID)
 	delete(m.users, userID)
 	return app.AccountDeleted{Deleted: true}, nil
 }

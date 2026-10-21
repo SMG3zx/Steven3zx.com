@@ -42,10 +42,10 @@ func compressedArtifact(t *testing.T, module []byte) (name string, data []byte) 
 func completedBuild(t *testing.T, store app.Store, owner, id string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
-	if found, err := store.FindUser(ctx, owner); err != nil {
+	must(t, store.AddOwner(ctx, owner))
+	if _, found, err := store.GetProject(ctx, owner+"-project", owner); err != nil {
 		t.Fatal(err)
-	} else if !found.Found {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: owner, Email: owner + "@example.com", PasswordHash: "hash"}))
+	} else if !found {
 		_, err = store.CreateProject(ctx, app.CreateProject{ID: owner + "-project", OwnerID: owner, Name: "p"})
 		must(t, err)
 	}

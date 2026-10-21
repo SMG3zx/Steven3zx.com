@@ -21,11 +21,7 @@ const rustTarget = "wasm32-unknown-unknown"
 func importedProject(t *testing.T, store app.Store, owner, project, language string) {
 	t.Helper()
 	ctx := context.Background()
-	if found, err := store.FindUser(ctx, owner); err != nil {
-		t.Fatal(err)
-	} else if !found.Found {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: owner, Email: owner + "@example.com", PasswordHash: "hash"}))
-	}
+	must(t, store.AddOwner(ctx, owner))
 	commit := strings.Repeat("b", 40)
 	job, snapshot := project+"-import", project+"-snapshot"
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: project, OwnerID: owner, Name: project})

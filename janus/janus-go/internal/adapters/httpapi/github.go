@@ -172,7 +172,7 @@ func (a *Server) githubCallback(c *call) any {
 			return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "sign in to the same Janus account and reconnect GitHub"})
 		}
 		if connectErr := a.dependencies.GitHub.Connect(ctx, app.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
-			if app.IsReply(connectErr) {
+			if app.IsConflict(connectErr) {
 				return jsonResponse(http.StatusConflict, map[string]string{"error": connectErr.Error()})
 			}
 			return internalError()

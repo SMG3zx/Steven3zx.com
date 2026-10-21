@@ -12,6 +12,7 @@ import (
 
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/hosttest"
+	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
@@ -21,14 +22,15 @@ const importMainGo = "package main\n\nfunc main() {}\n"
 // importFixture serves a one-file repository, alice/repo, from a local
 // directory and a fake host, with an in-memory Store holding alice and a Project.
 type importFixture struct {
-	t       *testing.T
-	store   app.Store
-	audit   *audittest.Recorder
-	source  *countingSource
-	imports *app.Imports
-	commit  string
-	blob    string
-	dir     string
+	t          *testing.T
+	store      app.Store
+	identities *identitytest.Memory
+	audit      *audittest.Recorder
+	source     *countingSource
+	imports    *app.Imports
+	commit     string
+	blob       string
+	dir        string
 }
 
 // countingSource counts how many times the repository was opened, and can be
@@ -67,13 +69,14 @@ func newImportFixture(t *testing.T) *importFixture {
 	}}})
 	store := storetest.NewMemory()
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Project"})
 	must(t, err)
-	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"}))
+	identities := users(t, "alice")
+	must(t, identities.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "github-alice", Token: "token"}))
 	source := &countingSource{inner: hosttest.NewDirSource(dir, commit)}
 	audit := audittest.NewRecorder()
-	return &importFixture{t: t, store: store, audit: audit, source: source, imports: app.NewImports(store, host, source, audit), commit: commit, blob: hosttest.BlobHash([]byte(importMainGo)), dir: dir}
+	return &importFixture{t: t, store: store, identities: identities, audit: audit, source: source, imports: app.NewImports(store, identities, host, source, audit), commit: commit, blob: hosttest.BlobHash([]byte(importMainGo)), dir: dir}
 }
 
 func (f *importFixture) wait() {
@@ -184,7 +187,7 @@ func TestRequestRefusesWhatCannotBeImported(t *testing.T) {
 			t.Errorf("%s: error = %v, want %q", c.name, err, c.want)
 		}
 	}
-	must(t, f.store.DisconnectGitHub(ctx, "alice"))
+	must(t, f.identities.DisconnectGitHub(ctx, "alice"))
 	if _, err := f.imports.Request(ctx, f.request()); err == nil || err.Error() != "connect GitHub before importing a repository" {
 		t.Errorf("without a connection: %v", err)
 	}
@@ -227,7 +230,7 @@ func TestResumeDiscardsStagingThatDoesNotMatchTheCommit(t *testing.T) {
 func TestResumeWithoutGitHubConnectionFailsAndDiscardsStaging(t *testing.T) {
 	f := newImportFixture(t)
 	f.interruptedImport("job-1", "staging-1", map[string]string{"main.go": f.blob}, f.manifestFor(f.blob))
-	must(t, f.store.DisconnectGitHub(context.Background(), "alice"))
+	must(t, f.identities.DisconnectGitHub(context.Background(), "alice"))
 	f.resume()
 
 	if job := f.job("job-1"); job.Status != "failed" || !strings.Contains(job.Error, "reconnect GitHub") {

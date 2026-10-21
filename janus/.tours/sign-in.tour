@@ -35,13 +35,13 @@
     },
     {
       "file": "janus-go/internal/app/identity.go",
-      "line": 13,
+      "line": 17,
       "title": "The identity use cases",
-      "description": "`func NewIdentity` builds the use cases for Accounts and sign-in methods, over the Store port."
+      "description": "`func NewIdentity` builds the use cases for Accounts and sign-in methods, over the Identities port (the identity service). Every User it creates or signs in is also added to the Store as an Owner."
     },
     {
       "file": "janus-go/internal/app/identity.go",
-      "line": 35,
+      "line": 47,
       "title": "Google and GitHub sign-ins",
       "description": "`func (i *Identity) ResolveGoogleIdentity` finds the Account for a Google sign-in through its Provider Identity, or creates one. GitHub works the same way."
     }

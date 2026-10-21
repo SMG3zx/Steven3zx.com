@@ -5,19 +5,19 @@
   "steps": [
     {
       "file": "janus-go/internal/app/imports.go",
-      "line": 66,
+      "line": 68,
       "title": "An import is requested",
       "description": "`func (i *Imports) Request` records the import as queued and starts it. The HTTP request returns before any files are fetched."
     },
     {
       "file": "janus-go/internal/app/imports.go",
-      "line": 349,
+      "line": 351,
       "title": "The import runs",
       "description": "`func (i *Imports) run` fetches the commit, scans it, and stores a Staging Snapshot, then completes it."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 153,
+      "line": 168,
       "title": "The Source port",
       "description": "`type Source interface` opens a repository at a commit and lists its files. The core never calls git or GitHub directly."
     },
@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/internal/app/imports.go",
-      "line": 157,
+      "line": 159,
       "title": "Resuming after a restart",
       "description": "`func (i *Imports) Resume` restarts the imports that a shutdown interrupted. See the job resume tour for the rest."
     }

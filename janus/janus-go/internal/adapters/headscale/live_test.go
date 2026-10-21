@@ -260,7 +260,7 @@ func TestLiveDefaultDenyPolicy(t *testing.T) {
 func TestLiveEnrollmentEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	store, audit := storetest.NewMemory(), audittest.NewRecorder()
-	if err := store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "live-alice", Email: "alice@example.com", PasswordHash: "h"}); err != nil {
+	if err := store.AddOwner(ctx, "live-alice"); err != nil {
 		t.Fatal(err)
 	}
 	agents := app.NewAgents(store, live, audit, liveURL, time.Now)

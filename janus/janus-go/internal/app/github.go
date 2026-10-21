@@ -20,25 +20,25 @@ var ErrNotConnected = errors.New("connect GitHub before importing a repository")
 // GitHub Connection stores. It keeps no state, so callers use it directly.
 type GitHub struct {
 	// API is the code host the Service reads from.
-	API   GitHost
-	store Store
+	API        GitHost
+	identities Identities
 }
 
-// NewGitHub returns a GitHub that reads tokens from store and repository
+// NewGitHub returns a GitHub that reads tokens from identities and repository
 // metadata from host.
-func NewGitHub(store Store, host GitHost) *GitHub {
-	return &GitHub{API: host, store: store}
+func NewGitHub(identities Identities, host GitHost) *GitHub {
+	return &GitHub{API: host, identities: identities}
 }
 
 // Token returns the Account's GitHub access token, and whether the Account is
 // connected at all.
 func (s *GitHub) Token(ctx context.Context, ownerID string) (token string, connected bool, err error) {
-	return s.store.FindGitHubToken(ctx, ownerID)
+	return s.identities.FindGitHubToken(ctx, ownerID)
 }
 
 // Disconnect removes the Account's stored token. Its sign-in identities stay.
 func (s *GitHub) Disconnect(ctx context.Context, ownerID string) error {
-	return s.store.DisconnectGitHub(ctx, ownerID)
+	return s.identities.DisconnectGitHub(ctx, ownerID)
 }
 
 // Repositories lists the repositories the Account can see. An Account that is
@@ -93,6 +93,9 @@ func (s *GitHub) connectedToken(ctx context.Context, ownerID string) (string, er
 }
 
 // Connect stores the GitHub Connection of an Account, replacing any earlier one.
+//
+// A GitHub account linked to another Account, or a different GitHub account
+// already connected, fails with a *Conflict.
 func (s *GitHub) Connect(ctx context.Context, connection ConnectGitHub) error {
-	return s.store.ConnectGitHub(ctx, connection)
+	return s.identities.ConnectGitHub(ctx, connection)
 }

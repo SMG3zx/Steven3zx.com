@@ -14,6 +14,7 @@ import (
 	"janus/internal/adapters/checktest"
 	"janus/internal/adapters/githubapi"
 	"janus/internal/adapters/gitsource"
+	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
@@ -52,9 +53,10 @@ func newDeployApp(t *testing.T, deployer agentDeployer) *deployApp {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	store := storetest.NewMemory()
-	gh := app.NewGitHub(store, githubapi.NewClient())
+	identities := identitytest.NewMemory()
+	gh := app.NewGitHub(identities, githubapi.NewClient())
 	audit := audittest.NewRecorder()
-	imports := app.NewImports(store, gh.API, gitsource.New(), audit)
+	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audit)
 	checks := checktest.NewFake()
 	builds := app.NewBuilds(store, buildertest.NewFake(), checks, audit)
 	deployments := app.NewDeployments(store, deployer, audit)
@@ -63,8 +65,8 @@ func newDeployApp(t *testing.T, deployer agentDeployer) *deployApp {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audit, Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds,
-		Accounts: app.NewAccounts(store, imports, builds), Deployments: deployments,
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Builds: builds,
+		Accounts: app.NewAccounts(store, identities, imports, builds), Deployments: deployments,
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 

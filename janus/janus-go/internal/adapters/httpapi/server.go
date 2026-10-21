@@ -218,7 +218,7 @@ func (a *Server) register(c *call) any {
 	userID := newUserID()
 	err = a.dependencies.Identity.CreateLocalUser(ctx, app.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
 	if err != nil {
-		if isConflict(err) {
+		if app.IsConflict(err) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
 		}
 		return internalError()
@@ -428,10 +428,6 @@ func jsonResponse(status int, body any) reply {
 
 func internalError() reply {
 	return jsonResponse(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
-}
-
-func isConflict(err error) bool {
-	return err != nil && (strings.Contains(strings.ToLower(err.Error()), "unique constraint") || strings.Contains(strings.ToLower(err.Error()), "constraint failed"))
 }
 
 func newUserID() string {

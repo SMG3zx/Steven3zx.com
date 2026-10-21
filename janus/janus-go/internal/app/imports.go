@@ -28,18 +28,20 @@ type ImportRequest struct {
 // runs on a goroutine the use case owns, at most two at once, and is recorded in
 // the Store as it moves through its states, so a restart can resume it.
 type Imports struct {
-	store  Store
-	host   GitHost
-	source Source
-	audit  Audit
-	jobs   *JobRunner
+	store      Store
+	identities Identities
+	host       GitHost
+	source     Source
+	audit      Audit
+	jobs       *JobRunner
 }
 
-// NewImports returns an Imports that records imports in store, checks the
-// repository, branch and commit against host, fetches files through source and
+// NewImports returns an Imports that records imports in store, reads the
+// Owner's GitHub token from identities, checks the repository, branch and
+// commit against host, fetches files through source and
 // audits what happens to audit.
-func NewImports(store Store, host GitHost, source Source, audit Audit) *Imports {
-	return &Imports{store: store, host: host, source: source, audit: audit, jobs: NewJobRunner(maxConcurrentImports)}
+func NewImports(store Store, identities Identities, host GitHost, source Source, audit Audit) *Imports {
+	return &Imports{store: store, identities: identities, host: host, source: source, audit: audit, jobs: NewJobRunner(maxConcurrentImports)}
 }
 
 // importJob is one import to run.
@@ -77,7 +79,7 @@ func (i *Imports) Request(ctx context.Context, request ImportRequest) (string, e
 	if !found {
 		return "", errors.New("project not found")
 	}
-	token, connected, err := i.store.FindGitHubToken(ctx, request.OwnerID)
+	token, connected, err := i.identities.FindGitHubToken(ctx, request.OwnerID)
 	if err != nil {
 		return "", err
 	}
@@ -173,7 +175,7 @@ func (i *Imports) Resume(ctx context.Context) (int, error) {
 // resumedJob prepares the job for an interrupted import. The repository is read
 // again from the host, because the job stores only its name.
 func (i *Imports) resumedJob(ctx context.Context, queued ResumableImport) (*importJob, error) {
-	token, connected, err := i.store.FindGitHubToken(ctx, queued.OwnerID)
+	token, connected, err := i.identities.FindGitHubToken(ctx, queued.OwnerID)
 	if err != nil {
 		return nil, err
 	}

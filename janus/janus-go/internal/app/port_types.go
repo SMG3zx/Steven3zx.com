@@ -104,6 +104,19 @@ type AuditEvent struct {
 	Fields map[string]string
 }
 
+// Conflict is a request Identities refused because it clashes with what is
+// stored. Reason is a sentence for the Account, such as "account already
+// exists".
+type Conflict struct{ Reason string }
+
+func (c *Conflict) Error() string { return c.Reason }
+
+// IsConflict reports whether err is, or wraps, a *Conflict.
+func IsConflict(err error) bool {
+	var conflict *Conflict
+	return errors.As(err, &conflict)
+}
+
 // SourceError is a failure to open a repository's tree. Message is the sentence
 // an Account sees, such as "repository clone failed"; Err is the underlying cause.
 type SourceError struct {

@@ -13,8 +13,8 @@ import (
 // owned and in flight one at a time, and its state moves compare and swap.
 func testChecksAndDeployments(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "bob", Email: "bob@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "alice"))
+	must(t, store.AddOwner(ctx, "bob"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	snapshot := importSnapshot(t, store, "alice", "p1", "one")
@@ -94,8 +94,8 @@ func testChecksAndDeployments(t *testing.T, store app.Store) {
 // Deployments are listed newest first and only for their Owner.
 func testRedeployAndStop(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "carol", Email: "carol@example.com", PasswordHash: "h"}))
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "dana", Email: "dana@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "carol"))
+	must(t, store.AddOwner(ctx, "dana"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p9", OwnerID: "carol", Name: "P"})
 	must(t, err)
 	snapshot := importSnapshot(t, store, "carol", "p9", "nine")

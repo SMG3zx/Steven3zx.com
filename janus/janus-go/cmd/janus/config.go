@@ -19,6 +19,7 @@ import (
 type settings struct {
 	HTTPAddress            string
 	DatabasePath           string
+	IdentityDatabasePath   string
 	JWTSecret              string
 	JWTIssuer              string
 	JWTExpiry              time.Duration
@@ -68,6 +69,10 @@ func loadSettings(ctx context.Context) (settings, error) {
 	databasePath := strings.TrimSpace(os.Getenv("JANUS_DATABASE_PATH"))
 	if databasePath == "" {
 		databasePath = "data/janus.db"
+	}
+	identityDatabasePath := strings.TrimSpace(os.Getenv("JANUS_IDENTITY_DATABASE_PATH"))
+	if identityDatabasePath == "" {
+		identityDatabasePath = "data/identity.db"
 	}
 	secret := os.Getenv("JANUS_JWT_SECRET")
 	if len(secret) < 32 {
@@ -149,6 +154,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.String("config.http.address", addr),
 		attribute.String("config.http.address.source", source),
 		attribute.String("config.database.path", databasePath),
+		attribute.String("config.identity.database.path", identityDatabasePath),
 		attribute.Bool("config.google.enabled", googleEnabled),
 		attribute.Bool("config.github.enabled", githubEnabled),
 		attribute.Bool("config.headscale.enabled", headscaleURL != ""),
@@ -156,7 +162,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.Bool("config.nats.embedded", natsURL == ""),
 	)
 	return settings{
-		HTTPAddress: addr, DatabasePath: databasePath, JWTSecret: secret, JWTIssuer: issuer,
+		HTTPAddress: addr, DatabasePath: databasePath, IdentityDatabasePath: identityDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
 		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,

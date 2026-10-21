@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/internal/app/port_types.go",
-      "line": 171,
+      "line": 184,
       "title": "What an Agent reports",
       "description": "`type RunReport struct` is one run as the Agent measured it, including network bytes and the status. A run that failed still reports what it spent."
     },

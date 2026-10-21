@@ -24,7 +24,7 @@ import (
 func TestContention(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "contention.db"))
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p", OwnerID: "alice", Name: "p"})
 	must(t, err)
 	commit := strings.Repeat("a", 40)
@@ -52,8 +52,10 @@ func TestContention(t *testing.T) {
 		var signIn, page []time.Duration
 		for range n {
 			start := time.Now()
-			if found, err := store.FindLocalUser(ctx, "alice@example.com"); err != nil || !found.Found {
-				t.Fatalf("sign-in lookup: %v", err)
+			// Signing in adds the Owner here; the credential lookup itself is in
+			// the identity service's own database since ENG-117.
+			if err := store.AddOwner(ctx, "alice"); err != nil {
+				t.Fatalf("sign-in: %v", err)
 			}
 			signIn = append(signIn, time.Since(start))
 			start = time.Now()

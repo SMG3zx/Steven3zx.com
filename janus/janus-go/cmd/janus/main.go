@@ -1,9 +1,13 @@
 // Command janus is the Janus control plane. It is the composition root: the only
 // place that knows which adapters exist and how they are wired to the use cases.
+//
+// `janus` runs the control plane; `janus migrate split` moves data between
+// databases once, as the services take over their own (see runMigrate).
 package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,6 +20,14 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		if err := runMigrate(ctx, os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			stop()
+			os.Exit(1)
+		}
+		return
+	}
 	logger, err := zap.NewProduction()
 	if err != nil {
 		return

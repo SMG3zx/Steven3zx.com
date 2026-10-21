@@ -14,15 +14,11 @@ import (
 // Every method that reports an absent record returns found=false with a nil
 // error, and reserves the error for failures.
 type Store interface {
-	// Identity: users, Provider Identities and the GitHub Connection.
-	CreateLocalUser(ctx context.Context, user CreateLocalUser) error
-	FindLocalUser(ctx context.Context, email string) (LocalUserFound, error)
-	FindUser(ctx context.Context, id string) (UserFound, error)
-	ResolveGoogleIdentity(ctx context.Context, identity ResolveGoogleIdentity) (GoogleIdentityResolved, error)
-	ResolveGitHubLogin(ctx context.Context, login ResolveGitHubLogin) (GitHubLoginResolved, error)
-	ConnectGitHub(ctx context.Context, connection ConnectGitHub) error
-	FindGitHubToken(ctx context.Context, userID string) (token string, connected bool, err error)
-	DisconnectGitHub(ctx context.Context, userID string) error
+	// AddOwner records that the User id may own records here, so Projects,
+	// Enrollment Codes and the rest can refer to it and go with it when the
+	// Account is deleted. Adding an Owner that exists changes nothing. Users
+	// themselves live behind Identities.
+	AddOwner(ctx context.Context, id string) error
 
 	// Projects, Snapshots, files and Entrypoints.
 	CreateProject(ctx context.Context, project CreateProject) (Project, error)
@@ -107,6 +103,25 @@ type Store interface {
 	// cancelActiveJobs an Account with unfinished jobs is left untouched and the
 	// result lists those jobs.
 	DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (AccountDeleted, error)
+}
+
+// Identities is where Users, their sign-in methods and their GitHub
+// Connection live: the identity service. A request refused because it clashes
+// with what is stored, such as an email that already has a local account or a
+// GitHub account linked to another Account, fails with a *Conflict. An absent
+// User is found=false with a nil error.
+type Identities interface {
+	CreateLocalUser(ctx context.Context, user CreateLocalUser) error
+	FindLocalUser(ctx context.Context, email string) (LocalUserFound, error)
+	FindUser(ctx context.Context, id string) (UserFound, error)
+	// DeleteUser removes a User and its sign-in methods and GitHub Connection.
+	// Deleted is false when there was no such User.
+	DeleteUser(ctx context.Context, id string) (deleted bool, err error)
+	ResolveGoogleIdentity(ctx context.Context, identity ResolveGoogleIdentity) (GoogleIdentityResolved, error)
+	ResolveGitHubLogin(ctx context.Context, login ResolveGitHubLogin) (GitHubLoginResolved, error)
+	ConnectGitHub(ctx context.Context, connection ConnectGitHub) error
+	FindGitHubToken(ctx context.Context, userID string) (token string, connected bool, err error)
+	DisconnectGitHub(ctx context.Context, userID string) error
 }
 
 // Builder compiles a workspace of one Language to an Artifact. The language is

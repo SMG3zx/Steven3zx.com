@@ -35,7 +35,6 @@ var tracer = otel.Tracer("github.com/SMG3zx/Janus/sqlstore")
 // app.IsReply.
 type Store struct {
 	db      *sql.DB
-	key     []byte
 	timeout time.Duration
 }
 
@@ -43,12 +42,6 @@ var _ app.Store = (*Store)(nil)
 
 // Option configures Open.
 type Option func(*Store)
-
-// WithTokenSecret derives the key that encrypts stored provider tokens from
-// secret. Without it, ConnectGitHub fails because tokens cannot be protected.
-func WithTokenSecret(secret string) Option {
-	return func(s *Store) { s.key = deriveTokenKey(secret) }
-}
 
 // WithTimeout bounds each operation. The default is DefaultTimeout.
 func WithTimeout(d time.Duration) Option { return func(s *Store) { s.timeout = d } }
@@ -141,28 +134,16 @@ func (s *Store) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 func newID() string { return uuid.NewString() }
 
 const schema = `
+-- users is the registry of Owners: every owned table refers to it, and
+-- deleting a row deletes what the Owner had. Users themselves, with their
+-- sign-in methods and GitHub Connection, live in the identity service's
+-- identity.db. A database from before the split still has the identity tables
+-- here; they are no longer read.
 CREATE TABLE IF NOT EXISTS users (
 	 id TEXT PRIMARY KEY,
 	 email TEXT NOT NULL DEFAULT '',
 	 display_name TEXT NOT NULL DEFAULT '',
 	 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS local_credentials (
-	 user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-	 email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-	 password_hash TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS oauth_identities (
-	 provider TEXT NOT NULL,
-	 subject TEXT NOT NULL,
-	 user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	 PRIMARY KEY (provider, subject)
-);
-CREATE TABLE IF NOT EXISTS github_connections (
-	 user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-	 subject TEXT NOT NULL UNIQUE,
-	 token_ciphertext BLOB NOT NULL,
-	 connected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS projects (
 	 id TEXT PRIMARY KEY,

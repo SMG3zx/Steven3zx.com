@@ -17,12 +17,14 @@ import (
 	"janus/internal/adapters/gitsource"
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
+	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
 	"janus/internal/platform/natsx"
 	auditservice "janus/internal/services/audit"
+	identityservice "janus/internal/services/identity"
 )
 
 // application is the composition root: it builds the adapters, hands them to
@@ -42,14 +44,17 @@ type application struct {
 	auditService *auditservice.Service
 	database     *sqlstore.Store
 	store        app.Store
-	identity     *app.Identity
-	projects     *app.Projects
-	github       *app.GitHub
-	agents       *app.Agents
-	tailnet      app.Tailnet
-	tailnode     *tailnode.Node
-	agentLink    *agentgrpc.Link
-	fleet        *app.Fleet
+	// identityService owns identity.db; identities reaches it over NATS.
+	identityService *identityservice.Service
+	identities      app.Identities
+	identity        *app.Identity
+	projects        *app.Projects
+	github          *app.GitHub
+	agents          *app.Agents
+	tailnet         app.Tailnet
+	tailnode        *tailnode.Node
+	agentLink       *agentgrpc.Link
+	fleet           *app.Fleet
 	// stopFleet ends the Fleet's reconcile loop; fleetDone closes when it has.
 	stopFleet      context.CancelFunc
 	fleetDone      chan struct{}
@@ -134,8 +139,11 @@ func (a *application) groups() []group {
 			{name: "store", start: a.openStore, stop: a.tracked(a.closeStore)},
 		}},
 		{name: "identity", components: []component{
+			{name: "identity service", start: a.startIdentityService, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("stop the identity service", a.identityService.Stop(ctx))
+			})},
 			{name: "identity use cases", start: func(context.Context) error {
-				a.identity = app.NewIdentity(a.store)
+				a.identity = app.NewIdentity(a.store, a.identities)
 				return nil
 			}},
 			{name: "authentication", start: func(context.Context) error {
@@ -155,8 +163,8 @@ func (a *application) groups() []group {
 				return nil
 			}},
 			{name: "imports", start: func(context.Context) error {
-				a.github = app.NewGitHub(a.store, githubapi.NewClient())
-				a.imports = app.NewImports(a.store, a.github.API, gitsource.New(), a.audit)
+				a.github = app.NewGitHub(a.identities, githubapi.NewClient())
+				a.imports = app.NewImports(a.store, a.identities, a.github.API, gitsource.New(), a.audit)
 				return nil
 			}, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain project imports", a.imports.Drain(ctx))
@@ -179,7 +187,7 @@ func (a *application) groups() []group {
 			})},
 			// Accounts come last in runtime: deleting one stops its Deployments first.
 			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.imports, a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
+				a.accounts = app.NewAccounts(a.store, a.identities, a.imports, a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
 				return nil
 			}},
 		}},
@@ -310,7 +318,7 @@ func (a *application) stopNATS(ctx context.Context) error {
 
 func (a *application) openStore(context.Context) error {
 	var err error
-	a.database, err = sqlstore.Open(a.settings.DatabasePath, sqlstore.WithTokenSecret(a.settings.JWTSecret))
+	a.database, err = sqlstore.Open(a.settings.DatabasePath)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -319,6 +327,27 @@ func (a *application) openStore(context.Context) error {
 }
 
 func (a *application) closeStore(context.Context) error { return a.database.Close() }
+
+// startIdentityService starts the identity service on identity.db. It refuses
+// to start while janus.db still holds Users that were never copied out,
+// because they could not sign in; `janus migrate split` copies them.
+func (a *application) startIdentityService(ctx context.Context) error {
+	cfg := a.settings
+	needed, err := identityservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.IdentityDatabasePath)
+	if err != nil {
+		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
+	}
+	if needed {
+		return fmt.Errorf("%s holds Users that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.IdentityDatabasePath)
+	}
+	service := identityservice.New(identityservice.Config{DatabasePath: cfg.IdentityDatabasePath, TokenSecret: cfg.JWTSecret})
+	if err := service.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("start the identity service: %w", err)
+	}
+	a.identityService = service
+	a.identities = identitynats.New(a.nats.Conn())
+	return nil
+}
 
 func (a *application) startBuilds(context.Context) error {
 	ctx := a.startCtx

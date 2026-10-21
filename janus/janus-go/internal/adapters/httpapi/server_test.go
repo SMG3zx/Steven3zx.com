@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
@@ -21,14 +22,15 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	store := storetest.NewMemory()
-	gh := app.NewGitHub(store, githubapi.NewClient())
-	imports := app.NewImports(store, gh.API, gitsource.New(), audittest.NewRecorder())
+	identities := identitytest.NewMemory()
+	gh := app.NewGitHub(identities, githubapi.NewClient())
+	imports := app.NewImports(store, identities, gh.API, gitsource.New(), audittest.NewRecorder())
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audittest.NewRecorder(), Identity: app.NewIdentity(store), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, imports),
+		Audit: audittest.NewRecorder(), Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, identities, imports),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
@@ -122,11 +124,11 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		t.Fatalf("unconfigured homepage Google sign-in = status %d, headers %#v, body %s", home.Code, home.Header(), home.Body.String())
 	}
 
-	firstIdentity, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"})
+	firstIdentity, err := identities.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondIdentity, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-subject", Email: "updated@example.com", DisplayName: "Alice Updated"})
+	secondIdentity, err := identities.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-subject", Email: "updated@example.com", DisplayName: "Alice Updated"})
 	if err != nil {
 		t.Fatal(err)
 	}

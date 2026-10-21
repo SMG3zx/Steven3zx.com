@@ -38,7 +38,7 @@ func testConcurrentCallers(t *testing.T, store app.Store) {
 	}
 	// Callers that share one record are serialized, not lost: exactly one wins.
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "shared", Email: "shared@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "shared"))
 	results := make(chan error, callers)
 	for range callers {
 		wg.Go(func() {
@@ -71,29 +71,7 @@ func exerciseEveryMethod(store app.Store, name string) (err error) {
 	}
 	do := func(label string, e error) bool { step = label; return check(e) }
 
-	email := name + "@example.com"
-	if !do("CreateLocalUser", store.CreateLocalUser(ctx, app.CreateLocalUser{ID: name, Email: email, PasswordHash: "h"})) {
-		return
-	}
-	if found, e := store.FindLocalUser(ctx, strings.ToUpper(email)); !do("FindLocalUser", e) || !found.Found {
-		return fmt.Errorf("%s: FindLocalUser did not find the user (%v)", name, e)
-	}
-	if found, e := store.FindUser(ctx, name); !do("FindUser", e) || !found.Found {
-		return fmt.Errorf("%s: FindUser did not find the user (%v)", name, e)
-	}
-	if got, e := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "g-" + name, Email: "g-" + email, DisplayName: name}); !do("ResolveGoogleIdentity", e) || got.ID == "" {
-		return
-	}
-	if got, e := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "gh-" + name, Email: "gh-" + email, DisplayName: name}); !do("ResolveGitHubLogin", e) || got.ID == "" {
-		return
-	}
-	if !do("ConnectGitHub", store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: name, Subject: "conn-" + name, Token: "token-" + name})) {
-		return
-	}
-	if token, connected, e := store.FindGitHubToken(ctx, name); !do("FindGitHubToken", e) || !connected || token != "token-"+name {
-		return fmt.Errorf("%s: FindGitHubToken = %q, %v, %v", name, token, connected, e)
-	}
-	if !do("DisconnectGitHub", store.DisconnectGitHub(ctx, name)) {
+	if !do("AddOwner", store.AddOwner(ctx, name)) {
 		return
 	}
 

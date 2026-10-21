@@ -26,10 +26,13 @@ import (
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
+	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/app"
 	"janus/internal/domain/artifact"
+	"janus/internal/platform/natstest"
+	"janus/internal/services/identity"
 )
 
 const headscaleImage = "headscale/headscale:v0.29.5"
@@ -52,6 +55,11 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	store, err := sqlstore.Open(filepath.Join(work, "janus.db"))
 	must(t, err)
 	t.Cleanup(func() { store.Close() })
+	hub := natstest.Start(t)
+	identityService := identity.New(identity.Config{DatabasePath: filepath.Join(work, "identity.db"), TokenSecret: strings.Repeat("k", 32)})
+	must(t, identityService.Start(ctx, hub.Conn()))
+	t.Cleanup(func() { identityService.Stop(context.Background()) })
+	identities := identitynats.New(hub.Conn())
 	audit := audittest.NewRecorder()
 	agents := app.NewAgents(store, tailnet, audit, controlURL, time.Now)
 	key, err := agents.ControlPlaneKey(ctx)
@@ -71,13 +79,14 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	policy, err := app.NewPolicy(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store), Projects: app.NewProjects(store), Accounts: app.NewAccounts(store),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(store), Accounts: app.NewAccounts(store, identities),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Agents: agents, Fleet: fleet,
 	}).Handler())
 	t.Cleanup(server.Close)
 	api := &client{t: t, base: server.URL}
 	api.register("alice@example.com")
+	alice := aliceID(t, identities)
 
 	// The Owner's machine: a host folder, with a file outside it that must
 	// stay out of reach.
@@ -98,14 +107,14 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	assertNoTCPListener(t, agent.Process.Pid)
 
 	// Deploy a completed build of the CGI app.
-	buildID := seedBuild(t, store, module)
+	buildID := seedBuild(t, store, alice, module)
 	deployCtx, cancelDeploy := context.WithTimeout(ctx, 90*time.Second)
-	must(t, fleet.Deploy(deployCtx, aliceID(t, store), agentID, "dep-live", buildID))
+	must(t, fleet.Deploy(deployCtx, alice, agentID, "dep-live", buildID))
 	cancelDeploy()
 
 	// Reach it the way the edge will: from the control plane's node over the
 	// tailnet, naming the Deployment in the header.
-	address := agentAddress(t, tailnet, store, agentID)
+	address := agentAddress(t, tailnet, store, alice, agentID)
 	edge := &edgeClient{t: t, http: control.HTTPClient(), base: "http://" + net.JoinHostPort(address, strconv.Itoa(app.AgentServePort))}
 	edge.expect(http.MethodGet, "/?x=1", nil, 200, "hello from GET x=1")
 	edge.expect(http.MethodGet, "/read?name=inside.txt", nil, 200, "inside-content")
@@ -355,19 +364,18 @@ func assertNoTCPListener(t *testing.T, pid int) {
 	}
 }
 
-func aliceID(t *testing.T, store *sqlstore.Store) string {
+func aliceID(t *testing.T, identities app.Identities) string {
 	t.Helper()
-	found, err := store.FindLocalUser(context.Background(), "alice@example.com")
+	found, err := identities.FindLocalUser(context.Background(), "alice@example.com")
 	must(t, err)
 	return found.ID
 }
 
-// seedBuild records a completed WASI build of module for alice, as the WASM
+// seedBuild records a completed WASI build of module for owner, as the WASM
 // Build pipeline would; building it is not what this test is about.
-func seedBuild(t *testing.T, store *sqlstore.Store, module []byte) string {
+func seedBuild(t *testing.T, store *sqlstore.Store, owner string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
-	owner := aliceID(t, store)
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "live-project", OwnerID: owner, Name: "live"})
 	must(t, err)
 	commit := strings.Repeat("a", 40)
@@ -393,9 +401,9 @@ func seedBuild(t *testing.T, store *sqlstore.Store, module []byte) string {
 }
 
 // agentAddress is the IPv4 tailnet address of the Agent's node.
-func agentAddress(t *testing.T, tailnet *headscale.Client, store *sqlstore.Store, agentID string) string {
+func agentAddress(t *testing.T, tailnet *headscale.Client, store *sqlstore.Store, owner, agentID string) string {
 	t.Helper()
-	record, found, err := store.FindAgent(context.Background(), agentID, aliceID(t, store))
+	record, found, err := store.FindAgent(context.Background(), agentID, owner)
 	must(t, err)
 	if !found {
 		t.Fatal("no Agent record")

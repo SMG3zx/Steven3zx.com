@@ -19,8 +19,7 @@ func Run(t *testing.T, newStore func(t *testing.T) app.Store) {
 		name string
 		test func(t *testing.T, store app.Store)
 	}{
-		{"Identity", testIdentity},
-		{"GitHubConnection", testGitHubConnection},
+		{"OwnersAreAddedOnce", testOwners},
 		{"ProjectsAreOwned", testProjectsAreOwned},
 		{"ImportCreatesAnActiveSnapshot", testImportCreatesAnActiveSnapshot},
 		{"ImportJobStateMachine", testImportJobStateMachine},
@@ -68,83 +67,29 @@ func importSnapshot(t *testing.T, store app.Store, owner, project, name string) 
 	return snapshot
 }
 
-func testIdentity(t *testing.T, store app.Store) {
+func testOwners(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: " Alice@Example.com ", PasswordHash: "hash"}))
-
-	err := store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "other", Email: "alice@example.com", PasswordHash: "hash"})
-	if err == nil || !app.IsReply(err) || !strings.Contains(strings.ToLower(err.Error()), "constraint failed") {
-		t.Fatalf("duplicate email = %v, want a constraint failure the actor reported", err)
+	if _, err := store.CreateProject(ctx, app.CreateProject{ID: "early", OwnerID: "alice", Name: "P"}); err == nil {
+		t.Fatal("a Project was created for an Owner that was never added")
 	}
-
-	found, err := store.FindLocalUser(ctx, "ALICE@example.com")
-	must(t, err)
-	if !found.Found || found.ID != "alice" || found.Email != "Alice@Example.com" || found.PasswordHash != "hash" {
-		t.Fatalf("app.FindLocalUser = %#v", found)
+	must(t, store.AddOwner(ctx, "alice"))
+	must(t, store.AddOwner(ctx, "alice")) // adding again changes nothing
+	if _, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"}); err != nil {
+		t.Fatalf("CreateProject for an added Owner = %v", err)
 	}
-	if missing, err := store.FindLocalUser(ctx, "nobody@example.com"); err != nil || missing.Found {
-		t.Fatalf("absent user = %#v, %v, want found=false and no error", missing, err)
+	must(t, store.AddOwner(ctx, "alice"))
+	if _, found, err := store.GetProject(ctx, "p1", "alice"); err != nil || !found {
+		t.Fatalf("adding an Owner again lost its Project: found=%v, %v", found, err)
 	}
-	if user, err := store.FindUser(ctx, "alice"); err != nil || !user.Found || user.ID != "alice" {
-		t.Fatalf("app.FindUser = %#v, %v", user, err)
-	}
-
-	first, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "g-1", Email: "g@example.com", DisplayName: "G"})
-	must(t, err)
-	second, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "g-1", Email: "changed@example.com", DisplayName: "Changed"})
-	must(t, err)
-	if first.ID == "" || second.ID != first.ID || second.Email != "g@example.com" {
-		t.Fatalf("Google identity resolved to %#v then %#v, want the same Account by subject", first, second)
-	}
-
-	inUse, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "gh-9", Email: "ALICE@example.com"})
-	must(t, err)
-	if !inUse.EmailInUse || inUse.ID != "" {
-		t.Fatalf("GitHub login with a taken email = %#v, want EmailInUse and no Account", inUse)
-	}
-	if _, err = store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "gh-9"}); err == nil || !strings.Contains(err.Error(), "verified primary email") {
-		t.Fatalf("GitHub login without an email = %v", err)
-	}
-	created, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "gh-1", Email: "new@example.com", DisplayName: "New"})
-	must(t, err)
-	again, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "gh-1", Email: "elsewhere@example.com"})
-	must(t, err)
-	if created.ID == "" || again.ID != created.ID {
-		t.Fatalf("GitHub login created %#v then %#v, want the same Account by subject", created, again)
-	}
-}
-
-func testGitHubConnection(t *testing.T, store app.Store) {
-	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "bob", Email: "bob@example.com", PasswordHash: "h"}))
-
-	if token, connected, err := store.FindGitHubToken(ctx, "alice"); err != nil || connected || token != "" {
-		t.Fatalf("before connecting = %q, %v, %v", token, connected, err)
-	}
-	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "gh-alice", Token: "secret"}))
-	if token, connected, err := store.FindGitHubToken(ctx, "alice"); err != nil || !connected || token != "secret" {
-		t.Fatalf("after connecting = %q, %v, %v", token, connected, err)
-	}
-	if err := store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "bob", Subject: "gh-alice", Token: "t"}); err == nil || !strings.Contains(err.Error(), "another Janus account") {
-		t.Fatalf("connecting alice's GitHub to bob = %v", err)
-	}
-	if err := store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "gh-other", Token: "t"}); err == nil || !strings.Contains(err.Error(), "different GitHub account") {
-		t.Fatalf("connecting a second GitHub to alice = %v", err)
-	}
-	if err := store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "gh-alice"}); err == nil || !strings.Contains(err.Error(), "incomplete") {
-		t.Fatalf("connecting without a token = %v", err)
-	}
-	must(t, store.DisconnectGitHub(ctx, "alice"))
-	if _, connected, err := store.FindGitHubToken(ctx, "alice"); err != nil || connected {
-		t.Fatalf("after disconnecting connected=%v err=%v", connected, err)
+	if deleted, err := store.DeleteAccount(ctx, "nobody", false); err != nil || deleted.Deleted {
+		t.Fatalf("deleting an Owner that was never added = %#v, %v, want nothing deleted", deleted, err)
 	}
 }
 
 func testProjectsAreOwned(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	created, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "  First  ", Description: " one "})
 	must(t, err)
@@ -190,7 +135,7 @@ func testProjectsAreOwned(t *testing.T, store app.Store) {
 
 func testImportCreatesAnActiveSnapshot(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	first := importSnapshot(t, store, "alice", "p1", "one")
@@ -243,7 +188,7 @@ func testImportCreatesAnActiveSnapshot(t *testing.T, store app.Store) {
 
 func testImportJobStateMachine(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	commit := strings.Repeat("c", 40)
@@ -292,7 +237,7 @@ func testImportJobStateMachine(t *testing.T, store app.Store) {
 
 func testStagingSnapshotsAndResume(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	commit := strings.Repeat("d", 40)
@@ -327,7 +272,7 @@ func testStagingSnapshotsAndResume(t *testing.T, store app.Store) {
 
 func testCompletingACancelledImportFails(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	commit := strings.Repeat("e", 40)
@@ -350,7 +295,7 @@ func testCompletingACancelledImportFails(t *testing.T, store app.Store) {
 
 func testBuildsFollowTheirStateMachine(t *testing.T, store app.Store) {
 	ctx := context.Background()
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "h"}))
+	must(t, store.AddOwner(ctx, "alice"))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	snapshot := importSnapshot(t, store, "alice", "p1", "one")
@@ -411,13 +356,12 @@ func testBuildsFollowTheirStateMachine(t *testing.T, store app.Store) {
 func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p1", OwnerID: "alice", Name: "P"})
 	must(t, err)
 	_, err = store.CreateProject(ctx, app.CreateProject{ID: "pb", OwnerID: "bob", Name: "B"})
 	must(t, err)
-	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "alice", Subject: "gh-alice", Token: "t"}))
 	snapshot := importSnapshot(t, store, "alice", "p1", "one")
 	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "t"}))
 
@@ -431,8 +375,8 @@ func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	if refused.Deleted || len(refused.ActiveJobs) != 1 {
 		t.Fatalf("deleting with an unfinished build = %#v, want a refusal listing it", refused)
 	}
-	if user, _ := store.FindUser(ctx, "alice"); !user.Found {
-		t.Fatal("a refused deletion removed the Account")
+	if _, found, _ := store.GetProject(ctx, "p1", "alice"); !found {
+		t.Fatal("a refused deletion removed the Account's project")
 	}
 
 	deleted, err := store.DeleteAccount(ctx, "alice", true)
@@ -440,20 +384,14 @@ func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	if !deleted.Deleted {
 		t.Fatalf("deleting with cancel = %#v", deleted)
 	}
-	if user, _ := store.FindUser(ctx, "alice"); user.Found {
-		t.Fatal("the Account is still found")
-	}
 	if _, found, _ := store.GetProject(ctx, "p1", "alice"); found {
 		t.Fatal("the project survived its Account")
 	}
 	if _, found, _ := store.FindWASMBuild(ctx, "b1", "alice"); found {
 		t.Fatal("the build survived its Account")
 	}
-	if _, connected, _ := store.FindGitHubToken(ctx, "alice"); connected {
-		t.Fatal("the GitHub Connection survived its Account")
-	}
-	if again, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "gh-alice", Email: "alice-new@example.com"}); err != nil || again.ID == "alice" {
-		t.Fatalf("the deleted Account's GitHub identity still resolves to it: %#v, %v", again, err)
+	if again, err := store.DeleteAccount(ctx, "alice", false); err != nil || again.Deleted {
+		t.Fatalf("deleting the Owner again = %#v, %v, want nothing left to delete", again, err)
 	}
 	if _, found, _ := store.GetProject(ctx, "pb", "bob"); !found {
 		t.Fatal("deleting alice removed bob's project")
@@ -479,7 +417,7 @@ func AdvanceImport(t testing.TB, store app.Store, id, from string, to ...string)
 func testEnrollmentCodes(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	expires := base.Add(15 * time.Minute)
@@ -518,7 +456,7 @@ func testAgents(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	laptop := app.CreateAgent{ID: "a1", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "k1", CreatedAt: base}
 	must(t, store.CreateAgent(ctx, laptop))
@@ -564,7 +502,7 @@ func testDeletingAnAccountRemovesAgents(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "a1", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "k1", CreatedAt: base}))
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "b1", OwnerID: "bob", Name: "server", Tag: "tag:acct-bob", KeyID: "k2", CreatedAt: base}))
@@ -594,7 +532,7 @@ func testListAllAgents(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	if all, err := store.ListAllAgents(ctx); err != nil || len(all) != 0 {
 		t.Fatalf("Agents of an empty Store = %#v, %v", all, err)
@@ -620,7 +558,7 @@ func testRunUsage(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	first := runUsage("r1", "alice", "a1", "d1", base)
 	first.Error, first.Probe, first.Status = "boom", true, "failed"
@@ -669,7 +607,7 @@ func testRunUsageGoesWithTheAccount(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"alice", "bob"} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+		must(t, store.AddOwner(ctx, id))
 	}
 	must(t, store.RecordRunUsage(ctx, runUsage("r1", "alice", "a1", "d1", base)))
 	must(t, store.RecordRunUsage(ctx, runUsage("r2", "bob", "b1", "d2", base)))

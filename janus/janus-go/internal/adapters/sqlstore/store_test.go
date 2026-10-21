@@ -26,7 +26,7 @@ func openTest(t *testing.T, path string) *Store {
 // simulates a restart: the next Open recovers interrupted jobs.
 func openAt(t *testing.T, path string) (*Store, func()) {
 	t.Helper()
-	store, err := Open(path, WithTokenSecret(testSecret))
+	store, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func testContext(t *testing.T) context.Context {
 func seedAccountAndProject(t *testing.T, store *Store, owner, project string) {
 	t.Helper()
 	ctx := testContext(t)
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: owner, Email: owner + "@example.com", PasswordHash: "hash"}))
+	must(t, store.AddOwner(ctx, owner))
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: project, OwnerID: owner, Name: project})
 	must(t, err)
 }
@@ -163,65 +163,18 @@ INSERT INTO project_import_jobs(id,owner_id,project_id,repository,branch,commit_
 	}
 }
 
-func TestGitHubIdentityCollisionAndEncryptedConnection(t *testing.T) {
-	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
-	ctx := testContext(t)
-	const owner = "local-user"
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: owner, Email: "alice@example.com", PasswordHash: "hash"}))
-	collision, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "github-1", Email: "alice@example.com", DisplayName: "Alice"})
-	if err != nil || !collision.EmailInUse || collision.ID != "" {
-		t.Fatalf("existing email was not rejected: %#v, %v", collision, err)
-	}
-	login, err := store.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: "github-2", Email: "new@example.com", DisplayName: "New"})
-	if err != nil || login.EmailInUse || login.ID == "" {
-		t.Fatalf("new GitHub identity was not created: %#v, %v", login, err)
-	}
-	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: owner, Subject: "github-private", Email: "alice@example.com", DisplayName: "Alice", Token: "gho-secret-token"}))
-	token, connected, err := store.FindGitHubToken(ctx, owner)
-	if err != nil || !connected || token != "gho-secret-token" {
-		t.Fatalf("GitHub token not recovered: %q, %v, %v", token, connected, err)
-	}
-	var ciphertext []byte
-	if err = store.db.QueryRow(`SELECT token_ciphertext FROM github_connections WHERE user_id=?`, owner).Scan(&ciphertext); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(ciphertext), "gho-secret-token") {
-		t.Fatal("GitHub token was stored in plaintext")
-	}
-	wrongKey := &Store{key: deriveTokenKey(strings.Repeat("different", 4))}
-	if _, err = wrongKey.decryptToken(ciphertext); err == nil {
-		t.Fatal("token decrypted after the JWT key changed")
-	}
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "other-user", Email: "other@example.com", PasswordHash: "hash"}))
-	if err = store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "other-user", Subject: "github-private", Token: "another"}); err == nil {
-		t.Fatal("same GitHub subject was linked to two Janus users")
-	}
-}
-
-func TestConnectGitHubNeedsATokenSecret(t *testing.T) {
-	store, err := Open(filepath.Join(t.TempDir(), "no-secret.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
-	ctx := testContext(t)
-	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "u", Email: "u@example.com", PasswordHash: "hash"}))
-	if err = store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "u", Subject: "s", Token: "t"}); err == nil {
-		t.Fatal("a token was stored with no key to protect it")
-	}
-}
-
 func TestErrorsAreReplyErrorsExceptForTheContext(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "errors.db"))
-	err := store.CreateLocalUser(testContext(t), app.CreateLocalUser{ID: "x", Email: "x@example.com"})
+	must(t, store.AddOwner(testContext(t), "x"))
+	_, err := store.CreateProject(testContext(t), app.CreateProject{ID: "p", OwnerID: "x", Name: "P"})
 	must(t, err)
-	err = store.CreateLocalUser(testContext(t), app.CreateLocalUser{ID: "x", Email: "y@example.com"})
+	_, err = store.CreateProject(testContext(t), app.CreateProject{ID: "p", OwnerID: "x", Name: "Again"})
 	if !app.IsReply(err) {
 		t.Fatalf("a constraint violation = %v, want a reply error", err)
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	err = store.CreateLocalUser(cancelled, app.CreateLocalUser{ID: "z", Email: "z@example.com"})
+	err = store.AddOwner(cancelled, "z")
 	if err == nil || app.IsReply(err) {
 		t.Fatalf("a cancelled context = %v, want the context's error and not a reply error", err)
 	}
@@ -231,7 +184,7 @@ func TestProjectOwnershipSnapshotRetentionAndFailedImport(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
 	ctx := testContext(t)
 	for _, user := range []struct{ id, email string }{{"alice", "alice@example.com"}, {"bob", "bob@example.com"}} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: user.id, Email: user.email, PasswordHash: "hash"}))
+		must(t, store.AddOwner(ctx, user.id))
 	}
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "project-1", OwnerID: "alice", Name: "Janus", Description: "source"})
 	must(t, err)
@@ -294,7 +247,7 @@ func TestProjectFilePagingAndWASMBuildArtifactOwnership(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
 	ctx := testContext(t)
 	for _, user := range []struct{ id, email string }{{"alice", "alice@example.com"}, {"bob", "bob@example.com"}} {
-		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: user.id, Email: user.email, PasswordHash: "hash"}))
+		must(t, store.AddOwner(ctx, user.id))
 	}
 	_, err := store.CreateProject(ctx, app.CreateProject{ID: "wasm-project", OwnerID: "alice", Name: "WASM"})
 	must(t, err)
@@ -445,55 +398,22 @@ func TestDeleteAccountIsBlockedByActiveJobsUntilCancelled(t *testing.T) {
 	if err != nil || blocked.Deleted || len(blocked.ActiveJobs) != 1 || blocked.ActiveJobs[0].ID != "bob-job" {
 		t.Fatalf("expected a blocked deletion listing bob-job, got %#v, %v", blocked, err)
 	}
-	if found, err := store.FindUser(ctx, "bob"); err != nil || !found.Found {
-		t.Fatal("blocked deletion removed the account")
+	if _, found, err := store.GetProject(ctx, "bob-project", "bob"); err != nil || !found {
+		t.Fatal("blocked deletion removed the account's project")
 	}
 
 	deleted, err := store.DeleteAccount(ctx, "bob", true)
 	if err != nil || !deleted.Deleted {
 		t.Fatalf("cancelling deletion failed: %#v, %v", deleted, err)
 	}
-	if found, _ := store.FindUser(ctx, "bob"); found.Found {
-		t.Fatal("account still exists after deletion")
+	if again, _ := store.DeleteAccount(ctx, "bob", false); again.Deleted {
+		t.Fatal("the Owner still exists after deletion")
 	}
 	if _, found, _ := store.GetProject(ctx, "bob-project", "bob"); found {
 		t.Fatal("project survived account deletion")
 	}
 	if _, found, _ := store.FindImportJob(ctx, "bob-job", "bob"); found {
 		t.Fatal("import job survived account deletion")
-	}
-}
-
-func TestDeleteAccountRemovesProviderIdentities(t *testing.T) {
-	store := openTest(t, filepath.Join(t.TempDir(), "identities.db"))
-	ctx := testContext(t)
-	linked, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-carol", Email: "carol@example.com", DisplayName: "Carol"})
-	if err != nil || linked.ID == "" {
-		t.Fatalf("expected a Google identity to create an account: %#v, %v", linked, err)
-	}
-	if deleted, err := store.DeleteAccount(ctx, linked.ID, false); err != nil || !deleted.Deleted {
-		t.Fatalf("delete account: %#v, %v", deleted, err)
-	}
-	var count int
-	if err = store.db.QueryRow(`SELECT COUNT(*) FROM oauth_identities WHERE subject='google-carol'`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 0 {
-		t.Fatalf("deleted account still has %d provider identity rows", count)
-	}
-}
-
-func TestDeleteAccountRemovesGitHubConnection(t *testing.T) {
-	store := openTest(t, filepath.Join(t.TempDir(), "github-delete.db"))
-	ctx := testContext(t)
-	seedAccountAndProject(t, store, "dana", "dana-project")
-	must(t, store.ConnectGitHub(ctx, app.ConnectGitHub{UserID: "dana", Subject: "github-dana", Email: "dana@example.com", DisplayName: "Dana", Token: "gho-dana-token"}))
-	if deleted, err := store.DeleteAccount(ctx, "dana", false); err != nil || !deleted.Deleted {
-		t.Fatalf("delete account: %#v, %v", deleted, err)
-	}
-	token, connected, err := store.FindGitHubToken(ctx, "dana")
-	if err != nil || connected || token != "" {
-		t.Fatalf("deleted account still has a GitHub connection: %q, %v, %v", token, connected, err)
 	}
 }
 
@@ -506,30 +426,8 @@ func TestDeleteAccountLeavesOtherAccountsUntouched(t *testing.T) {
 	if deleted, err := store.DeleteAccount(ctx, "frank", false); err != nil || !deleted.Deleted {
 		t.Fatalf("delete account: %#v, %v", deleted, err)
 	}
-	if found, err := store.FindUser(ctx, "erin"); err != nil || !found.Found {
-		t.Fatal("deleting one account removed another account")
-	}
 	if _, found, err := store.GetProject(ctx, "erin-project", "erin"); err != nil || !found {
 		t.Fatal("deleting one account removed another account's project")
-	}
-}
-
-func TestDeleteAccountLeavesOtherAccountsProviderIdentitiesUntouched(t *testing.T) {
-	store := openTest(t, filepath.Join(t.TempDir(), "identity-isolation.db"))
-	ctx := testContext(t)
-	kept, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-gina", Email: "gina@example.com", DisplayName: "Gina"})
-	must(t, err)
-	doomed, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-hal", Email: "hal@example.com", DisplayName: "Hal"})
-	must(t, err)
-	if kept.ID == "" || doomed.ID == "" || kept.ID == doomed.ID {
-		t.Fatalf("expected two separate accounts, got %#v and %#v", kept, doomed)
-	}
-	if deleted, err := store.DeleteAccount(ctx, doomed.ID, false); err != nil || !deleted.Deleted {
-		t.Fatalf("delete account: %#v, %v", deleted, err)
-	}
-	again, err := store.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-gina", Email: "gina@example.com", DisplayName: "Gina"})
-	if err != nil || again.ID != kept.ID {
-		t.Fatalf("another account's identity changed after deletion: got %q, want %q (%v)", again.ID, kept.ID, err)
 	}
 }
 
