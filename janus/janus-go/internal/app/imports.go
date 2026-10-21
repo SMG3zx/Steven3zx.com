@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"janus/internal/domain/manifest"
 	"janus/internal/domain/scan"
 )
 
@@ -228,15 +229,10 @@ func validateEntrypoint(metadataJSON, entrypoint string) error {
 	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
 		return errors.New("project scan metadata is unavailable")
 	}
-	if entrypoint == "" {
-		return nil
+	if !metadata.Scan.AcceptsEntrypoint(entrypoint) {
+		return errors.New("entrypoint must match a detected candidate")
 	}
-	for _, candidate := range metadata.Scan.Candidates {
-		if candidate.Path == entrypoint {
-			return nil
-		}
-	}
-	return errors.New("entrypoint must match a detected candidate")
+	return nil
 }
 
 // runner returns the function that runs job, and audits how it ended.
@@ -284,16 +280,6 @@ func (i *Imports) fail(ctx context.Context, job *importJob, public string, err e
 	return fmt.Errorf("%s: %w", public, err)
 }
 
-// manifestEntry describes one file of the selected commit. A Staging Snapshot
-// keeps the manifest of its commit, so an interrupted import knows which files
-// it still has to store without scanning the repository again.
-type manifestEntry struct {
-	Path string `json:"path"`
-	Mode string `json:"mode"`
-	Hash string `json:"hash"`
-	Size int64  `json:"size"`
-}
-
 // errStagingCorrupt reports that a Staging Snapshot does not match the commit it
 // was started from. The import discards it and starts again from the clone.
 var errStagingCorrupt = errors.New("staging snapshot does not match the commit")
@@ -302,13 +288,13 @@ var errStagingCorrupt = errors.New("staging snapshot does not match the commit")
 // manifest and stored files have been checked against each other.
 type stagedImport struct {
 	snapshotID string
-	manifest   []manifestEntry
+	manifest   []manifest.Entry
 	stored     map[string]bool
 }
 
 // pending returns the manifest entries whose files are not stored yet.
-func (s *stagedImport) pending() []manifestEntry {
-	pending := make([]manifestEntry, 0, len(s.manifest))
+func (s *stagedImport) pending() []manifest.Entry {
+	pending := make([]manifest.Entry, 0, len(s.manifest))
 	for _, entry := range s.manifest {
 		if !s.stored[entry.Path] {
 			pending = append(pending, entry)
@@ -329,13 +315,13 @@ func (i *Imports) findStaging(ctx context.Context, job *importJob) (*stagedImpor
 	if !found.Found {
 		return nil, nil
 	}
-	manifest, ok := parseManifest(found.Manifest)
-	if ok && storedFilesMatch(found.Files, manifest) {
+	entries, ok := manifest.Parse(found.Manifest)
+	if ok && manifest.StoredMatch(found.Files, entries) {
 		stored := make(map[string]bool, len(found.Files))
 		for path := range found.Files {
 			stored[path] = true
 		}
-		return &stagedImport{snapshotID: found.SnapshotID, manifest: manifest, stored: stored}, nil
+		return &stagedImport{snapshotID: found.SnapshotID, manifest: entries, stored: stored}, nil
 	}
 	if err = i.store.DiscardJobStaging(ctx, job.JobID); err != nil {
 		return nil, err
@@ -343,62 +329,13 @@ func (i *Imports) findStaging(ctx context.Context, job *importJob) (*stagedImpor
 	return nil, nil
 }
 
-// parseManifest decodes the manifest of a Staging Snapshot. An empty manifest
-// means that the scan never finished, so ok is false.
-func parseManifest(raw string) ([]manifestEntry, bool) {
-	if raw == "" {
-		return nil, false
-	}
-	var manifest []manifestEntry
-	if err := json.Unmarshal([]byte(raw), &manifest); err != nil {
-		return nil, false
-	}
-	return manifest, true
-}
-
-// storedFilesMatch reports whether every stored file is listed in the manifest
-// with the same hash. A Staging Snapshot that fails this check is corrupt or
-// from a different commit, so it must not be reused.
-func storedFilesMatch(stored map[string]string, manifest []manifestEntry) bool {
-	hashes := make(map[string]string, len(manifest))
-	for _, entry := range manifest {
-		hashes[entry.Path] = entry.Hash
-	}
-	for path, sha := range stored {
-		hash, ok := hashes[path]
-		if !ok || hash != sha {
-			return false
-		}
-	}
-	return true
-}
-
-// filesMatchManifest reports whether files are exactly the entries of manifest,
-// with the same hashes.
-func filesMatchManifest(files []SnapshotFile, manifest []manifestEntry) bool {
-	if len(files) != len(manifest) {
-		return false
-	}
-	hashes := make(map[string]string, len(manifest))
-	for _, entry := range manifest {
-		hashes[entry.Path] = entry.Hash
-	}
-	for _, file := range files {
-		hash, ok := hashes[file.Path]
-		if !ok || hash != file.Hash {
-			return false
-		}
-	}
-	return true
-}
-
 // manifestOf lists files as manifest entries.
-func manifestOf(files []SnapshotFile) []manifestEntry {
-	manifest := make([]manifestEntry, 0, len(files))
+func manifestOf(files []SnapshotFile) []manifest.Entry {
+	entries := make([]manifest.Entry, 0, len(files))
 	for _, file := range files {
-		manifest = append(manifest, manifestEntry{Path: file.Path, Mode: file.Mode, Hash: file.Hash, Size: int64(len(file.Content))})
+		entries = append(entries, manifest.Entry{Path: file.Path, Mode: file.Mode, Hash: file.Hash, Size: int64(len(file.Content))})
 	}
-	return manifest
+	return entries
 }
 
 func scanFiles(files []SnapshotFile) scan.Result {
@@ -454,7 +391,7 @@ func (i *Imports) storeStaged(ctx context.Context, job *importJob, staged *stage
 	if err != nil {
 		return i.fail(ctx, job, "repository scan failed", err)
 	}
-	if !filesMatchManifest(files, pending) {
+	if !manifest.Same(manifestOf(files), pending) {
 		return errStagingCorrupt
 	}
 	if err = i.updateJob(ctx, job, "storing", 70, ""); err != nil {
@@ -487,8 +424,8 @@ func (i *Imports) importFromClone(ctx context.Context, job *importJob) error {
 	if err != nil {
 		return i.fail(ctx, job, "repository metadata could not be encoded", err)
 	}
-	manifest := manifestOf(files)
-	manifestJSON, err := json.Marshal(manifest)
+	entries := manifestOf(files)
+	manifestJSON, err := json.Marshal(entries)
 	if err != nil {
 		return i.fail(ctx, job, "repository manifest could not be encoded", err)
 	}
@@ -502,7 +439,7 @@ func (i *Imports) importFromClone(ctx context.Context, job *importJob) error {
 	if err = i.storeFiles(ctx, job, snapshotID, files); err != nil {
 		return err
 	}
-	return i.completeImport(ctx, job, snapshotID, manifest)
+	return i.completeImport(ctx, job, snapshotID, entries)
 }
 
 // cloneCommit fetches the selected commit and returns its tree. The caller must
@@ -525,7 +462,7 @@ func (i *Imports) cloneCommit(ctx context.Context, job *importJob) (SourceTree, 
 // beginStaging starts a Staging Snapshot for the commit and returns its ID.
 func (i *Imports) beginStaging(ctx context.Context, job *importJob, found scan.Result, metadata, manifest []byte) (string, error) {
 	snapshotID := uuid.NewString()
-	err := i.store.BeginSnapshot(ctx, BeginSnapshot{ID: snapshotID, JobID: job.JobID, OwnerID: job.OwnerID, ProjectID: job.ProjectID, RepositoryID: job.Repository.ID, Repository: job.Repository.FullName, Branch: job.Branch, Commit: job.Commit, DefaultBranch: job.Repository.DefaultBranch, Language: dominantLanguage(found.Languages), Runtime: found.Runtime, Stars: job.Repository.Stars, Forks: job.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
+	err := i.store.BeginSnapshot(ctx, BeginSnapshot{ID: snapshotID, JobID: job.JobID, OwnerID: job.OwnerID, ProjectID: job.ProjectID, RepositoryID: job.Repository.ID, Repository: job.Repository.FullName, Branch: job.Branch, Commit: job.Commit, DefaultBranch: job.Repository.DefaultBranch, Language: scan.DominantLanguage(found.Languages), Runtime: found.Runtime, Stars: job.Repository.Stars, Forks: job.Repository.Forks, MetadataJSON: string(metadata), Manifest: string(manifest)})
 	if err != nil {
 		return "", err
 	}
@@ -547,27 +484,14 @@ func (i *Imports) storeFiles(ctx context.Context, job *importJob, snapshotID str
 
 // completeImport makes the Staging Snapshot the active Snapshot of its Project.
 // The totals come from the manifest, which describes every file of the commit.
-func (i *Imports) completeImport(ctx context.Context, job *importJob, snapshotID string, manifest []manifestEntry) error {
+func (i *Imports) completeImport(ctx context.Context, job *importJob, snapshotID string, entries []manifest.Entry) error {
 	var total int64
-	for _, entry := range manifest {
+	for _, entry := range entries {
 		total += entry.Size
 	}
-	err := i.store.CompleteSnapshot(ctx, CompleteSnapshot{SnapshotID: snapshotID, JobID: job.JobID, FileCount: len(manifest), TotalBytes: total})
+	err := i.store.CompleteSnapshot(ctx, CompleteSnapshot{SnapshotID: snapshotID, JobID: job.JobID, FileCount: len(entries), TotalBytes: total})
 	if err != nil {
 		return i.fail(ctx, job, "snapshot finalization failed", err)
 	}
 	return nil
-}
-
-// dominantLanguage returns the recognized language with the most files, or ""
-// when none was recognized. Ties go to the name that sorts first, so the same
-// repository always gets the same language.
-func dominantLanguage(languages map[string]int) string {
-	best, bestCount := "", 0
-	for name, count := range languages {
-		if count > bestCount || (count == bestCount && count > 0 && name < best) {
-			best, bestCount = name, count
-		}
-	}
-	return best
 }
