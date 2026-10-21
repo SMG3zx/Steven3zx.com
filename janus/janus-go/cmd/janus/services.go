@@ -323,7 +323,11 @@ func (a *application) startNATS(ctx context.Context) error {
 	cfg := a.settings
 	config := natsx.Config{URL: cfg.NATSURL, Address: cfg.NATSAddress, StoreDir: cfg.NATSDir, Name: "janus"}
 	if cfg.NATSURL == "" && cfg.KeySecret != "" {
-		trust, err := openNATSTrust(ctx, cfg.NATSKeysPath, cfg.KeySecret, cfg.NATSLeafAddress)
+		revoked, err := fleetservice.LeafRevocations(ctx, cfg.FleetDatabasePath)
+		if err != nil {
+			return fmt.Errorf("read the leaf revocations: %w", err)
+		}
+		trust, err := openNATSTrust(ctx, cfg.NATSKeysPath, cfg.KeySecret, cfg.NATSLeafAddress, revoked)
 		if err != nil {
 			return fmt.Errorf("open the NATS keys: %w", err)
 		}
@@ -542,7 +546,7 @@ func (a *application) startFleet(ctx context.Context) error {
 		a.agentLink = agentgrpc.NewLink(node.Dial)
 		link = a.agentLink
 	}
-	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link, Agents: a.agents})
+	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link, Agents: a.agents, OnRevoke: a.nats.UpdateAccount})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
 		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
 	}

@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/internal/domain/fleet/fleet.go",
-      "line": 95,
+      "line": 98,
       "title": "What an Agent reports",
       "description": "`type RunReport struct`. The fields of one run as the Agent measured it, carried over the Agent link."
     },
@@ -23,13 +23,13 @@
     },
     {
       "file": "janus-go/internal/domain/fleet/fleet.go",
-      "line": 109,
+      "line": 112,
       "title": "What the service keeps",
       "description": "`type RunUsageRecord struct`. A run with the Owner and the Agent it came from."
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 178,
+      "line": 184,
       "title": "Recorded once",
       "description": "`func (s *Service) insertRunUsage`. The run ID is the key, so reporting it again changes nothing."
     },

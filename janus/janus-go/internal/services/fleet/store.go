@@ -68,6 +68,12 @@ CREATE INDEX deployments_owner ON deployments(owner_id, created_at DESC);
 CREATE INDEX deployments_project ON deployments(project_id, created_at DESC);
 CREATE INDEX deployments_snapshot ON deployments(snapshot_id);
 CREATE UNIQUE INDEX one_inflight_deployment_per_project ON deployments(project_id) WHERE state IN ('queued','starting');
+`, `
+ALTER TABLE agents ADD COLUMN leaf_user_pub TEXT NOT NULL DEFAULT '';
+CREATE TABLE leaf_revocations (
+	user_pub TEXT PRIMARY KEY,
+	revoked_at INTEGER NOT NULL
+);
 `}
 
 // inFlightError is what a new Deployment gets while another one of its Project
@@ -103,17 +109,17 @@ func (s *Service) useCode(ctx context.Context, codeHash string, now time.Time) (
 }
 
 func (s *Service) insertAgent(ctx context.Context, agent contractfleet.AgentRecord) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agents (id,owner_id,name,tag,key_id,created_at) VALUES (?,?,?,?,?,?)`,
-		agent.ID, agent.OwnerID, agent.Name, agent.Tag, agent.KeyID, agent.CreatedAt.UnixNano())
+	_, err := s.db.ExecContext(ctx, `INSERT INTO agents (id,owner_id,name,tag,key_id,created_at,leaf_user_pub) VALUES (?,?,?,?,?,?,?)`,
+		agent.ID, agent.OwnerID, agent.Name, agent.Tag, agent.KeyID, agent.CreatedAt.UnixNano(), agent.LeafUserPub)
 	return err
 }
 
-const agentColumns = `id,owner_id,name,tag,key_id,created_at`
+const agentColumns = `id,owner_id,name,tag,key_id,created_at,leaf_user_pub`
 
 func scanAgent(row interface{ Scan(...any) error }) (contractfleet.AgentRecord, error) {
 	var agent contractfleet.AgentRecord
 	var created int64
-	if err := row.Scan(&agent.ID, &agent.OwnerID, &agent.Name, &agent.Tag, &agent.KeyID, &created); err != nil {
+	if err := row.Scan(&agent.ID, &agent.OwnerID, &agent.Name, &agent.Tag, &agent.KeyID, &created, &agent.LeafUserPub); err != nil {
 		return contractfleet.AgentRecord{}, err
 	}
 	agent.CreatedAt = time.Unix(0, created).UTC()

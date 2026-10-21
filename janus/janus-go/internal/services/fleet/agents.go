@@ -83,7 +83,7 @@ func (s *Service) enroll(ctx context.Context, request contractfleet.EnrollReques
 	}
 	tag := AgentTag(ownerID)
 	agentID := uuid.NewString()
-	leafCreds, err := s.leafCredentials(agentID, ownerID)
+	leafCreds, leafUserPub, err := s.leafCredentials(agentID, ownerID)
 	if err != nil {
 		return contractfleet.Enrollment{}, err
 	}
@@ -91,7 +91,7 @@ func (s *Service) enroll(ctx context.Context, request contractfleet.EnrollReques
 	if err != nil {
 		return contractfleet.Enrollment{}, fmt.Errorf("create a pre-auth key: %w", err)
 	}
-	agent := contractfleet.AgentRecord{ID: agentID, OwnerID: ownerID, Name: name, Tag: tag, KeyID: key.ID, CreatedAt: now.UTC()}
+	agent := contractfleet.AgentRecord{ID: agentID, OwnerID: ownerID, Name: name, Tag: tag, KeyID: key.ID, CreatedAt: now.UTC(), LeafUserPub: leafUserPub}
 	if err = s.insertAgent(ctx, agent); err != nil {
 		_ = s.cfg.Tailnet.ExpirePreAuthKey(ctx, key.ID)
 		return contractfleet.Enrollment{}, err
@@ -100,21 +100,22 @@ func (s *Service) enroll(ctx context.Context, request contractfleet.EnrollReques
 	return contractfleet.Enrollment{AgentID: agent.ID, AuthKey: key.Key, Tag: tag, ControlURL: s.cfg.ControlURL, KeyExpires: key.Expires, LeafCreds: leafCreds}, nil
 }
 
-// leafCredentials makes the .creds file of an Agent's leaf connection, or nil
-// when the service has no AGENTS account to sign it with.
-func (s *Service) leafCredentials(agentID, ownerID string) ([]byte, error) {
+// leafCredentials makes the .creds file of an Agent's leaf connection and the
+// public key of its user. Both are empty when the service has no AGENTS account
+// to sign with.
+func (s *Service) leafCredentials(agentID, ownerID string) ([]byte, string, error) {
 	if s.cfg.Agents == nil {
-		return nil, nil
+		return nil, "", nil
 	}
 	creds, err := s.cfg.Agents.IssueLeafUser(agentID, ownerID)
 	if err != nil {
-		return nil, fmt.Errorf("issue the leaf credentials: %w", err)
+		return nil, "", fmt.Errorf("issue the leaf credentials: %w", err)
 	}
 	body, err := creds.CredsFile()
 	if err != nil {
-		return nil, fmt.Errorf("encode the leaf credentials: %w", err)
+		return nil, "", fmt.Errorf("encode the leaf credentials: %w", err)
 	}
-	return body, nil
+	return body, creds.UserPub, nil
 }
 
 // listAgents returns the Owner's Agents, oldest first, with whether each is
@@ -193,10 +194,20 @@ func (s *Service) revokeAgents(ctx context.Context, request contractfleet.Owner)
 	return contractfleet.Empty{}, nil
 }
 
-// revoke removes the tailnet nodes and keys of agents. It does not touch fleet.db.
+// revoke removes the tailnet nodes and keys of agents, and revokes their leaf
+// credentials. The leaf credentials go first, so a failure on the tailnet leaves
+// no Agent able to reach the hub.
 func (s *Service) revoke(ctx context.Context, agents []contractfleet.AgentRecord) error {
 	if len(agents) == 0 {
 		return nil
+	}
+	for _, agent := range agents {
+		if agent.LeafUserPub == "" {
+			continue
+		}
+		if err := s.revokeLeaf(ctx, agent.LeafUserPub); err != nil {
+			return err
+		}
 	}
 	nodes, err := s.cfg.Tailnet.Nodes(ctx)
 	if err != nil {

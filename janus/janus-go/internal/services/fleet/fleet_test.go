@@ -18,6 +18,7 @@ import (
 	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"
 	"janus/internal/platform/natsauth"
+	"janus/internal/services/fleet"
 )
 
 // pageModule is a WebAssembly module that answers the probe every Deployment
@@ -525,5 +526,46 @@ func TestEnrollmentGivesTheAgentItsLeafCredentials(t *testing.T) {
 	}
 	if want := "janus.agent." + enrollment.AgentID + ".>"; !slices.Contains(claims.Pub.Allow, want) {
 		t.Fatalf("leaf user may not publish %s: %v", want, claims.Pub.Allow)
+	}
+}
+
+func TestRemovingAnAgentRevokesItsLeafCredentials(t *testing.T) {
+	op, err := natsauth.NewOperator("janus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents, err := natsauth.NewAccount(op, "AGENTS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var applied []*natsauth.Account
+	f := fleetfixture.Start(t, fleetfixture.Options{Agents: agents, OnRevoke: func(a *natsauth.Account) error {
+		applied = append(applied, a)
+		return nil
+	}})
+	ctx := context.Background()
+	enrollment := f.Enroll("owner", "laptop")
+	token, err := jwt.ParseDecoratedJWT(enrollment.LeafCreds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := jwt.DecodeUserClaims(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := f.Fleet.RemoveAgent(ctx, "owner", enrollment.AgentID)
+	if err != nil || !removed {
+		t.Fatalf("remove the Agent: %v, %v", removed, err)
+	}
+	if len(applied) != 1 || applied[0] != agents {
+		t.Fatalf("the hub was given %d accounts, want the AGENTS account once", len(applied))
+	}
+	revoked, err := fleet.LeafRevocations(ctx, f.DatabasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := revoked[claims.Subject]; !ok {
+		t.Fatalf("the removed Agent's leaf user %s is not revoked: %v", claims.Subject, revoked)
 	}
 }

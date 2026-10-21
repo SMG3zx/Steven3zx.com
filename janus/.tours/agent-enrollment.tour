@@ -17,7 +17,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 89,
+      "line": 95,
       "title": "Consuming a code once",
       "description": "`func (s *Service) useCode`. A code is marked used in one statement, so two enrollments cannot both win."
     },

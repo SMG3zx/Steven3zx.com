@@ -20,7 +20,7 @@ func startTrusted(t *testing.T, keysPath string) *natsx.Hub {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	trust, err := openNATSTrust(ctx, keysPath, keySecret, "")
+	trust, err := openNATSTrust(ctx, keysPath, keySecret, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,15 +74,91 @@ func TestTheKeysAreTheSameAfterARestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "keys.db")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	first, err := openNATSTrust(ctx, path, keySecret, "")
+	first, err := openNATSTrust(ctx, path, keySecret, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := openNATSTrust(ctx, path, keySecret, "")
+	again, err := openNATSTrust(ctx, path, keySecret, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first.agents.Pub != again.agents.Pub || first.trust.Operator.Claims.Subject != again.trust.Operator.Claims.Subject {
 		t.Fatal("a restart made new trust keys")
+	}
+}
+
+func TestARevokedLeafStaysRevokedAfterARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "keys.db")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	first, err := openNATSTrust(ctx, path, keySecret, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := first.agents.IssueLeafUser("1", "owner-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedAt := time.Now()
+	revoked := map[string]time.Time{leaf.UserPub: revokedAt}
+
+	again, err := openNATSTrust(ctx, path, keySecret, "", revoked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub, err := natsx.Start(ctx, natsx.Config{Address: "127.0.0.1:0", StoreDir: t.TempDir(), Name: "janus-test",
+		Trust: again.trust, ClientOptions: again.clientOpts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		closeCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		_ = hub.Close(closeCtx)
+	})
+
+	if _, err := nats.Connect(hub.URL(), leaf.Options()...); err == nil {
+		t.Fatal("a leaf revoked before the restart connected after it")
+	}
+}
+
+func TestRevokingALeafDropsItsConnectionOnTheRunningHub(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	trust, err := openNATSTrust(ctx, filepath.Join(t.TempDir(), "keys.db"), keySecret, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub, err := natsx.Start(ctx, natsx.Config{Address: "127.0.0.1:0", StoreDir: t.TempDir(), Name: "janus-test",
+		Trust: trust.trust, ClientOptions: trust.clientOpts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		closeCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		_ = hub.Close(closeCtx)
+	})
+	leaf, err := trust.agents.IssueLeafUser("1", "owner-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan struct{})
+	nc, err := nats.Connect(hub.URL(), append(leaf.Options(), nats.ClosedHandler(func(*nats.Conn) { close(closed) }))...)
+	if err != nil {
+		t.Fatalf("leaf connect: %v", err)
+	}
+	t.Cleanup(nc.Close)
+
+	if err := trust.agents.Revoke(leaf.UserPub, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.UpdateAccount(trust.agents); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the revoked leaf stayed connected")
 	}
 }

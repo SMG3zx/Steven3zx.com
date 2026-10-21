@@ -74,6 +74,9 @@ type Config struct {
 	// Agents is the AGENTS account the hub signs Agents' leaf credentials with.
 	// Nil means enrollment issues no leaf credentials.
 	Agents *natsauth.Account
+	// OnRevoke is called after a leaf credential is revoked in Agents, so the
+	// hub can drop the connections it revoked. Nil means nothing is called.
+	OnRevoke func(*natsauth.Account) error
 	// ReconcileInterval is how often the service connects to Agents. Zero means 15
 	// seconds.
 	ReconcileInterval time.Duration

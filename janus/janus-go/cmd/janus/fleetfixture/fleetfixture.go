@@ -56,12 +56,16 @@ type Options struct {
 	// Agents is the AGENTS account enrollment signs leaf credentials with. Nil
 	// means enrollment issues none.
 	Agents *natsauth.Account
+	// OnRevoke is called after a leaf credential is revoked. Nil means nothing.
+	OnRevoke func(*natsauth.Account) error
 }
 
 // Fixture is a running fleet service and the parts around it.
 type Fixture struct {
-	t    testing.TB
-	logs *observer.ObservedLogs
+	t testing.TB
+	// DatabasePath is the fleet.db the service writes.
+	DatabasePath string
+	logs         *observer.ObservedLogs
 	// Fleet is the app.Fleet the single process uses, over NATS.
 	Fleet app.Fleet
 	// Tailnet is the control server the Agents join.
@@ -107,8 +111,9 @@ func Start(t testing.TB, opts Options) *Fixture {
 		controlURL = "https://tailnet.example.test"
 	}
 	f.Builds = newBuilds(t, conn)
-	service := fleet.New(fleet.Config{DatabasePath: t.TempDir() + "/fleet.db", Tailnet: tailnet, ControlURL: controlURL,
-		Link: link, Agents: opts.Agents, ReconcileInterval: opts.ReconcileInterval, Now: opts.Now})
+	f.DatabasePath = t.TempDir() + "/fleet.db"
+	service := fleet.New(fleet.Config{DatabasePath: f.DatabasePath, Tailnet: tailnet, ControlURL: controlURL,
+		Link: link, Agents: opts.Agents, OnRevoke: opts.OnRevoke, ReconcileInterval: opts.ReconcileInterval, Now: opts.Now})
 	if err := service.Start(ctx, conn); err != nil {
 		t.Fatalf("start the fleet service: %v", err)
 	}

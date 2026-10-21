@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 245,
+      "line": 251,
       "title": "The SQLite store",
       "description": "`func (s *Service) insertDeployment`. Stores the queued Deployment in fleet.db, refusing a second one in flight for the Project in the same transaction."
     },
@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 521,
+      "line": 525,
       "title": "The composition root starts the fleet",
       "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the single process its client."
     }

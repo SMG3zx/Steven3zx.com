@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 264,
+      "line": 270,
       "title": "Compare and swap in SQLite",
       "description": "`func (s *Service) moveDeployment`. The move happens only while the Deployment is still in the state the caller saw."
     },

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -21,9 +22,10 @@ type natsTrust struct {
 
 // openNATSTrust restores the operator and the SYS, JANUS and AGENTS accounts
 // from the keystore at path, making each key the first time, and sets their
-// claims the same way on every start. The keystore is closed before it returns:
-// the keys are in memory after that.
-func openNATSTrust(ctx context.Context, path, secret, leafAddress string) (natsTrust, error) {
+// claims the same way on every start. revoked lists the leaf users fleet has
+// revoked, so they stay revoked after a restart. The keystore is closed before
+// it returns: the keys are in memory after that.
+func openNATSTrust(ctx context.Context, path, secret, leafAddress string, revoked map[string]time.Time) (natsTrust, error) {
 	store, err := keystore.Open(ctx, path, secret)
 	if err != nil {
 		return natsTrust{}, err
@@ -67,6 +69,11 @@ func openNATSTrust(ctx context.Context, path, secret, leafAddress string) (natsT
 	}
 	if err := janus.Import(agents, "agent commands", "janus.agent.>"); err != nil {
 		return natsTrust{}, err
+	}
+	for pub, at := range revoked {
+		if err := agents.Revoke(pub, at); err != nil {
+			return natsTrust{}, err
+		}
 	}
 	if err := agents.EnableJetStream(); err != nil {
 		return natsTrust{}, err

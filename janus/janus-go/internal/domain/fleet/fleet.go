@@ -56,6 +56,9 @@ type AgentRecord struct {
 	Tag       string    `json:"tag"`
 	KeyID     string    `json:"key_id"`
 	CreatedAt time.Time `json:"created_at"`
+	// LeafUserPub is the public key of the user the Agent's leaf connection joins
+	// the hub with. It is revoked when the Agent is removed.
+	LeafUserPub string `json:"-"`
 }
 
 // AgentStatus is an Agent with whether its node is on the tailnet. Status is

@@ -62,9 +62,10 @@ type Trust struct {
 
 // Hub is a process's connection to NATS and, when embedded, the server itself.
 type Hub struct {
-	conn   *nats.Conn
-	server *server.Server
-	closed chan struct{}
+	conn     *nats.Conn
+	server   *server.Server
+	resolver *server.MemAccResolver
+	closed   chan struct{}
 }
 
 // Start connects to cfg.URL, or embeds a JetStream server with domain HubDomain
@@ -73,11 +74,11 @@ func Start(ctx context.Context, cfg Config) (*Hub, error) {
 	h := &Hub{closed: make(chan struct{})}
 	url := cfg.URL
 	if url == "" {
-		srv, err := embed(cfg)
+		srv, resolver, err := embed(cfg)
 		if err != nil {
 			return nil, err
 		}
-		h.server = srv
+		h.server, h.resolver = srv, resolver
 		url = srv.ClientURL()
 	}
 	options := append([]nats.Option{
@@ -97,16 +98,18 @@ func Start(ctx context.Context, cfg Config) (*Hub, error) {
 	return h, nil
 }
 
-func embed(cfg Config) (*server.Server, error) {
+// embed starts the embedded server. resolver is the account resolver of a
+// trusted server, which UpdateAccount writes to, and nil for an untrusted one.
+func embed(cfg Config) (*server.Server, *server.MemAccResolver, error) {
 	if cfg.StoreDir == "" {
-		return nil, errors.New("an embedded NATS server needs a JetStream store directory")
+		return nil, nil, errors.New("an embedded NATS server needs a JetStream store directory")
 	}
 	if err := os.MkdirAll(cfg.StoreDir, 0700); err != nil {
-		return nil, fmt.Errorf("create NATS store directory: %w", err)
+		return nil, nil, fmt.Errorf("create NATS store directory: %w", err)
 	}
 	host, port, err := listenAddress(cfg.Address)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts := &server.Options{
 		ServerName:      "janus-hub",
@@ -118,34 +121,35 @@ func embed(cfg Config) (*server.Server, error) {
 		NoSigs:          true,
 		NoLog:           true,
 	}
+	var resolver *server.MemAccResolver
 	if cfg.Trust != nil {
-		if err := applyTrust(opts, cfg.Trust); err != nil {
-			return nil, err
+		if resolver, err = applyTrust(opts, cfg.Trust); err != nil {
+			return nil, nil, err
 		}
 	}
 	srv, err := server.NewServer(opts)
 	if err != nil {
-		return nil, fmt.Errorf("configure embedded NATS server: %w", err)
+		return nil, nil, fmt.Errorf("configure embedded NATS server: %w", err)
 	}
 	srv.Start()
 	if !srv.ReadyForConnections(readyTimeout) {
 		srv.Shutdown()
 		srv.WaitForShutdown()
-		return nil, fmt.Errorf("embedded NATS server did not accept connections within %s", readyTimeout)
+		return nil, nil, fmt.Errorf("embedded NATS server did not accept connections within %s", readyTimeout)
 	}
-	return srv, nil
+	return srv, resolver, nil
 }
 
 // applyTrust makes opts trust the operator and resolve the accounts, and opens
-// the leaf listener when there is a leaf address.
-func applyTrust(opts *server.Options, trust *Trust) error {
+// the leaf listener when there is a leaf address. It returns the resolver.
+func applyTrust(opts *server.Options, trust *Trust) (*server.MemAccResolver, error) {
 	if trust.Operator == nil || trust.SystemAccount == nil {
-		return errors.New("NATS trust needs an operator and a system account")
+		return nil, errors.New("NATS trust needs an operator and a system account")
 	}
 	resolver := &server.MemAccResolver{}
 	for _, account := range trust.Accounts {
 		if err := resolver.Store(account.Pub, account.JWT); err != nil {
-			return fmt.Errorf("store account %s: %w", account.Pub, err)
+			return nil, fmt.Errorf("store account %s: %w", account.Pub, err)
 		}
 	}
 	opts.TrustedOperators = []*jwt.OperatorClaims{trust.Operator.Claims}
@@ -154,10 +158,28 @@ func applyTrust(opts *server.Options, trust *Trust) error {
 	if trust.LeafAddress != "" {
 		host, port, err := listenAddress(trust.LeafAddress)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		opts.LeafNode = server.LeafNodeOpts{Host: host, Port: port}
 	}
+	return resolver, nil
+}
+
+// UpdateAccount gives the embedded server an account's current claims and JWT.
+// The users the account revoked lose their connections and cannot reconnect.
+// It fails on a server that trusts no keys.
+func (h *Hub) UpdateAccount(account *natsauth.Account) error {
+	if h.server == nil || h.resolver == nil {
+		return errors.New("the NATS server does not trust its own keys")
+	}
+	if err := h.resolver.Store(account.Pub, account.JWT); err != nil {
+		return fmt.Errorf("store account %s: %w", account.Pub, err)
+	}
+	live, err := h.server.LookupAccount(account.Pub)
+	if err != nil {
+		return fmt.Errorf("look up account %s: %w", account.Pub, err)
+	}
+	h.server.UpdateAccountClaims(live, account.Claims)
 	return nil
 }
 
