@@ -18,3 +18,16 @@ type Usage struct {
 	DurationMS      int64  `json:"duration_ms"`
 	CPUTimeMicros   int64  `json:"cpu_time_us"`
 }
+
+// The statuses a run ends with.
+const (
+	// StatusOK is a run that finished and wrote a response.
+	StatusOK = "ok"
+	// StatusFailed is a run that trapped, exited with an error or wrote an
+	// answer that could not be used.
+	StatusFailed = "failed"
+	// StatusOutOfFuel is a run that spent all its fuel.
+	StatusOutOfFuel = "out_of_fuel"
+	// StatusTimeout is a run stopped by its time limit.
+	StatusTimeout = "timeout"
+)

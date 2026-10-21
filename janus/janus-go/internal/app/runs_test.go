@@ -125,7 +125,7 @@ type blockingRunner struct {
 	release chan struct{}
 }
 
-func (b *blockingRunner) Run(context.Context, []byte, []string, app.RunLimits) (app.RunResult, error) {
+func (b *blockingRunner) Run(context.Context, []byte, app.RunInput) (app.RunResult, error) {
 	b.started <- struct{}{}
 	<-b.release
 	return app.RunResult{Stdout: []byte("done")}, nil
@@ -229,7 +229,7 @@ func TestRunsRecordAPanicAsAFailedRun(t *testing.T) {
 	module := []byte("\x00asm\x01\x00\x00\x00panics")
 	build := completedBuild(t, store, "alice", "build-1", module)
 	runner := runnertest.NewFake()
-	runner.Handle(module, func([]string, app.RunLimits) (app.RunResult, error) { panic("boom") })
+	runner.Handle(module, func(app.RunInput) (app.RunResult, error) { panic("boom") })
 	runs := app.NewRuns(store, runner)
 
 	id, err := runs.Request(context.Background(), "alice", build, nil)

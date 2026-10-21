@@ -1,6 +1,27 @@
 package runnertest
 
-import "janus/internal/domain/usage"
+import (
+	_ "embed"
+
+	"janus/internal/domain/usage"
+)
+
+//go:generate go run generate.go
+
+// These fixtures are assembled from the .wat files in testdata by generate.go.
+var (
+	// Echo copies stdin to stdout.
+	//go:embed testdata/echo.wasm
+	Echo []byte
+	// Environ writes each environment variable to stdout, ending each in a NUL byte.
+	//go:embed testdata/environ.wasm
+	Environ []byte
+	// ReadFile reads a path from stdin and writes that file, opened under the
+	// preopened directory, to stdout. It exits with the WASI error number as its
+	// status when the file cannot be opened.
+	//go:embed testdata/readfile.wasm
+	ReadFile []byte
+)
 
 func usageOf(fuel, peakMemory uint64) usage.Usage {
 	return usage.Usage{Fuel: fuel, PeakMemoryBytes: peakMemory}

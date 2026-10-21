@@ -36,6 +36,7 @@ type Memory struct {
 	builds     map[string]*memBuild
 	codes      map[string]memCode // by code hash
 	agents     map[string]app.AgentRecord
+	runs       map[string]app.RunUsageRecord // by run ID
 }
 
 var _ app.Store = (*Memory)(nil)
@@ -53,6 +54,7 @@ func NewMemory() *Memory {
 		builds:     map[string]*memBuild{},
 		codes:      map[string]memCode{},
 		agents:     map[string]app.AgentRecord{},
+		runs:       map[string]app.RunUsageRecord{},
 	}
 }
 
@@ -798,6 +800,11 @@ func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJob
 			delete(m.codes, hash)
 		}
 	}
+	for id, run := range m.runs {
+		if run.OwnerID == userID {
+			delete(m.runs, id)
+		}
+	}
 	delete(m.github, userID)
 	delete(m.creds, userID)
 	delete(m.users, userID)
@@ -878,4 +885,62 @@ func (m *Memory) DeleteAgent(_ context.Context, id, ownerID string) (bool, error
 	}
 	delete(m.agents, id)
 	return true, nil
+}
+
+func (m *Memory) ListAllAgents(context.Context) ([]app.AgentRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	agents := make([]app.AgentRecord, 0, len(m.agents))
+	for _, agent := range m.agents {
+		agents = append(agents, agent)
+	}
+	sort.Slice(agents, func(i, j int) bool {
+		if !agents[i].CreatedAt.Equal(agents[j].CreatedAt) {
+			return agents[i].CreatedAt.Before(agents[j].CreatedAt)
+		}
+		return agents[i].ID < agents[j].ID
+	})
+	return agents, nil
+}
+
+func (m *Memory) RecordRunUsage(_ context.Context, record app.RunUsageRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.users[record.OwnerID]; !ok {
+		return constraint("FOREIGN KEY constraint failed")
+	}
+	if _, ok := m.runs[record.RunID]; ok {
+		return nil
+	}
+	record.StartedAt = record.StartedAt.UTC()
+	m.runs[record.RunID] = record
+	return nil
+}
+
+func (m *Memory) ListRunUsage(_ context.Context, query app.RunUsageQuery) ([]app.RunUsageRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	records := make([]app.RunUsageRecord, 0)
+	for _, record := range m.runs {
+		if record.OwnerID != query.OwnerID ||
+			(query.AgentID != "" && record.AgentID != query.AgentID) ||
+			(query.DeploymentID != "" && record.DeploymentID != query.DeploymentID) {
+			continue
+		}
+		records = append(records, record)
+	}
+	sort.Slice(records, func(i, j int) bool {
+		if !records[i].StartedAt.Equal(records[j].StartedAt) {
+			return records[i].StartedAt.After(records[j].StartedAt)
+		}
+		return records[i].RunID > records[j].RunID
+	})
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if len(records) > limit {
+		records = records[:limit]
+	}
+	return records, nil
 }

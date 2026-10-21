@@ -5,6 +5,7 @@ package storetest
 import (
 	"context"
 	"janus/internal/app"
+	"janus/internal/domain/usage"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,9 @@ func Run(t *testing.T, newStore func(t *testing.T) app.Store) {
 		{"EnrollmentCodesAreSingleUseAndExpire", testEnrollmentCodes},
 		{"AgentsAreOwned", testAgents},
 		{"DeletingAnAccountRemovesItsAgentsAndCodes", testDeletingAnAccountRemovesAgents},
+		{"ListAllAgentsSpansOwners", testListAllAgents},
+		{"RunUsageIsOwnedAndKeptOnce", testRunUsage},
+		{"RunUsageGoesWithTheAccount", testRunUsageGoesWithTheAccount},
 		{"ConcurrentCallersNeverDeadlock", testConcurrentCallers},
 	} {
 		t.Run(c.name, func(t *testing.T) { c.test(t, newStore(t)) })
@@ -581,5 +585,98 @@ func testDeletingAnAccountRemovesAgents(t *testing.T, store app.Store) {
 	}
 	if owner, consumed, _ := store.ConsumeEnrollmentCode(ctx, "hb", base); !consumed || owner != "bob" {
 		t.Fatal("deleting alice removed bob's Enrollment Code")
+	}
+}
+
+func testListAllAgents(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	for _, id := range []string{"alice", "bob"} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+	}
+	if all, err := store.ListAllAgents(ctx); err != nil || len(all) != 0 {
+		t.Fatalf("Agents of an empty Store = %#v, %v", all, err)
+	}
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "b1", OwnerID: "bob", Name: "server", Tag: "tag:acct-bob", KeyID: "k1", CreatedAt: base.Add(time.Minute)}))
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "a1", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "k2", CreatedAt: base}))
+	all, err := store.ListAllAgents(ctx)
+	must(t, err)
+	if len(all) != 2 || all[0].ID != "a1" || all[1].ID != "b1" || all[1].OwnerID != "bob" || all[0].KeyID != "k2" {
+		t.Fatalf("all Agents = %#v, want a1 then b1 with their fields", all)
+	}
+}
+
+func runUsage(runID, owner, agent, deployment string, started time.Time) app.RunUsageRecord {
+	return app.RunUsageRecord{OwnerID: owner, AgentID: agent, RunReport: app.RunReport{
+		RunID: runID, DeploymentID: deployment, Status: "ok", StartedAt: started,
+		Usage:          usage.Usage{Fuel: 1234, PeakMemoryBytes: 65536, DurationMS: 7, CPUTimeMicros: 900},
+		NetworkBytesIn: 11, NetworkBytesOut: 22,
+	}}
+}
+
+func testRunUsage(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	for _, id := range []string{"alice", "bob"} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+	}
+	first := runUsage("r1", "alice", "a1", "d1", base)
+	first.Error, first.Probe, first.Status = "boom", true, "failed"
+	must(t, store.RecordRunUsage(ctx, first))
+	must(t, store.RecordRunUsage(ctx, runUsage("r2", "alice", "a1", "d2", base.Add(time.Second))))
+	must(t, store.RecordRunUsage(ctx, runUsage("r3", "alice", "a2", "d1", base.Add(2*time.Second))))
+	must(t, store.RecordRunUsage(ctx, runUsage("r4", "bob", "b1", "d9", base)))
+	// A report that arrives twice, after a reconnect, is kept once.
+	again := runUsage("r1", "alice", "a1", "d1", base.Add(time.Hour))
+	must(t, store.RecordRunUsage(ctx, again))
+
+	ids := func(records []app.RunUsageRecord) string {
+		var out []string
+		for _, record := range records {
+			out = append(out, record.RunID)
+		}
+		return strings.Join(out, ",")
+	}
+	all, err := store.ListRunUsage(ctx, app.RunUsageQuery{OwnerID: "alice"})
+	must(t, err)
+	if ids(all) != "r3,r2,r1" {
+		t.Fatalf("alice's runs = %s, want r3,r2,r1 newest first", ids(all))
+	}
+	got := all[2]
+	if got.OwnerID != "alice" || got.AgentID != "a1" || got.DeploymentID != "d1" || got.Status != "failed" || got.Error != "boom" || !got.Probe ||
+		!got.StartedAt.Equal(base) || got.Usage != first.Usage || got.NetworkBytesIn != 11 || got.NetworkBytesOut != 22 {
+		t.Fatalf("stored run = %#v, want %#v", got, first)
+	}
+	for query, want := range map[app.RunUsageQuery]string{
+		{OwnerID: "alice", AgentID: "a1"}:                     "r2,r1",
+		{OwnerID: "alice", DeploymentID: "d1"}:                "r3,r1",
+		{OwnerID: "alice", AgentID: "a1", DeploymentID: "d1"}: "r1",
+		{OwnerID: "alice", Limit: 1}:                          "r3",
+		{OwnerID: "bob", DeploymentID: "d1"}:                  "",
+		{OwnerID: "bob"}:                                      "r4",
+	} {
+		records, err := store.ListRunUsage(ctx, query)
+		must(t, err)
+		if ids(records) != want {
+			t.Errorf("runs for %+v = %s, want %s", query, ids(records), want)
+		}
+	}
+}
+
+func testRunUsageGoesWithTheAccount(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	for _, id := range []string{"alice", "bob"} {
+		must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: id, Email: id + "@example.com", PasswordHash: "h"}))
+	}
+	must(t, store.RecordRunUsage(ctx, runUsage("r1", "alice", "a1", "d1", base)))
+	must(t, store.RecordRunUsage(ctx, runUsage("r2", "bob", "b1", "d2", base)))
+	_, err := store.DeleteAccount(ctx, "alice", false)
+	must(t, err)
+	if records, _ := store.ListRunUsage(ctx, app.RunUsageQuery{OwnerID: "alice"}); len(records) != 0 {
+		t.Fatalf("runs survived their Account: %#v", records)
+	}
+	if records, _ := store.ListRunUsage(ctx, app.RunUsageQuery{OwnerID: "bob"}); len(records) != 1 {
+		t.Fatalf("deleting alice changed bob's runs: %#v", records)
 	}
 }

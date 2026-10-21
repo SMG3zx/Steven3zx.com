@@ -209,7 +209,7 @@ func (r *Runs) execute(id, artifactName string, data []byte, args []string, limi
 	if err != nil {
 		return
 	}
-	result, err = r.runner.Run(context.Background(), bytes, args, limits)
+	result, err = r.runner.Run(context.Background(), bytes, RunInput{Args: args, Limits: limits})
 }
 
 func (r *Runs) complete(id, module string, result RunResult, err error) {
@@ -217,6 +217,9 @@ func (r *Runs) complete(id, module string, result RunResult, err error) {
 	run := r.runs[id]
 	run.UpdatedAt = time.Now().UTC()
 	run.Stdout = string(result.Stdout)
+	if result.StdoutTruncated {
+		run.Stdout += "\n[output truncated]"
+	}
 	run.Stderr = string(result.Stderr)
 	run.Module = module
 	run.Usage = result.Usage
@@ -236,8 +239,14 @@ func (r *Runs) complete(id, module string, result RunResult, err error) {
 // limitsFor returns the resource limits of the template that built build, or
 // the defaults when its Snapshot cannot be found.
 func (r *Runs) limitsFor(ctx context.Context, owner string, build WASMBuild) RunLimits {
+	return templateLimits(ctx, r.store, owner, build)
+}
+
+// templateLimits returns the resource limits of the template that built build,
+// or the defaults when its Snapshot cannot be found.
+func templateLimits(ctx context.Context, store Store, owner string, build WASMBuild) RunLimits {
 	limits := RunLimits{Fuel: templates.DefaultFuel, MemoryBytes: templates.DefaultMemoryBytes, Timeout: templates.DefaultTimeout}
-	snapshots, err := r.store.ListSnapshots(ctx, owner, build.ProjectID)
+	snapshots, err := store.ListSnapshots(ctx, owner, build.ProjectID)
 	if err != nil {
 		return limits
 	}

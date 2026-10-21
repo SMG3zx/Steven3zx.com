@@ -288,3 +288,17 @@ type AgentRecord struct {
 	ID, OwnerID, Name, Tag, KeyID string
 	CreatedAt                     time.Time
 }
+
+// RunUsageRecord is one run an Agent reported, with the Owner and the Agent it
+// came from. The Owner is the Agent's, never a value the Agent sent.
+type RunUsageRecord struct {
+	RunReport
+	OwnerID, AgentID string
+}
+
+// RunUsageQuery selects an Owner's runs. AgentID and DeploymentID narrow it
+// when set. Limit caps how many come back; zero or less means 100.
+type RunUsageQuery struct {
+	OwnerID, AgentID, DeploymentID string
+	Limit                          int
+}

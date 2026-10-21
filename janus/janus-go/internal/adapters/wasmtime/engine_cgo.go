@@ -3,15 +3,19 @@
 package wasmtime
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	wasmtime "github.com/bytecodealliance/wasmtime-go/v49"
 
+	"janus/internal/app"
 	"janus/internal/domain/templates"
 )
 
@@ -26,22 +30,23 @@ func Available() bool { return true }
 // when it traps, so a run that exhausts its fuel still reports the fuel spent.
 func ExecuteWASI(moduleBytes []byte, args []string, timeout time.Duration) (stdout, stderr []byte, usage Usage, err error) {
 	limits := templates.Resources{Fuel: fuelLimit, MemoryBytes: templates.DefaultMemoryBytes, Timeout: timeout}
-	return ExecuteWASIWith(moduleBytes, args, limits)
+	result, err := execute(context.Background(), moduleBytes, app.RunInput{Args: args, Limits: limits})
+	return result.Stdout, result.Stderr, result.Usage, err
 }
 
-// ExecuteWASIWith is ExecuteWASI with the fuel, memory, and time limits of a
-// template's Resources.
-func ExecuteWASIWith(moduleBytes []byte, args []string, limits templates.Resources) (stdout, stderr []byte, usage Usage, err error) {
-	timeout := limits.Timeout
+// execute runs a WASI module as app.Runner describes. The run stops at
+// input.Limits.Timeout or when ctx ends, whichever comes first.
+func execute(ctx context.Context, moduleBytes []byte, input app.RunInput) (result app.RunResult, err error) {
+	limits := input.Limits
 	dir, err := os.MkdirTemp("", "janus-wasm-run-")
 	if err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	defer os.RemoveAll(dir)
 	outPath, errPath := filepath.Join(dir, "stdout"), filepath.Join(dir, "stderr")
 	stdinPath := filepath.Join(dir, "stdin")
-	if err = os.WriteFile(stdinPath, nil, 0600); err != nil {
-		return nil, nil, Usage{}, err
+	if err = os.WriteFile(stdinPath, input.Stdin, 0600); err != nil {
+		return app.RunResult{}, err
 	}
 	cfg := wasmtime.NewConfig()
 	cfg.SetConsumeFuel(true)
@@ -53,54 +58,104 @@ func ExecuteWASIWith(moduleBytes []byte, args []string, limits templates.Resourc
 	defer store.Close()
 	store.Limiter(limits.MemoryBytes, 10000, 1, 1, 1)
 	if err = store.SetFuel(limits.Fuel); err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	store.SetEpochDeadline(1)
 	wasi := wasmtime.NewWasiConfig()
-	wasi.SetArgv(args)
+	wasi.SetArgv(input.Args)
+	keys, values := splitEnv(input.Env)
+	wasi.SetEnv(keys, values)
 	if err = wasi.SetStdoutFile(outPath); err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	if err = wasi.SetStderrFile(errPath); err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	if err = wasi.SetStdinFile(stdinPath); err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
+	}
+	if input.Dir != "" {
+		// The folder is the module's only preopened directory, and WASI resolves
+		// every path against a preopen, so nothing outside it can be named.
+		if err = wasi.PreopenDir(input.Dir, "/", true); err != nil {
+			return app.RunResult{}, fmt.Errorf("open the host folder: %w", err)
+		}
 	}
 	store.SetWasi(wasi)
 	linker := wasmtime.NewLinker(engine)
 	defer linker.Close()
 	if err = linker.DefineWasi(); err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	module, err := loadModule(engine, moduleBytes)
 	if err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	defer module.Close()
 	instance, err := linker.Instantiate(store, module)
 	if err != nil {
-		return nil, nil, Usage{}, err
+		return app.RunResult{}, err
 	}
 	start := instance.GetFunc(store, "_start")
 	if start == nil {
-		return nil, nil, Usage{}, errors.New("WASM module does not export the WASI _start function")
+		return app.RunResult{}, errors.New("WASM module does not export the WASI _start function")
 	}
-	timer := time.AfterFunc(timeout, engine.IncrementEpoch)
+	var timedOut atomic.Bool
+	timer := time.AfterFunc(limits.Timeout, func() {
+		timedOut.Store(true)
+		engine.IncrementEpoch()
+	})
+	stopOnCancel := context.AfterFunc(ctx, engine.IncrementEpoch)
 	wall, cpu, err := measureCall(func() error {
 		_, callErr := start.Call(store)
 		return callErr
 	})
-	err = normalizeExit(err)
-	usage.DurationMS = wall.Milliseconds()
-	usage.CPUTimeMicros = cpu.Microseconds()
 	timer.Stop()
+	stopOnCancel()
+	err = classify(normalizeExit(err), timedOut.Load())
+	result.Usage.DurationMS = wall.Milliseconds()
+	result.Usage.CPUTimeMicros = cpu.Microseconds()
 	// Read the meters before the deferred store.Close releases the store.
-	usage.Fuel = fuelConsumed(store, limits.Fuel)
-	usage.PeakMemoryBytes = memoryBytes(instance, store)
-	stdout, _ = readBounded(outPath, maxOutput)
-	stderr, _ = readBounded(errPath, maxOutput)
-	return stdout, stderr, usage, err
+	result.Usage.Fuel = fuelConsumed(store, limits.Fuel)
+	result.Usage.PeakMemoryBytes = memoryBytes(instance, store)
+	maxStdout := input.MaxStdout
+	if maxStdout <= 0 {
+		maxStdout = maxOutput
+	}
+	result.Stdout, result.StdoutTruncated, _ = readBounded(outPath, maxStdout)
+	result.Stderr, _, _ = readBounded(errPath, maxOutput)
+	return result, err
+}
+
+// splitEnv turns "NAME=value" entries into the names and values Wasmtime takes.
+// An entry with no "=" is a name with an empty value.
+func splitEnv(env []string) (keys, values []string) {
+	for _, entry := range env {
+		key, value, _ := strings.Cut(entry, "=")
+		keys, values = append(keys, key), append(values, value)
+	}
+	return keys, values
+}
+
+// classify maps the traps that mean a limit was hit to the app errors for them.
+// An interrupt is a timeout only when the timer fired; otherwise ctx ended.
+func classify(err error, timedOut bool) error {
+	var trap *wasmtime.Trap
+	if !errors.As(err, &trap) {
+		return err
+	}
+	code := trap.Code()
+	switch {
+	case code == nil:
+		return err
+	case *code == wasmtime.OutOfFuel:
+		return app.ErrOutOfFuel
+	case *code == wasmtime.Interrupt && timedOut:
+		return app.ErrRunTimeout
+	case *code == wasmtime.Interrupt:
+		return fmt.Errorf("the WebAssembly run was stopped: %w", err)
+	}
+	return err
 }
 
 // normalizeExit turns a WASI proc_exit into the outcome it means. Wasmtime
@@ -145,22 +200,23 @@ func memoryBytes(instance *wasmtime.Instance, store *wasmtime.Store) uint64 {
 	return uint64(mem.DataSize(store))
 }
 
-func readBounded(name string, limit int) ([]byte, error) {
+// readBounded reads at most limit bytes of the named file, and reports whether
+// there was more.
+func readBounded(name string, limit int) (data []byte, truncated bool, err error) {
 	f, err := os.Open(name)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, int64(limit+1)))
+	data, err = io.ReadAll(io.LimitReader(f, int64(limit+1)))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(data) > limit {
-		data = data[:limit]
-		data = append(data, []byte("\n[output truncated]")...)
+		return data[:limit], true, nil
 	}
-	return data, nil
+	return data, false, nil
 }

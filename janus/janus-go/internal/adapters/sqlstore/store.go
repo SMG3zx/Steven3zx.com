@@ -244,4 +244,21 @@ CREATE TABLE IF NOT EXISTS agents (
 	 key_id TEXT NOT NULL UNIQUE,
 	 created_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS agents_owner ON agents(owner_id, created_at, id);`
+CREATE INDEX IF NOT EXISTS agents_owner ON agents(owner_id, created_at, id);
+CREATE TABLE IF NOT EXISTS run_usage (
+	 run_id TEXT PRIMARY KEY,
+	 owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	 agent_id TEXT NOT NULL,
+	 deployment_id TEXT NOT NULL,
+	 fuel INTEGER NOT NULL,
+	 peak_memory_bytes INTEGER NOT NULL,
+	 duration_ms INTEGER NOT NULL,
+	 cpu_time_us INTEGER NOT NULL,
+	 network_bytes_in INTEGER NOT NULL,
+	 network_bytes_out INTEGER NOT NULL,
+	 status TEXT NOT NULL,
+	 error TEXT NOT NULL DEFAULT '',
+	 probe INTEGER NOT NULL DEFAULT 0,
+	 started_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS run_usage_owner ON run_usage(owner_id, started_at DESC, run_id DESC);`

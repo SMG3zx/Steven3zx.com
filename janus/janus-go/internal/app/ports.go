@@ -71,6 +71,16 @@ type Store interface {
 	ListAgents(ctx context.Context, ownerID string) ([]AgentRecord, error)
 	FindAgent(ctx context.Context, id, ownerID string) (agent AgentRecord, found bool, err error)
 	DeleteAgent(ctx context.Context, id, ownerID string) (deleted bool, err error)
+	// ListAllAgents returns every Owner's Agents, oldest first. Only the control
+	// plane's own connection upkeep uses it.
+	ListAllAgents(ctx context.Context) ([]AgentRecord, error)
+
+	// Run Usage that Agents report. A run is kept once: recording a RunID again
+	// changes nothing. Usage outlives the Agent and the Deployment it ran for,
+	// and goes with the Account.
+	RecordRunUsage(ctx context.Context, record RunUsageRecord) error
+	// ListRunUsage returns the Owner's runs that match query, newest first.
+	ListRunUsage(ctx context.Context, query RunUsageQuery) ([]RunUsageRecord, error)
 
 	// DeleteAccount deletes an Account and everything it owns. Without
 	// cancelActiveJobs an Account with unfinished jobs is left untouched and the
@@ -89,13 +99,22 @@ type Builder interface {
 	Build(ctx context.Context, language string, request BuildRequest) (BuildResult, error)
 }
 
-// Runner runs a WASI module with the given arguments under limits. limits.Timeout
-// bounds the run, and an adapter may also stop early when ctx ends. It reports
-// what the module wrote and what the run consumed. A module that cannot be
-// loaded, traps or exceeds a limit fails with an error, and the RunResult still
-// holds the output and Usage measured up to that point. Stdin is empty.
+// Runner runs a WASI module under input.Limits. Limits.Timeout bounds the run,
+// and an adapter may also stop early when ctx ends. It reports what the module
+// wrote and what the run consumed. A module that cannot be loaded, traps or
+// exceeds a limit fails with an error, and the RunResult still holds the output
+// and Usage measured up to that point. A run that spends all its fuel fails with
+// an error matching ErrOutOfFuel, and one stopped by the timeout with an error
+// matching ErrRunTimeout.
+//
+// The module reads input.Stdin and sees input.Env as its environment and
+// input.Args as its arguments. When input.Dir is set, that host directory is
+// the module's one preopened directory (file descriptor 3, named "/"), which it
+// may read and write; nothing outside it is reachable. Without Dir the module
+// has no files at all. Stdout is cut at input.MaxStdout bytes, 64 KiB when it
+// is zero, and StdoutTruncated says so. Stderr is cut at 64 KiB.
 type Runner interface {
-	Run(ctx context.Context, module []byte, args []string, limits RunLimits) (RunResult, error)
+	Run(ctx context.Context, module []byte, input RunInput) (RunResult, error)
 }
 
 // Source fetches a repository at a commit. Open makes the commit's file tree
@@ -163,4 +182,44 @@ type Tailnet interface {
 	Nodes(ctx context.Context) ([]TailnetNode, error)
 	// DeleteNode removes a node, so it can no longer be reached.
 	DeleteNode(ctx context.Context, nodeID string) error
+}
+
+// LocalState is what an Agent keeps on its own machine, so that it serves the
+// same Deployments, paused or not, after a restart. It is safe for concurrent
+// use, and a pause written by another process using the same storage, such as
+// the Agent's command line, is what the next Paused reads.
+type LocalState interface {
+	// SaveDeployment keeps a Deployment, replacing one with the same ID.
+	SaveDeployment(ctx context.Context, deployment HostedDeployment) error
+	// DeleteDeployment forgets a Deployment. Forgetting one that is not kept is
+	// not an error.
+	DeleteDeployment(ctx context.Context, id string) error
+	// Deployments returns every kept Deployment, ordered by ID.
+	Deployments(ctx context.Context) ([]HostedDeployment, error)
+	// SetPaused records whether the Agent is paused. Paused is false until it
+	// is first set.
+	SetPaused(ctx context.Context, paused bool) error
+	Paused(ctx context.Context) (bool, error)
+}
+
+// AgentLink carries the control plane's commands to Agents over the tailnet
+// and their events back. It holds one connection per Agent.
+//
+// Connect keeps a connection open to the Agent at address, the IP address of
+// its tailnet node, until Disconnect, reconnecting whenever it drops.
+// Connecting an Agent that is already connected to the same address does
+// nothing; a new address replaces the old connection. Events from the Agent go
+// to events one at a time, in the order the Agent sent them, on a goroutine the
+// link owns. An Agent sends its AgentState first on every new connection.
+//
+// Send delivers one command and waits for the Agent's answer. It fails with an
+// error matching ErrAgentUnreachable when there is no connection or the
+// connection drops before the answer, and with an *AgentError when the Agent
+// refused the command. Close disconnects every Agent and waits for the link's
+// goroutines.
+type AgentLink interface {
+	Connect(agentID, address string, events func(AgentEvent))
+	Disconnect(agentID string)
+	Send(ctx context.Context, agentID string, command AgentCommand) error
+	Close() error
 }
