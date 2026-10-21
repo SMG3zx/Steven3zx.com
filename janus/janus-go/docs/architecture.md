@@ -30,6 +30,7 @@ These match the module vocabulary used elsewhere in this repo: a port is the **i
 
 ```
 cmd/janus/                      composition root: config, wiring, ordered start and stop
+cmd/janus-agent/                the Agent's composition root: enroll, run, pause, resume
 internal/
   domain/                       pure types and rules (job state machines, Artifact format,
                                 Templates, scan, Usage). Standard library and pure libraries only
@@ -49,6 +50,13 @@ internal/
     audittest/                  recorder
     headscale/                  driven: Tailnet over the Headscale REST API
     tailnettest/                test adapter and contract suite for Tailnet
+    tailnode/                   a process's own tailnet node (tsnet); used by both roots
+    agentgrpc/                  AgentLink (control plane) and its server (Agent): the
+                                gRPC stream of ENG-78, messages in agentpb/agent.proto
+    agentlinktest/              test adapter and contract suite for AgentLink
+    agenthttp/                  driving: the Agent's HTTP endpoint for the edge
+    agentdisk/                  driven: LocalState in the Agent's state directory
+    localstatetest/             test adapter and contract suite for LocalState
 ```
 
 Rules for the tree:
@@ -63,7 +71,7 @@ Rules for the tree:
 1. `domain` imports only the standard library and pure libraries. It imports nothing else from this repository.
 2. `app` imports `domain` and pure libraries (uuid, argon2, JWT, OPA, zstd, the OpenTelemetry API). It never imports an adapter, `net/http`, `database/sql`, `os/exec`, a Docker or Git client, Wasmtime, or any actor framework.
 3. An adapter imports `app` and `domain`. An adapter never imports another adapter, `cmd`, or a test adapter, except that a `<port>test` package may be imported by tests. `internal/archtest` checks non-test imports only, so that exception holds by construction.
-4. `cmd/janus` is the only package that imports concrete adapters.
+4. `cmd/janus` and `cmd/janus-agent`, the two composition roots, are the only packages that import concrete adapters.
 5. Dependencies point inward: `cmd` and adapters toward `app`, `app` toward `domain`.
 
 `internal/archtest` ([archtest_test.go](../internal/archtest/archtest_test.go)) enforces rules 1 to 4 with a Go test over the `go list` import graph and fails the build on a violation. Fixture packages under its `testdata/` break each rule to prove the check works. The allow-list of pure libraries lives in that test, so adding one is a visible review decision.
@@ -89,6 +97,8 @@ Rules for the tree:
 | `GitHost` | list repositories, branches, commits | `githubapi` | `hosttest.Host` |
 | `Audit` | record an Audit Event | `auditlog` | `audittest.Recorder` |
 | `Tailnet` | issue pre-auth keys, list and remove the nodes Agents join | `headscale` | `tailnettest.Fake` |
+| `AgentLink` | carry commands to Agents and their state and Usage back | `agentgrpc.Link` | `agentlinktest.Loopback` |
+| `LocalState` | keep an Agent's Deployments and pause on its machine | `agentdisk` | `localstatetest.Memory` |
 
 ### One Store
 
@@ -106,7 +116,7 @@ The legal moves of an import or build live in `domain` as data and a `CanMove(fr
 
 ## 6. Use cases (the primary side)
 
-- A use case is a method on a struct in `app` (`Accounts`, `Projects`, `Imports`, `Builds`, `Runs`). The struct holds its ports and is built with a constructor that takes them. Its methods are the application's interface; tests and HTTP call the same ones.
+- A use case is a method on a struct in `app` (`Accounts`, `Projects`, `Imports`, `Builds`, `Runs`, `Agents`, `Fleet`, and on the Agent, `AgentRuntime`). The struct holds its ports and is built with a constructor that takes them. Its methods are the application's interface; tests and HTTP call the same ones.
 - No interface for a use case until a second caller needs to substitute it. HTTP is not a reason.
 - `context.Context` is the first parameter and is never stored in a struct. Methods return domain values and typed errors, never HTTP types, SQL rows or adapter errors.
 - A use case does not read the environment or the clock directly; take a function or a value when time matters.

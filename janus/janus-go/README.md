@@ -18,6 +18,26 @@ A signed-in Owner calls `POST /api/agents/enrollment-codes` for a single-use cod
 
 The live tests run against a real Headscale in Docker and real `tsnet` nodes: `go test -tags live ./internal/adapters/headscale`. They need Docker and internet access.
 
+### The Janus Agent
+
+`cmd/janus-agent` is the Agent, one binary (it needs cgo for Wasmtime, like the control plane). Build it with `go build -tags ts_omit_peerapiserver ./cmd/janus-agent`: without that tag, tsnet opens a peerAPI TCP listener on every host interface, so an Agent built without it refuses to join the tailnet. On Windows the binary carries an application manifest (`manifest_windows_*.syso`, regenerated with `go generate ./cmd/janus-agent`); tsnet panics without one. On the Owner's machine:
+
+```
+janus-agent enroll -server https://janus.example -folder ~/janus-files -name laptop <code>
+janus-agent run
+janus-agent pause      # stop serving; the running Agent follows within a second
+janus-agent resume
+janus-agent status
+```
+
+`enroll` trades the code from the web UI for a pre-auth key and joins the tailnet once. `-folder` is the one host folder every Deployment may read and write; modules see it as `/` and can reach nothing outside it. The Agent keeps its settings, its tailnet node and its Deployments under `-state` (default: `janus-agent` in the user's configuration directory), so `run` after a restart serves the same Deployments, paused or not. It opens no listener on the host: it listens only on the tailnet, on port 7100 for the control plane's gRPC stream and 7101 for HTTP requests to Deployments (the `Janus-Deployment` header names one), and accepts only callers tagged `tag:ctrl`. The protocol is `internal/adapters/agentgrpc/agentpb/agent.proto`; regenerate it with `go generate ./internal/adapters/agentgrpc` (needs `buf`, `protoc-gen-go` and `protoc-gen-go-grpc`).
+
+A Deployment is served per request (ADR 0002) through CGI/1.1: the request arrives in `REQUEST_METHOD`, `PATH_INFO`, `QUERY_STRING`, `CONTENT_TYPE`, `CONTENT_LENGTH`, `HTTP_*` and the other CGI variables, with the body on stdin; the module writes header lines (`Status: 404` sets the status), a blank line and the body to stdout. Each request gets the Template's fuel and memory, 30 seconds, and 10 MiB bodies; an Agent runs 16 at once. Every run is reported to the control plane with its fuel, peak memory, duration, CPU time, network bytes (request and response bodies) and status (`ok`, `failed`, `out_of_fuel` or `timeout`).
+
+With Headscale configured, the control plane joins the tailnet as its own `tag:ctrl` node (state in `JANUS_TAILNET_DIR`, default `data/tailnet`) and connects to every enrolled Agent. `/agents` lists the Owner's Agents with a Pause or Resume button and issues Enrollment Codes; the API is `POST /api/agents/{id}/pause`, `POST /api/agents/{id}/resume` and `GET /api/agents/{id}/runs`, and `GET /api/agents` also shows whether each Agent is connected and paused.
+
+`go test -tags live ./e2e/agentlive` runs the real `janus-agent` binary against Headscale in Docker: it enrolls, deploys a Go program built for WASI, serves it over the tailnet, checks the folder confinement and the usage reports, pauses and resumes from the API and the command line, and restarts the Agent.
+
 ## Projects and repository imports
 
 Signed-in users can create an empty project at `/projects/new` or create a project and import a GitHub repository. The project page lists repositories, branches, and the 50 newest commits for a branch. Imports run asynchronously and show their current stage. Janus fetches the selected commit with pure-Go Git, scans without running repository code, and stores tracked file contents in the local Turso database. The per-snapshot limits are 256 MiB total uncompressed file content, 50,000 files, and 16 MiB per file. The five newest successful snapshots are retained per project; interrupted imports are cleaned up on startup. The project page lists retained snapshots and lets the owner reactivate an earlier revision without reimporting it.
@@ -58,7 +78,7 @@ OPA policy is embedded in `internal/app/policy.rego`. The default decision is de
 The structure is ports and adapters, described in [docs/architecture.md](docs/architecture.md) ([ADR 0003](docs/adr/0003-ports-and-adapters.md)). There is no actor framework.
 
 - `internal/domain` holds the pure rules; `internal/app` holds the use cases (`Accounts`, `Imports`, `Builds`, `Runs`), the authentication and authorization modules, and the ports they declare.
-- `cmd/janus` is the composition root. It loads settings, starts telemetry, and runs a table of components (foundation, identity, projects and builds, runtime, web) in order, then stops them in reverse, waiting for running builds and imports. A startup failure part-way stops whatever already started.
+- `cmd/janus` is the control plane's composition root, and `cmd/janus-agent` the Agent's. It loads settings, starts telemetry, and runs a table of components (foundation, identity, projects and builds, runtime, web) in order, then stops them in reverse, waiting for running builds and imports. A startup failure part-way stops whatever already started.
 - Adapters live in `internal/adapters`: `sqlstore` (the local Turso database and its single connection), `dockerbuild`, `wasmtime`, `githubapi`, `gitsource`, `auditlog` (structured audit events through zap; passwords, OAuth codes, tokens, and raw emails are excluded from audit fields) and `httpapi` (the HTTP server and routes). Each port with more than one adapter has a `<port>test` package with a test adapter and a contract suite.
 - Spans cover startup, shutdown, requests and the use cases. The tracing helpers are `app.StartSpan` and `app.RecordError`; the OpenTelemetry providers and the Pyroscope profiler are started by `cmd/janus`.
 

@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"tailscale.com/feature/buildfeatures"
+
 	"janus/internal/adapters/agentdisk"
 	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/agenthttp"
@@ -22,9 +24,30 @@ import (
 	"janus/internal/app"
 )
 
+// errHostListener is why an Agent built without the ts_omit_peerapiserver tag
+// refuses to join the tailnet.
+var errHostListener = errors.New("this janus-agent was built without -tags " + buildTags +
+	": it would open tsnet's peerAPI listener on every host interface, and an Agent opens no listener outside the tailnet")
+
+// buildTags are the tags janus-agent must be built with.
+const buildTags = "ts_omit_peerapiserver"
+
+// noHostListener refuses a build whose tsnet would listen on the host. tsnet
+// in netstack mode opens a kernel TCP listener for its peerAPI on every
+// interface, which netstack does not need; the build tag removes it.
+func noHostListener() error {
+	if buildfeatures.HasPeerAPIServer {
+		return errHostListener
+	}
+	return nil
+}
+
 // enroll trades an Enrollment Code for a pre-auth key at the control plane,
 // joins the tailnet with it once, and records the Agent's settings.
 func enroll(ctx context.Context, out io.Writer, state, server, folder, name, code string) error {
+	if err := noHostListener(); err != nil {
+		return err
+	}
 	if server == "" {
 		return errors.New("give the control plane's URL with -server")
 	}
@@ -100,6 +123,9 @@ func serve(ctx context.Context, state string) error {
 		return err
 	}
 	logger := log.New(os.Stderr, "janus-agent ", log.LstdFlags)
+	if err = noHostListener(); err != nil {
+		return err
+	}
 	if !wasmtime.Available() {
 		return errors.New("this build of janus-agent cannot run WebAssembly: it was built without cgo")
 	}

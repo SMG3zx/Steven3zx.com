@@ -1,3 +1,5 @@
 # Serve a Deployment by starting its module for each request
 
 A deployed module is not a long-running server. For each HTTP request the Agent starts the module, passes the request in through environment and stdin, and reads the response from stdout. We chose this because our Targets are WASI preview 1, which has no listening sockets, and because per-request runs fit the Usage we already measure (fuel, memory, time). The cost is a start-up per request and no in-memory state between requests. Long-running modules on wasi-http would be a later addition for the Distributed Network, and would need new Targets, so this decision is hard to reverse once users write to it.
+
+The request and response follow CGI/1.1 (RFC 3875), as WAGI does: the request is in the CGI environment variables and the body on stdin, and the module writes header lines, a blank line and the body to stdout, with a `Status` header for anything but 200 (decided in ENG-111; `internal/domain/cgi`). An existing convention means users can follow its documentation and reuse CGI libraries.

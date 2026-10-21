@@ -77,7 +77,7 @@ One execution of a WASM Build's Artifact. It records its Usage.
 _Avoid_: Execution
 
 **Usage**:
-What a WASM Run consumed, measured by the host: the fuel it spent, the peak size of its linear memory, how long it ran, and the active CPU time it used. Active CPU time leaves out time spent waiting, and it is what the CPU layer bills. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent.
+What a WASM Run consumed, measured by the host: the fuel it spent, the peak size of its linear memory, how long it ran, and the active CPU time it used. Active CPU time leaves out time spent waiting, and it is what the CPU layer bills. Fuel is exact and repeats for the same module and input. Usage is recorded for every run, and a run that fails or runs out of fuel still reports what it spent. A run of a Deployment on an Agent also reports its network bytes (the request body it read and the response body it wrote) and its status: ok, failed, out of fuel, or timeout.
 _Avoid_: Metrics, billing
 
 ## Deployments
@@ -122,8 +122,16 @@ A Deployment that ended in an error, kept with its message. It is not resumed. I
 ## Agents
 
 **Agent**:
-The Janus program on an Owner's machine that runs a Deployment's module. It joins the Janus tailnet under the tag `tag:acct-<owner id>` and accepts connections only from the control plane. It opens no listener on the internet. An Agent is listed with a status: online, offline (its node joined but the tailnet reports it down), pending (enrolled, but no node has joined with its key yet), or unknown (the tailnet could not be asked).
+The Janus program on an Owner's machine that runs a Deployment's module. It joins the Janus tailnet under the tag `tag:acct-<owner id>` and accepts connections only from the control plane. It opens no listener on the internet. It keeps its Deployments on the machine, so after a restart it serves them again without a new Deploy. An Agent is listed with a status: online, offline (its node joined but the tailnet reports it down), pending (enrolled, but no node has joined with its key yet), or unknown (the tailnet could not be asked).
 _Avoid_: Worker, runner, node (a node is the Agent's presence on the tailnet)
+
+**Host Folder**:
+The one directory on the Owner's machine, chosen when the Agent enrolls, that every Deployment on that Agent may read and write. A module sees it as `/` and can reach nothing outside it.
+_Avoid_: Mount, volume, workspace
+
+**Paused Agent**:
+An Agent the Owner paused from its command line or the web UI. It keeps its Deployments but answers no request until resumed, and refuses a new Deploy. The pause outlasts a restart. Pausing does not change a Deployment's state.
+_Avoid_: Stopped, offline
 
 **Enrollment Code**:
 A single-use code the web UI shows an Owner once, valid for 15 minutes, that the Agent's command line exchanges for a pre-auth key. Janus keeps only a hash of it. An unknown, used or expired code is refused in the same words, so a guess learns nothing. A code is used up even if enrolling fails afterwards, so the Owner asks for a new one.
