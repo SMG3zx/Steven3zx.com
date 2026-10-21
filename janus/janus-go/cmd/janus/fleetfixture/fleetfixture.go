@@ -11,8 +11,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +25,7 @@ import (
 	"janus/internal/adapters/fleetnats"
 	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
+	contractfleet "janus/internal/contract/fleet"
 	contractprojects "janus/internal/contract/projects"
 	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natstest"
@@ -58,6 +57,11 @@ type Options struct {
 	Agents *natsauth.Account
 	// OnRevoke is called after a leaf credential is revoked. Nil means nothing.
 	OnRevoke func(*natsauth.Account) error
+	// Hub is a NATS server to run the service on, instead of an embedded test
+	// server. AgentsConn and Trust go with it, as cmd/janus gives them the service.
+	Hub        *natsx.Hub
+	AgentsConn *nats.Conn
+	Trust      *contractfleet.AgentTrust
 }
 
 // Fixture is a running fleet service and the parts around it.
@@ -65,7 +69,10 @@ type Fixture struct {
 	t testing.TB
 	// DatabasePath is the fleet.db the service writes.
 	DatabasePath string
-	logs         *observer.ObservedLogs
+	// owners is the Owner of each Agent Attach served, for reading its modules.
+	ownersMu sync.Mutex
+	owners   map[string]string
+	logs     *observer.ObservedLogs
 	// Fleet is the app.Fleet the single process uses, over NATS.
 	Fleet app.Fleet
 	// Tailnet is the control server the Agents join.
@@ -84,7 +91,10 @@ func Start(t testing.TB, opts Options) *Fixture {
 	if opts.ReconcileInterval <= 0 {
 		opts.ReconcileInterval = 10 * time.Millisecond
 	}
-	hub := natstest.Start(t)
+	hub := opts.Hub
+	if hub == nil {
+		hub = natstest.Start(t)
+	}
 	conn := hub.Conn()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -96,7 +106,7 @@ func Start(t testing.TB, opts Options) *Fixture {
 	}
 	t.Cleanup(func() { _ = auditService.Stop(context.Background()) })
 
-	f := &Fixture{t: t, logs: logs, conn: conn}
+	f := &Fixture{t: t, logs: logs, conn: conn, owners: map[string]string{}}
 	tailnet, link := opts.Tailnet, opts.Link
 	if tailnet == nil {
 		f.Tailnet = tailnettest.NewFake()
@@ -104,6 +114,7 @@ func Start(t testing.TB, opts Options) *Fixture {
 	}
 	if link == nil {
 		f.Link = agentlinktest.NewLoopback()
+		f.Link.ModuleSource = f.moduleOf
 		link = f.Link
 	}
 	controlURL := opts.ControlURL
@@ -112,8 +123,13 @@ func Start(t testing.TB, opts Options) *Fixture {
 	}
 	f.Builds = newBuilds(t, conn)
 	f.DatabasePath = t.TempDir() + "/fleet.db"
+	onRevoke := opts.OnRevoke
+	if onRevoke == nil && opts.Hub != nil {
+		onRevoke = hub.UpdateAccount
+	}
 	service := fleet.New(fleet.Config{DatabasePath: f.DatabasePath, Tailnet: tailnet, ControlURL: controlURL,
-		Link: link, Agents: opts.Agents, OnRevoke: opts.OnRevoke, ReconcileInterval: opts.ReconcileInterval, Now: opts.Now})
+		Link: link, Agents: opts.Agents, Trust: opts.Trust, AgentsConn: opts.AgentsConn, OnRevoke: onRevoke,
+		ReconcileInterval: opts.ReconcileInterval, Now: opts.Now})
 	if err := service.Start(ctx, conn); err != nil {
 		t.Fatalf("start the fleet service: %v", err)
 	}
@@ -151,21 +167,21 @@ func (f *Fixture) Enroll(owner, name string) app.Enrollment {
 }
 
 // Attach joins the Agent of enrollment to the tailnet as a node named name, and
-// serves runtime at the node's address, where the service connects to it. It
-// waits until the service has the Agent's first state report.
-func (f *Fixture) Attach(owner string, enrollment app.Enrollment, name string, runtime *app.AgentRuntime) (address string) {
+// serves runtime as that Agent, where the service's link reaches it. It waits
+// until the service has the Agent's first state report.
+func (f *Fixture) Attach(owner string, enrollment app.Enrollment, name string, runtime *app.AgentRuntime) {
 	f.t.Helper()
-	node, err := f.Tailnet.Join(enrollment.AuthKey, name)
-	if err != nil {
+	if _, err := f.Tailnet.Join(enrollment.AuthKey, name); err != nil {
 		f.t.Fatalf("join the tailnet as %s: %v", name, err)
 	}
-	address = net.JoinHostPort(node.Addresses[0], strconv.Itoa(fleet.AgentConnectPort))
-	f.Link.Serve(address, runtime)
+	f.ownersMu.Lock()
+	f.owners[enrollment.AgentID] = owner
+	f.ownersMu.Unlock()
+	f.Link.Serve(enrollment.AgentID, runtime)
 	f.Eventually("the Agent to report its state", func() bool {
 		reports, err := f.Fleet.AgentStatuses(context.Background(), owner)
 		return err == nil && reports[enrollment.AgentID].Connected
 	})
-	return address
 }
 
 // Eventually waits until done reports true, checking every 10 milliseconds, and
@@ -403,4 +419,21 @@ func (f *Fixture) Publish(subject string, event any) {
 // service the test runs against the same server.
 func (f *Fixture) Conn() *nats.Conn {
 	return f.conn
+}
+
+// moduleOf reads the module with sha that the service staged for the Owner of
+// the Agent with agentID, as the Agent itself reads it from the hub.
+func (f *Fixture) moduleOf(ctx context.Context, agentID, sha string) ([]byte, error) {
+	f.ownersMu.Lock()
+	owner := f.owners[agentID]
+	f.ownersMu.Unlock()
+	js, err := jetstream.New(f.conn)
+	if err != nil {
+		return nil, err
+	}
+	store, err := js.ObjectStore(ctx, contractfleet.ModulesBucket(owner))
+	if err != nil {
+		return nil, err
+	}
+	return store.GetBytes(ctx, sha)
 }

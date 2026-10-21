@@ -27,6 +27,38 @@ const ControlTag = "tag:ctrl"
 // so an Agent can join the hub and reach nothing else there.
 const AgentLeafPort = 7102
 
+// The names of an Agent's link. A command is a request on its command subject.
+// Its state is the key of its ID in AgentStateBucket on the hub. Its Usage is
+// a stream in its own JetStream domain, AgentDomain, under AgentUsageSubject.
+// The modules an Agent deploys are objects in ModulesBucket of their Owner.
+const AgentStateBucket = "agent_state"
+
+// AgentCommandSubject is the subject a command to the Agent with agentID is sent
+// on.
+func AgentCommandSubject(agentID string) string {
+	return "janus.agent." + agentID + ".command"
+}
+
+// AgentUsageSubject is the subject the Agent's runs are published on, in its
+// USAGE stream.
+func AgentUsageSubject(agentID string) string {
+	return "janus.usage." + agentID + ".run"
+}
+
+// AgentUsageStream is the stream an Agent keeps its Usage in, in its own domain.
+const AgentUsageStream = "USAGE"
+
+// AgentDomain is the JetStream domain of the Agent with agentID.
+func AgentDomain(agentID string) string {
+	return "agent-" + agentID
+}
+
+// ModulesBucket is the object store that holds the modules of an Owner's
+// Deployments, by SHA-256. The Owner's Agents read it through the hub.
+func ModulesBucket(ownerID string) string {
+	return "modules-" + ownerID
+}
+
 // The subjects the fleet service answers.
 const (
 	SubjectIssueCode           = "janus.fleet.code.issue"
@@ -61,6 +93,8 @@ type (
 	HostedDeployment  = domainfleet.HostedDeployment
 	AgentCommand      = domainfleet.AgentCommand
 	AgentEvent        = domainfleet.AgentEvent
+	AgentReply        = domainfleet.AgentReply
+	AgentTrust        = domainfleet.AgentTrust
 	AgentError        = domainfleet.AgentError
 	NewDeployment     = domainfleet.NewDeployment
 	Deployment        = domainfleet.Deployment

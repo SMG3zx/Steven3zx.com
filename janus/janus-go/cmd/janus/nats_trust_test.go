@@ -20,7 +20,7 @@ func startTrusted(t *testing.T, keysPath string) *natsx.Hub {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	trust, err := openNATSTrust(ctx, keysPath, keySecret, "", nil)
+	trust, err := openNATSTrust(ctx, keysPath, keySecret, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +74,11 @@ func TestTheKeysAreTheSameAfterARestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "keys.db")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	first, err := openNATSTrust(ctx, path, keySecret, "", nil)
+	first, err := openNATSTrust(ctx, path, keySecret, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := openNATSTrust(ctx, path, keySecret, "", nil)
+	again, err := openNATSTrust(ctx, path, keySecret, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestARevokedLeafStaysRevokedAfterARestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "keys.db")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	first, err := openNATSTrust(ctx, path, keySecret, "", nil)
+	first, err := openNATSTrust(ctx, path, keySecret, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestARevokedLeafStaysRevokedAfterARestart(t *testing.T) {
 	revokedAt := time.Now()
 	revoked := map[string]time.Time{leaf.UserPub: revokedAt}
 
-	again, err := openNATSTrust(ctx, path, keySecret, "", revoked)
+	again, err := openNATSTrust(ctx, path, keySecret, revoked)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestARevokedLeafStaysRevokedAfterARestart(t *testing.T) {
 func TestRevokingALeafDropsItsConnectionOnTheRunningHub(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	trust, err := openNATSTrust(ctx, filepath.Join(t.TempDir(), "keys.db"), keySecret, "", nil)
+	trust, err := openNATSTrust(ctx, filepath.Join(t.TempDir(), "keys.db"), keySecret, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

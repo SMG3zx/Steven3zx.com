@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +14,6 @@ import (
 	"janus/internal/adapters/runnertest"
 	"janus/internal/app"
 	"janus/internal/domain/cgi"
-	"janus/internal/services/fleet"
 )
 
 // fleetApp is the HTTP adapter with the fleet service running in process, and an
@@ -44,15 +41,7 @@ func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledB
 		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
 	runtime := app.NewAgentRuntime(runner, localstatetest.NewMemory(), "", time.Now)
-	nodes, err := f.tailnet.Nodes(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, node := range nodes {
-		if node.Name == "laptop" {
-			f.link.Serve(net.JoinHostPort(node.Addresses[0], strconv.Itoa(fleet.AgentConnectPort)), runtime)
-		}
-	}
+	f.link.Serve(enrolled.AgentID, runtime)
 	f.settled(t, enrolled.AgentID, "report from the Agent", func() bool {
 		agents := decode[[]agentBody](t, perform(f.handler, http.MethodGet, "/api/agents", "", owner))
 		return len(agents) == 1 && agents[0].Connected

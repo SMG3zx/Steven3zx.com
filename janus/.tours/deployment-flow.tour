@@ -17,7 +17,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/link.go",
-      "line": 190,
+      "line": 199,
       "title": "What ready checks",
       "description": "`func (s *Service) ready`. It reads what the Agent last reported over its connection: paused, offline, or ready."
     },
@@ -41,13 +41,13 @@
     },
     {
       "file": "janus-go/internal/services/fleet/link.go",
-      "line": 171,
+      "line": 180,
       "title": "The command reaches the Agent",
       "description": "`func (s *Service) sendToAgent`. It checks the Owner has the Agent, sends the command over the Agent link, and maps unreachable and refused to errors."
     },
     {
       "file": "janus-go/internal/services/fleet/deployments.go",
-      "line": 333,
+      "line": 336,
       "title": "Every failure ends here",
       "description": "`func (s *Service) fail`. It moves the Deployment to failed from whichever state it is in, with its own context."
     },

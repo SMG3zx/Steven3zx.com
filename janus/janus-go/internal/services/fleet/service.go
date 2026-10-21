@@ -39,23 +39,20 @@ const defaultReconcileInterval = 15 * time.Second
 // connection to the control plane.
 const AgentConnectPort = 7100
 
-// AgentLink carries the control plane's commands to Agents over the tailnet and
-// their events back. It holds one connection per Agent.
+// AgentLink carries the control plane's commands to Agents and their events
+// back, over the hub's NATS server. It keeps one link to each enrolled Agent.
 //
-// Connect keeps a connection open to the Agent at address, the IP address of its
-// tailnet node, until Disconnect, reconnecting whenever it drops. Connecting an
-// Agent that is already connected to the same address does nothing; a new address
-// replaces the old connection. Events from the Agent go to events one at a time,
-// in the order the Agent sent them, on a goroutine the link owns. An Agent sends
-// its AgentState first on every new connection.
+// Connect keeps the link to the Agent with agentID until Disconnect. Events from
+// the Agent go to events one at a time, in the order the Agent sent them. An
+// event that events returns an error for is delivered again later, so an event
+// is never lost while the service cannot keep it.
 //
 // Send delivers one command and waits for the Agent's answer. It fails with an
-// error matching contractfleet.ErrAgentUnreachable when there is no connection or
-// the connection drops before the answer, and with a *contractfleet.AgentError
-// when the Agent refused the command. Close disconnects every Agent and waits for
-// the link's goroutines.
+// error matching contractfleet.ErrAgentUnreachable when the Agent is not
+// listening, and with a *contractfleet.AgentError when the Agent refused the
+// command. Close disconnects every Agent and waits for the link's goroutines.
 type AgentLink interface {
-	Connect(agentID, address string, events func(contractfleet.AgentEvent))
+	Connect(agentID string, events func(contractfleet.AgentEvent) error)
 	Disconnect(agentID string)
 	Send(ctx context.Context, agentID string, command contractfleet.AgentCommand) error
 	Close() error
@@ -71,6 +68,13 @@ type Config struct {
 	ControlURL string
 	// Link carries commands to the Agents and their events back.
 	Link AgentLink
+	// Trust is the public half of the hub's NATS trust, which enrollment hands
+	// each Agent. Nil means enrollment hands out no trust.
+	Trust *contractfleet.AgentTrust
+	// AgentsConn is a connection of a user of AGENTS. The Agents' state and their
+	// modules live in AGENTS, so the service reaches them through it. Nil means
+	// the connection it is started on.
+	AgentsConn *nats.Conn
 	// Agents is the AGENTS account the hub signs Agents' leaf credentials with.
 	// Nil means enrollment issues no leaf credentials.
 	Agents *natsauth.Account
@@ -86,19 +90,21 @@ type Config struct {
 
 // Service answers the fleet subjects from fleet.db and runs Deployments.
 type Service struct {
-	cfg       Config
-	db        *sql.DB
-	conn      *nats.Conn
-	js        jetstream.JetStream
+	cfg  Config
+	db   *sql.DB
+	conn *nats.Conn
+	js   jetstream.JetStream
+	// agentsJS is JetStream over the connection of AGENTS.
+	agentsJS  jetstream.JetStream
 	service   micro.Service
 	artifacts jetstream.ObjectStore
 	events    jetstream.ConsumeContext
 
-	// mu guards the connections the reconcile loop keeps, and the last state
-	// each Agent reported.
-	mu        sync.Mutex
-	addresses map[string]string
-	states    map[string]contractfleet.AgentStatusReport
+	// mu guards the links the reconcile loop keeps, and the last state each
+	// Agent wrote.
+	mu     sync.Mutex
+	linked map[string]bool
+	states map[string]agentView
 
 	// closed is set when Stop starts; Deployments are not queued after it.
 	closed        bool
@@ -117,7 +123,7 @@ func New(cfg Config) *Service {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Service{cfg: cfg, addresses: map[string]string{}, states: map[string]contractfleet.AgentStatusReport{}}
+	return &Service{cfg: cfg, linked: map[string]bool{}, states: map[string]agentView{}}
 }
 
 // Start opens fleet.db, declares the artifacts store it reads, answers its
@@ -145,6 +151,16 @@ func (s *Service) Start(ctx context.Context, conn *nats.Conn) (err error) {
 	}
 	if s.artifacts, err = natsx.DeclareObjectStore(ctx, s.js, natsx.ArtifactsBucket); err != nil {
 		return err
+	}
+	agentsConn := conn
+	if s.cfg.AgentsConn != nil {
+		agentsConn = s.cfg.AgentsConn
+	}
+	if s.agentsJS, err = jetstream.New(agentsConn); err != nil {
+		return fmt.Errorf("open JetStream for the Agents: %w", err)
+	}
+	if _, err = s.agentsJS.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: contractfleet.AgentStateBucket}); err != nil {
+		return fmt.Errorf("declare the Agents' state: %w", err)
 	}
 	if s.service, err = micro.AddService(conn, micro.Config{Name: contractfleet.ServiceName, Version: "1.0.0", Description: "Janus Agents, their Deployments and Usage"}); err != nil {
 		return fmt.Errorf("register the fleet service: %w", err)

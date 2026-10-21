@@ -46,6 +46,9 @@ type Config struct {
 	// Trust makes the embedded server run with decentralised credentials. Nil
 	// means it accepts any client, as before. It is ignored when URL is set.
 	Trust *Trust
+	// LeafAddress is the host:port the embedded server takes leaf connections
+	// on. Empty means it takes none. It is ignored when URL is set.
+	LeafAddress string
 }
 
 // Trust is the decentralised NATS trust of an embedded server: the operator
@@ -55,9 +58,6 @@ type Trust struct {
 	Operator      *natsauth.Operator
 	SystemAccount *natsauth.Account
 	Accounts      []*natsauth.Account
-	// LeafAddress is the host:port the server takes leaf connections on. Empty
-	// means it takes none.
-	LeafAddress string
 }
 
 // Hub is a process's connection to NATS and, when embedded, the server itself.
@@ -127,6 +127,13 @@ func embed(cfg Config) (*server.Server, *server.MemAccResolver, error) {
 			return nil, nil, err
 		}
 	}
+	if cfg.LeafAddress != "" {
+		leafHost, leafPort, err := listenAddress(cfg.LeafAddress)
+		if err != nil {
+			return nil, nil, err
+		}
+		opts.LeafNode = server.LeafNodeOpts{Host: leafHost, Port: leafPort}
+	}
 	srv, err := server.NewServer(opts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure embedded NATS server: %w", err)
@@ -140,8 +147,8 @@ func embed(cfg Config) (*server.Server, *server.MemAccResolver, error) {
 	return srv, resolver, nil
 }
 
-// applyTrust makes opts trust the operator and resolve the accounts, and opens
-// the leaf listener when there is a leaf address. It returns the resolver.
+// applyTrust makes opts trust the operator and resolve the accounts. It returns
+// the resolver.
 func applyTrust(opts *server.Options, trust *Trust) (*server.MemAccResolver, error) {
 	if trust.Operator == nil || trust.SystemAccount == nil {
 		return nil, errors.New("NATS trust needs an operator and a system account")
@@ -155,13 +162,6 @@ func applyTrust(opts *server.Options, trust *Trust) (*server.MemAccResolver, err
 	opts.TrustedOperators = []*jwt.OperatorClaims{trust.Operator.Claims}
 	opts.AccountResolver = resolver
 	opts.SystemAccount = trust.SystemAccount.Pub
-	if trust.LeafAddress != "" {
-		host, port, err := listenAddress(trust.LeafAddress)
-		if err != nil {
-			return nil, err
-		}
-		opts.LeafNode = server.LeafNodeOpts{Host: host, Port: port}
-	}
 	return resolver, nil
 }
 

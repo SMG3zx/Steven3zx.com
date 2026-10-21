@@ -22,8 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go"
+
 	"janus/cmd/janus/fleetfixture"
-	"janus/internal/adapters/agentgrpc"
+	"janus/internal/adapters/agentnats"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
@@ -35,7 +37,9 @@ import (
 	contractbuilds "janus/internal/contract/builds"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/domain/artifact"
-	"janus/internal/platform/natstest"
+	"janus/internal/platform/leafbridge"
+	"janus/internal/platform/natstrust"
+	"janus/internal/platform/natsx"
 	"janus/internal/services/fleet/headscale"
 	"janus/internal/services/identity"
 )
@@ -60,7 +64,19 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	store, err := sqlstore.Open(filepath.Join(work, "janus.db"))
 	must(t, err)
 	t.Cleanup(func() { store.Close() })
-	hub := natstest.Start(t)
+	// The hub trusts its own keys and takes its Agents' leaf connections on a
+	// loopback port, which the control plane's tailnet node carries from the
+	// tailnet. It is the hub cmd/janus runs.
+	trust, err := natstrust.Open(ctx, filepath.Join(work, "keys.db"), strings.Repeat("s", 32), nil)
+	must(t, err)
+	leafAddress := freeLoopbackAddress(t)
+	hub, err := natsx.Start(ctx, natsx.Config{Address: "127.0.0.1:0", StoreDir: filepath.Join(work, "nats"), Name: "janus-live",
+		Trust: trust.Server, ClientOptions: trust.Client, LeafAddress: leafAddress})
+	must(t, err)
+	t.Cleanup(func() { _ = hub.Close(context.Background()) })
+	agentsConn, err := nats.Connect(hub.URL(), trust.Fleet...)
+	must(t, err)
+	t.Cleanup(agentsConn.Close)
 	identityService := identity.New(identity.Config{DatabasePath: filepath.Join(work, "identity.db"), TokenSecret: strings.Repeat("k", 32)})
 	must(t, identityService.Start(ctx, hub.Conn()))
 	t.Cleanup(func() { identityService.Stop(context.Background()) })
@@ -75,11 +91,17 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	cancelUp()
 	must(t, err)
 	t.Cleanup(func() { control.Close() })
-	link := agentgrpc.NewLink(control.Dial, agentgrpc.WithMaxRetryDelay(time.Second))
+	listener, err := control.Listen(contractfleet.AgentLeafPort)
+	must(t, err)
+	bridge := leafbridge.ServeHub(listener, leafAddress)
+	t.Cleanup(bridge.Close)
+	link, err := agentnats.NewLink(agentsConn)
+	must(t, err)
 	t.Cleanup(func() { link.Close() })
-	// The fleet service runs on its own NATS server, with the real tailnet and
-	// the gRPC link; the builds it deploys are seeded through its fixture.
-	fx := fleetfixture.Start(t, fleetfixture.Options{Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
+	// The fleet service runs on the hub, with the real tailnet and the Agents'
+	// NATS link; the builds it deploys are seeded through its fixture.
+	fx := fleetfixture.Start(t, fleetfixture.Options{Hub: hub, AgentsConn: agentsConn, Agents: trust.Agents, Trust: publicTrust(trust),
+		Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
 	wasm := buildstest.NewFake(store)
 	builds := app.NewBuilds(store, catalog, wasm)
 	policy, err := app.NewPolicy(ctx)
@@ -117,7 +139,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	deployCtx, cancelDeploy := context.WithTimeout(ctx, 90*time.Second)
 	deployed, err := fx.Fleet.CreateDeployment(deployCtx, app.NewDeployment{OwnerID: alice, ProjectID: "live-project", BuildID: buildID, AgentID: agentID})
 	must(t, err)
-	fx.Eventually("the deployment to be healthy", func() bool {
+	eventually(t, "the deployment to be healthy", 120*time.Second, func() bool {
 		d, found, err := fx.Fleet.FindDeployment(deployCtx, alice, deployed)
 		return err == nil && found && d.State == "healthy"
 	})
@@ -360,6 +382,11 @@ func assertNoTCPListener(t *testing.T, pid int) {
 	must(t, err)
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Fields(line)
+		// The leaf bridge listens on loopback, where only the Agent itself
+		// connects. Anything listening beyond loopback is refused.
+		if strings.Contains(line, "127.0.0.1:") || strings.Contains(line, "[::1]:") {
+			continue
+		}
 		listening := strings.Contains(line, "LISTEN")
 		owned := (runtime.GOOS == "windows" && len(fields) > 0 && fields[len(fields)-1] == strconv.Itoa(pid)) ||
 			strings.Contains(line, "pid="+strconv.Itoa(pid)+",")
@@ -524,4 +551,24 @@ func (e *edgeClient) eventually(method, path string, status int) {
 		}
 		return err == nil && got == status
 	})
+}
+
+// freeLoopbackAddress returns a loopback address that was free a moment ago.
+func freeLoopbackAddress(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	must(t, err)
+	defer listener.Close()
+	return listener.Addr().String()
+}
+
+// publicTrust is the trust an Agent's enrollment carries.
+func publicTrust(trust natstrust.Trust) *contractfleet.AgentTrust {
+	return &contractfleet.AgentTrust{
+		OperatorJWT:   trust.Public.OperatorJWT,
+		SystemAccount: trust.Public.SystemAccount,
+		SystemJWT:     trust.Public.SystemJWT,
+		AgentsAccount: trust.Public.AgentsAccount,
+		AgentsJWT:     trust.Public.AgentsJWT,
+	}
 }

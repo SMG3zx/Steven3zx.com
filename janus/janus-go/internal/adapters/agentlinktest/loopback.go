@@ -5,6 +5,7 @@ package agentlinktest
 import (
 	"context"
 	"sync"
+	"time"
 
 	"janus/internal/app"
 )
@@ -16,15 +17,20 @@ import (
 // served is up as soon as Connect or Serve returns, and Settle waits for its
 // events, so tests need not poll. It is safe for concurrent use.
 type Loopback struct {
+	// ModuleSource reads the module of a Deploy whose module the service did not
+	// send inline, as an Agent reads it from the hub. Nil means such a Deploy
+	// carries no module.
+	ModuleSource func(ctx context.Context, agentID, sha string) ([]byte, error)
+
 	mu     sync.Mutex
-	agents map[string]*app.AgentRuntime // by address
+	agents map[string]*app.AgentRuntime // by Agent ID
 	conns  map[string]*loopConn         // by Agent ID
 	wg     sync.WaitGroup
 }
 
 type loopConn struct {
-	address string
-	events  func(app.AgentEvent)
+	agentID string
+	events  func(app.AgentEvent) error
 	stop    chan struct{}
 	// moved wakes the connection when its Agent changes; settle asks it to
 	// deliver what is waiting and answer.
@@ -40,27 +46,28 @@ func NewLoopback() *Loopback {
 	return &Loopback{agents: map[string]*app.AgentRuntime{}, conns: map[string]*loopConn{}}
 }
 
-// Serve makes runtime the Agent at address, replacing any Agent there.
-func (l *Loopback) Serve(address string, runtime *app.AgentRuntime) {
+// Serve makes runtime the Agent with agentID, replacing any Agent with that ID.
+func (l *Loopback) Serve(agentID string, runtime *app.AgentRuntime) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.agents[address] = runtime
-	l.moveLocked(address, runtime)
+	l.agents[agentID] = runtime
+	l.moveLocked(agentID, runtime)
 }
 
-// Unserve takes the Agent at address away, as a crash or a network failure
+// Unserve takes the Agent with agentID away, as a crash or a network failure
 // would; connections to it drop.
-func (l *Loopback) Unserve(address string) {
+func (l *Loopback) Unserve(agentID string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.agents, address)
-	l.moveLocked(address, nil)
+	delete(l.agents, agentID)
+	l.moveLocked(agentID, nil)
 }
 
-// moveLocked attaches every connection to address to runtime. The caller holds mu.
-func (l *Loopback) moveLocked(address string, runtime *app.AgentRuntime) {
+// moveLocked attaches every connection to the Agent with agentID to runtime. The
+// caller holds mu.
+func (l *Loopback) moveLocked(agentID string, runtime *app.AgentRuntime) {
 	for _, conn := range l.conns {
-		if conn.address == address {
+		if conn.agentID == agentID {
 			conn.attach(runtime)
 			select {
 			case conn.moved <- struct{}{}:
@@ -70,17 +77,14 @@ func (l *Loopback) moveLocked(address string, runtime *app.AgentRuntime) {
 	}
 }
 
-func (l *Loopback) Connect(agentID, address string, events func(app.AgentEvent)) {
+func (l *Loopback) Connect(agentID string, events func(app.AgentEvent) error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if old, ok := l.conns[agentID]; ok {
-		if old.address == address {
-			return
-		}
-		close(old.stop)
+	if _, ok := l.conns[agentID]; ok {
+		return
 	}
-	conn := &loopConn{address: address, events: events, stop: make(chan struct{}),
-		moved: make(chan struct{}, 1), settle: make(chan chan struct{}), attached: l.agents[address]}
+	conn := &loopConn{agentID: agentID, events: events, stop: make(chan struct{}),
+		moved: make(chan struct{}, 1), settle: make(chan chan struct{}), attached: l.agents[agentID]}
 	l.conns[agentID] = conn
 	l.wg.Add(1)
 	go l.run(conn)
@@ -144,7 +148,7 @@ func (l *Loopback) run(conn *loopConn) {
 			}
 		}
 		state := runtime.State()
-		conn.events(app.AgentEvent{State: &state})
+		_ = conn.events(app.AgentEvent{State: &state, At: time.Now()})
 	forward:
 		for {
 			select {
@@ -153,10 +157,10 @@ func (l *Loopback) run(conn *loopConn) {
 			case <-conn.moved:
 				break forward
 			case report := <-runtime.Reports():
-				conn.events(app.AgentEvent{Usage: &report})
+				_ = conn.events(app.AgentEvent{Usage: &report})
 			case <-runtime.Changes():
 				state := runtime.State()
-				conn.events(app.AgentEvent{State: &state})
+				_ = conn.events(app.AgentEvent{State: &state, At: time.Now()})
 			case done := <-conn.settle:
 				drain(conn, runtime)
 				close(done)
@@ -170,10 +174,10 @@ func drain(conn *loopConn, runtime *app.AgentRuntime) {
 	for {
 		select {
 		case report := <-runtime.Reports():
-			conn.events(app.AgentEvent{Usage: &report})
+			_ = conn.events(app.AgentEvent{Usage: &report})
 		case <-runtime.Changes():
 			state := runtime.State()
-			conn.events(app.AgentEvent{State: &state})
+			_ = conn.events(app.AgentEvent{State: &state, At: time.Now()})
 		default:
 			return
 		}
@@ -202,6 +206,15 @@ func (l *Loopback) Send(ctx context.Context, agentID string, command app.AgentCo
 	runtime := conn.current()
 	if runtime == nil {
 		return app.ErrAgentUnreachable
+	}
+	if command.Deploy != nil && command.Deploy.Module == nil && l.ModuleSource != nil {
+		module, err := l.ModuleSource(ctx, agentID, command.Deploy.SHA256)
+		if err != nil {
+			return &app.AgentError{Message: err.Error()}
+		}
+		deploy := *command.Deploy
+		deploy.Module = module
+		command.Deploy = &deploy
 	}
 	if err := runtime.Apply(ctx, command); err != nil {
 		return &app.AgentError{Message: err.Error()}

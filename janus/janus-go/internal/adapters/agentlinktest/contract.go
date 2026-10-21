@@ -17,20 +17,19 @@ import (
 // Link is the Agent link the contract tests: the control plane's end of a
 // connection to an Agent, as the fleet service holds it.
 type Link interface {
-	Connect(agentID, address string, events func(app.AgentEvent))
+	Connect(agentID string, events func(app.AgentEvent) error)
 	Disconnect(agentID string)
 	Send(ctx context.Context, agentID string, command app.AgentCommand) error
 	Close() error
 }
 
 // Subject is an adapter under test, with what the port cannot do itself: run
-// an Agent where the link can reach it.
+// the Agent "agent-1" where the link can reach it. Start serves runtime as that
+// Agent and returns stop, which takes the Agent away as a crash would. A
+// restarted Agent is served again by another Start.
 type Subject struct {
-	Link Link
-	// Start serves runtime as an Agent and returns the address to Connect to.
-	// When address is not empty the Agent must listen there, as a restarted
-	// Agent does. stop takes the Agent away as a crash would.
-	Start func(t *testing.T, runtime *app.AgentRuntime, address string) (listening string, stop func())
+	Link  Link
+	Start func(t *testing.T, runtime *app.AgentRuntime) (stop func())
 }
 
 // Run runs the Agent link contract against subjects made by newSubject.
@@ -128,7 +127,10 @@ func deployment(id string) app.HostedDeployment {
 // events collects what a link delivers for one Agent.
 type events chan app.AgentEvent
 
-func (e events) deliver(event app.AgentEvent) { e <- event }
+func (e events) deliver(event app.AgentEvent) error {
+	e <- event
+	return nil
+}
 
 // next waits for an event that matches want, skipping others.
 func (e events) next(t *testing.T, what string, want func(app.AgentEvent) bool) app.AgentEvent {
@@ -153,13 +155,13 @@ func isState(paused bool) func(app.AgentEvent) bool {
 
 // connected starts an Agent, connects the link to it and waits for the first
 // State, so the connection is up.
-func connected(t *testing.T, s Subject, runtime *app.AgentRuntime) (events, string, func()) {
+func connected(t *testing.T, s Subject, runtime *app.AgentRuntime) (events, func()) {
 	t.Helper()
-	address, stop := s.Start(t, runtime, "")
+	stop := s.Start(t, runtime)
 	got := make(events, 64)
-	s.Link.Connect("agent-1", address, got.deliver)
+	s.Link.Connect("agent-1", got.deliver)
 	got.next(t, "the first State", func(event app.AgentEvent) bool { return event.State != nil })
-	return got, address, stop
+	return got, stop
 }
 
 // sendEventually retries while the connection comes up: over a network it
@@ -188,9 +190,9 @@ func testFirstEventIsState(t *testing.T, s Subject) {
 	if err := runtime.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	address, _ := s.Start(t, runtime, "")
+	s.Start(t, runtime)
 	got := make(events, 64)
-	s.Link.Connect("agent-1", address, got.deliver)
+	s.Link.Connect("agent-1", got.deliver)
 	first := got.next(t, "the first event", func(app.AgentEvent) bool { return true })
 	if first.State == nil || !first.State.Paused {
 		t.Fatalf("first event = %+v, want the paused State", first)
@@ -199,7 +201,7 @@ func testFirstEventIsState(t *testing.T, s Subject) {
 
 func testPauseResume(t *testing.T, s Subject) {
 	runtime := newRuntime(newKeptState())
-	got, _, _ := connected(t, s, runtime)
+	got, _ := connected(t, s, runtime)
 	sendEventually(t, s, app.AgentCommand{Pause: true})
 	if !runtime.State().Paused {
 		t.Fatal("the Agent is not paused")
@@ -214,7 +216,7 @@ func testPauseResume(t *testing.T, s Subject) {
 
 func testDeployAndUsage(t *testing.T, s Subject) {
 	runtime := newRuntime(newKeptState())
-	got, _, _ := connected(t, s, runtime)
+	got, _ := connected(t, s, runtime)
 	sendEventually(t, s, app.AgentCommand{Deploy: ptr(deployment("dep-1"))})
 	// Usage and State are separate streams, so their order is not fixed.
 	var sawState, sawProbe bool
@@ -263,7 +265,7 @@ func testUnreachable(t *testing.T, s Subject) {
 
 func testReconnect(t *testing.T, s Subject) {
 	state := newKeptState()
-	got, address, stop := connected(t, s, newRuntime(state))
+	got, stop := connected(t, s, newRuntime(state))
 	stop()
 	deadline := time.Now().Add(30 * time.Second)
 	for !errors.Is(s.Link.Send(context.Background(), "agent-1", app.AgentCommand{Pause: true}), app.ErrAgentUnreachable) {
@@ -276,7 +278,7 @@ func testReconnect(t *testing.T, s Subject) {
 	if err := restarted.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	s.Start(t, restarted, address)
+	s.Start(t, restarted)
 	got.next(t, "the State of the restarted Agent", func(event app.AgentEvent) bool { return event.State != nil })
 	sendEventually(t, s, app.AgentCommand{Pause: true})
 	if !restarted.State().Paused {
@@ -286,7 +288,7 @@ func testReconnect(t *testing.T, s Subject) {
 
 func testDisconnect(t *testing.T, s Subject) {
 	runtime := newRuntime(newKeptState())
-	got, _, _ := connected(t, s, runtime)
+	got, _ := connected(t, s, runtime)
 	s.Link.Disconnect("agent-1")
 	if err := s.Link.Send(context.Background(), "agent-1", app.AgentCommand{Pause: true}); !errors.Is(err, app.ErrAgentUnreachable) {
 		t.Fatalf("send after disconnect: %v", err)

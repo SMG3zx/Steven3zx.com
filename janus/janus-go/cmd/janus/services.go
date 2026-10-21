@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nats-io/nats.go"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	"janus/internal/adapters/agentgrpc"
+	"janus/internal/adapters/agentnats"
 	"janus/internal/adapters/auditnats"
 	"janus/internal/adapters/buildevents"
 	"janus/internal/adapters/buildsnats"
@@ -52,6 +53,11 @@ type application struct {
 	// agents is the AGENTS account fleet signs Agents' leaf credentials with.
 	// It is nil when the control plane runs without NATS trust keys.
 	agents *natsauth.Account
+	// agentTrust is the public trust enrollment hands each Agent. It is nil
+	// when the control plane runs without NATS trust keys.
+	agentTrust *contractfleet.AgentTrust
+	// agentsOpts are the options of the fleet service's AGENTS connection.
+	agentsOpts []nats.Option
 	// auditService writes the Audit Events published to the AUDIT stream.
 	auditService *auditservice.Service
 	database     *sqlstore.Store
@@ -73,9 +79,12 @@ type application struct {
 	github        *app.GitHub
 	tailnet       *headscale.Client
 	tailnode      *tailnode.Node
-	agentLink     *agentgrpc.Link
-	leafBridge    *leafbridge.Bridge
-	fleetService  *fleetservice.Service
+	agentLink     *agentnats.Link
+	// agentsConn is the fleet service's connection as a user of AGENTS, which
+	// reaches the Agents' state, modules and Usage. It is nil without NATS trust.
+	agentsConn   *nats.Conn
+	leafBridge   *leafbridge.Bridge
+	fleetService *fleetservice.Service
 	// fleet is the fleet service as the single process uses it; nil when Agent
 	// enrollment is off.
 	fleet          app.Fleet
@@ -329,12 +338,16 @@ func (a *application) startNATS(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("read the leaf revocations: %w", err)
 		}
-		trust, err := openNATSTrust(ctx, cfg.NATSKeysPath, cfg.KeySecret, cfg.NATSLeafAddress, revoked)
+		trust, err := openNATSTrust(ctx, cfg.NATSKeysPath, cfg.KeySecret, revoked)
 		if err != nil {
 			return fmt.Errorf("open the NATS keys: %w", err)
 		}
 		config.Trust, config.ClientOptions = trust.trust, trust.clientOpts
+		config.LeafAddress = cfg.NATSLeafAddress
 		a.agents = trust.agents
+		a.agentTrust = trust.public
+		a.agentsOpts = trust.fleetOpts
+		a.agentTrust = trust.public
 	}
 	hub, err := natsx.Start(ctx, config)
 	if err != nil {
@@ -346,6 +359,10 @@ func (a *application) startNATS(ctx context.Context) error {
 }
 
 func (a *application) stopNATS(ctx context.Context) error {
+	if a.agentsConn != nil {
+		a.agentsConn.Close()
+		a.agentsConn = nil
+	}
 	return wrap("stop NATS", a.nats.Close(ctx))
 }
 
@@ -542,16 +559,26 @@ func (a *application) startFleet(ctx context.Context) error {
 	if needed {
 		return fmt.Errorf("%s holds Agents or Deployments that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.FleetDatabasePath)
 	}
-	var link fleetservice.AgentLink = unreachableAgents{}
+	agentsConn := a.nats.Conn()
+	if a.agentsOpts != nil {
+		if agentsConn, err = nats.Connect(a.nats.URL(), a.agentsOpts...); err != nil {
+			return fmt.Errorf("connect the fleet service to the Agents' account: %w", err)
+		}
+		a.agentsConn = agentsConn
+	}
+	link, err := agentnats.NewLink(agentsConn)
+	if err != nil {
+		return errors.Join(fmt.Errorf("open the Agent link: %w", err), a.stopAgentLink())
+	}
+	a.agentLink = link
 	if node := a.joinTailnet(ctx, client); node != nil {
 		a.tailnode = node
-		a.agentLink = agentgrpc.NewLink(node.Dial)
-		link = a.agentLink
 		if err := a.startLeafBridge(); err != nil {
 			return errors.Join(err, a.stopAgentLink())
 		}
 	}
-	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link, Agents: a.agents, OnRevoke: a.nats.UpdateAccount})
+	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL,
+		Link: link, Agents: a.agents, Trust: a.agentTrust, AgentsConn: a.agentsConn, OnRevoke: a.nats.UpdateAccount})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
 		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
 	}
@@ -625,14 +652,3 @@ func (a *application) stopAgentLink() error {
 	}
 	return errors.Join(errs...)
 }
-
-// unreachableAgents is the Agent link of a control plane that is not on the
-// tailnet: it connects to no Agent, and every command fails as unreachable.
-type unreachableAgents struct{}
-
-func (unreachableAgents) Connect(string, string, func(contractfleet.AgentEvent)) {}
-func (unreachableAgents) Disconnect(string)                                      {}
-func (unreachableAgents) Send(context.Context, string, contractfleet.AgentCommand) error {
-	return contractfleet.ErrAgentUnreachable
-}
-func (unreachableAgents) Close() error { return nil }

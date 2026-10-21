@@ -3,19 +3,29 @@ package fleet
 import (
 	"context"
 	"errors"
-	"net"
-	"strconv"
+	"fmt"
 	"time"
 
+	"github.com/nats-io/nats.go/jetstream"
+
 	contractfleet "janus/internal/contract/fleet"
-	"janus/internal/services/fleet/headscale"
 )
 
 // recordTimeout bounds the database write of one reported run.
 const recordTimeout = 10 * time.Second
 
-// startReconcile starts the loop that keeps the Agent link connected to every
-// enrolled Agent. Stop ends it.
+// agentStaleAfter is how old an Agent's last state may be before the Agent counts
+// as offline. An Agent writes its state every heartbeat, well inside this.
+const agentStaleAfter = 30 * time.Second
+
+// agentView is the last state an Agent wrote, and when the hub recorded it.
+type agentView struct {
+	state contractfleet.AgentState
+	at    time.Time
+}
+
+// startReconcile starts the loop that keeps the Agent link to every enrolled
+// Agent. Stop ends it.
 func (s *Service) startReconcile() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.stopReconcile = cancel
@@ -43,67 +53,52 @@ func (s *Service) reconcileLoop(ctx context.Context) {
 	}
 }
 
-// reconcile connects to every Agent whose node has joined the tailnet, at its
-// node's IPv4 address, and disconnects from Agents that were removed. An Agent
-// whose node is offline is still connected to, so the link reaches it as soon as
-// it is back.
+// reconcile links every enrolled Agent, and drops the links of Agents that were
+// removed. An Agent that is offline is still linked, so its events arrive as
+// soon as it is back.
 func (s *Service) reconcile(ctx context.Context) error {
 	agents, err := s.loadAgents(ctx, "")
 	if err != nil {
 		return err
 	}
-	nodes, err := s.cfg.Tailnet.Nodes(ctx)
-	if err != nil {
-		return err
-	}
-	byKey := make(map[string]headscale.Node, len(nodes))
-	for _, node := range nodes {
-		if node.KeyID != "" {
-			byKey[node.KeyID] = node
-		}
-	}
-	want := map[string]bool{}
-	for _, agent := range agents {
-		node, joined := byKey[agent.KeyID]
-		ip := ipv4(node.Addresses)
-		if !joined || ip == "" {
-			continue
-		}
-		want[agent.ID] = true
-		address := net.JoinHostPort(ip, strconv.Itoa(AgentConnectPort))
-		s.mu.Lock()
-		current := s.addresses[agent.ID]
-		s.addresses[agent.ID] = address
-		s.mu.Unlock()
-		if current != address {
-			s.cfg.Link.Connect(agent.ID, address, s.receiver(agent))
-		}
-	}
+	want := make(map[string]bool, len(agents))
+	var connect []contractfleet.AgentRecord
 	s.mu.Lock()
+	for _, agent := range agents {
+		want[agent.ID] = true
+		if !s.linked[agent.ID] {
+			s.linked[agent.ID] = true
+			connect = append(connect, agent)
+		}
+	}
 	var gone []string
-	for id := range s.addresses {
+	for id := range s.linked {
 		if !want[id] {
 			gone = append(gone, id)
-			delete(s.addresses, id)
+			delete(s.linked, id)
 			delete(s.states, id)
 		}
 	}
 	s.mu.Unlock()
+	for _, agent := range connect {
+		s.cfg.Link.Connect(agent.ID, s.receiver(agent))
+	}
 	for _, id := range gone {
 		s.cfg.Link.Disconnect(id)
 	}
 	return nil
 }
 
-// receiver handles what agent reports over its connection. Usage is recorded
-// under the Owner of the Agent that reported it, whatever the report says.
-func (s *Service) receiver(agent contractfleet.AgentRecord) func(contractfleet.AgentEvent) {
-	return func(event contractfleet.AgentEvent) {
+// receiver handles what agent reports. Usage is recorded under the Owner of the
+// Agent that reported it, whatever the report says. An event that cannot be
+// kept is returned as an error, so the link delivers it again.
+func (s *Service) receiver(agent contractfleet.AgentRecord) func(contractfleet.AgentEvent) error {
+	return func(event contractfleet.AgentEvent) error {
 		switch {
 		case event.State != nil:
 			s.mu.Lock()
-			if _, connected := s.addresses[agent.ID]; connected {
-				s.states[agent.ID] = contractfleet.AgentStatusReport{Connected: true, AgentState: *event.State}
+			if s.linked[agent.ID] {
+				s.states[agent.ID] = agentView{state: *event.State, at: event.At}
 			}
 			s.mu.Unlock()
 		case event.Usage != nil:
@@ -111,10 +106,24 @@ func (s *Service) receiver(agent contractfleet.AgentRecord) func(contractfleet.A
 			defer cancel()
 			record := contractfleet.RunUsageRecord{RunReport: *event.Usage, OwnerID: agent.OwnerID, AgentID: agent.ID}
 			if err := s.insertRunUsage(ctx, record); err != nil {
-				s.audit(ctx, "error", "agent.usage.dropped", map[string]string{"user_id": agent.OwnerID, "agent_id": agent.ID, "error": err.Error()})
+				s.audit(ctx, "error", "agent.usage.failed", map[string]string{"user_id": agent.OwnerID, "agent_id": agent.ID, "error": err.Error()})
+				return err
 			}
 		}
+		return nil
 	}
+}
+
+// reportLocked is what the control plane knows of the Agent with id. It is
+// connected when the Agent is linked and wrote its state within agentStaleAfter.
+// The caller holds mu.
+func (s *Service) reportLocked(id string) contractfleet.AgentStatusReport {
+	view, ok := s.states[id]
+	if !ok || !s.linked[id] {
+		return contractfleet.AgentStatusReport{}
+	}
+	connected := time.Since(view.at) < agentStaleAfter
+	return contractfleet.AgentStatusReport{Connected: connected, AgentState: view.state}
 }
 
 // agentStatus returns the last state each of the Owner's Agents reported, by ID.
@@ -130,7 +139,7 @@ func (s *Service) agentStatus(ctx context.Context, request contractfleet.Owner) 
 	defer s.mu.Unlock()
 	reports := make(map[string]contractfleet.AgentStatusReport, len(agents))
 	for _, agent := range agents {
-		reports[agent.ID] = s.states[agent.ID]
+		reports[agent.ID] = s.reportLocked(agent.ID)
 	}
 	return contractfleet.AgentStatuses{Reports: reports}, nil
 }
@@ -194,19 +203,40 @@ func (s *Service) ready(ctx context.Context, owner, agentID string) error {
 		return errAgentNotFound
 	}
 	s.mu.Lock()
-	state := s.states[agentID]
-	connected := false
-	if _, ok := s.addresses[agentID]; ok {
-		connected = state.Connected
-	}
+	report := s.reportLocked(agentID)
 	s.mu.Unlock()
 	switch {
-	case state.Paused:
+	case report.Paused:
 		return invalid("the Agent is paused, so it cannot take a Deploy")
-	case !connected:
+	case !report.Connected:
 		return invalid("the Agent is offline, so it cannot take a Deploy")
 	}
 	return nil
+}
+
+// stageModule puts the module of a Deployment in the Owner's modules bucket,
+// under its SHA-256, where the Agent reads it, and takes the module out of the
+// command. A WASM module is larger than one NATS message.
+func (s *Service) stageModule(ctx context.Context, owner string, hosted *contractfleet.HostedDeployment) error {
+	store, err := s.modulesStore(ctx, owner)
+	if err != nil {
+		return fmt.Errorf("open the modules of the Owner: %w", err)
+	}
+	if _, err := store.PutBytes(ctx, hosted.SHA256, hosted.Module); err != nil {
+		return fmt.Errorf("stage the module: %w", err)
+	}
+	hosted.Module = nil
+	return nil
+}
+
+// modulesStore returns the Owner's modules bucket, making it on first use.
+func (s *Service) modulesStore(ctx context.Context, owner string) (jetstream.ObjectStore, error) {
+	name := contractfleet.ModulesBucket(owner)
+	store, err := s.agentsJS.ObjectStore(ctx, name)
+	if errors.Is(err, jetstream.ErrBucketNotFound) {
+		store, err = s.agentsJS.CreateObjectStore(ctx, jetstream.ObjectStoreConfig{Bucket: name})
+	}
+	return store, err
 }
 
 // listUsage returns the Owner's recorded runs that match the query, newest first.
@@ -224,14 +254,4 @@ func (s *Service) listUsage(ctx context.Context, query contractfleet.RunUsageQue
 	}
 	runs, err := s.loadRunUsage(ctx, query)
 	return contractfleet.RunUsage{Runs: runs}, err
-}
-
-// ipv4 returns the first IPv4 address of addresses, or "".
-func ipv4(addresses []string) string {
-	for _, address := range addresses {
-		if ip := net.ParseIP(address); ip != nil && ip.To4() != nil {
-			return address
-		}
-	}
-	return ""
 }

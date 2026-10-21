@@ -35,17 +35,32 @@ type IssuedCode struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// Enrollment is what an Agent needs to join the tailnet: a single-use key, the
-// control server to join, and the tag its node will carry. AuthKey is a secret.
-// LeafCreds is the .creds file of the Agent's leaf connection to the hub, also a
-// secret; it is empty when the hub issues no NATS credentials.
+// Enrollment is what an Agent needs to join the tailnet and the hub: a single-use
+// key, the control server to join, the tag its node will carry, and its NATS
+// credentials. AuthKey is a secret. LeafCreds is the .creds file of the Agent's
+// leaf connection to the hub, and LocalCreds the .creds file its own server's
+// clients connect with; both are secrets. They and Trust are empty when the hub
+// issues no NATS credentials.
 type Enrollment struct {
-	AgentID    string    `json:"agent_id"`
-	AuthKey    string    `json:"auth_key"`
-	Tag        string    `json:"tag"`
-	ControlURL string    `json:"control_url"`
-	KeyExpires time.Time `json:"key_expires"`
-	LeafCreds  []byte    `json:"leaf_creds,omitempty"`
+	AgentID    string      `json:"agent_id"`
+	OwnerID    string      `json:"owner_id"`
+	AuthKey    string      `json:"auth_key"`
+	Tag        string      `json:"tag"`
+	ControlURL string      `json:"control_url"`
+	KeyExpires time.Time   `json:"key_expires"`
+	LeafCreds  []byte      `json:"leaf_creds,omitempty"`
+	LocalCreds []byte      `json:"local_creds,omitempty"`
+	Trust      *AgentTrust `json:"trust,omitempty"`
+}
+
+// AgentTrust is the public half of the hub's NATS trust: what an Agent's own
+// server needs to verify the accounts its leaf joins. None of it is secret.
+type AgentTrust struct {
+	OperatorJWT   string `json:"operator_jwt"`
+	SystemAccount string `json:"system_account"`
+	SystemJWT     string `json:"system_jwt"`
+	AgentsAccount string `json:"agents_account"`
+	AgentsJWT     string `json:"agents_jwt"`
 }
 
 // AgentRecord is a stored Agent.
@@ -142,10 +157,18 @@ type AgentCommand struct {
 	Resume bool              `json:"resume,omitempty"`
 }
 
-// AgentEvent is one message from an Agent. Exactly one field is set.
+// AgentEvent is one message from an Agent. Exactly one field is set. At is when
+// the Agent's State was written, for a State event.
 type AgentEvent struct {
 	State *AgentState `json:"state,omitempty"`
+	At    time.Time   `json:"at,omitempty"`
 	Usage *RunReport  `json:"usage,omitempty"`
+}
+
+// AgentReply answers an AgentCommand. Error is the Agent's reason for refusing
+// it, and empty when the Agent accepted it.
+type AgentReply struct {
+	Error string `json:"error,omitempty"`
 }
 
 // NewDeployment asks to deploy a WASM Build on one of the Owner's Agents.

@@ -6,23 +6,46 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	contractfleet "janus/internal/contract/fleet"
 )
 
 // settings is what enroll records for the Agent to run with. It holds no
 // secret: the pre-auth key is used once and is not kept; the node's own key
-// lives in the tailnet directory.
+// lives in the tailnet directory, and the NATS credentials in their own files.
 type settings struct {
 	AgentID    string `json:"agent_id"`
+	OwnerID    string `json:"owner_id"`
 	Name       string `json:"name"`
 	Server     string `json:"server"`
 	ControlURL string `json:"control_url"`
 	Tag        string `json:"tag"`
 	Folder     string `json:"folder"`
+	// Trust is the public half of the hub's NATS trust, which the Agent's own
+	// server verifies its leaf against.
+	Trust *contractfleet.AgentTrust `json:"trust,omitempty"`
 }
 
-func settingsPath(state string) string   { return filepath.Join(state, "agent.json") }
-func tailnetDir(state string) string     { return filepath.Join(state, "tailnet") }
-func deploymentsDir(state string) string { return filepath.Join(state, "local") }
+// The files of the NATS credentials of an Agent: its leaf connection to the hub,
+// and the credentials its own server's clients use. They are secrets.
+const (
+	leafCreds  = "leaf.creds"
+	localCreds = "local.creds"
+)
+
+func settingsPath(state string) string    { return filepath.Join(state, "agent.json") }
+func tailnetDir(state string) string      { return filepath.Join(state, "tailnet") }
+func deploymentsDir(state string) string  { return filepath.Join(state, "local") }
+func credsPath(state, name string) string { return filepath.Join(state, name) }
+
+// saveCreds stores a credentials file of the Agent's state directory, readable by
+// its owner only.
+func saveCreds(state, name string, body []byte) error {
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(credsPath(state, name), body, 0o600)
+}
 
 func loadSettings(state string) (settings, error) {
 	data, err := os.ReadFile(settingsPath(state))

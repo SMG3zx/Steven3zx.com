@@ -11,19 +11,19 @@
     },
     {
       "file": "janus-go/internal/domain/fleet/fleet.go",
-      "line": 98,
+      "line": 113,
       "title": "What an Agent reports",
       "description": "`type RunReport struct`. The fields of one run as the Agent measured it, carried over the Agent link."
     },
     {
       "file": "janus-go/internal/services/fleet/link.go",
-      "line": 100,
+      "line": 95,
       "title": "The fleet service receives reports",
       "description": "`func (s *Service) receiver`. Usage is recorded under the Owner of the Agent that reported it, whatever the report says."
     },
     {
       "file": "janus-go/internal/domain/fleet/fleet.go",
-      "line": 112,
+      "line": 127,
       "title": "What the service keeps",
       "description": "`type RunUsageRecord struct`. A run with the Owner and the Agent it came from."
     },
@@ -35,7 +35,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/link.go",
-      "line": 214,
+      "line": 244,
       "title": "An Owner reads their usage",
       "description": "`func (s *Service) listUsage`. The query is scoped to the Owner, and an Agent the Owner does not have is not found."
     }

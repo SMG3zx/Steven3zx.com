@@ -83,7 +83,7 @@ func (s *Service) enroll(ctx context.Context, request contractfleet.EnrollReques
 	}
 	tag := AgentTag(ownerID)
 	agentID := uuid.NewString()
-	leafCreds, leafUserPub, err := s.leafCredentials(agentID, ownerID)
+	creds, err := s.agentCredentials(agentID, ownerID)
 	if err != nil {
 		return contractfleet.Enrollment{}, err
 	}
@@ -91,31 +91,51 @@ func (s *Service) enroll(ctx context.Context, request contractfleet.EnrollReques
 	if err != nil {
 		return contractfleet.Enrollment{}, fmt.Errorf("create a pre-auth key: %w", err)
 	}
-	agent := contractfleet.AgentRecord{ID: agentID, OwnerID: ownerID, Name: name, Tag: tag, KeyID: key.ID, CreatedAt: now.UTC(), LeafUserPub: leafUserPub}
+	agent := contractfleet.AgentRecord{ID: agentID, OwnerID: ownerID, Name: name, Tag: tag, KeyID: key.ID, CreatedAt: now.UTC(), LeafUserPub: creds.leafPub}
 	if err = s.insertAgent(ctx, agent); err != nil {
 		_ = s.cfg.Tailnet.ExpirePreAuthKey(ctx, key.ID)
 		return contractfleet.Enrollment{}, err
 	}
 	s.audit(ctx, "info", "agent.enrolled", map[string]string{"user_id": ownerID, "agent_id": agent.ID})
-	return contractfleet.Enrollment{AgentID: agent.ID, AuthKey: key.Key, Tag: tag, ControlURL: s.cfg.ControlURL, KeyExpires: key.Expires, LeafCreds: leafCreds}, nil
+	enrollment := contractfleet.Enrollment{AgentID: agent.ID, OwnerID: ownerID, AuthKey: key.Key, Tag: tag, ControlURL: s.cfg.ControlURL, KeyExpires: key.Expires,
+		LeafCreds: creds.leaf, LocalCreds: creds.local}
+	if creds.leaf != nil {
+		enrollment.Trust = s.cfg.Trust
+	}
+	return enrollment, nil
 }
 
-// leafCredentials makes the .creds file of an Agent's leaf connection and the
-// public key of its user. Both are empty when the service has no AGENTS account
-// to sign with.
-func (s *Service) leafCredentials(agentID, ownerID string) ([]byte, string, error) {
+// agentCredentials is the NATS credentials an Agent is enrolled with: the .creds
+// files of its leaf connection and of its own server's clients, and the public
+// key of the leaf user, which is revoked when the Agent is removed.
+type agentCredentials struct {
+	leaf, local []byte
+	leafPub     string
+}
+
+// agentCredentials makes the credentials of a new Agent. All of them are empty
+// when the service has no AGENTS account to sign with.
+func (s *Service) agentCredentials(agentID, ownerID string) (agentCredentials, error) {
 	if s.cfg.Agents == nil {
-		return nil, "", nil
+		return agentCredentials{}, nil
 	}
-	creds, err := s.cfg.Agents.IssueLeafUser(agentID, ownerID)
+	leaf, err := s.cfg.Agents.IssueLeafUser(agentID, ownerID)
 	if err != nil {
-		return nil, "", fmt.Errorf("issue the leaf credentials: %w", err)
+		return agentCredentials{}, fmt.Errorf("issue the leaf credentials: %w", err)
 	}
-	body, err := creds.CredsFile()
+	local, err := s.cfg.Agents.IssueUser("local-"+agentID, []string{">"}, []string{">"}, true)
 	if err != nil {
-		return nil, "", fmt.Errorf("encode the leaf credentials: %w", err)
+		return agentCredentials{}, fmt.Errorf("issue the local credentials: %w", err)
 	}
-	return body, creds.UserPub, nil
+	leafBody, err := leaf.CredsFile()
+	if err != nil {
+		return agentCredentials{}, fmt.Errorf("encode the leaf credentials: %w", err)
+	}
+	localBody, err := local.CredsFile()
+	if err != nil {
+		return agentCredentials{}, fmt.Errorf("encode the local credentials: %w", err)
+	}
+	return agentCredentials{leaf: leafBody, local: localBody, leafPub: leaf.UserPub}, nil
 }
 
 // listAgents returns the Owner's Agents, oldest first, with whether each is

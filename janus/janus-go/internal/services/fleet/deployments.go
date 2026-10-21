@@ -302,6 +302,9 @@ func (s *Service) run(dep deployment) {
 	}
 	hosted, err := s.hostedDeployment(ctx, dep.OwnerID, dep.ProjectID, dep.BuildID, dep.ID)
 	if err == nil {
+		err = s.stageModule(ctx, dep.OwnerID, &hosted)
+	}
+	if err == nil {
 		err = s.sendToAgent(ctx, dep.OwnerID, dep.AgentID, contractfleet.AgentCommand{Deploy: &hosted})
 	}
 	if err != nil {

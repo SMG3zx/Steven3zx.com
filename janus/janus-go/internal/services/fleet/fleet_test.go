@@ -64,7 +64,6 @@ type setup struct {
 	t       testing.TB
 	owner   string
 	agent   app.Enrollment
-	address string
 	runtime *app.AgentRuntime
 }
 
@@ -73,8 +72,8 @@ func newSetup(t *testing.T) *setup {
 	f := fleetfixture.Start(t, fleetfixture.Options{})
 	enrollment := f.Enroll("owner", "laptop")
 	runtime := agentRuntime()
-	address := f.Attach("owner", enrollment, "laptop", runtime)
-	return &setup{Fixture: f, t: t, owner: "owner", agent: enrollment, address: address, runtime: runtime}
+	f.Attach("owner", enrollment, "laptop", runtime)
+	return &setup{Fixture: f, t: t, owner: "owner", agent: enrollment, runtime: runtime}
 }
 
 // build records a complete WASI build of the owner's project, with a check of
@@ -436,7 +435,7 @@ func TestStopKeepsTheDeploymentWhenTheAgentCannotBeReached(t *testing.T) {
 	s := newSetup(t)
 	ctx := context.Background()
 	id := s.deploy(s.build("b1", "passed", pageModule))
-	s.Link.Unserve(s.address)
+	s.Link.Unserve(s.agent.AgentID)
 
 	if err := s.Fleet.StopDeployment(ctx, s.owner, id); err == nil {
 		t.Fatal("a deployment was stopped on an Agent that could not be reached")

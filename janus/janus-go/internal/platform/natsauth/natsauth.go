@@ -243,13 +243,15 @@ func (a *Account) IssueAgentUser(agentID, ownerID string) (Credentials, error) {
 
 // LeafSubjects are what an Agent's leaf connection may carry across the link.
 // They are AgentSubjects, plus the Agent's own JetStream domain, which the hub
-// reaches through the leaf to read Usage. The leaf also answers requests that
-// reach it through an import, whose replies the server routes on the `_R_`
-// prefix, so that prefix is allowed for publishing.
+// reaches through the leaf to read Usage, and the hub's JetStream API, which the
+// Agent reads its modules and writes its state through. The leaf also publishes
+// replies to the hub's inboxes, and answers requests that reach it through an
+// import, whose replies the server routes on the `_R_` prefix. Its own inboxes
+// are under `_INBOX.<agent id>`, so it receives no other client's replies.
 func LeafSubjects(agentID, ownerID string) (pub, sub []string) {
 	pub, sub = AgentSubjects(agentID, ownerID)
 	sub = append(sub, "$JS.agent-"+agentID+".API.>")
-	pub = append(pub, "_R_.>")
+	pub = append(pub, "$JS.hub.API.>", "$JS.FC.>", "$JS.ACK.>", "_INBOX.>", "_R_.>")
 	return pub, sub
 }
 

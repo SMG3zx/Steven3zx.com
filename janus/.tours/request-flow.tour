@@ -29,9 +29,9 @@
     },
     {
       "file": "janus-go/internal/services/fleet/service.go",
-      "line": 57,
+      "line": 54,
       "title": "The Agent link the service needs",
-      "description": "`type AgentLink interface`. The fleet service sends commands to Agents through it. Real: agentgrpc.Link. Test: agentlinktest.Loopback."
+      "description": "`type AgentLink interface`. The fleet service sends commands to Agents through it. Real: agentnats.Link, over the hub's NATS server. Test: agentlinktest.Loopback."
     },
     {
       "file": "janus-go/internal/app/ports.go",
@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 527,
+      "line": 544,
       "title": "The composition root starts the fleet",
       "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the single process its client."
     }

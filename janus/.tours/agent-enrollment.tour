@@ -35,7 +35,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/link.go",
-      "line": 50,
+      "line": 59,
       "title": "The control plane connects",
       "description": "`func (s *Service) reconcile(`. Every enrolled Agent whose node is on the tailnet gets a connection, and removed Agents lose theirs."
     }

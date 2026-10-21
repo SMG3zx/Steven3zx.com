@@ -17,8 +17,8 @@ import (
 	"tailscale.com/feature/buildfeatures"
 
 	"janus/internal/adapters/agentdisk"
-	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/agenthttp"
+	"janus/internal/adapters/agentnats"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
@@ -75,11 +75,15 @@ func enroll(ctx context.Context, out io.Writer, state, server, folder, name, cod
 	}
 	defer response.Body.Close()
 	var reply struct {
-		Error      string `json:"error"`
-		AgentID    string `json:"agent_id"`
-		AuthKey    string `json:"auth_key"`
-		Tag        string `json:"tag"`
-		ControlURL string `json:"control_url"`
+		Error      string                    `json:"error"`
+		AgentID    string                    `json:"agent_id"`
+		OwnerID    string                    `json:"owner_id"`
+		AuthKey    string                    `json:"auth_key"`
+		Tag        string                    `json:"tag"`
+		ControlURL string                    `json:"control_url"`
+		LeafCreds  []byte                    `json:"leaf_creds"`
+		LocalCreds []byte                    `json:"local_creds"`
+		Trust      *contractfleet.AgentTrust `json:"trust"`
 	}
 	if err = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&reply); err != nil {
 		return fmt.Errorf("read the control plane's answer (%s): %w", response.Status, err)
@@ -99,7 +103,14 @@ func enroll(ctx context.Context, out io.Writer, state, server, folder, name, cod
 	if err = node.Close(); err != nil {
 		return err
 	}
-	if err = saveSettings(state, settings{AgentID: reply.AgentID, Name: name, Server: server, ControlURL: reply.ControlURL, Tag: reply.Tag, Folder: abs}); err != nil {
+	if err = saveCreds(state, leafCreds, reply.LeafCreds); err != nil {
+		return err
+	}
+	if err = saveCreds(state, localCreds, reply.LocalCreds); err != nil {
+		return err
+	}
+	if err = saveSettings(state, settings{AgentID: reply.AgentID, OwnerID: reply.OwnerID, Name: name, Server: server,
+		ControlURL: reply.ControlURL, Tag: reply.Tag, Folder: abs, Trust: reply.Trust}); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "Enrolled %q as Agent %s. Deployments may use %s.\nStart it with: janus-agent run\n", name, reply.AgentID, abs)
@@ -149,21 +160,26 @@ func serve(ctx context.Context, state string) error {
 	defer node.Close()
 	authorize := node.RequireTag(contractfleet.ControlTag)
 
-	connectListener, err := node.Listen(app.AgentConnectPort)
-	if err != nil {
-		return err
-	}
 	serveListener, err := node.Listen(app.AgentServePort)
 	if err != nil {
 		return err
 	}
-	stream := agentgrpc.NewServer(runtime, authorize)
+	hub, err := joinHub(ctx, state, s, node)
+	if err != nil {
+		return err
+	}
+	defer hub.Close()
 	web := &http.Server{Handler: agenthttp.Handler(runtime, authorize), ReadHeaderTimeout: 10 * time.Second}
 	failed := make(chan error, 2)
 	var wg sync.WaitGroup
-	wg.Go(func() { failed <- stream.Serve(connectListener) })
 	wg.Go(func() {
 		if err := web.Serve(serveListener); !errors.Is(err, http.ErrServerClosed) {
+			failed <- err
+		}
+	})
+	serveCtx, stopServe := context.WithCancel(ctx)
+	wg.Go(func() {
+		if err := agentnats.Serve(serveCtx, agentnats.Config{Conn: hub.conn, AgentID: s.AgentID, OwnerID: s.OwnerID, Runtime: runtime}); err != nil {
 			failed <- err
 		}
 	})
@@ -181,9 +197,9 @@ func serve(ctx context.Context, state string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), app.RequestTimeout+5*time.Second)
 	defer cancel()
 	stopWatch()
+	stopServe()
 	_ = web.Shutdown(shutdownCtx)
 	_ = runtime.Drain(shutdownCtx)
-	stream.Stop()
 	wg.Wait()
 	if serveErr != nil {
 		return serveErr

@@ -81,8 +81,9 @@ func (a *Server) enrollAgent(c *call) any {
 		return internalError()
 	}
 	return secretReply(http.StatusCreated, map[string]any{
-		"agent_id": enrollment.AgentID, "auth_key": enrollment.AuthKey, "tag": enrollment.Tag,
+		"agent_id": enrollment.AgentID, "owner_id": enrollment.OwnerID, "auth_key": enrollment.AuthKey, "tag": enrollment.Tag,
 		"control_url": enrollment.ControlURL, "key_expires_at": enrollment.KeyExpires,
+		"leaf_creds": enrollment.LeafCreds, "local_creds": enrollment.LocalCreds, "trust": enrollment.Trust,
 	})
 }
 
