@@ -4,7 +4,7 @@
 //
 // Builds are plain calls, not actors: each runs on its caller's goroutine, so
 // builds of any Language overlap, up to the limit the job runner sets.
-package dockerbuild
+package docker
 
 import (
 	"context"
@@ -14,8 +14,8 @@ import (
 	"regexp"
 	"strings"
 
-	"janus/internal/app"
 	"janus/internal/domain/artifact"
+	"janus/internal/services/builds"
 )
 
 const (
@@ -28,9 +28,9 @@ const (
 var validImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 
 type (
-	Request       = app.BuildRequest
-	Result        = app.BuildResult
-	ManifestError = app.ManifestError
+	Request       = builds.CompileRequest
+	Result        = builds.CompileResult
+	ManifestError = builds.ManifestError
 )
 
 // Executor runs a container. Docker is the real one.
@@ -42,8 +42,6 @@ type adapter struct {
 	image   string
 	command func(Request) (string, error)
 }
-
-var _ app.Builder = (*Docker)(nil)
 
 // Docker builds in sandboxed containers, one trusted image per Language.
 type Docker struct {

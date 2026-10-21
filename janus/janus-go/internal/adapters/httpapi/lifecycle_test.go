@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
 	"net/http"
 	"strings"
@@ -25,13 +26,13 @@ func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 	gh := app.NewGitHub(identities, catalog)
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(catalog)
-	builds := app.NewBuilds(store, catalog, nil, nil, audit)
+	builds := app.NewBuilds(store, catalog, buildstest.NewFake(store))
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return New(Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog, builds),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog).WithBuilds(builds),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler(), catalog
 }

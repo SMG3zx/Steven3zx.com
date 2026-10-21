@@ -32,6 +32,7 @@ type AgentStatusReport struct {
 // says.
 type Fleet struct {
 	store   Store
+	builds  BuildArtifacts
 	tailnet Tailnet
 	link    AgentLink
 	audit   Audit
@@ -46,6 +47,13 @@ type Fleet struct {
 func NewFleet(store Store, tailnet Tailnet, link AgentLink, audit Audit) *Fleet {
 	return &Fleet{store: store, tailnet: tailnet, link: link, audit: audit,
 		addresses: map[string]string{}, states: map[string]AgentStatusReport{}}
+}
+
+// WithBuilds makes the Fleet read the Artifacts it deploys from builds. It
+// returns f, so it chains onto NewFleet.
+func (f *Fleet) WithBuilds(builds BuildArtifacts) *Fleet {
+	f.builds = builds
+	return f
 }
 
 // Reconcile connects to every Agent whose node has joined the tailnet, at its
@@ -197,7 +205,7 @@ func (f *Fleet) Stop(ctx context.Context, ownerID, agentID, deploymentID string)
 // reason when it failed there, and an error matching ErrAgentUnreachable when
 // the Agent cannot be reached.
 func (f *Fleet) Deploy(ctx context.Context, ownerID, agentID, deploymentID, buildID string) error {
-	build, stored, err := runnableBuild(ctx, f.store, ownerID, buildID)
+	build, stored, err := runnableBuild(ctx, f.store, f.builds, ownerID, buildID)
 	if err != nil {
 		return err
 	}

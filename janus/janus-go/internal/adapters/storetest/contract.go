@@ -21,7 +21,7 @@ func Run(t *testing.T, newStore func(t *testing.T) app.Store) {
 	}{
 		{"OwnersAreAddedOnce", testOwners},
 		{"ReferencesGoWithWhatRefersToThem", testReferences},
-		{"BuildsFollowTheirStateMachine", testBuildsFollowTheirStateMachine},
+		{"BuildReferencesFollowTheBuildsService", testBuildReferencesFollowTheBuildsService},
 		{"ChecksAndDeploymentsFollowTheirRules", testChecksAndDeployments},
 		{"RedeployAndStopFollowTheirRules", testRedeployAndStop},
 		{"DeletingAnAccountCascades", testDeletingAnAccountCascades},
@@ -96,9 +96,8 @@ func testReferences(t *testing.T, store app.Store) {
 	if _, found, _ := store.FindSnapshot(ctx, "s1", "bob"); found {
 		t.Fatal("bob found alice's Snapshot")
 	}
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: "s1", Target: "t"}))
-	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "queued", To: "failed", Progress: 100}))
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b2", OwnerID: "alice", ProjectID: "p1", SnapshotID: "s2", Target: "t"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: "s1", Target: "t", Status: "failed"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b2", OwnerID: "alice", ProjectID: "p1", SnapshotID: "s2", Target: "t", Status: "queued"}))
 
 	must(t, store.RemoveSnapshot(ctx, "s1"))
 	must(t, store.RemoveSnapshot(ctx, "s1")) // removing again changes nothing
@@ -120,64 +119,52 @@ func testReferences(t *testing.T, store app.Store) {
 	}
 }
 
-func testBuildsFollowTheirStateMachine(t *testing.T, store app.Store) {
+// testBuildReferencesFollowTheBuildsService holds the rules of the Store's
+// records of WASM Builds: the builds service publishes each state, the Store
+// keeps it, applying a state again changes nothing, and a Build of a Project or
+// Snapshot the Store does not reference is not kept.
+func testBuildReferencesFollowTheBuildsService(t *testing.T, store app.Store) {
 	ctx := context.Background()
 	must(t, store.AddOwner(ctx, "alice"))
 	must(t, store.AddProject(ctx, app.ProjectRef{ID: "p1", OwnerID: "alice"}))
 	snapshot := ReadySnapshot(t, store, "alice", "p1", "one-snapshot", "Rust")
 
-	var err error
-	if err = store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b0", OwnerID: "bob", ProjectID: "p1", SnapshotID: snapshot, Target: "t"}); err == nil || !strings.Contains(err.Error(), "snapshot not found") {
-		t.Fatalf("another Account building alice's Snapshot = %v", err)
-	}
-	if err = store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b0", OwnerID: "alice", ProjectID: "p1", SnapshotID: "missing", Target: "t"}); err == nil {
-		t.Fatal("building a missing Snapshot succeeded")
-	}
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
-	err = store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b2", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"})
-	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "constraint failed") {
-		t.Fatalf("a second active build = %v, want a constraint failure", err)
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b0", OwnerID: "alice", ProjectID: "p1", SnapshotID: "missing", Target: "t", Status: "queued"}))
+	if _, found, _ := store.FindWASMBuild(ctx, "b0", "alice"); found {
+		t.Fatal("a Build of an unreferenced Snapshot was kept")
 	}
 
-	queued, err := store.ListResumableBuilds(ctx)
-	must(t, err)
-	if len(queued) != 1 || queued[0].JobID != "b1" || queued[0].Language != "Rust" || queued[0].SnapshotID != snapshot || queued[0].Target != "wasm32-unknown-unknown" {
-		t.Fatalf("resumable builds = %#v", queued)
-	}
-	if artifact, err := store.FindWASMBuildArtifact(ctx, "b1", "alice"); err != nil || artifact.Found {
-		t.Fatalf("artifact of an unfinished build = %#v, %v", artifact, err)
-	}
-	if err = store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "queued", To: "complete"}); err == nil || !strings.Contains(err.Error(), "cannot move from queued to complete") {
-		t.Fatalf("queued to complete = %v", err)
-	}
-	if err = store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "building", To: "failed"}); err == nil || !strings.Contains(err.Error(), "changed while it was being updated") {
-		t.Fatalf("a move from a status the build is not in = %v", err)
-	}
-	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "queued", To: "building", Progress: 40, Log: "compiling"}))
-	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "building", To: "building", Progress: 60, Log: "still compiling"}))
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b1", ArtifactName: "wasm-artifacts.zip", Artifact: []byte("zip"), Log: []byte("done")}))
-	if err = store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b1", ArtifactName: "x", Artifact: []byte("y")}); err == nil || !strings.Contains(err.Error(), "WASM build not found") {
-		t.Fatalf("completing a finished build = %v", err)
-	}
-
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown", Status: "queued"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown", Status: "building"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown", Status: "building"}))
 	build, found, err := store.FindWASMBuild(ctx, "b1", "alice")
 	must(t, err)
-	if !found || build.Status != "complete" || build.Progress != 100 || build.ArtifactName != "wasm-artifacts.zip" || build.Log != "done" || build.SnapshotID != snapshot {
-		t.Fatalf("finished build = %#v", build)
+	if !found || build.Status != "building" || build.SnapshotID != snapshot || build.Target != "wasm32-unknown-unknown" {
+		t.Fatalf("building build = %#v, found %v", build, found)
 	}
 	if _, found, _ = store.FindWASMBuild(ctx, "b1", "bob"); found {
 		t.Fatal("another Account found the build")
 	}
-	artifact, err := store.FindWASMBuildArtifact(ctx, "b1", "alice")
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown", Status: "complete"}))
+	build, _, err = store.FindWASMBuild(ctx, "b1", "alice")
 	must(t, err)
-	if !artifact.Found || artifact.Name != "wasm-artifacts.zip" || string(artifact.Data) != "zip" {
-		t.Fatalf("artifact = %#v", artifact)
+	if build.Status != "complete" {
+		t.Fatalf("finished build = %#v", build)
 	}
-	if other, _ := store.FindWASMBuildArtifact(ctx, "b1", "bob"); other.Found {
-		t.Fatal("another Account downloaded the artifact")
+
+	must(t, store.ApplyCheck(ctx, app.CheckChange{BuildID: "b1", OwnerID: "alice", Status: app.CheckPassed, Log: "tests ok"}))
+	check, found, err := store.FindCheck(ctx, "b1", "alice")
+	must(t, err)
+	if !found || check.Status != app.CheckPassed || check.Log != "tests ok" {
+		t.Fatalf("check = %#v, found %v", check, found)
 	}
-	// With the first build finished, a new one may start.
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b3", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
+	if _, found, _ = store.FindCheck(ctx, "b1", "bob"); found {
+		t.Fatal("another Account found the check")
+	}
+	must(t, store.ApplyCheck(ctx, app.CheckChange{BuildID: "missing", OwnerID: "alice", Status: app.CheckPassed}))
+	if _, found, _ = store.FindCheck(ctx, "missing", "alice"); found {
+		t.Fatal("a check of an unknown build was kept")
+	}
 }
 
 func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
@@ -188,7 +175,7 @@ func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	must(t, store.AddProject(ctx, app.ProjectRef{ID: "p1", OwnerID: "alice"}))
 	must(t, store.AddProject(ctx, app.ProjectRef{ID: "pb", OwnerID: "bob"}))
 	snapshot := ReadySnapshot(t, store, "alice", "p1", "one-snapshot", "Rust")
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "t"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "t", Status: "queued"}))
 
 	active, err := store.ListActiveJobs(ctx, "alice")
 	must(t, err)

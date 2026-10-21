@@ -24,6 +24,7 @@ import (
 
 	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
@@ -75,7 +76,9 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	t.Cleanup(func() { control.Close() })
 	link := agentgrpc.NewLink(control.Dial, agentgrpc.WithMaxRetryDelay(time.Second))
 	t.Cleanup(func() { link.Close() })
-	fleet := app.NewFleet(store, tailnet, link, audit)
+	wasm := buildstest.NewFake(store)
+	builds := app.NewBuilds(store, catalog, wasm)
+	fleet := app.NewFleet(store, tailnet, link, audit).WithBuilds(builds)
 	fleetCtx, stopFleet := context.WithCancel(ctx)
 	fleetDone := make(chan struct{})
 	go func() { defer close(fleetDone); fleet.Run(fleetCtx, time.Second) }()
@@ -83,7 +86,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	policy, err := app.NewPolicy(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog).WithBuilds(builds),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Agents: agents, Fleet: fleet,
 	}).Handler())
@@ -111,7 +114,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	assertNoTCPListener(t, agent.Process.Pid)
 
 	// Deploy a completed build of the CGI app.
-	buildID := seedBuild(t, store, alice, module)
+	buildID := seedBuild(t, store, wasm, alice, module)
 	deployCtx, cancelDeploy := context.WithTimeout(ctx, 90*time.Second)
 	must(t, fleet.Deploy(deployCtx, alice, agentID, "dep-live", buildID))
 	cancelDeploy()
@@ -375,13 +378,12 @@ func aliceID(t *testing.T, identities app.Identities) string {
 	return found.ID
 }
 
-// seedBuild records a completed WASI build of module for owner, as the WASM
-// Build pipeline would; building it is not what this test is about.
-func seedBuild(t *testing.T, store *sqlstore.Store, owner string, module []byte) string {
+// seedBuild records a completed WASI build of module for owner, as the builds
+// service would; building it is not what this test is about.
+func seedBuild(t *testing.T, store *sqlstore.Store, builds *buildstest.Fake, owner string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
 	storetest.ReadySnapshot(t, store, owner, "live-project", "live-snapshot", "Go")
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "live-build", OwnerID: owner, ProjectID: "live-project", SnapshotID: "live-snapshot", Target: "wasip1-wasm"}))
 	var archive bytes.Buffer
 	writer := zip.NewWriter(&archive)
 	file, err := writer.Create("main.wasm")
@@ -391,7 +393,9 @@ func seedBuild(t *testing.T, store *sqlstore.Store, owner string, module []byte)
 	must(t, writer.Close())
 	compressed, err := artifact.Compress(ctx, archive.Bytes())
 	must(t, err)
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "live-build", ArtifactName: "wasm-artifacts.zip" + artifact.ZstdExtension, Artifact: compressed.Data, Log: []byte("ok")}))
+	builds.Produce(compressed.Data)
+	_, err = builds.StartBuild(ctx, app.StartBuild{ID: "live-build", OwnerID: owner, ProjectID: "live-project", SnapshotID: "live-snapshot", Target: "wasip1-wasm"})
+	must(t, err)
 	return "live-build"
 }
 

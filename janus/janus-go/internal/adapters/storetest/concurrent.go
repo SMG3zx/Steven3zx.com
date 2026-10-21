@@ -35,25 +35,25 @@ func testConcurrentCallers(t *testing.T, store app.Store) {
 			t.Error(err)
 		}
 	}
-	// Callers that share one record are serialized, not lost: exactly one wins.
+	// Callers that record the same Build's state are serialized, not lost: each
+	// applies it, and the Build is kept once.
 	ctx := context.Background()
 	ReadySnapshot(t, store, "shared", "shared-project", "shared-snapshot", "Go")
 	results := make(chan error, callers)
 	for range callers {
 		wg.Go(func() {
-			results <- store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "shared-build", OwnerID: "shared", ProjectID: "shared-project", SnapshotID: "shared-snapshot", Target: "t"})
+			results <- store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "shared-build", OwnerID: "shared", ProjectID: "shared-project", SnapshotID: "shared-snapshot", Target: "t", Status: "queued"})
 		})
 	}
 	wg.Wait()
 	close(results)
-	won := 0
 	for err := range results {
-		if err == nil {
-			won++
+		if err != nil {
+			t.Fatalf("concurrent ApplyWASMBuild: %v", err)
 		}
 	}
-	if won != 1 {
-		t.Fatalf("%d callers created the same build, want exactly 1", won)
+	if _, found, err := store.FindWASMBuild(ctx, "shared-build", "shared"); err != nil || !found {
+		t.Fatalf("shared build = found %v, %v", found, err)
 	}
 }
 
@@ -88,16 +88,10 @@ func exerciseEveryMethod(store app.Store, name string) (err error) {
 	}
 
 	build := name + "-build"
-	if !do("CreateWASMBuild", store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: build, OwnerID: name, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm"})) {
+	if !do("ApplyWASMBuild", store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: build, OwnerID: name, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm", Status: "complete"})) {
 		return
 	}
-	if _, e := store.ListResumableBuilds(ctx); !do("ListResumableBuilds", e) {
-		return
-	}
-	if !do("TransitionWASMBuild", store.TransitionWASMBuild(ctx, app.JobTransition{ID: build, From: "queued", To: "building", Progress: 5})) {
-		return
-	}
-	if !do("CompleteWASMBuild", store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: build, ArtifactName: "a.zip", Artifact: []byte("zip"), Log: []byte("ok")})) {
+	if !do("ApplyCheck", store.ApplyCheck(ctx, app.CheckChange{BuildID: build, OwnerID: name, Status: app.CheckPassed, Log: "ok"})) {
 		return
 	}
 	if active, e := store.ListActiveJobs(ctx, name); !do("ListActiveJobs", e) || len(active) != 0 {
@@ -106,8 +100,8 @@ func exerciseEveryMethod(store app.Store, name string) (err error) {
 	if got, found, e := store.FindWASMBuild(ctx, build, name); !do("FindWASMBuild", e) || !found || got.Status != "complete" {
 		return fmt.Errorf("%s: FindWASMBuild = %+v, %v, %v", name, got, found, e)
 	}
-	if artifact, e := store.FindWASMBuildArtifact(ctx, build, name); !do("FindWASMBuildArtifact", e) || !artifact.Found {
-		return fmt.Errorf("%s: FindWASMBuildArtifact = %+v, %v", name, artifact, e)
+	if check, found, e := store.FindCheck(ctx, build, name); !do("FindCheck", e) || !found || check.Status != app.CheckPassed {
+		return fmt.Errorf("%s: FindCheck = %+v, %v, %v", name, check, found, e)
 	}
 
 	if !do("RemoveSnapshot", store.RemoveSnapshot(ctx, snapshot)) {

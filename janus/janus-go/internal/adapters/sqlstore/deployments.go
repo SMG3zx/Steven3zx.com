@@ -14,36 +14,17 @@ import (
 // Project is queued or starting. The memory store gives the same words.
 var inFlightError = errors.New("a Deployment is already in flight for this Project")
 
-// StartCheck records that the checks of a completed WASM Build have started.
-func (s *Store) StartCheck(ctx context.Context, check app.StartCheck) error {
-	ctx, done := s.start(ctx, "StartCheck")
+// ApplyCheck stores the Check of a WASM Build the builds service published. A
+// Check of a Build this Store does not reference is not kept.
+func (s *Store) ApplyCheck(ctx context.Context, check app.CheckChange) error {
+	ctx, done := s.start(ctx, "ApplyCheck")
 	return done(s.inTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `INSERT INTO project_checks(build_id,owner_id,status)
-			SELECT id,owner_id,? FROM project_wasm_builds WHERE id=? AND status='complete'`, app.CheckRunning, check.BuildID)
-		if err != nil {
-			return err
-		}
-		if rows, _ := result.RowsAffected(); rows != 1 {
-			return errors.New("WASM build not found")
-		}
-		return nil
+		_, err := tx.ExecContext(ctx, `INSERT INTO project_checks(build_id,owner_id,status,error,check_log,no_tests)
+			SELECT id,owner_id,?,?,?,? FROM project_wasm_builds WHERE id=? AND owner_id=?
+			ON CONFLICT(build_id) DO UPDATE SET status=excluded.status,error=excluded.error,check_log=excluded.check_log,no_tests=excluded.no_tests,updated_at=CURRENT_TIMESTAMP`,
+			check.Status, check.Error, check.Log, check.NoTests, check.BuildID, check.OwnerID)
+		return err
 	}))
-}
-
-// FinishCheck records how the running checks of a WASM Build ended.
-func (s *Store) FinishCheck(ctx context.Context, check app.FinishCheck) error {
-	ctx, done := s.start(ctx, "FinishCheck")
-	if check.Status != app.CheckPassed && check.Status != app.CheckFailed {
-		return done(fmt.Errorf("check cannot finish as %s", check.Status))
-	}
-	result, err := s.db.ExecContext(ctx, `UPDATE project_checks SET status=?,error=?,check_log=?,no_tests=?,updated_at=CURRENT_TIMESTAMP
-		WHERE build_id=? AND status=?`, check.Status, check.Error, check.Log, check.NoTests, check.BuildID, app.CheckRunning)
-	if err == nil {
-		if rows, _ := result.RowsAffected(); rows != 1 {
-			err = errors.New("check not found")
-		}
-	}
-	return done(err)
 }
 
 // FindCheck returns the Check of one of an Account's WASM Builds.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,15 +50,11 @@ func seedSnapshot(t *testing.T, store *Store, owner, project, snapshot string) {
 	storetest.ReadySnapshot(t, store, owner, project, snapshot, "Go")
 }
 
-// startBuildAt creates a WASM build of snapshot and moves it to status, as a
-// worker would while it is running.
+// startBuildAt records a WASM Build of snapshot in status, as the builds service
+// publishes it.
 func startBuildAt(t *testing.T, store *Store, owner, project, snapshot, build, status string) {
 	t.Helper()
-	ctx := testContext(t)
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: build, OwnerID: owner, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm"}))
-	if status != "queued" {
-		must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: build, From: "queued", To: status, Progress: 5}))
-	}
+	must(t, store.ApplyWASMBuild(testContext(t), app.WASMBuildChange{ID: build, OwnerID: owner, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm", Status: status}))
 }
 
 func buildStatus(t *testing.T, store *Store, owner, build string) app.WASMBuild {
@@ -127,102 +122,25 @@ func TestADatabaseFromBeforeTheSplitOpens(t *testing.T) {
 	if err := store.db.QueryRow(`SELECT status FROM project_import_jobs WHERE id='old-job'`).Scan(&status); err != nil || status != "storing" {
 		t.Fatalf("legacy import job = %q, %v; want it left for the projects service", status, err)
 	}
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b", OwnerID: "alice", ProjectID: "project-legacy", SnapshotID: "snapshot-legacy", Target: "wasip1-wasm"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b", OwnerID: "alice", ProjectID: "project-legacy", SnapshotID: "snapshot-legacy", Target: "wasip1-wasm", Status: "queued"}))
 }
 
 func TestErrorsAreReplyErrorsExceptForTheContext(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "errors.db"))
-	ctx := testContext(t)
-	seedSnapshot(t, store, "x", "p", "s")
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b", OwnerID: "x", ProjectID: "p", SnapshotID: "s", Target: "t"}))
-	err := store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b", OwnerID: "x", ProjectID: "p", SnapshotID: "s", Target: "t"})
-	if !app.IsReply(err) {
-		t.Fatalf("a constraint violation = %v, want a reply error", err)
-	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	err = store.AddOwner(cancelled, "z")
+	err := store.AddOwner(cancelled, "z")
 	if err == nil || app.IsReply(err) {
 		t.Fatalf("a cancelled context = %v, want the context's error and not a reply error", err)
 	}
 }
 
-func TestWASMBuildArtifactsAreOwned(t *testing.T) {
-	store := openTest(t, filepath.Join(t.TempDir(), "test.db"))
-	ctx := testContext(t)
-	must(t, store.AddOwner(ctx, "bob"))
-	seedSnapshot(t, store, "alice", "wasm-project", "wasm-snapshot")
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "wasm-job", OwnerID: "alice", ProjectID: "wasm-project", SnapshotID: "wasm-snapshot", Target: "wasm32-unknown-unknown"}))
-	if err := store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "wasm-job-2", OwnerID: "alice", ProjectID: "wasm-project", SnapshotID: "wasm-snapshot", Target: "wasm32-wasip1"}); err == nil {
-		t.Fatal("more than one active build was allowed for a project")
-	}
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "wasm-job", ArtifactName: "wasm-artifacts.zip", Artifact: []byte("artifact"), Log: []byte("build log")}))
-	build, found, err := store.FindWASMBuild(ctx, "wasm-job", "alice")
-	if err != nil || !found || build.Status != "complete" || build.Target != "wasm32-unknown-unknown" || build.Log != "build log" {
-		t.Fatalf("stored WASM build = %#v, %v, %v", build, found, err)
-	}
-	stored, err := store.FindWASMBuildArtifact(ctx, "wasm-job", "alice")
-	if err != nil || !stored.Found || string(stored.Data) != "artifact" {
-		t.Fatalf("stored WASM artifact = %#v, %v", stored, err)
-	}
-	if _, found, err = store.FindWASMBuild(ctx, "wasm-job", "bob"); err != nil || found {
-		t.Fatalf("another owner's WASM build was visible: %v, %v", found, err)
-	}
-}
-
-func TestInterruptedBuildResumesUpToThreeTimesThenFails(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "resume.db")
-	ctx := testContext(t)
-
-	store, stop := openAt(t, path)
-	seedSnapshot(t, store, "alice", "project-1", "snapshot-1")
-	startBuildAt(t, store, "alice", "project-1", "snapshot-1", "build-1", "building")
-	stop()
-
-	for restart := 1; restart <= app.MaxResumes; restart++ {
-		store, stop = openAt(t, path)
-		if build := buildStatus(t, store, "alice", "build-1"); build.Status != "queued" {
-			t.Fatalf("restart %d: status = %q, want queued", restart, build.Status)
-		}
-		listed, err := store.ListResumableBuilds(ctx)
-		must(t, err)
-		if len(listed) != 1 || listed[0].JobID != "build-1" || listed[0].Language != "Go" {
-			t.Fatalf("restart %d: resumable builds = %#v", restart, listed)
-		}
-		// The resumed worker runs again and is interrupted by the next restart.
-		must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "build-1", From: "queued", To: "building", Progress: 5}))
-		stop()
-	}
-
-	store, stop = openAt(t, path)
-	defer stop()
-	if build := buildStatus(t, store, "alice", "build-1"); build.Status != "failed" || !strings.Contains(build.Error, "resume limit") {
-		t.Fatalf("after the fourth interruption: status=%q error=%q", build.Status, build.Error)
-	}
-}
-
-func TestTerminalBuildStatusCannotChange(t *testing.T) {
-	store := openTest(t, filepath.Join(t.TempDir(), "terminal.db"))
-	ctx := testContext(t)
-	seedSnapshot(t, store, "alice", "project-1", "snapshot-1")
-	startBuildAt(t, store, "alice", "project-1", "snapshot-1", "build-1", "building")
-	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "build-1", From: "building", To: "failed", Progress: 100, Error: "compile failed"}))
-
-	err := store.TransitionWASMBuild(ctx, app.JobTransition{ID: "build-1", From: "failed", To: "building", Progress: 5})
-	if err == nil || !strings.Contains(err.Error(), "cannot move from failed to building") {
-		t.Fatalf("expected a rejected transition from failed, got %v", err)
-	}
-	if build := buildStatus(t, store, "alice", "build-1"); build.Status != "failed" || build.Error != "compile failed" {
-		t.Fatalf("failed build changed: status=%q error=%q", build.Status, build.Error)
-	}
-}
-
-func TestRemovingAProjectRemovesItsSnapshotsBuildsAndArtifacts(t *testing.T) {
+func TestRemovingAProjectRemovesItsSnapshotsAndBuilds(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "project-delete.db"))
 	ctx := testContext(t)
 	seedSnapshot(t, store, "alice", "project-1", "snapshot-1")
 	startBuildAt(t, store, "alice", "project-1", "snapshot-1", "build-1", "queued")
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "build-1", ArtifactName: "app.wasm.zst", Artifact: []byte("artifact"), Log: []byte("ok")}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "build-1", OwnerID: "alice", ProjectID: "project-1", SnapshotID: "snapshot-1", Target: "wasip1-wasm", Status: "complete"}))
 
 	must(t, store.RemoveProject(ctx, "project-1"))
 	for _, table := range []string{"projects", "project_snapshots", "project_wasm_builds"} {

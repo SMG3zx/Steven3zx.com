@@ -11,55 +11,55 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 106,
+      "line": 95,
       "title": "Identities",
       "description": "`type Identities interface`. Real: identitynats.Client, which asks the identity service over NATS. Test: identitytest.Memory. Contract: identitytest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 166,
+      "line": 160,
       "title": "Catalog",
       "description": "`type Catalog interface`. Real: projectsnats.Client, which asks the projects service over NATS. Test: catalogtest.Memory. Contract: catalogtest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 127,
-      "title": "Builder",
-      "description": "`type Builder interface`. Real: dockerbuild.Docker. Test: buildertest.Fake."
+      "line": 113,
+      "title": "WASMBuilds",
+      "description": "`type WASMBuilds interface`. Real: buildsnats.Client, which asks the builds service over NATS. Test: buildstest.Fake. The builds service's own tests cover the service behind it."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 135,
-      "title": "Checker",
-      "description": "`type Checker interface`. Real: dockerbuild.Docker. Test: checktest.Fake. The checktest package has no contract suite yet."
+      "line": 129,
+      "title": "BuildArtifacts",
+      "description": "`type BuildArtifacts interface`. Real: buildsnats.Client, which reads the Artifact from the artifacts store. Test: the Builds use case over buildstest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 153,
+      "line": 147,
       "title": "Runner",
       "description": "`type Runner interface`. Real: wasmtime.Wasmtime. Test: runnertest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 199,
+      "line": 193,
       "title": "Audit",
       "description": "`type Audit interface`. Real: auditnats.Publisher, which publishes to the AUDIT stream for the audit service. Test: audittest.Recorder. Contract: audittest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 220,
+      "line": 214,
       "title": "Tailnet",
       "description": "`type Tailnet interface`. Real: headscale.Client. Test: tailnettest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 238,
+      "line": 232,
       "title": "LocalState",
       "description": "`type LocalState interface`. Real: agentdisk. Test: localstatetest.Memory."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 268,
+      "line": 262,
       "title": "AgentLink",
       "description": "`type AgentLink interface`. Real: agentgrpc.Link. Test: agentlinktest.Loopback."
     }

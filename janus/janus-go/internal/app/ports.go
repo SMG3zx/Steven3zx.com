@@ -34,25 +34,14 @@ type Store interface {
 	RemoveProject(ctx context.Context, id string) error
 	RemoveSnapshot(ctx context.Context, id string) error
 
-	// WASM Builds and Resume.
-	// TransitionWASMBuild compares and swaps a build's status. The move must be
-	// legal under the build state machine in domain/jobs, and the stored status
-	// must still be transition.From; otherwise the build is left as it is and
-	// the error says "WASM build cannot move from X to Y", "WASM build not
-	// found" or "WASM build changed while it was being updated". Staying in a
-	// non-terminal status is a legal move, so progress can be reported.
-	CreateWASMBuild(ctx context.Context, build CreateWASMBuild) error
-	TransitionWASMBuild(ctx context.Context, transition JobTransition) error
-	CompleteWASMBuild(ctx context.Context, build CompleteWASMBuild) error
+	// WASM Builds, as the references Deployments need. The builds service owns
+	// them: it publishes each Build's and Check's state on EVENTS, and ApplyWASMBuild
+	// and ApplyCheck store what it says. Applying a state again changes nothing, and
+	// a Build whose Project or Snapshot is not referenced here is not kept.
+	ApplyWASMBuild(ctx context.Context, build WASMBuildChange) error
+	ApplyCheck(ctx context.Context, check CheckChange) error
 	FindWASMBuild(ctx context.Context, id, ownerID string) (build WASMBuild, found bool, err error)
-	FindWASMBuildArtifact(ctx context.Context, id, ownerID string) (WASMBuildArtifact, error)
-	ListResumableBuilds(ctx context.Context) ([]ResumableBuild, error)
 	ListActiveJobs(ctx context.Context, ownerID string) ([]ActiveJob, error)
-
-	// Checks of WASM Builds. A Build has at most one Check, started when the Build
-	// completes and finished when its commands end.
-	StartCheck(ctx context.Context, check StartCheck) error
-	FinishCheck(ctx context.Context, check FinishCheck) error
 	FindCheck(ctx context.Context, buildID, ownerID string) (check Check, found bool, err error)
 
 	// Deployments. A Project has at most one Deployment in flight, one that is
@@ -117,23 +106,28 @@ type Identities interface {
 	DisconnectGitHub(ctx context.Context, userID string) error
 }
 
-// Builder compiles a workspace of one Language to an Artifact. The language is
-// matched without regard to case.
-//
-// A workspace without the manifest the Language's Template requires fails with
-// a *ManifestError. A Language or Target no Template covers fails with a plain
-// error. The BuildResult's Log is set on failure too, and its Artifact is a
-// compressed ZIP that artifact.Module can open.
-type Builder interface {
-	Build(ctx context.Context, language string, request BuildRequest) (BuildResult, error)
+// WASMBuilds is the builds service as the single process uses it: WASM Builds
+// of a Project's Snapshot, their Checks and their Artifacts. A request the
+// service refuses fails with a plain error whose text is meant for the Account,
+// or a contract error. A Build or Artifact that is not the Owner's is absent.
+type WASMBuilds interface {
+	// StartBuild queues a Build and returns it.
+	StartBuild(ctx context.Context, build StartBuild) (WASMBuild, error)
+	// RetryBuild queues a new Build of a failed Build's Snapshot.
+	RetryBuild(ctx context.Context, owner, buildID string) (WASMBuild, error)
+	FindBuild(ctx context.Context, owner, buildID string) (WASMBuild, bool, error)
+	// Artifact returns the Artifact of a complete Build; Found is false when
+	// it has none.
+	Artifact(ctx context.Context, owner, buildID string) (WASMBuildArtifact, error)
+	// DeleteOwner cancels the Owner's running Builds and deletes its Builds and
+	// Artifacts. It is idempotent.
+	DeleteOwner(ctx context.Context, owner string) error
 }
 
-// Checker runs the check and test commands of a compiled workspace in an
-// isolated container, the same way Builder compiles it. A failing command is a
-// Passed of false, not an error. An error means the checks could not run to an
-// answer, such as a container that crashed or timed out.
-type Checker interface {
-	Check(ctx context.Context, language string, request CheckRequest) (CheckResult, error)
+// BuildArtifacts reads the Artifacts of an Account's WASM Builds, which Runs and
+// the Fleet deploy.
+type BuildArtifacts interface {
+	Artifact(ctx context.Context, owner, buildID string) (WASMBuildArtifact, error)
 }
 
 // Runner runs a WASI module under input.Limits. Limits.Timeout bounds the run,

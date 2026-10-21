@@ -5,9 +5,10 @@ import (
 	"fmt"
 )
 
-// JobCanceller stops the running jobs of an Account.
-type JobCanceller interface {
-	CancelOwner(owner string) int
+// BuildOwners deletes the WASM Builds an Account owns, and cancels the ones
+// running.
+type BuildOwners interface {
+	DeleteOwner(ctx context.Context, owner string) error
 }
 
 // Accounts deletes Accounts. Deleting an Account removes everything it owns:
@@ -17,17 +18,22 @@ type Accounts struct {
 	store       Store
 	identities  Identities
 	catalog     Catalog
-	running     []JobCanceller
+	builds      BuildOwners
 	agents      *Agents
 	deployments *Deployments
 }
 
 // NewAccounts returns an Accounts that deletes what an Account owns through
-// store and catalog and the User itself through identities and, when the Owner
-// chooses to cancel unfinished jobs, also stops the ones that are running in
-// running.
-func NewAccounts(store Store, identities Identities, catalog Catalog, running ...JobCanceller) *Accounts {
-	return &Accounts{store: store, identities: identities, catalog: catalog, running: running}
+// store and catalog and the User itself through identities.
+func NewAccounts(store Store, identities Identities, catalog Catalog) *Accounts {
+	return &Accounts{store: store, identities: identities, catalog: catalog}
+}
+
+// WithBuilds makes a deleted Account's WASM Builds go with it, and their running
+// Builds stop. It returns a, so it chains onto NewAccounts.
+func (a *Accounts) WithBuilds(builds BuildOwners) *Accounts {
+	a.builds = builds
+	return a
 }
 
 // WithAgents makes a deleted Account's Agents leave the tailnet too. It returns
@@ -51,8 +57,8 @@ func (a *Accounts) WithDeployments(deployments *Deployments) *Accounts {
 //
 // The steps run in an order that can be repeated after any of them fails: the
 // Deployments stop and the Agents leave the tailnet, the projects service
-// deletes the Projects, the Store deletes the Builds and the rest, and the
-// User and its sign-in methods go last. A failure keeps the Account, which can
+// deletes the Projects, the builds service deletes the Builds, the Store deletes
+// the rest, and the User and its sign-in methods go last. A failure keeps the Account, which can
 // still sign in, and the error comes back, so deleting again finishes the job
 // and no node is left behind without a record.
 func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bool) (AccountDeleted, error) {
@@ -86,6 +92,11 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	if err = a.catalog.DeleteOwner(ctx, owner); err != nil {
 		return AccountDeleted{}, fmt.Errorf("delete the Account's Projects: %w", err)
 	}
+	if a.builds != nil {
+		if err = a.builds.DeleteOwner(ctx, owner); err != nil {
+			return AccountDeleted{}, fmt.Errorf("delete the Account's WASM builds: %w", err)
+		}
+	}
 	result, err := a.store.DeleteAccount(ctx, owner, cancelActiveJobs)
 	if err != nil || len(result.ActiveJobs) > 0 {
 		return result, err
@@ -94,11 +105,6 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	result.Deleted, err = a.identities.DeleteUser(ctx, owner)
 	if err != nil {
 		return AccountDeleted{}, fmt.Errorf("delete the Account's sign-in methods: %w", err)
-	}
-	if result.Deleted && cancelActiveJobs {
-		for _, jobs := range a.running {
-			jobs.CancelOwner(owner)
-		}
 	}
 	return result, nil
 }

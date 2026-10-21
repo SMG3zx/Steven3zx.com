@@ -20,11 +20,12 @@ func users(t *testing.T, ids ...string) *identitytest.Memory {
 	return identities
 }
 
-type cancelCounter struct{ owners []string }
+// ownerDeleter records the Owners whose WASM Builds were deleted.
+type ownerDeleter struct{ owners []string }
 
-func (c *cancelCounter) CancelOwner(owner string) int {
-	c.owners = append(c.owners, owner)
-	return 1
+func (d *ownerDeleter) DeleteOwner(_ context.Context, owner string) error {
+	d.owners = append(d.owners, owner)
+	return nil
 }
 
 func TestDeleteRefusesWhileJobsAreActiveUnlessTheOwnerCancelsThem(t *testing.T) {
@@ -32,23 +33,23 @@ func TestDeleteRefusesWhileJobsAreActiveUnlessTheOwnerCancelsThem(t *testing.T) 
 	importedProject(t, catalog, store, "bob", "bob-project", "Rust")
 	ctx := context.Background()
 	catalog.SeedImport("bob", "bob-project", "bob-job", "queued")
-	running := &cancelCounter{}
+	builds := &ownerDeleter{}
 	identities := users(t, "bob")
-	accounts := app.NewAccounts(store, identities, catalog, running)
+	accounts := app.NewAccounts(store, identities, catalog).WithBuilds(builds)
 
 	blocked, err := accounts.Delete(ctx, "bob", false)
 	if err != nil || blocked.Deleted || len(blocked.ActiveJobs) != 1 || blocked.ActiveJobs[0].ID != "bob-job" {
 		t.Fatalf("blocked = %+v, %v", blocked, err)
 	}
-	if len(running.owners) != 0 {
-		t.Fatal("running jobs were stopped for a refused deletion")
+	if len(builds.owners) != 0 {
+		t.Fatal("WASM builds were deleted for a refused deletion")
 	}
 	deleted, err := accounts.Delete(ctx, "bob", true)
 	if err != nil || !deleted.Deleted {
 		t.Fatalf("deleted = %+v, %v", deleted, err)
 	}
-	if len(running.owners) != 1 || running.owners[0] != "bob" {
-		t.Fatalf("stopped jobs of %v, want bob's", running.owners)
+	if len(builds.owners) != 1 || builds.owners[0] != "bob" {
+		t.Fatalf("deleted builds of %v, want bob's", builds.owners)
 	}
 	if found, _ := identities.FindUser(ctx, "bob"); found.Found {
 		t.Fatal("the account still exists")
@@ -64,12 +65,12 @@ func TestDeleteRefusesWhileJobsAreActiveUnlessTheOwnerCancelsThem(t *testing.T) 
 	}
 }
 
-func TestDeleteWithoutActiveJobsStopsNothing(t *testing.T) {
+func TestDeleteWithoutActiveJobsDeletesTheBuildsToo(t *testing.T) {
 	store, catalog := storetest.NewMemory(), catalogtest.NewMemory()
 	importedProject(t, catalog, store, "carol", "carol-project", "Rust")
-	running := &cancelCounter{}
-	deleted, err := app.NewAccounts(store, users(t, "carol"), catalog, running).Delete(context.Background(), "carol", false)
-	if err != nil || !deleted.Deleted || len(running.owners) != 0 {
-		t.Fatalf("deleted = %+v, %v, stopped %v", deleted, err, running.owners)
+	builds := &ownerDeleter{}
+	deleted, err := app.NewAccounts(store, users(t, "carol"), catalog).WithBuilds(builds).Delete(context.Background(), "carol", false)
+	if err != nil || !deleted.Deleted || len(builds.owners) != 1 || builds.owners[0] != "carol" {
+		t.Fatalf("deleted = %+v, %v, builds deleted for %v", deleted, err, builds.owners)
 	}
 }

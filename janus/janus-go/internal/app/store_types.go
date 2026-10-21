@@ -81,14 +81,6 @@ type CreateProject struct {
 
 type UpdateProject struct{ ID, OwnerID, Name, Description string }
 
-// JobTransition moves a job from the status From to the status To, if the job
-// is still in From. Error is the reason shown when To is failed, and Log is the
-// build log a WASM build keeps; an import ignores it.
-type JobTransition struct {
-	ID, From, To, Error, Log string
-	Progress                 int
-}
-
 type ImportJob struct {
 	ID         string `json:"id"`
 	OwnerID    string `json:"owner_id"`
@@ -123,13 +115,6 @@ type ListProjectFiles struct {
 	Offset, Limit                  int
 }
 
-type CreateWASMBuild struct {
-	ID, OwnerID, ProjectID, SnapshotID, Target string
-}
-type CompleteWASMBuild struct {
-	ID, ArtifactName string
-	Artifact, Log    []byte
-}
 type WASMBuild struct {
 	ID           string `json:"id"`
 	ProjectID    string `json:"project_id"`
@@ -150,16 +135,6 @@ const (
 	CheckPassed  = "passed"
 	CheckFailed  = "failed"
 )
-
-// StartCheck begins the Check of a completed WASM Build.
-type StartCheck struct{ BuildID string }
-
-// FinishCheck records how the Check of a WASM Build ended. Status is CheckPassed
-// or CheckFailed; Error is set when the checks could not run to an answer.
-type FinishCheck struct {
-	BuildID, Status, Error, Log string
-	NoTests                     bool
-}
 
 // Check is the result of the checks run on one WASM Build.
 type Check struct {
@@ -208,6 +183,25 @@ type Deployment struct {
 	Check *Check `json:"check,omitempty"`
 }
 
+// StartBuild asks the builds service for a Build of a Project's Snapshot. The
+// caller chooses the ID.
+type StartBuild struct {
+	ID, OwnerID, ProjectID, SnapshotID, Target string
+}
+
+// WASMBuildChange is a Build's state as the builds service publishes it, which
+// the Store keeps as its reference to the Build.
+type WASMBuildChange struct {
+	ID, OwnerID, ProjectID, SnapshotID, Target, Status, Error string
+}
+
+// CheckChange is a Check's state as the builds service publishes it, which the
+// Store keeps for the Deployments that refer to its Build.
+type CheckChange struct {
+	BuildID, OwnerID, Status, Error, Log string
+	NoTests                              bool
+}
+
 type WASMBuildArtifact struct {
 	Name  string
 	Data  []byte
@@ -247,26 +241,11 @@ type UserFound struct {
 	Err         error
 }
 
-// ResumableBuild is a queued WASM build found at startup, with the language of
-// the Snapshot it compiles.
-type ResumableBuild struct {
-	JobID      string
-	OwnerID    string
-	ProjectID  string
-	SnapshotID string
-	Target     string
-	Language   string
-}
-
 type AccountDeleted struct {
 	Deleted    bool
 	ActiveJobs []ActiveJob
 	Err        error
 }
-
-// MaxResumes is how many times an interrupted job may resume after a restart.
-// The interruption after the last allowed resume fails the job.
-const MaxResumes = 3
 
 // ActiveJob describes an import or WASM build that has not finished yet.
 type ActiveJob struct {

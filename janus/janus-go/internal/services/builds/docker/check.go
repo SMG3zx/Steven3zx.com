@@ -1,4 +1,4 @@
-package dockerbuild
+package docker
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"janus/internal/app"
+	"janus/internal/services/builds"
 )
 
 // Each check command runs the Language's checks in its builder image and exits
@@ -34,28 +34,26 @@ var checkSpecs = map[string]checkSpec{
 	"go":   {command: goCheckCommand, noTests: func(log string) bool { return !strings.Contains("\n"+log, "\nok ") }},
 }
 
-var _ app.Checker = (*Docker)(nil)
-
 // Check runs the check and test commands of the workspace in the Language's
 // builder image, with the same isolation as a build.
-func (d *Docker) Check(ctx context.Context, language string, request app.CheckRequest) (app.CheckResult, error) {
+func (d *Docker) Check(ctx context.Context, language string, request builds.CheckRequest) (builds.CheckResult, error) {
 	key := strings.ToLower(language)
 	a, ok := d.adapters[key]
 	spec, hasChecks := checkSpecs[key]
 	if !ok || !hasChecks {
-		return app.CheckResult{}, errors.New("no WASM checks for " + language)
+		return builds.CheckResult{}, errors.New("no WASM checks for " + language)
 	}
 	if !validImage.MatchString(a.image) {
-		return app.CheckResult{}, errors.New("configure a trusted, pre-provisioned WASM builder image")
+		return builds.CheckResult{}, errors.New("configure a trusted, pre-provisioned WASM builder image")
 	}
 	ran := d.execute(ctx, Run{Image: a.image, Workspace: request.Workspace, Command: spec.command, MaxLog: MaxLog, MaxOutput: 64 << 10})
 	if ran.Err != nil {
-		return app.CheckResult{Log: ran.Stderr}, ran.Err
+		return builds.CheckResult{Log: ran.Stderr}, ran.Err
 	}
 	status, err := strconv.Atoi(strings.TrimSpace(string(ran.Stdout)))
 	if err != nil {
-		return app.CheckResult{Log: ran.Stderr}, errors.New("the checks did not report their status")
+		return builds.CheckResult{Log: ran.Stderr}, errors.New("the checks did not report their status")
 	}
 	passed := status == 0
-	return app.CheckResult{Passed: passed, NoTests: passed && spec.noTests(string(ran.Stderr)), Log: ran.Stderr}, nil
+	return builds.CheckResult{Passed: passed, NoTests: passed && spec.noTests(string(ran.Stderr)), Log: ran.Stderr}, nil
 }

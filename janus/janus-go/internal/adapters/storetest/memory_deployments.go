@@ -25,31 +25,17 @@ type memDeployment struct {
 // of the Project is queued or starting. The SQL store gives the same words.
 const inFlightMessage = "a Deployment is already in flight for this Project"
 
-func (m *Memory) StartCheck(_ context.Context, check app.StartCheck) error {
+// ApplyCheck stores the Check of a Build the builds service published. A Check
+// of a Build that is not referenced here is not kept.
+func (m *Memory) ApplyCheck(_ context.Context, change app.CheckChange) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	build, ok := m.builds[check.BuildID]
-	if !ok || build.Status != "complete" {
-		return fail("WASM build not found")
+	build, ok := m.builds[change.BuildID]
+	if !ok || build.ownerID != change.OwnerID {
+		return nil
 	}
-	if _, exists := m.checks[check.BuildID]; exists {
-		return constraint("UNIQUE constraint failed: project_checks.build_id")
-	}
-	m.checks[check.BuildID] = &memCheck{ownerID: build.ownerID, Check: app.Check{BuildID: check.BuildID, Status: app.CheckRunning}}
-	return nil
-}
-
-func (m *Memory) FinishCheck(_ context.Context, check app.FinishCheck) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	stored, ok := m.checks[check.BuildID]
-	if !ok || stored.Status != app.CheckRunning {
-		return fail("check not found")
-	}
-	if check.Status != app.CheckPassed && check.Status != app.CheckFailed {
-		return fail("check cannot finish as %s", check.Status)
-	}
-	stored.Status, stored.Error, stored.Log, stored.NoTests = check.Status, check.Error, check.Log, check.NoTests
+	m.checks[change.BuildID] = &memCheck{ownerID: change.OwnerID, Check: app.Check{BuildID: change.BuildID, Status: change.Status,
+		Error: change.Error, Log: change.Log, NoTests: change.NoTests}}
 	return nil
 }
 

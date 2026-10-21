@@ -72,7 +72,7 @@ func Open(path string, options ...Option) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate project snapshots: %w", err)
 	}
-	if err := migrateAndRecoverJobs(db); err != nil {
+	if err := migrateJobColumns(db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("recover interrupted project imports: %w", err)
 	}

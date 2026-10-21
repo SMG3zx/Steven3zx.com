@@ -39,14 +39,16 @@ func compressedArtifact(t *testing.T, module []byte) (name string, data []byte) 
 }
 
 // completedBuild stores a finished Build of module for owner and returns its ID.
-func completedBuild(t *testing.T, store app.Store, owner, id string, module []byte) string {
+// completedBuild records a complete Build of owner in store, whose Artifact holds
+// module, and returns its ID.
+func completedBuild(t *testing.T, store app.Store, builds *storedBuilds, owner, id string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
 	project := owner + "-project"
 	snapshot := storetest.ReadySnapshot(t, store, owner, project, id+"-snapshot", "Go")
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: id, OwnerID: owner, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: id, OwnerID: owner, ProjectID: project, SnapshotID: snapshot, Target: "wasip1-wasm", Status: "complete"}))
 	name, data := compressedArtifact(t, module)
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: id, ArtifactName: name, Artifact: data, Log: []byte("ok")}))
+	builds.put(owner, id, app.WASMBuildArtifact{Name: name, Data: data, Found: true})
 	return id
 }
 
@@ -67,9 +69,10 @@ func waitRuns(t *testing.T, runs *app.Runs) {
 }
 
 func TestRunsExecuteACompletedBuildAndKeepItsOutput(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
-	runs := app.NewRuns(store, runnertest.NewFake())
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
+	runs := app.NewRuns(store, builds, runnertest.NewFake())
 
 	id, err := runs.Request(context.Background(), "alice", build, []string{"one"})
 	must(t, err)
@@ -88,9 +91,10 @@ func TestRunsExecuteACompletedBuildAndKeepItsOutput(t *testing.T) {
 }
 
 func TestRunsRefuseWhatCannotRun(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
-	runs := app.NewRuns(store, runnertest.NewFake())
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
+	runs := app.NewRuns(store, builds, runnertest.NewFake())
 	ctx := context.Background()
 
 	if _, err := runs.Request(ctx, "bob", build, nil); err == nil || err.Error() != "completed WASM build not found" {
@@ -120,10 +124,11 @@ func (b *blockingRunner) Run(context.Context, []byte, app.RunInput) (app.RunResu
 }
 
 func TestRunsLimitConcurrentRunsToTwo(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
 	runner := &blockingRunner{started: make(chan struct{}, 3), release: make(chan struct{})}
-	runs := app.NewRuns(store, runner)
+	runs := app.NewRuns(store, builds, runner)
 	ctx := context.Background()
 
 	first, err := runs.Request(ctx, "alice", build, nil)
@@ -148,9 +153,10 @@ func TestRunsLimitConcurrentRunsToTwo(t *testing.T) {
 }
 
 func TestRunsKeepAtMostOneHundredRuns(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
-	runs := app.NewRuns(store, runnertest.NewFake())
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
+	runs := app.NewRuns(store, builds, runnertest.NewFake())
 	var ids []string
 	for i := 0; i < 130; i++ {
 		var id string
@@ -185,10 +191,11 @@ func TestRunsKeepAtMostOneHundredRuns(t *testing.T) {
 }
 
 func TestRunsHoldTheirLimitsUnderManyCallers(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
 	runner := &blockingRunner{started: make(chan struct{}, 64), release: make(chan struct{})}
-	runs := app.NewRuns(store, runner)
+	runs := app.NewRuns(store, builds, runner)
 	var accepted, refused int
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -213,12 +220,13 @@ func TestRunsHoldTheirLimitsUnderManyCallers(t *testing.T) {
 }
 
 func TestRunsRecordAPanicAsAFailedRun(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
 	module := []byte("\x00asm\x01\x00\x00\x00panics")
-	build := completedBuild(t, store, "alice", "build-1", module)
+	build := completedBuild(t, store, builds, "alice", "build-1", module)
 	runner := runnertest.NewFake()
 	runner.Handle(module, func(app.RunInput) (app.RunResult, error) { panic("boom") })
-	runs := app.NewRuns(store, runner)
+	runs := app.NewRuns(store, builds, runner)
 
 	id, err := runs.Request(context.Background(), "alice", build, nil)
 	must(t, err)
@@ -234,9 +242,10 @@ func TestRunsRecordAPanicAsAFailedRun(t *testing.T) {
 }
 
 func TestRunsRecordARunnerFailure(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Spins)
-	runs := app.NewRuns(store, runnertest.NewFake())
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Spins)
+	runs := app.NewRuns(store, builds, runnertest.NewFake())
 	id, err := runs.Request(context.Background(), "alice", build, nil)
 	must(t, err)
 	waitRuns(t, runs)
@@ -247,10 +256,11 @@ func TestRunsRecordARunnerFailure(t *testing.T) {
 }
 
 func TestDrainRefusesNewRunsAndWaitsForActiveOnes(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
 	runner := &blockingRunner{started: make(chan struct{}, 1), release: make(chan struct{})}
-	runs := app.NewRuns(store, runner)
+	runs := app.NewRuns(store, builds, runner)
 	id, err := runs.Request(context.Background(), "alice", build, nil)
 	must(t, err)
 	<-runner.started
@@ -285,10 +295,11 @@ func TestDrainRefusesNewRunsAndWaitsForActiveOnes(t *testing.T) {
 }
 
 func TestDrainGivesUpWhenItsContextEnds(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
 	runner := &blockingRunner{started: make(chan struct{}, 1), release: make(chan struct{})}
-	runs := app.NewRuns(store, runner)
+	runs := app.NewRuns(store, builds, runner)
 	_, err := runs.Request(context.Background(), "alice", build, nil)
 	must(t, err)
 	<-runner.started
@@ -306,9 +317,10 @@ type unavailableRunner struct{ blockingRunner }
 func (*unavailableRunner) Available() bool { return false }
 
 func TestRunsReportAnUnavailableRuntime(t *testing.T) {
+	builds := newStoredBuilds()
 	store := storetest.NewMemory()
-	build := completedBuild(t, store, "alice", "build-1", runnertest.Hello)
-	runs := app.NewRuns(store, &unavailableRunner{})
+	build := completedBuild(t, store, builds, "alice", "build-1", runnertest.Hello)
+	runs := app.NewRuns(store, builds, &unavailableRunner{})
 	_, err := runs.Request(context.Background(), "alice", build, nil)
 	if err == nil || !strings.HasPrefix(err.Error(), "Wasmtime runtime unavailable") {
 		t.Fatalf("error = %v", err)

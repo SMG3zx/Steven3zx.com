@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 
+	buildsservice "janus/internal/services/builds"
 	identityservice "janus/internal/services/identity"
 	projectsservice "janus/internal/services/projects"
 )
@@ -18,7 +19,8 @@ const migrateUsage = `usage: janus migrate split
 split  copies the tables each service now owns out of JANUS_DATABASE_PATH
        (data/janus.db): the identity tables into a new
        JANUS_IDENTITY_DATABASE_PATH (data/identity.db) and the project tables
-       into a new JANUS_PROJECTS_DATABASE_PATH (data/projects.db). A service
+       into a new JANUS_PROJECTS_DATABASE_PATH (data/projects.db), and the WASM
+       build tables into a new JANUS_BUILDS_DATABASE_PATH (data/builds.db). A service
        whose database exists is skipped, so running it again only does what is
        left. Stop janus first.`
 
@@ -43,6 +45,9 @@ func runMigrate(ctx context.Context, args []string, out io.Writer) error {
 		}},
 		{"projects", cfg.ProjectsDatabasePath, func(ctx context.Context, legacy, path string) (map[string]int, error) {
 			return projectsservice.Split(ctx, legacy, path)
+		}},
+		{"builds", cfg.BuildsDatabasePath, func(ctx context.Context, legacy, path string) (map[string]int, error) {
+			return buildsservice.Split(ctx, legacy, path)
 		}},
 	}
 	for _, step := range splits {

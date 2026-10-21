@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"strings"
 
 	_ "turso.tech/database/tursogo"
 
@@ -55,7 +54,7 @@ func Split(ctx context.Context, legacy, path string) (SplitResult, error) {
 	result := SplitResult{}
 	err = tursodb.InTx(ctx, target, func(tx *sql.Tx) error {
 		for _, table := range splitTables {
-			n, err := copyTable(ctx, source, tx, table.name, table.columns)
+			n, err := tursodb.CopyTable(ctx, source, tx, table.name, table.columns)
 			if err != nil {
 				return fmt.Errorf("copy %s: %w", table.name, err)
 			}
@@ -96,32 +95,6 @@ func Split(ctx context.Context, legacy, path string) (SplitResult, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-func copyTable(ctx context.Context, source *sql.DB, tx *sql.Tx, table, columns string) (int, error) {
-	rows, err := source.QueryContext(ctx, `SELECT `+columns+` FROM `+table)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-	width := strings.Count(columns, ",") + 1
-	insert := `INSERT INTO ` + table + `(` + columns + `) VALUES(` + strings.TrimSuffix(strings.Repeat("?,", width), ",") + `)`
-	n := 0
-	for rows.Next() {
-		values := make([]any, width)
-		pointers := make([]any, width)
-		for i := range values {
-			pointers[i] = &values[i]
-		}
-		if err := rows.Scan(pointers...); err != nil {
-			return n, err
-		}
-		if _, err := tx.ExecContext(ctx, insert, values...); err != nil {
-			return n, err
-		}
-		n++
-	}
-	return n, rows.Err()
 }
 
 // NeedsSplit reports whether projects.db at path is missing while the

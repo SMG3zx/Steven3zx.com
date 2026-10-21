@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/buildertest"
+	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/checktest"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
@@ -29,14 +28,14 @@ func (d agentDeployer) Deploy(context.Context, string, string, string, string) e
 func (d agentDeployer) Stop(context.Context, string, string, string) error { return nil }
 
 // appCheckFailed is the Check of a WASM build whose tests failed.
-func appCheckFailed() app.CheckResult {
-	return app.CheckResult{Passed: false, Log: []byte("test failed\n")}
+func appCheckFailed() buildstest.Result {
+	return buildstest.Result{Passed: false, Log: "test failed\n"}
 }
 
 type deployApp struct {
 	handler     http.Handler
 	store       app.Store
-	checks      *checktest.Fake
+	checks      *buildstest.Fake
 	audit       *audittest.Recorder
 	deployments *app.Deployments
 	builds      *app.Builds
@@ -57,8 +56,8 @@ func newDeployApp(t *testing.T, deployer agentDeployer) *deployApp {
 	gh := app.NewGitHub(identities, catalog)
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(catalog)
-	checks := checktest.NewFake()
-	builds := app.NewBuilds(store, catalog, buildertest.NewFake(), checks, audit)
+	checks := buildstest.NewFake(store)
+	builds := app.NewBuilds(store, catalog, checks)
 	deployments := app.NewDeployments(store, deployer, audit)
 	authorization, err := app.NewPolicy(ctx)
 	if err != nil {
@@ -66,7 +65,7 @@ func newDeployApp(t *testing.T, deployer agentDeployer) *deployApp {
 	}
 	handler := New(Config{
 		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds,
-		Accounts: app.NewAccounts(store, identities, catalog, builds), Deployments: deployments,
+		Accounts: app.NewAccounts(store, identities, catalog).WithBuilds(builds), Deployments: deployments,
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
@@ -114,9 +113,6 @@ func (a *deployApp) buildRust(t *testing.T) string {
 	defer cancel()
 	id, err := a.builds.Request(ctx, app.NewBuild{OwnerID: a.project.OwnerID, ProjectID: a.project.ID, Target: "wasm32-unknown-unknown"})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := a.builds.Wait(ctx); err != nil {
 		t.Fatal(err)
 	}
 	return id

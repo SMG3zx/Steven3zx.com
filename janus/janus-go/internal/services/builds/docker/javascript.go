@@ -1,4 +1,4 @@
-package dockerbuild
+package docker
 
 import (
 	"errors"

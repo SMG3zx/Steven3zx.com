@@ -57,6 +57,7 @@ func TestMigrateSplitCopiesTheConfiguredDatabase(t *testing.T) {
 	t.Setenv("JANUS_DATABASE_PATH", legacy)
 	t.Setenv("JANUS_IDENTITY_DATABASE_PATH", filepath.Join(dir, "identity.db"))
 	t.Setenv("JANUS_PROJECTS_DATABASE_PATH", filepath.Join(dir, "projects.db"))
+	t.Setenv("JANUS_BUILDS_DATABASE_PATH", filepath.Join(dir, "builds.db"))
 
 	var out bytes.Buffer
 	if err := runMigrate(context.Background(), []string{"split"}, &out); err != nil {
@@ -71,7 +72,7 @@ func TestMigrateSplitCopiesTheConfiguredDatabase(t *testing.T) {
 	if err := runMigrate(context.Background(), []string{"split"}, &out); err != nil {
 		t.Fatalf("running the split again = %v", err)
 	}
-	if !strings.Contains(out.String(), "identity: ") || strings.Count(out.String(), "exists, skipped") != 2 {
+	if !strings.Contains(out.String(), "identity: ") || strings.Count(out.String(), "exists, skipped") != 3 {
 		t.Fatalf("a second run did something:\n%s", out.String())
 	}
 }
@@ -99,6 +100,7 @@ func TestTheIdentityServiceWaitsForTheSplit(t *testing.T) {
 	t.Setenv("JANUS_DATABASE_PATH", legacy)
 	t.Setenv("JANUS_IDENTITY_DATABASE_PATH", identity)
 	t.Setenv("JANUS_PROJECTS_DATABASE_PATH", filepath.Join(t.TempDir(), "projects.db"))
+	t.Setenv("JANUS_BUILDS_DATABASE_PATH", filepath.Join(t.TempDir(), "builds.db"))
 	if err := runMigrate(ctx, []string{"split"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +133,7 @@ func TestTheProjectsServiceWaitsForTheSplit(t *testing.T) {
 	t.Setenv("JANUS_DATABASE_PATH", legacy)
 	t.Setenv("JANUS_IDENTITY_DATABASE_PATH", filepath.Join(t.TempDir(), "identity.db"))
 	t.Setenv("JANUS_PROJECTS_DATABASE_PATH", projects)
+	t.Setenv("JANUS_BUILDS_DATABASE_PATH", filepath.Join(filepath.Dir(projects), "builds.db"))
 	if err := runMigrate(ctx, []string{"split"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}

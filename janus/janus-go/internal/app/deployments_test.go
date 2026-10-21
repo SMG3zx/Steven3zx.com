@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/buildertest"
+	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/checktest"
 	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
@@ -82,7 +81,7 @@ type deployFixture struct {
 	store       app.Store
 	catalog     *catalogtest.Memory
 	audit       *audittest.Recorder
-	checks      *checktest.Fake
+	checks      *buildstest.Fake
 	deployer    *fakeDeployer
 	deployments *app.Deployments
 	build       string
@@ -96,22 +95,14 @@ func newDeployFixture(t *testing.T) *deployFixture {
 	store, catalog := storetest.NewMemory(), catalogtest.NewMemory()
 	importedProject(t, catalog, store, "owner", "project", "Rust")
 	audit := audittest.NewRecorder()
-	checks := checktest.NewFake()
-	builds := app.NewBuilds(store, catalog, buildertest.NewFake(), checks, audit)
+	checks := buildstest.NewFake(store)
+	builds := app.NewBuilds(store, catalog, checks)
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "agent", OwnerID: "owner", Name: "laptop", Tag: "tag:acct-owner", KeyID: "key"}))
 	build, err := builds.Request(ctx, app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget})
 	must(t, err)
-	waitBuilds(t, builds)
 	deployer := &fakeDeployer{}
 	return &deployFixture{t: t, store: store, catalog: catalog, audit: audit, checks: checks, deployer: deployer,
 		deployments: app.NewDeployments(store, deployer, audit), build: build}
-}
-
-func waitBuilds(t *testing.T, builds *app.Builds) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	must(t, builds.Wait(ctx))
 }
 
 func (f *deployFixture) wait() {
@@ -162,11 +153,10 @@ func TestDeployQueuesAPassedBuildAndEndsHealthy(t *testing.T) {
 func TestDeployRefusesFailingChecksUnlessDeployAnyway(t *testing.T) {
 	f := newDeployFixture(t)
 	// The fixture's build passed its Check; a second build of the Project gets a failing one.
-	f.checks.Answer(app.CheckResult{Passed: false, Log: []byte("test failed\n")})
-	builds := app.NewBuilds(f.store, f.catalog, buildertest.NewFake(), f.checks, f.audit)
+	f.checks.Answer(buildstest.Result{Passed: false, Log: "test failed\n"})
+	builds := app.NewBuilds(f.store, f.catalog, f.checks)
 	build, err := builds.Request(context.Background(), app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget})
 	must(t, err)
-	waitBuilds(t, builds)
 	f.build = build
 
 	if _, err := f.request(false); err == nil || !strings.Contains(err.Error(), "checks failed") {
@@ -183,10 +173,9 @@ func TestDeployRefusesFailingChecksUnlessDeployAnyway(t *testing.T) {
 func TestDeployKeepsTheCheckErrorAndAllowsDeployAnyway(t *testing.T) {
 	f := newDeployFixture(t)
 	f.checks.Break(errors.New("container crashed"))
-	builds := app.NewBuilds(f.store, f.catalog, buildertest.NewFake(), f.checks, f.audit)
+	builds := app.NewBuilds(f.store, f.catalog, f.checks)
 	build, err := builds.Request(context.Background(), app.NewBuild{OwnerID: "owner", ProjectID: "project", Target: rustTarget})
 	must(t, err)
-	waitBuilds(t, builds)
 
 	check, found, err := f.store.FindCheck(context.Background(), build, "owner")
 	must(t, err)

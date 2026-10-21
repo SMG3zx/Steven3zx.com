@@ -8,28 +8,6 @@ import (
 	"janus/internal/domain/usage"
 )
 
-// BuildRequest asks for a workspace to be compiled for a Target. Entrypoint is
-// the file the Account confirmed, relative to the workspace root; adapters that
-// need one find their own when it is empty.
-type BuildRequest struct{ Workspace, Target, Entrypoint string }
-
-// BuildResult is a finished build. Artifact is a compressed ZIP of the WASM
-// modules, and Log is the bounded compiler output. Log is set on failure too.
-type BuildResult struct {
-	Name          string
-	Artifact, Log []byte
-}
-
-// ManifestError means the workspace lacks the manifest its Template requires.
-// Message is the sentence an Account sees; Err is the underlying cause.
-type ManifestError struct {
-	Message string
-	Err     error
-}
-
-func (e *ManifestError) Error() string { return e.Message + ": " + e.Err.Error() }
-func (e *ManifestError) Unwrap() error { return e.Err }
-
 // RunResult is what a WASM Run produced. Stdout and Stderr are bounded, and
 // StdoutTruncated reports that Stdout was cut. Usage is filled in whenever the
 // module started running, including when it traps, so a Run that exhausts its
@@ -128,18 +106,6 @@ type TailnetNode struct {
 	Addresses       []string
 	Online          bool
 	LastSeen        time.Time
-}
-
-// CheckRequest asks for the checks of a compiled workspace. The workspace is the
-// same source tree the build compiled.
-type CheckRequest struct{ Workspace string }
-
-// CheckResult is the outcome of a Check. Passed is false when a check or test
-// command failed. NoTests is true when the Language's test command ran no tests,
-// so the Check rests on the compile-level check alone. Log is bounded output.
-type CheckResult struct {
-	Passed, NoTests bool
-	Log             []byte
 }
 
 // HostedDeployment is a Deployment as an Agent serves it: the module, its

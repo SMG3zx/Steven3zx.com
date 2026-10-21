@@ -18,19 +18,9 @@ func testChecksAndDeployments(t *testing.T, store app.Store) {
 	must(t, store.AddProject(ctx, app.ProjectRef{ID: "p1", OwnerID: "alice"}))
 	snapshot := ReadySnapshot(t, store, "alice", "p1", "one-snapshot", "Rust")
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "laptop", OwnerID: "alice", Name: "laptop", Tag: "tag:acct-alice", KeyID: "key-alice"}))
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "wasm32-unknown-unknown", Status: "complete"}))
 
-	var err error
-	if err = store.StartCheck(ctx, app.StartCheck{BuildID: "b1"}); err == nil {
-		t.Fatal("a check started for a build that has not completed")
-	}
-	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b1", From: "queued", To: "building", Progress: 5}))
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b1", ArtifactName: "wasm.zip", Artifact: []byte("zip")}))
-
-	must(t, store.StartCheck(ctx, app.StartCheck{BuildID: "b1"}))
-	if err = store.StartCheck(ctx, app.StartCheck{BuildID: "b1"}); err == nil {
-		t.Fatal("a build had two checks")
-	}
+	must(t, store.ApplyCheck(ctx, app.CheckChange{BuildID: "b1", OwnerID: "alice", Status: app.CheckRunning}))
 	check, found, err := store.FindCheck(ctx, "b1", "alice")
 	must(t, err)
 	if !found || check.Status != app.CheckRunning {
@@ -39,13 +29,7 @@ func testChecksAndDeployments(t *testing.T, store app.Store) {
 	if _, found, _ = store.FindCheck(ctx, "b1", "bob"); found {
 		t.Fatal("another Account found the check")
 	}
-	if err = store.FinishCheck(ctx, app.FinishCheck{BuildID: "b1", Status: "maybe"}); err == nil {
-		t.Fatal("a check finished as an unknown status")
-	}
-	must(t, store.FinishCheck(ctx, app.FinishCheck{BuildID: "b1", Status: app.CheckFailed, Error: "container crashed", Log: "log"}))
-	if err = store.FinishCheck(ctx, app.FinishCheck{BuildID: "b1", Status: app.CheckPassed}); err == nil {
-		t.Fatal("a finished check finished again")
-	}
+	must(t, store.ApplyCheck(ctx, app.CheckChange{BuildID: "b1", OwnerID: "alice", Status: app.CheckFailed, Error: "container crashed", Log: "log"}))
 	check, _, err = store.FindCheck(ctx, "b1", "alice")
 	must(t, err)
 	if check.Status != app.CheckFailed || check.Error != "container crashed" || check.Log != "log" {
@@ -99,9 +83,7 @@ func testRedeployAndStop(t *testing.T, store app.Store) {
 	must(t, store.AddProject(ctx, app.ProjectRef{ID: "p9", OwnerID: "carol"}))
 	snapshot := ReadySnapshot(t, store, "carol", "p9", "nine-snapshot", "Rust")
 	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "desk", OwnerID: "carol", Name: "desk", Tag: "tag:acct-carol", KeyID: "key-carol"}))
-	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b9", OwnerID: "carol", ProjectID: "p9", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
-	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b9", From: "queued", To: "building", Progress: 5}))
-	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b9", ArtifactName: "wasm.zip", Artifact: []byte("zip")}))
+	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b9", OwnerID: "carol", ProjectID: "p9", SnapshotID: snapshot, Target: "wasm32-unknown-unknown", Status: "complete"}))
 
 	must(t, store.CreateDeployment(ctx, app.CreateDeployment{ID: "r1", OwnerID: "carol", ProjectID: "p9", BuildID: "b9", AgentID: "desk"}))
 	must(t, store.TransitionDeployment(ctx, app.DeploymentTransition{ID: "r1", From: "queued", To: "starting"}))

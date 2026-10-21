@@ -19,19 +19,20 @@ type fleetEnv struct {
 	*agentEnv
 	link    *agentlinktest.Loopback
 	fleet   *app.Fleet
+	builds  *storedBuilds
 	runtime *app.AgentRuntime
 	agentID string
 }
 
 func newFleetEnv(t *testing.T) *fleetEnv {
 	t.Helper()
-	env := &fleetEnv{agentEnv: newAgentEnv(t, "alice", "bob"), link: agentlinktest.NewLoopback()}
+	env := &fleetEnv{agentEnv: newAgentEnv(t, "alice", "bob"), link: agentlinktest.NewLoopback(), builds: newStoredBuilds()}
 	t.Cleanup(func() { env.link.Close() })
 	enrollment := env.enroll(t, "alice", "laptop")
 	env.agentID = enrollment.AgentID
 	env.runtime = app.NewAgentRuntime(cgiRunner(), localstatetest.NewMemory(), "/home/alice/janus", time.Now)
 	env.link.Serve(env.addressOf(t, enrollment.AgentID), env.runtime)
-	env.fleet = app.NewFleet(env.store, env.tailnet, env.link, env.audit)
+	env.fleet = app.NewFleet(env.store, env.tailnet, env.link, env.audit).WithBuilds(env.builds)
 	must(t, env.fleet.Reconcile(context.Background()))
 	return env
 }
@@ -108,7 +109,7 @@ func TestFleetOnlyCommandsTheOwnersAgents(t *testing.T) {
 func TestFleetDeploysABuildAndRecordsItsUsageUnderTheOwner(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
-	build := completedBuild(t, env.store, "alice", "build-1", cgiModule)
+	build := completedBuild(t, env.store, env.builds, "alice", "build-1", cgiModule)
 	must(t, env.fleet.Deploy(ctx, "alice", env.agentID, "dep-1", build))
 	response, err := env.runtime.Serve(ctx, "dep-1", get("/hi"))
 	must(t, err)
@@ -137,7 +138,7 @@ func TestFleetDeploysABuildAndRecordsItsUsageUnderTheOwner(t *testing.T) {
 func TestFleetRefusesABuildThatCannotBeDeployed(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
-	build := completedBuild(t, env.store, "alice", "build-1", cgiModule)
+	build := completedBuild(t, env.store, env.builds, "alice", "build-1", cgiModule)
 	if err := env.fleet.Deploy(ctx, "bob", env.agentID, "dep-1", build); !errors.Is(err, app.ErrAgentNotFound) && err == nil {
 		t.Fatal("bob deployed alice's build")
 	}
@@ -152,7 +153,7 @@ func TestFleetRefusesABuildThatCannotBeDeployed(t *testing.T) {
 func TestFleetReportsAFailedProbeAsAnAgentError(t *testing.T) {
 	env := newFleetEnv(t)
 	ctx := context.Background()
-	build := completedBuild(t, env.store, "alice", "build-1", []byte("\x00asm\x01\x00\x00\x00unknown to the runner"))
+	build := completedBuild(t, env.store, env.builds, "alice", "build-1", []byte("\x00asm\x01\x00\x00\x00unknown to the runner"))
 	err := env.fleet.Deploy(ctx, "alice", env.agentID, "dep-1", build)
 	var refused *app.AgentError
 	if !errors.As(err, &refused) {

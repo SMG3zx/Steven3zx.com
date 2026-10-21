@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"janus/internal/app"
-	"janus/internal/domain/jobs"
 )
 
 // Memory is an app.Store that keeps its data in maps, for tests of callers that need
@@ -62,8 +61,7 @@ type memSnapshot struct{ app.SnapshotRef }
 
 type memBuild struct {
 	app.WASMBuild
-	ownerID  string
-	artifact []byte
+	ownerID string
 }
 
 // activeBuildStatuses are the statuses of a WASM build that has not finished.
@@ -203,57 +201,25 @@ func (m *Memory) deleteBuild(id string) {
 	}
 }
 
-// Jobs: WASM Builds and Resume.
+// WASM Builds, as the references Deployments need. The builds service owns
+// them; ApplyWASMBuild stores what it publishes, and a Build whose Project or
+// Snapshot is not referenced is not kept.
 
-func (m *Memory) CreateWASMBuild(_ context.Context, build app.CreateWASMBuild) error {
+func (m *Memory) ApplyWASMBuild(_ context.Context, change app.WASMBuildChange) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s, ok := m.snapshots[build.SnapshotID]
-	p, known := m.projects[build.ProjectID]
-	if !known || p.ownerID != build.OwnerID || !ok || s.ProjectID != build.ProjectID {
-		return fail("project snapshot not found")
+	project, known := m.projects[change.ProjectID]
+	_, snapshotKnown := m.snapshots[change.SnapshotID]
+	if !known || project.ownerID != change.OwnerID || !snapshotKnown {
+		return nil
 	}
-	if _, exists := m.builds[build.ID]; exists {
-		return constraint("UNIQUE constraint failed: project_wasm_builds.id")
-	}
-	for _, other := range m.builds {
-		if other.ProjectID == build.ProjectID && isIn(other.Status, activeBuildStatuses) {
-			return constraint("UNIQUE constraint failed: project_wasm_builds.project_id")
-		}
-	}
-	now := m.now()
-	m.builds[build.ID] = &memBuild{ownerID: build.OwnerID, WASMBuild: app.WASMBuild{ID: build.ID, ProjectID: build.ProjectID,
-		SnapshotID: build.SnapshotID, Target: build.Target, Status: "queued", CreatedAt: now, UpdatedAt: now}}
-	return nil
-}
-
-func (m *Memory) TransitionWASMBuild(_ context.Context, t app.JobTransition) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	build, ok := m.builds[t.ID]
+	build, ok := m.builds[change.ID]
 	if !ok {
-		return fail("job not found")
+		build = &memBuild{ownerID: change.OwnerID, WASMBuild: app.WASMBuild{ID: change.ID, ProjectID: change.ProjectID,
+			SnapshotID: change.SnapshotID, Target: change.Target}}
+		m.builds[change.ID] = build
 	}
-	if !jobs.WASM.CanMove(t.From, t.To) {
-		return fail("WASM build cannot move from %s to %s", t.From, t.To)
-	}
-	if build.Status != t.From {
-		return fail("WASM build changed while it was being updated")
-	}
-	build.Status, build.Progress, build.Error, build.Log, build.UpdatedAt = t.To, t.Progress, t.Error, t.Log, m.now()
-	return nil
-}
-
-func (m *Memory) CompleteWASMBuild(_ context.Context, complete app.CompleteWASMBuild) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	build, ok := m.builds[complete.ID]
-	if !ok || !isIn(build.Status, activeBuildStatuses) {
-		return fail("WASM build not found")
-	}
-	build.Status, build.Progress, build.Error = "complete", 100, ""
-	build.ArtifactName, build.artifact, build.Log = complete.ArtifactName, append([]byte(nil), complete.Artifact...), string(complete.Log)
-	build.UpdatedAt = m.now()
+	build.Status, build.Error = change.Status, change.Error
 	return nil
 }
 
@@ -265,38 +231,6 @@ func (m *Memory) FindWASMBuild(_ context.Context, id, ownerID string) (app.WASMB
 		return app.WASMBuild{}, false, nil
 	}
 	return build.WASMBuild, true, nil
-}
-
-func (m *Memory) FindWASMBuildArtifact(_ context.Context, id, ownerID string) (app.WASMBuildArtifact, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	build, ok := m.builds[id]
-	if !ok || build.ownerID != ownerID || build.Status != "complete" {
-		return app.WASMBuildArtifact{}, nil
-	}
-	return app.WASMBuildArtifact{Name: build.ArtifactName, Data: append([]byte(nil), build.artifact...), Found: true}, nil
-}
-
-func (m *Memory) ListResumableBuilds(_ context.Context) ([]app.ResumableBuild, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var queued []*memBuild
-	for _, build := range m.builds {
-		if build.Status == "queued" {
-			queued = append(queued, build)
-		}
-	}
-	sort.Slice(queued, func(i, j int) bool { return queued[i].CreatedAt < queued[j].CreatedAt })
-	var builds []app.ResumableBuild
-	for _, build := range queued {
-		s, ok := m.snapshots[build.SnapshotID]
-		if !ok {
-			continue
-		}
-		builds = append(builds, app.ResumableBuild{JobID: build.ID, OwnerID: build.ownerID, ProjectID: build.ProjectID,
-			SnapshotID: build.SnapshotID, Target: build.Target, Language: s.Language})
-	}
-	return builds, nil
 }
 
 func (m *Memory) ListActiveJobs(_ context.Context, ownerID string) ([]app.ActiveJob, error) {

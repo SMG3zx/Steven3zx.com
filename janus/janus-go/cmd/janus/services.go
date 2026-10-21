@@ -12,7 +12,8 @@ import (
 
 	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/auditnats"
-	"janus/internal/adapters/dockerbuild"
+	"janus/internal/adapters/buildevents"
+	"janus/internal/adapters/buildsnats"
 	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
@@ -24,6 +25,8 @@ import (
 	"janus/internal/app"
 	"janus/internal/platform/natsx"
 	auditservice "janus/internal/services/audit"
+	buildsservice "janus/internal/services/builds"
+	"janus/internal/services/builds/docker"
 	identityservice "janus/internal/services/identity"
 	projectsservice "janus/internal/services/projects"
 )
@@ -53,14 +56,18 @@ type application struct {
 	projectsService *projectsservice.Service
 	catalog         app.Catalog
 	projectEvents   *projectevents.Events
-	identity        *app.Identity
-	projects        *app.Projects
-	github          *app.GitHub
-	agents          *app.Agents
-	tailnet         app.Tailnet
-	tailnode        *tailnode.Node
-	agentLink       *agentgrpc.Link
-	fleet           *app.Fleet
+	// buildsService owns builds.db and runs WASM Builds; buildEvents applies its
+	// events to the Store, and builds is the single process's use of it.
+	buildsService *buildsservice.Service
+	buildEvents   *buildevents.Events
+	identity      *app.Identity
+	projects      *app.Projects
+	github        *app.GitHub
+	agents        *app.Agents
+	tailnet       app.Tailnet
+	tailnode      *tailnode.Node
+	agentLink     *agentgrpc.Link
+	fleet         *app.Fleet
 	// stopFleet ends the Fleet's reconcile loop; fleetDone closes when it has.
 	stopFleet      context.CancelFunc
 	fleetDone      chan struct{}
@@ -173,17 +180,20 @@ func (a *application) groups() []group {
 				a.imports = app.NewImports(a.catalog)
 				return nil
 			}},
-			{name: "builds", start: a.startBuilds, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("drain WASM builds", a.builds.Drain(ctx))
+			{name: "builds service", start: a.startBuildsService, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("stop the builds service", a.buildsService.Stop(ctx))
+			})},
+			{name: "builds", start: a.startBuilds},
+			{name: "build events", start: a.startBuildEvents, stop: a.tracked(func(ctx context.Context) error {
+				return wrap("stop applying build events", a.buildEvents.Stop(ctx))
 			})},
 			{name: "project events", start: a.startProjectEvents, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("stop applying project events", a.projectEvents.Stop(ctx))
 			})},
-			{name: "resume", start: a.resumeInterruptedJobs},
 		}},
 		{name: "runtime", components: []component{
 			{name: "runs", start: func(context.Context) error {
-				a.runs = app.NewRuns(a.store, wasmtime.Wasmtime{})
+				a.runs = app.NewRuns(a.store, a.builds, wasmtime.Wasmtime{})
 				return nil
 			}, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain WASM runtime", a.runs.Drain(ctx))
@@ -194,7 +204,7 @@ func (a *application) groups() []group {
 			})},
 			// Accounts come last in runtime: deleting one stops its Deployments first.
 			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog, a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
+				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog).WithBuilds(a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
 				return nil
 			}},
 		}},
@@ -356,22 +366,59 @@ func (a *application) startIdentityService(ctx context.Context) error {
 	return nil
 }
 
-func (a *application) startBuilds(context.Context) error {
-	ctx := a.startCtx
-	if err := dockerbuild.EnsureRunning(ctx); err != nil {
+// startBuildsService starts the builds service on builds.db. It refuses to start
+// while janus.db still holds WASM Builds that were never copied out, because they
+// would not run; `janus migrate split` copies them. Before it starts, the Docker
+// builder images are made ready, as the builds compile in them.
+func (a *application) startBuildsService(ctx context.Context) error {
+	cfg := a.settings
+	needed, err := buildsservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.BuildsDatabasePath)
+	if err != nil {
+		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
+	}
+	if needed {
+		return fmt.Errorf("%s holds WASM Builds that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.BuildsDatabasePath)
+	}
+	if err := docker.EnsureRunning(a.startCtx); err != nil {
 		return fmt.Errorf("ensure Docker Engine is running: %w", err)
 	}
 	a.logger.Info("Docker daemon is ready")
-	images := dockerbuild.Images{Rust: a.settings.WASMBuilderImage, Go: a.settings.GoWASMBuilderImage, JavaScript: a.settings.JSWASMBuilderImage}
-	built, err := dockerbuild.PrepareImages(ctx, images)
+	images := docker.Images{Rust: cfg.WASMBuilderImage, Go: cfg.GoWASMBuilderImage, JavaScript: cfg.JSWASMBuilderImage}
+	built, err := docker.PrepareImages(a.startCtx, images)
 	if err != nil {
 		return fmt.Errorf("prepare WASM builder images: %w", err)
 	}
 	for _, image := range built {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
-	docker := dockerbuild.NewDocker(images)
-	a.builds = app.NewBuilds(a.store, a.catalog, docker, docker, a.audit)
+	compiler := docker.NewDocker(images)
+	service := buildsservice.New(buildsservice.Config{DatabasePath: cfg.BuildsDatabasePath, Compile: compiler.Build, Check: compiler.Check})
+	if err := service.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("start the builds service: %w", err)
+	}
+	a.buildsService = service
+	return nil
+}
+
+// startBuilds makes the WASM Builds use case, which asks the builds service over
+// NATS and reads the Artifacts from the artifacts store.
+func (a *application) startBuilds(ctx context.Context) error {
+	client, err := buildsnats.New(ctx, a.nats.Conn())
+	if err != nil {
+		return fmt.Errorf("open the artifacts store: %w", err)
+	}
+	a.builds = app.NewBuilds(a.store, a.catalog, client)
+	return nil
+}
+
+// startBuildEvents applies the builds service's events to the Store, from where
+// it left off, so Deployments see each Build's and Check's state.
+func (a *application) startBuildEvents(ctx context.Context) error {
+	events := buildevents.New(a.store)
+	if err := events.Start(ctx, a.nats.Conn()); err != nil {
+		return fmt.Errorf("apply build events: %w", err)
+	}
+	a.buildEvents = events
 	return nil
 }
 
@@ -383,18 +430,6 @@ func (a *application) startDeployments(context.Context) error {
 		deployer = a.fleet
 	}
 	a.deployments = app.NewDeployments(a.store, deployer, a.audit)
-	return nil
-}
-
-// resumeInterruptedJobs restarts the WASM builds that the previous shutdown
-// interrupted. It runs before the routes accept requests. Imports are jobs of
-// the projects service, which JetStream hands out again by itself.
-func (a *application) resumeInterruptedJobs(context.Context) error {
-	builds, err := a.builds.Resume(a.startCtx)
-	if err != nil {
-		return fmt.Errorf("resume WASM builds: %w", err)
-	}
-	a.logger.Info("resumed interrupted jobs", zap.Int("wasm_builds", builds))
 	return nil
 }
 
@@ -526,7 +561,7 @@ func (a *application) startFleet(ctx context.Context) error {
 	}
 	a.tailnode = node
 	a.agentLink = agentgrpc.NewLink(node.Dial)
-	a.fleet = app.NewFleet(a.store, a.tailnet, a.agentLink, a.audit)
+	a.fleet = app.NewFleet(a.store, a.tailnet, a.agentLink, a.audit).WithBuilds(a.builds)
 	loopCtx, cancel := context.WithCancel(context.Background())
 	a.stopFleet, a.fleetDone = cancel, make(chan struct{})
 	go func() {

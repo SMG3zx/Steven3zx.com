@@ -47,6 +47,7 @@ type Run struct {
 // are active at once.
 type Runs struct {
 	store  Store
+	builds BuildArtifacts
 	runner Runner
 
 	active   atomic.Int32
@@ -57,10 +58,10 @@ type Runs struct {
 	runs map[string]Run
 }
 
-// NewRuns returns a Runs that reads Builds from store and runs their modules
-// with runner.
-func NewRuns(store Store, runner Runner) *Runs {
-	return &Runs{store: store, runner: runner, runs: map[string]Run{}}
+// NewRuns returns a Runs that reads Builds from store, their Artifacts from
+// builds, and runs their modules with runner.
+func NewRuns(store Store, builds BuildArtifacts, runner Runner) *Runs {
+	return &Runs{store: store, builds: builds, runner: runner, runs: map[string]Run{}}
 }
 
 // Request starts a Run of the completed Build buildID, which owner must own, and
@@ -90,7 +91,7 @@ func (r *Runs) Request(ctx context.Context, owner, buildID string, args []string
 			r.active.Add(-1)
 		}
 	}()
-	build, stored, err := runnableBuild(ctx, r.store, owner, buildID)
+	build, stored, err := runnableBuild(ctx, r.store, r.builds, owner, buildID)
 	if err != nil {
 		return "", err
 	}
@@ -222,7 +223,7 @@ func (r *Runs) complete(id, module string, result RunResult, err error) {
 
 // runnableBuild returns the owner's completed WASI build and its Artifact. Its
 // errors are meant for the Account, except a Store failure, which is passed on.
-func runnableBuild(ctx context.Context, store Store, owner, buildID string) (WASMBuild, WASMBuildArtifact, error) {
+func runnableBuild(ctx context.Context, store Store, builds BuildArtifacts, owner, buildID string) (WASMBuild, WASMBuildArtifact, error) {
 	build, found, err := store.FindWASMBuild(ctx, buildID, owner)
 	if err != nil && !IsReply(err) {
 		return WASMBuild{}, WASMBuildArtifact{}, err
@@ -235,7 +236,7 @@ func runnableBuild(ctx context.Context, store Store, owner, buildID string) (WAS
 	case build.Target != "wasm32-wasip1" && build.Target != "wasip1-wasm":
 		return WASMBuild{}, WASMBuildArtifact{}, errors.New("only WASI WebAssembly targets can run")
 	}
-	stored, err := store.FindWASMBuildArtifact(ctx, buildID, owner)
+	stored, err := builds.Artifact(ctx, owner, buildID)
 	if err != nil && !IsReply(err) {
 		return WASMBuild{}, WASMBuildArtifact{}, err
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"janus/internal/adapters/audittest"
+	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
@@ -32,19 +33,6 @@ const (
 	secondCommit   = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	entrypointPath = "cmd/server/main.go"
 )
-
-// e2eWASMBuilder builds any Rust workspace into a fixed Artifact.
-type e2eWASMBuilder struct{}
-
-func (e2eWASMBuilder) Build(_ context.Context, _ string, request app.BuildRequest) (app.BuildResult, error) {
-	if request.Target != "wasm32-unknown-unknown" {
-		return app.BuildResult{}, fmt.Errorf("unexpected target %q", request.Target)
-	}
-	if _, err := os.Stat(path.Join(request.Workspace, "Cargo.toml")); err != nil {
-		return app.BuildResult{}, err
-	}
-	return app.BuildResult{Name: "wasm-artifacts.zip", Artifact: []byte("playwright-wasm-archive"), Log: []byte("Finished release build")}, nil
-}
 
 func TestProjectBrowserActions(t *testing.T) {
 	pw, err := playwright.Run()
@@ -320,7 +308,7 @@ func TestProjectBrowserActions(t *testing.T) {
 
 func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, http.Handler) {
 	t.Helper()
-	catalog, identities, _, handler := startJanusWith(t, ctx, e2eWASMBuilder{})
+	catalog, identities, _, handler := startJanusWith(t, ctx)
 	return catalog, identities, handler
 }
 
@@ -329,7 +317,7 @@ func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Ide
 // in-memory Catalog, so a test can seed the Snapshot an Import would make;
 // the real projects service is tested through its adapter. It returns the
 // Catalog, the Identities, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (*catalogtest.Memory, app.Identities, *app.Builds, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, *app.Builds, http.Handler) {
 	t.Helper()
 	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"))
 	if err != nil {
@@ -352,9 +340,11 @@ func startJanusWith(t *testing.T, ctx context.Context, b app.Builder) (*catalogt
 	gh := app.NewGitHub(identities, catalog)
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(catalog)
-	builds := app.NewBuilds(store, catalog, b, nil, audit)
+	wasm := buildstest.NewFake(store)
+	wasm.Produce([]byte("playwright-wasm-archive"))
+	builds := app.NewBuilds(store, catalog, wasm)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog, builds),
+		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog).WithBuilds(builds),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
