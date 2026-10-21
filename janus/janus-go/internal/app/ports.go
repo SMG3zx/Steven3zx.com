@@ -3,7 +3,6 @@ package app
 
 import (
 	"context"
-	"time"
 )
 
 // Store is what callers use to read and write Janus data. It returns typed
@@ -44,43 +43,6 @@ type Store interface {
 	ListActiveJobs(ctx context.Context, ownerID string) ([]ActiveJob, error)
 	FindCheck(ctx context.Context, buildID, ownerID string) (check Check, found bool, err error)
 
-	// Deployments. A Project has at most one Deployment in flight, one that is
-	// queued or starting; CreateDeployment fails with a plain error while another
-	// one is. TransitionDeployment is a compare and swap on the state, following
-	// domain/deployments.
-	CreateDeployment(ctx context.Context, deployment CreateDeployment) error
-	TransitionDeployment(ctx context.Context, transition DeploymentTransition) error
-	FindDeployment(ctx context.Context, id, ownerID string) (deployment Deployment, found bool, err error)
-	// PromoteDeployment makes a starting Deployment healthy and stops the
-	// Project's other healthy Deployments with the reason it names, in one change.
-	// It returns the Deployments it stopped, with their Agents, so the Agents can
-	// be told. A Deployment that is not starting is refused.
-	PromoteDeployment(ctx context.Context, promotion PromoteDeployment) (superseded []Deployment, err error)
-	// ListDeployments returns the Owner's Deployments of a Project, newest first.
-	ListDeployments(ctx context.Context, projectID, ownerID string) ([]Deployment, error)
-
-	// Agents and Enrollment Codes. A code is stored by hash and can be consumed
-	// once; every Agent lookup is scoped to its owner.
-	CreateEnrollmentCode(ctx context.Context, code CreateEnrollmentCode) error
-	// ConsumeEnrollmentCode marks the code used and returns its owner, if the
-	// code exists, is unused and expires after now. Otherwise consumed is false and
-	// the code, if any, is left as it is.
-	ConsumeEnrollmentCode(ctx context.Context, codeHash string, now time.Time) (ownerID string, consumed bool, err error)
-	CreateAgent(ctx context.Context, agent CreateAgent) error
-	ListAgents(ctx context.Context, ownerID string) ([]AgentRecord, error)
-	FindAgent(ctx context.Context, id, ownerID string) (agent AgentRecord, found bool, err error)
-	DeleteAgent(ctx context.Context, id, ownerID string) (deleted bool, err error)
-	// ListAllAgents returns every Owner's Agents, oldest first. Only the control
-	// plane's own connection upkeep uses it.
-	ListAllAgents(ctx context.Context) ([]AgentRecord, error)
-
-	// Run Usage that Agents report. A run is kept once: recording a RunID again
-	// changes nothing. Usage outlives the Agent and the Deployment it ran for,
-	// and goes with the Account.
-	RecordRunUsage(ctx context.Context, record RunUsageRecord) error
-	// ListRunUsage returns the Owner's runs that match query, newest first.
-	ListRunUsage(ctx context.Context, query RunUsageQuery) ([]RunUsageRecord, error)
-
 	// DeleteAccount deletes an Account and everything it owns. Without
 	// cancelActiveJobs an Account with unfinished jobs is left untouched and the
 	// result lists those jobs.
@@ -116,6 +78,9 @@ type WASMBuilds interface {
 	// RetryBuild queues a new Build of a failed Build's Snapshot.
 	RetryBuild(ctx context.Context, owner, buildID string) (WASMBuild, error)
 	FindBuild(ctx context.Context, owner, buildID string) (WASMBuild, bool, error)
+	// FindCheck returns the Check of one of the Owner's Builds; found is false
+	// when the Build has none yet.
+	FindCheck(ctx context.Context, owner, buildID string) (Check, bool, error)
 	// Artifact returns the Artifact of a complete Build; Found is false when
 	// it has none.
 	Artifact(ctx context.Context, owner, buildID string) (WASMBuildArtifact, error)
@@ -124,10 +89,44 @@ type WASMBuilds interface {
 	DeleteOwner(ctx context.Context, owner string) error
 }
 
-// BuildArtifacts reads the Artifacts of an Account's WASM Builds, which Runs and
-// the Fleet deploy.
+// BuildArtifacts reads the Artifacts of an Account's WASM Builds, which Runs
+// read.
 type BuildArtifacts interface {
 	Artifact(ctx context.Context, owner, buildID string) (WASMBuildArtifact, error)
+}
+
+// Fleet is the fleet service as the single process uses it: enrollment of
+// Agents, the Agents on the tailnet, their Deployments and the Usage they report.
+// A request the service refuses fails with an error whose text is meant for the
+// Account, or with ErrAgentNotFound, ErrAgentUnreachable or an *AgentError. An
+// Agent or Deployment that is not the Owner's is absent.
+type Fleet interface {
+	IssueCode(ctx context.Context, owner string) (IssuedCode, error)
+	Enroll(ctx context.Context, code, name string) (Enrollment, error)
+	ListAgents(ctx context.Context, owner string) ([]AgentStatus, error)
+	// RemoveAgent deletes the Owner's Agent and takes its node off the tailnet.
+	// removed is false for an Agent the Owner does not have.
+	RemoveAgent(ctx context.Context, owner, agentID string) (removed bool, err error)
+	// AgentStatuses returns the last state each of the Owner's Agents reported,
+	// by Agent ID.
+	AgentStatuses(ctx context.Context, owner string) (map[string]AgentStatusReport, error)
+	PauseAgent(ctx context.Context, owner, agentID string) error
+	ResumeAgent(ctx context.Context, owner, agentID string) error
+	// Usage returns the Owner's recorded runs that match query, newest first.
+	Usage(ctx context.Context, query RunUsageQuery) ([]RunUsageRecord, error)
+	// CreateDeployment queues a Deployment and returns its ID.
+	CreateDeployment(ctx context.Context, deployment NewDeployment) (id string, err error)
+	// RollbackDeployment queues a Deployment of a stopped one's WASM Build.
+	RollbackDeployment(ctx context.Context, owner, id string) (string, error)
+	StopDeployment(ctx context.Context, owner, id string) error
+	FindDeployment(ctx context.Context, owner, id string) (deployment Deployment, found bool, err error)
+	// RevokeAgents takes the Owner's Agents off the tailnet and keeps their
+	// records. TeardownDeployments stops the Owner's running Deployments.
+	// DeleteOwner removes everything the Owner has in the service. Accounts calls
+	// them in that order when it deletes an Account, and each can be repeated.
+	RevokeAgents(ctx context.Context, owner string) error
+	TeardownDeployments(ctx context.Context, owner string) error
+	DeleteOwner(ctx context.Context, owner string) error
 }
 
 // Runner runs a WASI module under input.Limits. Limits.Timeout bounds the run,
@@ -194,37 +193,6 @@ type Audit interface {
 	Record(ctx context.Context, event AuditEvent)
 }
 
-// ControlTag is the tag of the control plane's own node on the tailnet.
-const ControlTag = "tag:ctrl"
-
-// Tailnet is the private network Agents join, run by a control server such as
-// Headscale. Janus asks it for the keys an Agent enrolls with and for the nodes
-// that joined, and removes a node to cut an Agent off. It never reaches an
-// Agent itself: that is a connection over the network, made by other code.
-//
-// Whoever implements Tailnet enforces one access rule: nodes tagged ControlTag
-// may open connections to every other tagged node, and no other connection is
-// allowed. So an Agent can reach neither the control plane nor another
-// Account's Agent, and enrolling an Account needs no change to the rule.
-//
-// An ID is whatever the control server calls a key or a node, as a string. A
-// key is single-use: once a node has joined with it, or after it is expired, a
-// second join fails. Removing or expiring something that does not exist is not
-// an error, so a retry after a partial failure finishes the job.
-type Tailnet interface {
-	// CreatePreAuthKey makes a single-use key that enrolls one node carrying tag,
-	// valid until expires.
-	CreatePreAuthKey(ctx context.Context, tag string, expires time.Time) (TailnetKey, error)
-	// ExpirePreAuthKey ends a key's validity at once. Nodes that already joined
-	// with it stay.
-	ExpirePreAuthKey(ctx context.Context, keyID string) error
-	// Nodes lists every node on the tailnet. Online reflects the control
-	// server's last report and may lag a disconnect by several seconds.
-	Nodes(ctx context.Context) ([]TailnetNode, error)
-	// DeleteNode removes a node, so it can no longer be reached.
-	DeleteNode(ctx context.Context, nodeID string) error
-}
-
 // LocalState is what an Agent keeps on its own machine, so that it serves the
 // same Deployments, paused or not, after a restart. It is safe for concurrent
 // use, and a pause written by another process using the same storage, such as
@@ -242,26 +210,4 @@ type LocalState interface {
 	// Paused reads the pause as last recorded through any handle on the same
 	// storage. It is false until SetPaused is first called.
 	Paused(ctx context.Context) (bool, error)
-}
-
-// AgentLink carries the control plane's commands to Agents over the tailnet
-// and their events back. It holds one connection per Agent.
-//
-// Connect keeps a connection open to the Agent at address, the IP address of
-// its tailnet node, until Disconnect, reconnecting whenever it drops.
-// Connecting an Agent that is already connected to the same address does
-// nothing; a new address replaces the old connection. Events from the Agent go
-// to events one at a time, in the order the Agent sent them, on a goroutine the
-// link owns. An Agent sends its AgentState first on every new connection.
-//
-// Send delivers one command and waits for the Agent's answer. It fails with an
-// error matching ErrAgentUnreachable when there is no connection or the
-// connection drops before the answer, and with an *AgentError when the Agent
-// refused the command. Close disconnects every Agent and waits for the link's
-// goroutines.
-type AgentLink interface {
-	Connect(agentID, address string, events func(AgentEvent))
-	Disconnect(agentID string)
-	Send(ctx context.Context, agentID string, command AgentCommand) error
-	Close() error
 }

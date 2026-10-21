@@ -22,14 +22,14 @@ func (a *Server) startDeployment(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.Deployments == nil {
+	if a.dependencies.Fleet == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Deployments are unavailable"})
 	}
 	var input deploymentInput
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "choose a WASM build and an Agent to deploy"})
 	}
-	id, err := a.dependencies.Deployments.Create(c.Request.Context(), app.NewDeployment{OwnerID: owner, ProjectID: c.Param("id"),
+	id, err := a.dependencies.Fleet.CreateDeployment(c.Request.Context(), app.NewDeployment{OwnerID: owner, ProjectID: c.Param("id"),
 		BuildID: input.BuildID, AgentID: input.AgentID, DeployAnyway: input.DeployAnyway})
 	if err != nil {
 		return jsonResponse(deploymentErrorStatus(err), map[string]string{"error": err.Error()})
@@ -44,15 +44,24 @@ func (a *Server) getDeployment(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.Deployments == nil {
+	if a.dependencies.Fleet == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Deployments are unavailable"})
 	}
-	deployment, found, err := a.dependencies.Deployments.Find(c.Request.Context(), owner, c.Param("id"))
+	deployment, found, err := a.dependencies.Fleet.FindDeployment(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return internalError()
 	}
 	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "deployment not found"})
+	}
+	if a.dependencies.Builds != nil {
+		check, ok, err := a.dependencies.Builds.Check(c.Request.Context(), owner, deployment.BuildID)
+		if err != nil {
+			return internalError()
+		}
+		if ok {
+			deployment.Check = &check
+		}
 	}
 	return jsonResponse(http.StatusOK, deployment)
 }
@@ -64,10 +73,10 @@ func (a *Server) rollbackDeployment(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.Deployments == nil {
+	if a.dependencies.Fleet == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Deployments are unavailable"})
 	}
-	id, err := a.dependencies.Deployments.Rollback(c.Request.Context(), owner, c.Param("id"))
+	id, err := a.dependencies.Fleet.RollbackDeployment(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return jsonResponse(deploymentErrorStatus(err), map[string]string{"error": err.Error()})
 	}
@@ -81,10 +90,10 @@ func (a *Server) stopDeployment(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	if a.dependencies.Deployments == nil {
+	if a.dependencies.Fleet == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Deployments are unavailable"})
 	}
-	if err := a.dependencies.Deployments.Stop(c.Request.Context(), owner, c.Param("id")); err != nil {
+	if err := a.dependencies.Fleet.StopDeployment(c.Request.Context(), owner, c.Param("id")); err != nil {
 		return jsonResponse(deploymentErrorStatus(err), map[string]string{"error": err.Error()})
 	}
 	return jsonResponse(http.StatusOK, map[string]string{"id": c.Param("id"), "state": "stopped"})

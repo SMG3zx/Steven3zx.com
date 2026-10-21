@@ -31,9 +31,7 @@ import (
 // environment variables.
 type Config struct {
 	// Addr is the listen address; "127.0.0.1:0" picks a free port.
-	Addr string
-	// Deployments queues Deployments of WASM builds. Nil refuses Deploy with 503.
-	Deployments    *app.Deployments
+	Addr           string
 	Authentication *app.Authentication
 	Authorization  *app.Policy
 	Audit          app.Audit
@@ -43,10 +41,10 @@ type Config struct {
 	Imports        *app.Imports
 	Builds         *app.Builds
 	Accounts       *app.Accounts
-	Agents         *app.Agents
-	// Fleet is nil when the control plane is not on the tailnet; pausing and
-	// resuming Agents then answers 503.
-	Fleet          *app.Fleet
+	// Fleet is the fleet service: Agents, their Deployments and their Usage. It is
+	// nil when the control plane is not on the tailnet; Agent and Deployment
+	// routes then answer 503.
+	Fleet          app.Fleet
 	Runs           *app.Runs
 	JWTExpiry      time.Duration
 	CookieSecure   bool

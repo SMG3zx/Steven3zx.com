@@ -4,52 +4,52 @@
   "description": "Follows one Deploy from its refusals, through the Agent handoff, to the state changes that end it. Covers ENG-108.",
   "steps": [
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 92,
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 218,
       "title": "Refusals come first",
-      "description": "`func (d *Deployments) Create` refuses an incomplete build, a running or failed Check, and an unknown Agent, before any record is written."
+      "description": "`func (s *Service) queue`. Every refusal is checked here, before anything is recorded: the Build, its Check and the Agent."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 280,
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 249,
       "title": "Up-front Agent check",
-      "description": "`d.deployer.Ready(` refuses a paused, offline or missing Agent before a Deployment is created."
+      "description": "`s.ready(`. The Agent must be connected and not paused before a Deployment is queued."
     },
     {
-      "file": "janus-go/internal/app/fleet.go",
-      "line": 178,
-      "title": "What Ready checks",
-      "description": "`func (f *Fleet) Ready` reports whether the Owner's Agent is connected and not paused."
+      "file": "janus-go/internal/services/fleet/link.go",
+      "line": 190,
+      "title": "What ready checks",
+      "description": "`func (s *Service) ready`. It reads what the Agent last reported over its connection: paused, offline, or ready."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 359,
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 290,
       "title": "The Deployment runs in the background",
-      "description": "`func (d *Deployments) run` runs on its own goroutine. The request has already returned queued."
+      "description": "`func (s *Service) run`. A goroutine the service owns hands the Deployment to its Agent until the Agent reports it healthy or refuses it."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 368,
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 299,
       "title": "Queued to starting",
-      "description": "`From: string(deployments.Queued)` moves the Deployment to starting. The Store compares the state it saw, so a concurrent change is detected."
+      "description": "`string(deployments.Queued)`. The first move of the state machine, a compare and swap in fleet.db."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 372,
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 157,
       "title": "The Agent handoff",
-      "description": "`d.deployer.Deploy(` hands the module to the Agent, and blocks until the Agent reports it healthy or refuses it."
+      "description": "`s.sendToAgent(`. The module and its limits go to the Agent as a Deploy command."
     },
     {
-      "file": "janus-go/internal/app/fleet.go",
-      "line": 207,
-      "title": "Fleet sends the command",
-      "description": "`func (f *Fleet) Deploy` sends the Deploy command over AgentLink, and the Agent answers with its state."
+      "file": "janus-go/internal/services/fleet/link.go",
+      "line": 171,
+      "title": "The command reaches the Agent",
+      "description": "`func (s *Service) sendToAgent`. It checks the Owner has the Agent, sends the command over the Agent link, and maps unreachable and refused to errors."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 398,
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 333,
       "title": "Every failure ends here",
-      "description": "`func (d *Deployments) fail` ends a Deployment as failed from whichever state it is in. It uses its own context, so a timeout cannot leave it in flight."
+      "description": "`func (s *Service) fail`. It moves the Deployment to failed from whichever state it is in, with its own context."
     },
     {
       "file": "janus-go/internal/domain/deployments/deployments.go",
@@ -58,16 +58,16 @@
       "description": "`func CanMove` says which moves are legal. The transitions themselves are listed in the machine map just above it."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/deployments.go",
-      "line": 72,
+      "file": "janus-go/internal/services/fleet/store.go",
+      "line": 264,
       "title": "Compare and swap in SQLite",
-      "description": "`func (s *Store) TransitionDeployment` writes the move only if the stored state is still the one the caller saw."
+      "description": "`func (s *Service) moveDeployment`. The move happens only while the Deployment is still in the state the caller saw."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/store.go",
-      "line": 257,
+      "file": "janus-go/internal/services/fleet/store.go",
+      "line": 70,
       "title": "The one-in-flight rule in the schema",
-      "description": "`CREATE UNIQUE INDEX IF NOT EXISTS one_inflight_deployment_per_project` backs the rule with a partial unique index, so the database enforces it too."
+      "description": "`CREATE UNIQUE INDEX one_inflight_deployment_per_project`. Two Deployments of one Project cannot be queued or starting at once."
     }
   ]
 }

@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 144,
+      "line": 145,
       "title": "The ordered table",
       "description": "`func (a *application) groups` lists the groups in order: foundation, identity, projects and builds, runtime, web. Adding a component is one entry here."
     },
@@ -29,7 +29,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 102,
+      "line": 103,
       "title": "The application's start",
       "description": "`func (a *application) Start` opens the telemetry and the store, then starts the groups through the lifecycle."
     },
@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 130,
+      "line": 131,
       "title": "The application's stop",
       "description": "`func (a *application) Stop` records the shutdown in a span and calls the lifecycle's stop."
     }

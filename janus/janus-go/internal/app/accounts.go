@@ -15,12 +15,11 @@ type BuildOwners interface {
 // its Projects, Snapshots, WASM Builds and Artifacts, its Provider Identities
 // and its GitHub Connection, and, when Agents are set, its Agents' tailnet nodes.
 type Accounts struct {
-	store       Store
-	identities  Identities
-	catalog     Catalog
-	builds      BuildOwners
-	agents      *Agents
-	deployments *Deployments
+	store      Store
+	identities Identities
+	catalog    Catalog
+	builds     BuildOwners
+	fleet      Fleet
 }
 
 // NewAccounts returns an Accounts that deletes what an Account owns through
@@ -36,17 +35,11 @@ func (a *Accounts) WithBuilds(builds BuildOwners) *Accounts {
 	return a
 }
 
-// WithAgents makes a deleted Account's Agents leave the tailnet too. It returns
-// a, so it chains onto NewAccounts.
-func (a *Accounts) WithAgents(agents *Agents) *Accounts {
-	a.agents = agents
-	return a
-}
-
-// WithDeployments makes a deleted Account's Deployments stop first. It returns
-// a, so it chains onto NewAccounts.
-func (a *Accounts) WithDeployments(deployments *Deployments) *Accounts {
-	a.deployments = deployments
+// WithFleet makes a deleted Account's Deployments stop, its Agents leave the
+// tailnet, and its records in the fleet service go. It returns a, so it chains
+// onto NewAccounts.
+func (a *Accounts) WithFleet(fleet Fleet) *Accounts {
+	a.fleet = fleet
 	return a
 }
 
@@ -79,13 +72,11 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	}
 	// Deployments stop while their Agents can still be reached, so before the
 	// Agents leave the tailnet.
-	if a.deployments != nil {
-		if err = a.deployments.Teardown(ctx, owner); err != nil {
+	if a.fleet != nil {
+		if err = a.fleet.TeardownDeployments(ctx, owner); err != nil {
 			return AccountDeleted{}, fmt.Errorf("stop the Account's Deployments: %w", err)
 		}
-	}
-	if a.agents != nil {
-		if err = a.agents.RevokeAll(ctx, owner); err != nil {
+		if err = a.fleet.RevokeAgents(ctx, owner); err != nil {
 			return AccountDeleted{}, fmt.Errorf("remove the Account's Agents from the tailnet: %w", err)
 		}
 	}
@@ -95,6 +86,11 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	if a.builds != nil {
 		if err = a.builds.DeleteOwner(ctx, owner); err != nil {
 			return AccountDeleted{}, fmt.Errorf("delete the Account's WASM builds: %w", err)
+		}
+	}
+	if a.fleet != nil {
+		if err = a.fleet.DeleteOwner(ctx, owner); err != nil {
+			return AccountDeleted{}, fmt.Errorf("delete the Account's fleet records: %w", err)
 		}
 	}
 	result, err := a.store.DeleteAccount(ctx, owner, cancelActiveJobs)

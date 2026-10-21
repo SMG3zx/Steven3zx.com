@@ -1,5 +1,5 @@
-// Package tailnettest holds an in-memory app.Tailnet and the contract suite
-// every app.Tailnet adapter, real or test, must pass.
+// Package tailnettest holds an in-memory headscale.Tailnet and the contract suite
+// every headscale.Tailnet adapter, real or test, must pass.
 package tailnettest
 
 import (
@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"janus/internal/app"
+	"janus/internal/services/fleet/headscale"
 )
 
 // Subject is an adapter under test, with the one thing the port cannot do: make
 // a node join, as an Agent does with the key it was given.
 type Subject struct {
-	Tailnet app.Tailnet
+	Tailnet headscale.Tailnet
 	// Join registers a node named name using key and returns once it has joined
 	// or failed. It returns an error when the key cannot be used.
-	Join func(t *testing.T, key app.TailnetKey, name string) error
+	Join func(t *testing.T, key headscale.Key, name string) error
 }
 
 // Run runs the Tailnet contract against subjects made by newSubject. Cases share
@@ -45,7 +45,7 @@ func must(t *testing.T, err error) {
 	}
 }
 
-func newKey(t *testing.T, s Subject, tag string) app.TailnetKey {
+func newKey(t *testing.T, s Subject, tag string) headscale.Key {
 	t.Helper()
 	key, err := s.Tailnet.CreatePreAuthKey(context.Background(), tag, time.Now().Add(time.Hour))
 	must(t, err)
@@ -54,7 +54,7 @@ func newKey(t *testing.T, s Subject, tag string) app.TailnetKey {
 
 // waitNode polls Nodes until the node that joined with keyID is listed and
 // online, since a real control server reports a join a moment late.
-func waitNode(t *testing.T, s Subject, keyID string) app.TailnetNode {
+func waitNode(t *testing.T, s Subject, keyID string) headscale.Node {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for {

@@ -107,3 +107,12 @@ func (c *Client) Artifact(ctx context.Context, owner, buildID string) (app.WASMB
 func (c *Client) DeleteOwner(ctx context.Context, owner string) error {
 	return c.call(ctx, contractbuilds.SubjectDeleteOwner, contractbuilds.Owner{OwnerID: owner}, nil)
 }
+
+// FindCheck returns the Check of one of the Owner's Builds. found is false when
+// the Build has no Check yet.
+func (c *Client) FindCheck(ctx context.Context, owner, buildID string) (app.Check, bool, error) {
+	var found contractbuilds.CheckFound
+	err := c.call(ctx, contractbuilds.SubjectFindCheck, contractbuilds.BuildKey{OwnerID: owner, BuildID: buildID}, &found)
+	check := found.Check
+	return app.Check{BuildID: check.BuildID, Status: check.Status, Error: check.Error, Log: check.Log, NoTests: check.NoTests}, found.Found, err
+}

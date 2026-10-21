@@ -14,17 +14,26 @@ import (
 	"janus/internal/domain/cgi"
 )
 
+// Link is the Agent link the contract tests: the control plane's end of a
+// connection to an Agent, as the fleet service holds it.
+type Link interface {
+	Connect(agentID, address string, events func(app.AgentEvent))
+	Disconnect(agentID string)
+	Send(ctx context.Context, agentID string, command app.AgentCommand) error
+	Close() error
+}
+
 // Subject is an adapter under test, with what the port cannot do itself: run
 // an Agent where the link can reach it.
 type Subject struct {
-	Link app.AgentLink
+	Link Link
 	// Start serves runtime as an Agent and returns the address to Connect to.
 	// When address is not empty the Agent must listen there, as a restarted
 	// Agent does. stop takes the Agent away as a crash would.
 	Start func(t *testing.T, runtime *app.AgentRuntime, address string) (listening string, stop func())
 }
 
-// Run runs the AgentLink contract against subjects made by newSubject.
+// Run runs the Agent link contract against subjects made by newSubject.
 func Run(t *testing.T, newSubject func(t *testing.T) Subject) {
 	t.Helper()
 	for _, c := range []struct {

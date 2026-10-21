@@ -16,34 +16,34 @@
       "description": "`func (a *Server) startDeployment` reads the body, checks the project.deploy policy, and calls the use case. It never touches the Store."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 92,
-      "title": "The use case",
-      "description": "`func (d *Deployments) Create` checks the build, its Check and the Agent. The business rules live here, in the core."
+      "file": "janus-go/internal/adapters/fleetnats/fleetnats.go",
+      "line": 119,
+      "title": "The Fleet port's adapter",
+      "description": "`func (c *Client) CreateDeployment`. The single process asks the fleet service over NATS and turns its refusals back into the errors the port documents."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 280,
-      "title": "Calling an outbound port",
-      "description": "`d.deployer.Ready(` asks the Agent port whether it can take a Deploy. The use case depends on the interface, not on Fleet."
+      "file": "janus-go/internal/services/fleet/deployments.go",
+      "line": 218,
+      "title": "The fleet service checks the build",
+      "description": "`func (s *Service) queue`. It asks the builds service for the Build and its Check over NATS, checks the Agent, and only then records the Deployment."
     },
     {
-      "file": "janus-go/internal/app/deployments.go",
-      "line": 28,
-      "title": "The port the use case needs",
-      "description": "`type AgentDeployer interface` is declared in the core. Fleet implements it, and a test fake can too."
+      "file": "janus-go/internal/services/fleet/service.go",
+      "line": 56,
+      "title": "The Agent link the service needs",
+      "description": "`type AgentLink interface`. The fleet service sends commands to Agents through it. Real: agentgrpc.Link. Test: agentlinktest.Loopback."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 16,
+      "line": 15,
       "title": "The Store port",
       "description": "`type Store interface` is what the core reads and writes. It returns typed values and plain errors, and every adapter must pass the contract suite."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/deployments.go",
-      "line": 45,
-      "title": "The SQLite adapter",
-      "description": "`func (s *Store) CreateDeployment` implements the Store port over SQLite, and enforces the one-in-flight rule inside one transaction."
+      "file": "janus-go/internal/services/fleet/store.go",
+      "line": 245,
+      "title": "The SQLite store",
+      "description": "`func (s *Service) insertDeployment`. Stores the queued Deployment in fleet.db, refusing a second one in flight for the Project in the same transaction."
     },
     {
       "file": "janus-go/internal/domain/deployments/deployments.go",
@@ -53,15 +53,15 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 193,
+      "line": 192,
       "title": "The Audit port",
       "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 427,
-      "title": "The composition root",
-      "description": "`func (a *application) startDeployments` is where the core is wired to its adapters. Only cmd/janus knows which adapters exist."
+      "line": 508,
+      "title": "The composition root starts the fleet",
+      "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the single process its client."
     }
   ]
 }

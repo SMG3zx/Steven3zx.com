@@ -22,6 +22,7 @@ import (
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
+	contractfleet "janus/internal/contract/fleet"
 )
 
 // errHostListener is why an Agent built without the ts_omit_peerapiserver tag
@@ -116,7 +117,7 @@ func nodeName(agentID string) string {
 // serve runs the Agent until ctx ends: it resumes its kept Deployments, joins
 // the tailnet, and listens there, and only there, for the control plane's
 // stream and the edge's requests. Both accept only callers tagged
-// app.ControlTag.
+// contract/fleet's ControlTag.
 func serve(ctx context.Context, state string) error {
 	s, err := loadSettings(state)
 	if err != nil {
@@ -146,7 +147,7 @@ func serve(ctx context.Context, state string) error {
 		return err
 	}
 	defer node.Close()
-	authorize := node.RequireTag(app.ControlTag)
+	authorize := node.RequireTag(contractfleet.ControlTag)
 
 	connectListener, err := node.Listen(app.AgentConnectPort)
 	if err != nil {

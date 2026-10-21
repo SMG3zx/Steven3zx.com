@@ -1,5 +1,5 @@
-// Package agentlinktest holds an in-process app.AgentLink and the contract
-// suite every app.AgentLink adapter, real or test, must pass.
+// Package agentlinktest holds an in-process Agent link and the contract
+// suite every Agent link, real or test, must pass.
 package agentlinktest
 
 import (
@@ -9,7 +9,7 @@ import (
 	"janus/internal/app"
 )
 
-// Loopback is an app.AgentLink to Agents in the same process: each address is
+// Loopback is an Agent link to Agents in the same process: each address is
 // an *app.AgentRuntime registered with Serve. It carries commands and events
 // the way a network link does, including connections that drop when an Agent
 // goes away and come back when it returns. A connection to an Agent that is
@@ -34,8 +34,6 @@ type loopConn struct {
 	mu       sync.Mutex
 	attached *app.AgentRuntime
 }
-
-var _ app.AgentLink = (*Loopback)(nil)
 
 // NewLoopback returns a Loopback with no Agents.
 func NewLoopback() *Loopback {

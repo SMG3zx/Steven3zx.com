@@ -1,4 +1,4 @@
-// Package headscale is the app.Tailnet over the Headscale REST API. It makes
+// Package headscale is the Tailnet over the Headscale REST API. It makes
 // the single-use pre-auth keys Agents enroll with, lists and removes their
 // nodes, and installs the one policy that keeps the tailnet default-deny.
 package headscale
@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"janus/internal/app"
+	contractfleet "janus/internal/contract/fleet"
 )
 
 const defaultUser = "janus"
@@ -35,7 +35,53 @@ type Config struct {
 	HTTPClient *http.Client
 }
 
-// Client implements app.Tailnet over Headscale.
+// Key is a single-use pre-auth key that enrolls one node carrying Tag. ID is the
+// key's ID on the control server, and Key is the secret the node joins with.
+type Key struct {
+	ID, Key string
+	Tag     string
+	Expires time.Time
+}
+
+// Node is a node on the tailnet. KeyID is the pre-auth key it joined with, and is
+// empty for a node that was registered another way.
+type Node struct {
+	ID, Name, KeyID string
+	Tags            []string
+	Addresses       []string
+	Online          bool
+	LastSeen        time.Time
+}
+
+// Tailnet is the private network Agents join, run by a control server such as
+// Headscale. The fleet service asks it for the keys an Agent enrolls with and for
+// the nodes that joined, and removes a node to cut an Agent off. It never reaches
+// an Agent itself: that is a connection over the network, made by other code.
+//
+// Whoever implements Tailnet enforces one access rule: nodes tagged
+// contract/fleet's ControlTag may open connections to every other tagged node,
+// and no other connection is allowed. So an Agent can reach neither the control
+// plane nor another Account's Agent.
+//
+// An ID is whatever the control server calls a key or a node, as a string. A key
+// is single-use: once a node has joined with it, or after it is expired, a second
+// join fails. Removing or expiring something that does not exist is not an error,
+// so a retry after a partial failure finishes the job.
+type Tailnet interface {
+	// CreatePreAuthKey makes a single-use key that enrolls one node carrying tag,
+	// valid until expires.
+	CreatePreAuthKey(ctx context.Context, tag string, expires time.Time) (Key, error)
+	// ExpirePreAuthKey ends a key's validity at once. Nodes that already joined
+	// with it stay.
+	ExpirePreAuthKey(ctx context.Context, keyID string) error
+	// Nodes lists every node on the tailnet. Online reflects the control server's
+	// last report and may lag a disconnect by several seconds.
+	Nodes(ctx context.Context) ([]Node, error)
+	// DeleteNode removes a node, so it can no longer be reached.
+	DeleteNode(ctx context.Context, nodeID string) error
+}
+
+// Client implements Tailnet over Headscale.
 type Client struct {
 	baseURL, apiKey, user string
 	http                  *http.Client
@@ -44,7 +90,7 @@ type Client struct {
 	userID string
 }
 
-var _ app.Tailnet = (*Client)(nil)
+var _ Tailnet = (*Client)(nil)
 
 // New returns a Client for the Headscale server in config.
 func New(config Config) *Client {
@@ -59,7 +105,7 @@ func New(config Config) *Client {
 }
 
 // Prepare makes sure the Headscale user exists and installs the policy the Tailnet
-// port requires: nodes tagged app.ControlTag may open connections to any tagged
+// port requires: nodes tagged contractfleet.ControlTag may open connections to any tagged
 // node, and nothing else is allowed, so an Agent cannot reach the control plane
 // or another Agent. A tag
 // need not be listed for a node to carry it, so enrolling an Account needs no
@@ -69,9 +115,9 @@ func (c *Client) Prepare(ctx context.Context) error {
 		return err
 	}
 	document, err := json.Marshal(map[string]any{
-		"tagOwners": map[string][]string{app.ControlTag: {c.user + "@"}},
+		"tagOwners": map[string][]string{contractfleet.ControlTag: {c.user + "@"}},
 		"acls": []map[string]any{
-			{"action": "accept", "src": []string{app.ControlTag}, "dst": []string{"autogroup:tagged:*"}},
+			{"action": "accept", "src": []string{contractfleet.ControlTag}, "dst": []string{"autogroup:tagged:*"}},
 		},
 	})
 	if err != nil {
@@ -83,10 +129,10 @@ func (c *Client) Prepare(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) CreatePreAuthKey(ctx context.Context, tag string, expires time.Time) (app.TailnetKey, error) {
+func (c *Client) CreatePreAuthKey(ctx context.Context, tag string, expires time.Time) (Key, error) {
 	userID, err := c.ensureUser(ctx)
 	if err != nil {
-		return app.TailnetKey{}, err
+		return Key{}, err
 	}
 	var reply struct {
 		PreAuthKey struct {
@@ -97,12 +143,12 @@ func (c *Client) CreatePreAuthKey(ctx context.Context, tag string, expires time.
 	}
 	body := map[string]any{"user": userID, "reusable": false, "ephemeral": false, "expiration": expires.UTC().Format(time.RFC3339), "acl_tags": []string{tag}}
 	if err = c.do(ctx, http.MethodPost, "/api/v1/preauthkey", body, &reply); err != nil {
-		return app.TailnetKey{}, fmt.Errorf("create a pre-auth key: %w", err)
+		return Key{}, fmt.Errorf("create a pre-auth key: %w", err)
 	}
 	if reply.PreAuthKey.ID == "" || reply.PreAuthKey.Key == "" {
-		return app.TailnetKey{}, errors.New("create a pre-auth key: the reply has no key")
+		return Key{}, errors.New("create a pre-auth key: the reply has no key")
 	}
-	return app.TailnetKey{ID: reply.PreAuthKey.ID, Key: reply.PreAuthKey.Key, Tag: tag, Expires: expires}, nil
+	return Key{ID: reply.PreAuthKey.ID, Key: reply.PreAuthKey.Key, Tag: tag, Expires: expires}, nil
 }
 
 func (c *Client) ExpirePreAuthKey(ctx context.Context, keyID string) error {
@@ -128,16 +174,16 @@ type node struct {
 	} `json:"preAuthKey"`
 }
 
-func (c *Client) Nodes(ctx context.Context) ([]app.TailnetNode, error) {
+func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 	var reply struct {
 		Nodes []node `json:"nodes"`
 	}
 	if err := c.do(ctx, http.MethodGet, "/api/v1/node", nil, &reply); err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
-	nodes := make([]app.TailnetNode, 0, len(reply.Nodes))
+	nodes := make([]Node, 0, len(reply.Nodes))
 	for _, n := range reply.Nodes {
-		out := app.TailnetNode{ID: n.ID, Name: n.Name, Tags: n.Tags, Addresses: n.IPAddresses, Online: n.Online}
+		out := Node{ID: n.ID, Name: n.Name, Tags: n.Tags, Addresses: n.IPAddresses, Online: n.Online}
 		if n.PreAuthKey != nil {
 			out.KeyID = n.PreAuthKey.ID
 		}

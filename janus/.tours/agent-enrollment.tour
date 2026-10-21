@@ -4,40 +4,40 @@
   "description": "How an Owner's Agent joins the tailnet: the web UI issues a single-use code, the Agent's command line exchanges it for a pre-auth key, and the control plane connects to the node once it joins.",
   "steps": [
     {
-      "file": "janus-go/internal/app/agents.go",
-      "line": 88,
-      "title": "The Owner asks for a code",
-      "description": "`func (a *Agents) IssueCode` makes a single-use Enrollment Code. Only its hash is stored, so the plain code is shown once."
-    },
-    {
-      "file": "janus-go/internal/app/agents.go",
-      "line": 105,
-      "title": "The Agent exchanges the code",
-      "description": "`func (a *Agents) Enroll` consumes the code and asks the tailnet for a pre-auth key. A code is used up even if enrolling fails afterwards."
-    },
-    {
-      "file": "janus-go/internal/adapters/sqlstore/agents.go",
-      "line": 22,
-      "title": "Consuming a code once",
-      "description": "`func (s *Store) ConsumeEnrollmentCode` marks the code used only if it is unused and unexpired, in one transaction."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 214,
-      "title": "The Tailnet port",
-      "description": "`type Tailnet interface` issues keys, lists nodes, and removes a node. The control server behind it enforces who may connect to whom."
-    },
-    {
-      "file": "janus-go/internal/adapters/headscale/client.go",
+      "file": "janus-go/internal/services/fleet/agents.go",
       "line": 50,
-      "title": "The real Tailnet adapter",
-      "description": "`func New(config Config) *Client` returns the Headscale adapter for the Tailnet port."
+      "title": "The Owner asks for a code",
+      "description": "`func (s *Service) issueCode`. The code is random, shown once, and only its hash is stored, valid for 15 minutes."
     },
     {
-      "file": "janus-go/internal/app/fleet.go",
-      "line": 63,
+      "file": "janus-go/internal/services/fleet/agents.go",
+      "line": 70,
+      "title": "The Agent exchanges the code",
+      "description": "`func (s *Service) enroll`. The code is used up, a single-use pre-auth key is made for the Owner's tag, and the Agent is recorded."
+    },
+    {
+      "file": "janus-go/internal/services/fleet/store.go",
+      "line": 89,
+      "title": "Consuming a code once",
+      "description": "`func (s *Service) useCode`. A code is marked used in one statement, so two enrollments cannot both win."
+    },
+    {
+      "file": "janus-go/internal/services/fleet/headscale/client.go",
+      "line": 70,
+      "title": "The Tailnet port",
+      "description": "`type Tailnet interface`. Headscale is called directly by the fleet service. Test: tailnettest.Fake."
+    },
+    {
+      "file": "janus-go/internal/services/fleet/headscale/client.go",
+      "line": 96,
+      "title": "The real Tailnet client",
+      "description": "`func New(config Config) *Client`. It talks to the Headscale REST API and installs the policy that keeps the tailnet default-deny."
+    },
+    {
+      "file": "janus-go/internal/services/fleet/link.go",
+      "line": 50,
       "title": "The control plane connects",
-      "description": "`func (f *Fleet) Reconcile` connects to every Agent whose node has joined the tailnet, and disconnects from Agents that were removed."
+      "description": "`func (s *Service) reconcile(`. Every enrolled Agent whose node is on the tailnet gets a connection, and removed Agents lose theirs."
     }
   ]
 }

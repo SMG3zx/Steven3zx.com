@@ -10,34 +10,34 @@
       "description": "`type Usage struct` holds the fuel, peak memory, time and CPU a run used, as measured by the host."
     },
     {
-      "file": "janus-go/internal/app/port_types.go",
-      "line": 135,
+      "file": "janus-go/internal/domain/fleet/fleet.go",
+      "line": 92,
       "title": "What an Agent reports",
-      "description": "`type RunReport struct` is one run as the Agent measured it, including network bytes and the status. A run that failed still reports what it spent."
+      "description": "`type RunReport struct`. The fields of one run as the Agent measured it, carried over the Agent link."
     },
     {
-      "file": "janus-go/internal/app/fleet.go",
-      "line": 129,
-      "title": "The Fleet receives reports",
-      "description": "`func (f *Fleet) receiver` handles each event from an Agent and records its usage under the Owner of that Agent, whatever the report says."
+      "file": "janus-go/internal/services/fleet/link.go",
+      "line": 100,
+      "title": "The fleet service receives reports",
+      "description": "`func (s *Service) receiver`. Usage is recorded under the Owner of the Agent that reported it, whatever the report says."
     },
     {
-      "file": "janus-go/internal/app/store_types.go",
-      "line": 296,
-      "title": "What the Store keeps",
-      "description": "`type RunUsageRecord struct` pairs a run with its Owner and Agent. The Owner is always the Agent's, never a value the Agent sent."
+      "file": "janus-go/internal/domain/fleet/fleet.go",
+      "line": 106,
+      "title": "What the service keeps",
+      "description": "`type RunUsageRecord struct`. A run with the Owner and the Agent it came from."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/agents.go",
-      "line": 128,
+      "file": "janus-go/internal/services/fleet/store.go",
+      "line": 178,
       "title": "Recorded once",
-      "description": "`func (s *Store) RecordRunUsage` keeps a run once. Recording the same run ID again changes nothing."
+      "description": "`func (s *Service) insertRunUsage`. The run ID is the key, so reporting it again changes nothing."
     },
     {
-      "file": "janus-go/internal/app/fleet.go",
-      "line": 223,
+      "file": "janus-go/internal/services/fleet/link.go",
+      "line": 214,
       "title": "An Owner reads their usage",
-      "description": "`func (f *Fleet) Usage` returns only the Owner's own runs, newest first."
+      "description": "`func (s *Service) listUsage`. The query is scoped to the Owner, and an Agent the Owner does not have is not found."
     }
   ]
 }

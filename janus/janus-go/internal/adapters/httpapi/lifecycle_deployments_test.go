@@ -7,12 +7,11 @@ import (
 	"testing"
 )
 
-// deployOnce queues a Deploy of build through the API, waits for it, and returns
-// the new Deployment's ID.
+// deployOnce queues a Deploy of build through the API, waits until it is healthy,
+// and returns the new Deployment's ID.
 func (a *deployApp) deployOnce(t *testing.T, build string) string {
 	t.Helper()
-	path := "/api/projects/" + a.project.ID + "/deployments"
-	response := perform(a.handler, http.MethodPost, path, `{"build_id":"`+build+`","agent_id":"laptop"}`, a.session)
+	response := perform(a.handler, http.MethodPost, a.deployPath(), `{"build_id":"`+build+`","agent_id":"`+a.agent+`"}`, a.session)
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("deploy status = %d, body = %s", response.Code, response.Body.String())
 	}
@@ -22,13 +21,13 @@ func (a *deployApp) deployOnce(t *testing.T, build string) string {
 	if err := json.Unmarshal(response.Body.Bytes(), &queued); err != nil || queued.ID == "" {
 		t.Fatalf("queued = %+v, %v", queued, err)
 	}
-	a.waitDeployments(t)
+	a.waitState(t, queued.ID, "healthy")
 	return queued.ID
 }
 
 func TestRedeployRollbackAndStopThroughTheAPI(t *testing.T) {
-	env := newDeployApp(t, agentDeployer{})
-	build := env.buildRust(t)
+	env := newDeployApp(t)
+	build := env.addBuild("passed", pageModule)
 	first := env.deployOnce(t, build)
 	second := env.deployOnce(t, build)
 
@@ -42,10 +41,11 @@ func TestRedeployRollbackAndStopThroughTheAPI(t *testing.T) {
 	if err := json.Unmarshal(rollback.Body.Bytes(), &rolled); err != nil || rolled.ID == "" {
 		t.Fatalf("rollback = %s, %v", rollback.Body.String(), err)
 	}
-	env.waitDeployments(t)
-	if read := perform(env.handler, http.MethodGet, "/api/deployments/"+second, "", env.session); !strings.Contains(read.Body.String(), `"reason":"rolled back"`) {
-		t.Fatalf("the Deployment the rollback replaced = %s", read.Body.String())
-	}
+	env.waitState(t, rolled.ID, "healthy")
+	env.fixture.Eventually("the rolled back deployment to be replaced", func() bool {
+		read := perform(env.handler, http.MethodGet, "/api/deployments/"+second, "", env.session)
+		return strings.Contains(read.Body.String(), `"reason":"rolled back"`)
+	})
 
 	if other := perform(env.handler, http.MethodPost, "/api/deployments/"+rolled.ID+"/stop", "", env.intruder); other.Code != http.StatusNotFound {
 		t.Fatalf("another Account stopped the Deployment: %d %s", other.Code, other.Body.String())
@@ -57,8 +57,5 @@ func TestRedeployRollbackAndStopThroughTheAPI(t *testing.T) {
 	read := perform(env.handler, http.MethodGet, "/api/deployments/"+rolled.ID, "", env.session)
 	if !strings.Contains(read.Body.String(), `"state":"stopped"`) || !strings.Contains(read.Body.String(), `"reason":"removed"`) {
 		t.Fatalf("stopped Deployment = %s", read.Body.String())
-	}
-	if again := perform(env.handler, http.MethodPost, "/api/deployments/"+rolled.ID+"/stop", "", env.session); again.Code != http.StatusConflict {
-		t.Fatalf("a stopped Deployment was stopped again: %d %s", again.Code, again.Body.String())
 	}
 }

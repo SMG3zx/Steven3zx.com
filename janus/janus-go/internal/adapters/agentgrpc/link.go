@@ -17,7 +17,7 @@ import (
 	"janus/internal/app"
 )
 
-// Link is the control plane's end: an app.AgentLink that holds one gRPC stream
+// Link is the control plane's end: the Agent link of the fleet service, which holds one gRPC stream
 // to each connected Agent and reopens it when it drops.
 //
 // The connection is not TLS: on the tailnet it already runs inside WireGuard,
@@ -30,8 +30,6 @@ type Link struct {
 	conns map[string]*linkConn
 	wg    sync.WaitGroup
 }
-
-var _ app.AgentLink = (*Link)(nil)
 
 // Option changes a Link.
 type Option func(*Link)

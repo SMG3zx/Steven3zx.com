@@ -22,19 +22,21 @@ import (
 	"testing"
 	"time"
 
+	"janus/cmd/janus/fleetfixture"
 	"janus/internal/adapters/agentgrpc"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/headscale"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
-	"janus/internal/adapters/storetest"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/app"
+	contractbuilds "janus/internal/contract/builds"
+	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/domain/artifact"
 	"janus/internal/platform/natstest"
+	"janus/internal/services/fleet/headscale"
 	"janus/internal/services/identity"
 )
 
@@ -66,8 +68,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	// Projects are not what this test is about; the Build it deploys is seeded.
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	agents := app.NewAgents(store, tailnet, audit, controlURL, time.Now)
-	key, err := agents.ControlPlaneKey(ctx)
+	key, err := tailnet.CreatePreAuthKey(ctx, contractfleet.ControlTag, time.Now().Add(time.Hour))
 	must(t, err)
 	upCtx, cancelUp := context.WithTimeout(ctx, 60*time.Second)
 	control, err := tailnode.Start(upCtx, tailnode.Config{Dir: filepath.Join(work, "control"), Hostname: "janus-control", ControlURL: controlURL, AuthKey: key.Key})
@@ -76,19 +77,17 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	t.Cleanup(func() { control.Close() })
 	link := agentgrpc.NewLink(control.Dial, agentgrpc.WithMaxRetryDelay(time.Second))
 	t.Cleanup(func() { link.Close() })
+	// The fleet service runs on its own NATS server, with the real tailnet and
+	// the gRPC link; the builds it deploys are seeded through its fixture.
+	fx := fleetfixture.Start(t, fleetfixture.Options{Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
 	wasm := buildstest.NewFake(store)
 	builds := app.NewBuilds(store, catalog, wasm)
-	fleet := app.NewFleet(store, tailnet, link, audit).WithBuilds(builds)
-	fleetCtx, stopFleet := context.WithCancel(ctx)
-	fleetDone := make(chan struct{})
-	go func() { defer close(fleetDone); fleet.Run(fleetCtx, time.Second) }()
-	t.Cleanup(func() { stopFleet(); <-fleetDone })
 	policy, err := app.NewPolicy(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
 		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog).WithBuilds(builds),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
-		Agents: agents, Fleet: fleet,
+		Fleet: fx.Fleet,
 	}).Handler())
 	t.Cleanup(server.Close)
 	api := &client{t: t, base: server.URL}
@@ -114,15 +113,20 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	assertNoTCPListener(t, agent.Process.Pid)
 
 	// Deploy a completed build of the CGI app.
-	buildID := seedBuild(t, store, wasm, alice, module)
+	buildID := seedBuild(t, fx.Builds, alice, module)
 	deployCtx, cancelDeploy := context.WithTimeout(ctx, 90*time.Second)
-	must(t, fleet.Deploy(deployCtx, alice, agentID, "dep-live", buildID))
+	deployed, err := fx.Fleet.CreateDeployment(deployCtx, app.NewDeployment{OwnerID: alice, ProjectID: "live-project", BuildID: buildID, AgentID: agentID})
+	must(t, err)
+	fx.Eventually("the deployment to be healthy", func() bool {
+		d, found, err := fx.Fleet.FindDeployment(deployCtx, alice, deployed)
+		return err == nil && found && d.State == "healthy"
+	})
 	cancelDeploy()
 
 	// Reach it the way the edge will: from the control plane's node over the
 	// tailnet, naming the Deployment in the header.
-	address := agentAddress(t, tailnet, store, alice, agentID)
-	edge := &edgeClient{t: t, http: control.HTTPClient(), base: "http://" + net.JoinHostPort(address, strconv.Itoa(app.AgentServePort))}
+	address := agentAddress(t, tailnet, fx.Fleet, alice, agentID)
+	edge := &edgeClient{t: t, http: control.HTTPClient(), base: "http://" + net.JoinHostPort(address, strconv.Itoa(app.AgentServePort)), deployment: deployed}
 	edge.expect(http.MethodGet, "/?x=1", nil, 200, "hello from GET x=1")
 	edge.expect(http.MethodGet, "/read?name=inside.txt", nil, 200, "inside-content")
 	edge.expect(http.MethodPost, "/write?name=written.txt", []byte("from the module"), 201, "wrote 15 bytes")
@@ -216,7 +220,7 @@ func startHeadscale(t *testing.T, work string) (string, *headscale.Client) {
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d", port)
-	config, err := os.ReadFile(filepath.Join(moduleRoot, "internal", "adapters", "headscale", "testdata", "config.yaml"))
+	config, err := os.ReadFile(filepath.Join(moduleRoot, "internal", "services", "fleet", "headscale", "testdata", "config.yaml"))
 	must(t, err)
 	config = []byte(strings.Replace(string(config), "server_url: http://127.0.0.1:8080", "server_url: "+url, 1))
 	dir := filepath.Join(work, "headscale")
@@ -379,11 +383,12 @@ func aliceID(t *testing.T, identities app.Identities) string {
 }
 
 // seedBuild records a completed WASI build of module for owner, as the builds
-// service would; building it is not what this test is about.
-func seedBuild(t *testing.T, store *sqlstore.Store, builds *buildstest.Fake, owner string, module []byte) string {
+// service would, with its checks passed; building it is not what this test is
+// about.
+func seedBuild(t *testing.T, builds *fleetfixture.Builds, owner string, module []byte) string {
 	t.Helper()
 	ctx := context.Background()
-	storetest.ReadySnapshot(t, store, owner, "live-project", "live-snapshot", "Go")
+	builds.AddSnapshot(owner, "live-project", "live-snapshot", "Go")
 	var archive bytes.Buffer
 	writer := zip.NewWriter(&archive)
 	file, err := writer.Create("main.wasm")
@@ -393,24 +398,29 @@ func seedBuild(t *testing.T, store *sqlstore.Store, builds *buildstest.Fake, own
 	must(t, writer.Close())
 	compressed, err := artifact.Compress(ctx, archive.Bytes())
 	must(t, err)
-	builds.Produce(compressed.Data)
-	_, err = builds.StartBuild(ctx, app.StartBuild{ID: "live-build", OwnerID: owner, ProjectID: "live-project", SnapshotID: "live-snapshot", Target: "wasip1-wasm"})
-	must(t, err)
+	build := contractbuilds.Build{ID: "live-build", ProjectID: "live-project", SnapshotID: "live-snapshot", Target: "wasip1-wasm", Status: contractbuilds.StatusComplete}
+	builds.AddArtifact(owner, build, &contractbuilds.Check{BuildID: "live-build", Status: "passed"}, compressed.Data, "wasm-artifacts.zip"+artifact.ZstdExtension)
 	return "live-build"
 }
 
 // agentAddress is the IPv4 tailnet address of the Agent's node.
-func agentAddress(t *testing.T, tailnet *headscale.Client, store *sqlstore.Store, owner, agentID string) string {
+func agentAddress(t *testing.T, tailnet *headscale.Client, fleet app.Fleet, owner, agentID string) string {
 	t.Helper()
-	record, found, err := store.FindAgent(context.Background(), agentID, owner)
+	agents, err := fleet.ListAgents(context.Background(), owner)
 	must(t, err)
-	if !found {
+	var keyID string
+	for _, agent := range agents {
+		if agent.ID == agentID {
+			keyID = agent.KeyID
+		}
+	}
+	if keyID == "" {
 		t.Fatal("no Agent record")
 	}
 	nodes, err := tailnet.Nodes(context.Background())
 	must(t, err)
 	for _, node := range nodes {
-		if node.KeyID != record.KeyID {
+		if node.KeyID != keyID {
 			continue
 		}
 		for _, address := range node.Addresses {
@@ -468,6 +478,8 @@ type edgeClient struct {
 	t    *testing.T
 	http *http.Client
 	base string
+	// deployment is the Deployment every request is for.
+	deployment string
 }
 
 func (e *edgeClient) call(method, path string, body []byte) (int, string, error) {
@@ -475,7 +487,7 @@ func (e *edgeClient) call(method, path string, body []byte) (int, string, error)
 	if err != nil {
 		return 0, "", err
 	}
-	request.Header.Set(app.DeploymentHeader, "dep-live")
+	request.Header.Set(app.DeploymentHeader, e.deployment)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	response, err := e.http.Do(request.WithContext(ctx))
@@ -504,7 +516,7 @@ func (e *edgeClient) eventually(method, path string, status int) {
 	e.t.Helper()
 	short := *e.http
 	short.Timeout = 5 * time.Second
-	edge := &edgeClient{t: e.t, http: &short, base: e.base}
+	edge := &edgeClient{t: e.t, http: &short, base: e.base, deployment: e.deployment}
 	eventually(e.t, fmt.Sprintf("%s %s to answer %d", method, path, status), 90*time.Second, func() bool {
 		got, _, err := edge.call(method, path, nil)
 		if status == 0 {

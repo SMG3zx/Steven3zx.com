@@ -74,6 +74,10 @@ func (b *storedBuilds) RetryBuild(context.Context, string, string) (app.WASMBuil
 	return app.WASMBuild{}, errNotUsed
 }
 
+func (b *storedBuilds) FindCheck(context.Context, string, string) (app.Check, bool, error) {
+	return app.Check{}, false, errNotUsed
+}
+
 func (b *storedBuilds) FindBuild(context.Context, string, string) (app.WASMBuild, bool, error) {
 	return app.WASMBuild{}, false, errNotUsed
 }

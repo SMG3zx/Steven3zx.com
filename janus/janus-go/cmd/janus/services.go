@@ -14,7 +14,7 @@ import (
 	"janus/internal/adapters/auditnats"
 	"janus/internal/adapters/buildevents"
 	"janus/internal/adapters/buildsnats"
-	"janus/internal/adapters/headscale"
+	"janus/internal/adapters/fleetnats"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/projectevents"
@@ -23,10 +23,13 @@ import (
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
+	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/natsx"
 	auditservice "janus/internal/services/audit"
 	buildsservice "janus/internal/services/builds"
 	"janus/internal/services/builds/docker"
+	fleetservice "janus/internal/services/fleet"
+	"janus/internal/services/fleet/headscale"
 	identityservice "janus/internal/services/identity"
 	projectsservice "janus/internal/services/projects"
 )
@@ -63,19 +66,17 @@ type application struct {
 	identity      *app.Identity
 	projects      *app.Projects
 	github        *app.GitHub
-	agents        *app.Agents
-	tailnet       app.Tailnet
+	tailnet       *headscale.Client
 	tailnode      *tailnode.Node
 	agentLink     *agentgrpc.Link
-	fleet         *app.Fleet
-	// stopFleet ends the Fleet's reconcile loop; fleetDone closes when it has.
-	stopFleet      context.CancelFunc
-	fleetDone      chan struct{}
+	fleetService  *fleetservice.Service
+	// fleet is the fleet service as the single process uses it; nil when Agent
+	// enrollment is off.
+	fleet          app.Fleet
 	authentication *app.Authentication
 	authorization  *app.Policy
 	imports        *app.Imports
 	builds         *app.Builds
-	deployments    *app.Deployments
 	accounts       *app.Accounts
 	runs           *app.Runs
 	httpServer     *httpapi.Server
@@ -168,7 +169,6 @@ func (a *application) groups() []group {
 				a.authorization, err = app.NewPolicy(a.startCtx)
 				return err
 			}},
-			{name: "agents", start: a.startAgents},
 		}},
 		{name: "projects and builds", components: []component{
 			{name: "projects service", start: a.startProjectsService, stop: a.tracked(func(ctx context.Context) error {
@@ -198,13 +198,10 @@ func (a *application) groups() []group {
 			}, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain WASM runtime", a.runs.Drain(ctx))
 			})},
-			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleetLoop)},
-			{name: "deployments", start: a.startDeployments, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("drain Deployments", a.deployments.Drain(ctx))
-			})},
+			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)},
 			// Accounts come last in runtime: deleting one stops its Deployments first.
 			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog).WithBuilds(a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
+				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog).WithBuilds(a.builds).WithFleet(a.fleet)
 				return nil
 			}},
 		}},
@@ -422,17 +419,6 @@ func (a *application) startBuildEvents(ctx context.Context) error {
 	return nil
 }
 
-// startDeployments makes the Deployments use case. It hands Deployments to the
-// Fleet, when Agent enrollment is on; without it Deploy is refused.
-func (a *application) startDeployments(context.Context) error {
-	var deployer app.AgentDeployer
-	if a.fleet != nil {
-		deployer = a.fleet
-	}
-	a.deployments = app.NewDeployments(a.store, deployer, a.audit)
-	return nil
-}
-
 // startProjectsService starts the projects service on projects.db. It refuses
 // to start while janus.db still holds Projects that were never copied out;
 // `janus migrate split` copies them.
@@ -469,7 +455,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Agents: a.agents, Fleet: a.fleet, Runs: a.runs, Deployments: a.deployments,
+		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Fleet: a.fleet, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,
@@ -514,10 +500,12 @@ func (a *application) record(ctx context.Context, level, name string, fields map
 	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
 }
 
-// startAgents builds the Agents use case when a Headscale server is configured.
-// A Headscale that cannot be prepared leaves Agent enrollment off and the
-// control plane running, with the reason in the log.
-func (a *application) startAgents(ctx context.Context) error {
+// startFleet starts the fleet service: Agent enrollment, the Agents on the
+// tailnet, their Deployments and their Usage. It needs Headscale; without it,
+// enrollment is off and the reason is in the log. When the control plane's own
+// node cannot join the tailnet, the service still runs, with an Agent link that
+// reaches no Agent, so Agents can still be removed and their Accounts deleted.
+func (a *application) startFleet(ctx context.Context) error {
 	cfg := a.settings
 	if cfg.HeadscaleURL == "" {
 		a.logger.Info("Agent enrollment is off: HEADSCALE_URL is not set")
@@ -528,26 +516,36 @@ func (a *application) startAgents(ctx context.Context) error {
 		a.logger.Error("Agent enrollment is off: Headscale could not be prepared", zap.Error(err))
 		return nil
 	}
-	a.tailnet = client
-	a.agents = app.NewAgents(a.store, client, a.audit, cfg.HeadscaleControlURL, time.Now)
+	needed, err := fleetservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.FleetDatabasePath)
+	if err != nil {
+		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
+	}
+	if needed {
+		return fmt.Errorf("%s holds Agents or Deployments that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.FleetDatabasePath)
+	}
+	var link fleetservice.AgentLink = unreachableAgents{}
+	if node := a.joinTailnet(ctx, client); node != nil {
+		a.tailnode = node
+		a.agentLink = agentgrpc.NewLink(node.Dial)
+		link = a.agentLink
+	}
+	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link})
+	if err := service.Start(ctx, a.nats.Conn()); err != nil {
+		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
+	}
+	a.fleetService = service
+	a.fleet = fleetnats.New(a.nats.Conn())
 	return nil
 }
 
-// fleetInterval is how often the Fleet looks for Agents to connect to.
-const fleetInterval = 15 * time.Second
-
-// startFleet puts the control plane on the tailnet as its own node, tagged
-// app.ControlTag, and keeps it connected to every enrolled Agent. It needs
-// Agent enrollment; when the node cannot join, Agents stay enrolled but cannot
-// be reached, and the reason is in the log.
-func (a *application) startFleet(ctx context.Context) error {
-	if a.agents == nil {
-		return nil
-	}
+// joinTailnet puts the control plane on the tailnet as its own node, tagged
+// contractfleet.ControlTag, so it can reach Agents. It returns nil and logs the
+// reason when the node cannot join.
+func (a *application) joinTailnet(ctx context.Context, client *headscale.Client) *tailnode.Node {
 	cfg := a.settings
 	authKey := ""
 	if !tailnode.Joined(cfg.TailnetDir) {
-		key, err := a.agents.ControlPlaneKey(ctx)
+		key, err := client.CreatePreAuthKey(ctx, contractfleet.ControlTag, time.Now().Add(controlKeyTTL))
 		if err != nil {
 			a.logger.Error("Agents cannot be reached: no key for the control plane's tailnet node", zap.Error(err))
 			return nil
@@ -559,29 +557,41 @@ func (a *application) startFleet(ctx context.Context) error {
 		a.logger.Error("Agents cannot be reached: the control plane did not join the tailnet", zap.Error(err))
 		return nil
 	}
-	a.tailnode = node
-	a.agentLink = agentgrpc.NewLink(node.Dial)
-	a.fleet = app.NewFleet(a.store, a.tailnet, a.agentLink, a.audit).WithBuilds(a.builds)
-	loopCtx, cancel := context.WithCancel(context.Background())
-	a.stopFleet, a.fleetDone = cancel, make(chan struct{})
-	go func() {
-		defer close(a.fleetDone)
-		a.fleet.Run(loopCtx, fleetInterval)
-	}()
-	return nil
+	return node
 }
 
-// stopFleetLoop ends the reconcile loop, closes every Agent connection and
-// takes the control plane off the tailnet.
-func (a *application) stopFleetLoop(ctx context.Context) error {
-	if a.fleet == nil {
+// controlKeyTTL is how long the control plane's pre-auth key is valid.
+const controlKeyTTL = time.Hour
+
+// stopFleet stops the fleet service, which waits for its Deployments, then
+// closes every Agent connection and takes the control plane off the tailnet.
+func (a *application) stopFleet(ctx context.Context) error {
+	if a.fleetService == nil {
 		return nil
 	}
-	a.stopFleet()
-	select {
-	case <-a.fleetDone:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return errors.Join(a.agentLink.Close(), a.tailnode.Close())
+	return errors.Join(wrap("stop the fleet service", a.fleetService.Stop(ctx)), a.stopAgentLink())
 }
+
+// stopAgentLink closes the Agent link and the control plane's node, when they
+// were started.
+func (a *application) stopAgentLink() error {
+	var errs []error
+	if a.agentLink != nil {
+		errs = append(errs, a.agentLink.Close())
+	}
+	if a.tailnode != nil {
+		errs = append(errs, a.tailnode.Close())
+	}
+	return errors.Join(errs...)
+}
+
+// unreachableAgents is the Agent link of a control plane that is not on the
+// tailnet: it connects to no Agent, and every command fails as unreachable.
+type unreachableAgents struct{}
+
+func (unreachableAgents) Connect(string, string, func(contractfleet.AgentEvent)) {}
+func (unreachableAgents) Disconnect(string)                                      {}
+func (unreachableAgents) Send(context.Context, string, contractfleet.AgentCommand) error {
+	return contractfleet.ErrAgentUnreachable
+}
+func (unreachableAgents) Close() error { return nil }

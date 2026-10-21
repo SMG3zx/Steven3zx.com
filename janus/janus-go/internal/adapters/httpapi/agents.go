@@ -24,7 +24,7 @@ func (a *Server) registerAgentRoutes(app *mux) {
 // is configured.
 func (a *Server) whenAgentsConfigured(handle func(*call) any) func(*call) any {
 	return func(c *call) any {
-		if a.dependencies.Agents == nil {
+		if a.dependencies.Fleet == nil {
 			return agentsUnavailable()
 		}
 		return handle(c)
@@ -45,7 +45,7 @@ func (a *Server) issueAgentCode(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	issued, err := a.dependencies.Agents.IssueCode(c.Request.Context(), owner)
+	issued, err := a.dependencies.Fleet.IssueCode(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -72,7 +72,7 @@ func (a *Server) enrollAgent(c *call) any {
 	if err = decodeJSON(c.Request, &input); err != nil || input.Code == "" {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "send an enrollment code and a name for the Agent"})
 	}
-	enrollment, err := a.dependencies.Agents.Enroll(ctx, input.Code, input.Name)
+	enrollment, err := a.dependencies.Fleet.Enroll(ctx, input.Code, input.Name)
 	switch {
 	case errors.Is(err, app.ErrEnrollmentCodeInvalid), errors.Is(err, app.ErrAgentName):
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -106,15 +106,13 @@ func (a *Server) listAgents(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	statuses, err := a.dependencies.Agents.List(c.Request.Context(), owner)
+	statuses, err := a.dependencies.Fleet.ListAgents(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
-	reported := map[string]app.AgentStatusReport{}
-	if a.dependencies.Fleet != nil {
-		if reported, err = a.dependencies.Fleet.Status(c.Request.Context(), owner); err != nil {
-			return internalError()
-		}
+	reported, err := a.dependencies.Fleet.AgentStatuses(c.Request.Context(), owner)
+	if err != nil {
+		return internalError()
 	}
 	views := make([]agentView, 0, len(statuses))
 	for _, status := range statuses {
@@ -135,11 +133,11 @@ func (a *Server) listAgents(c *call) any {
 }
 
 func (a *Server) pauseAgent(c *call) any {
-	return a.controlAgent(c, "agent.paused", a.dependencies.Fleet.Pause)
+	return a.controlAgent(c, "agent.paused", a.dependencies.Fleet.PauseAgent)
 }
 
 func (a *Server) resumeAgent(c *call) any {
-	return a.controlAgent(c, "agent.resumed", a.dependencies.Fleet.Resume)
+	return a.controlAgent(c, "agent.resumed", a.dependencies.Fleet.ResumeAgent)
 }
 
 // controlAgent sends the Owner's Agent a pause or a resume and answers with
@@ -242,7 +240,7 @@ func (a *Server) removeAgent(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	removed, err := a.dependencies.Agents.Remove(c.Request.Context(), owner, c.Param("id"))
+	removed, err := a.dependencies.Fleet.RemoveAgent(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		a.log(c.Request.Context(), "error", "agent.remove.failed", map[string]string{"user_id": owner, "agent_id": c.Param("id")})
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": "the Agent could not be removed from the tailnet; try again"})

@@ -148,3 +148,12 @@ func (b *Builds) buildSource(ctx context.Context, request NewBuild, project Proj
 	}
 	return SnapshotRef{}, errors.New("snapshot not found")
 }
+
+// Check returns the Check of one of an Account's Builds. found is false when the
+// Build has no Check yet.
+func (b *Builds) Check(ctx context.Context, owner, id string) (Check, bool, error) {
+	if b.service == nil {
+		return Check{}, false, errors.New("WASM build runner is not configured")
+	}
+	return b.service.FindCheck(ctx, owner, id)
+}

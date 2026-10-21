@@ -20,16 +20,11 @@ type Memory struct {
 	mu   sync.Mutex
 	last time.Time
 
-	users       map[string]struct{} // the Owners
-	projects    map[string]*memProject
-	snapshots   map[string]*memSnapshot
-	builds      map[string]*memBuild
-	codes       map[string]memCode // by code hash
-	agents      map[string]app.AgentRecord
-	runs        map[string]app.RunUsageRecord // by run ID
-	checks      map[string]*memCheck          // by WASM Build ID
-	deployments map[string]*memDeployment     // by Deployment ID
-	deploySeq   int                           // orders Deployments as they are created
+	users     map[string]struct{} // the Owners
+	projects  map[string]*memProject
+	snapshots map[string]*memSnapshot
+	builds    map[string]*memBuild
+	checks    map[string]*memCheck // by WASM Build ID
 }
 
 var _ app.Store = (*Memory)(nil)
@@ -37,22 +32,18 @@ var _ app.Store = (*Memory)(nil)
 // NewMemory returns an empty Memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		users:       map[string]struct{}{},
-		projects:    map[string]*memProject{},
-		snapshots:   map[string]*memSnapshot{},
-		builds:      map[string]*memBuild{},
-		codes:       map[string]memCode{},
-		agents:      map[string]app.AgentRecord{},
-		runs:        map[string]app.RunUsageRecord{},
-		checks:      map[string]*memCheck{},
-		deployments: map[string]*memDeployment{},
+		users:     map[string]struct{}{},
+		projects:  map[string]*memProject{},
+		snapshots: map[string]*memSnapshot{},
+		builds:    map[string]*memBuild{},
+		checks:    map[string]*memCheck{},
 	}
 }
 
-type memCode struct {
-	ownerID   string
-	expiresAt time.Time
-	used      bool
+// memCheck is a Check and the Owner of the WASM Build it checked.
+type memCheck struct {
+	app.Check
+	ownerID string
 }
 
 type memProject struct{ id, ownerID string }
@@ -172,11 +163,6 @@ func (m *Memory) deleteProject(id string) {
 			m.deleteBuild(bid)
 		}
 	}
-	for did, dep := range m.deployments {
-		if dep.ProjectID == id {
-			delete(m.deployments, did)
-		}
-	}
 }
 
 // deleteSnapshot removes a Snapshot reference and the WASM builds that
@@ -190,15 +176,10 @@ func (m *Memory) deleteSnapshot(id string) {
 	}
 }
 
-// deleteBuild removes a WASM build with its Check and Deployments.
+// deleteBuild removes a WASM build with its Check.
 func (m *Memory) deleteBuild(id string) {
 	delete(m.builds, id)
 	delete(m.checks, id)
-	for did, dep := range m.deployments {
-		if dep.BuildID == id {
-			delete(m.deployments, did)
-		}
-	}
 }
 
 // WASM Builds, as the references Deployments need. The builds service owns
@@ -269,155 +250,30 @@ func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJob
 			delete(m.builds, id)
 		}
 	}
-	for id, agent := range m.agents {
-		if agent.OwnerID == userID {
-			delete(m.agents, id)
-		}
-	}
-	for hash, code := range m.codes {
-		if code.ownerID == userID {
-			delete(m.codes, hash)
-		}
-	}
-	for id, run := range m.runs {
-		if run.OwnerID == userID {
-			delete(m.runs, id)
-		}
-	}
 	delete(m.users, userID)
 	return app.AccountDeleted{Deleted: true}, nil
 }
 
-func (m *Memory) CreateEnrollmentCode(_ context.Context, code app.CreateEnrollmentCode) error {
+// ApplyCheck stores the Check of a Build the builds service published. A Check
+// of a Build that is not referenced here is not kept.
+func (m *Memory) ApplyCheck(_ context.Context, change app.CheckChange) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.codes[code.CodeHash]; ok {
-		return constraint("UNIQUE constraint failed: enrollment_codes.code_hash")
-	}
-	m.codes[code.CodeHash] = memCode{ownerID: code.OwnerID, expiresAt: code.ExpiresAt}
-	return nil
-}
-
-func (m *Memory) ConsumeEnrollmentCode(_ context.Context, codeHash string, now time.Time) (string, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	code, ok := m.codes[codeHash]
-	if !ok || code.used || !now.Before(code.expiresAt) {
-		return "", false, nil
-	}
-	code.used = true
-	m.codes[codeHash] = code
-	return code.ownerID, true, nil
-}
-
-func (m *Memory) CreateAgent(_ context.Context, agent app.CreateAgent) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.agents[agent.ID]; ok {
-		return constraint("UNIQUE constraint failed: agents.id")
-	}
-	for _, other := range m.agents {
-		if other.KeyID == agent.KeyID {
-			return constraint("UNIQUE constraint failed: agents.key_id")
-		}
-	}
-	m.agents[agent.ID] = app.AgentRecord{ID: agent.ID, OwnerID: agent.OwnerID, Name: agent.Name, Tag: agent.Tag, KeyID: agent.KeyID, CreatedAt: agent.CreatedAt.UTC()}
-	return nil
-}
-
-func (m *Memory) ListAgents(_ context.Context, ownerID string) ([]app.AgentRecord, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	agents := make([]app.AgentRecord, 0)
-	for _, agent := range m.agents {
-		if agent.OwnerID == ownerID {
-			agents = append(agents, agent)
-		}
-	}
-	sort.Slice(agents, func(i, j int) bool {
-		if !agents[i].CreatedAt.Equal(agents[j].CreatedAt) {
-			return agents[i].CreatedAt.Before(agents[j].CreatedAt)
-		}
-		return agents[i].ID < agents[j].ID
-	})
-	return agents, nil
-}
-
-func (m *Memory) FindAgent(_ context.Context, id, ownerID string) (app.AgentRecord, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	agent, ok := m.agents[id]
-	if !ok || agent.OwnerID != ownerID {
-		return app.AgentRecord{}, false, nil
-	}
-	return agent, true, nil
-}
-
-func (m *Memory) DeleteAgent(_ context.Context, id, ownerID string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	agent, ok := m.agents[id]
-	if !ok || agent.OwnerID != ownerID {
-		return false, nil
-	}
-	delete(m.agents, id)
-	return true, nil
-}
-
-func (m *Memory) ListAllAgents(context.Context) ([]app.AgentRecord, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	agents := make([]app.AgentRecord, 0, len(m.agents))
-	for _, agent := range m.agents {
-		agents = append(agents, agent)
-	}
-	sort.Slice(agents, func(i, j int) bool {
-		if !agents[i].CreatedAt.Equal(agents[j].CreatedAt) {
-			return agents[i].CreatedAt.Before(agents[j].CreatedAt)
-		}
-		return agents[i].ID < agents[j].ID
-	})
-	return agents, nil
-}
-
-func (m *Memory) RecordRunUsage(_ context.Context, record app.RunUsageRecord) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.users[record.OwnerID]; !ok {
-		return constraint("FOREIGN KEY constraint failed")
-	}
-	if _, ok := m.runs[record.RunID]; ok {
+	build, ok := m.builds[change.BuildID]
+	if !ok || build.ownerID != change.OwnerID {
 		return nil
 	}
-	record.StartedAt = record.StartedAt.UTC()
-	m.runs[record.RunID] = record
+	m.checks[change.BuildID] = &memCheck{ownerID: change.OwnerID, Check: app.Check{BuildID: change.BuildID, Status: change.Status,
+		Error: change.Error, Log: change.Log, NoTests: change.NoTests}}
 	return nil
 }
 
-func (m *Memory) ListRunUsage(_ context.Context, query app.RunUsageQuery) ([]app.RunUsageRecord, error) {
+func (m *Memory) FindCheck(_ context.Context, buildID, ownerID string) (app.Check, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	records := make([]app.RunUsageRecord, 0)
-	for _, record := range m.runs {
-		if record.OwnerID != query.OwnerID ||
-			(query.AgentID != "" && record.AgentID != query.AgentID) ||
-			(query.DeploymentID != "" && record.DeploymentID != query.DeploymentID) {
-			continue
-		}
-		records = append(records, record)
+	stored, ok := m.checks[buildID]
+	if !ok || stored.ownerID != ownerID {
+		return app.Check{}, false, nil
 	}
-	sort.Slice(records, func(i, j int) bool {
-		if !records[i].StartedAt.Equal(records[j].StartedAt) {
-			return records[i].StartedAt.After(records[j].StartedAt)
-		}
-		return records[i].RunID > records[j].RunID
-	})
-	limit := query.Limit
-	if limit <= 0 {
-		limit = 100
-	}
-	if len(records) > limit {
-		records = records[:limit]
-	}
-	return records, nil
+	return stored.Check, true, nil
 }

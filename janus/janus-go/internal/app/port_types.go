@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/domain/templates"
 	"janus/internal/domain/usage"
 )
@@ -90,75 +91,30 @@ func IsConflict(err error) bool {
 	return errors.As(err, &conflict)
 }
 
-// TailnetKey is a pre-auth key. ID names it for later calls; Key is the secret
-// an Agent presents to join, and must not be logged or stored.
-type TailnetKey struct {
-	ID, Key string
-	Tag     string
-	Expires time.Time
-}
+// The Agent link's wire types are the fleet contract's: the fleet service and
+// the Agent both speak them, so the single process uses the same types.
+type (
+	HostedDeployment = domainfleet.HostedDeployment
+	AgentState       = domainfleet.AgentState
+	DeploymentHash   = domainfleet.DeploymentHash
+	RunReport        = domainfleet.RunReport
+	AgentCommand     = domainfleet.AgentCommand
+	AgentEvent       = domainfleet.AgentEvent
+	AgentError       = domainfleet.AgentError
+)
 
-// TailnetNode is a node on the tailnet. KeyID is the pre-auth key it joined with,
-// and is empty for a node that was registered another way.
-type TailnetNode struct {
-	ID, Name, KeyID string
-	Tags            []string
-	Addresses       []string
-	Online          bool
-	LastSeen        time.Time
-}
+// ErrAgentUnreachable is what the Fleet's error matches when no connection to the
+// Agent is up.
+var ErrAgentUnreachable = domainfleet.ErrAgentUnreachable
 
-// HostedDeployment is a Deployment as an Agent serves it: the module, its
-// SHA-256 as lower-case hex, and the Template's fuel and memory limits.
-// Limits.Timeout is not used; every request gets the same timeout.
-type HostedDeployment struct {
-	ID, SHA256 string
-	Module     []byte
-	Limits     RunLimits
-}
+// ErrAgentNotFound is what the Fleet's error matches for an Agent the Owner does
+// not have.
+var ErrAgentNotFound = errors.New("Agent not found")
 
-// AgentState is what an Agent is doing: whether it is paused, and the
-// Deployments it serves, ordered by ID.
-type AgentState struct {
-	Paused      bool
-	Deployments []DeploymentHash
-}
+// ErrEnrollmentCodeInvalid is what the Fleet's enrollment refuses a code with:
+// unknown, used or expired, which are not told apart.
+var ErrEnrollmentCodeInvalid = errors.New(domainfleet.MessageEnrollmentCodeInvalid)
 
-// DeploymentHash names a Deployment an Agent serves and its module's SHA-256.
-type DeploymentHash struct{ ID, SHA256 string }
-
-// RunReport is what one run of a Deployment's module consumed, as its Agent
-// measured it. NetworkBytesIn and NetworkBytesOut are the size of the request
-// and of the response, headers and body. Status is one of the usage statuses,
-// and Error says why a run that was not ok ended. Probe marks the
-// GET / run that decides whether a Deployment is healthy.
-type RunReport struct {
-	RunID, DeploymentID             string
-	Usage                           usage.Usage
-	NetworkBytesIn, NetworkBytesOut uint64
-	Status, Error                   string
-	Probe                           bool
-	StartedAt                       time.Time
-}
-
-// AgentCommand is one instruction to an Agent. Exactly one field is set.
-type AgentCommand struct {
-	Deploy        *HostedDeployment
-	Stop          string
-	Pause, Resume bool
-}
-
-// AgentEvent is one message from an Agent. Exactly one field is set.
-type AgentEvent struct {
-	State *AgentState
-	Usage *RunReport
-}
-
-// ErrAgentUnreachable is what AgentLink.Send's error matches when no connection
-// to the Agent is up.
-var ErrAgentUnreachable = errors.New("the Agent cannot be reached")
-
-// AgentError is an Agent's refusal of a command. Message is the Agent's reason.
-type AgentError struct{ Message string }
-
-func (e *AgentError) Error() string { return e.Message }
+// ErrAgentName is what the Fleet's enrollment refuses a blank or too long name
+// with.
+var ErrAgentName = errors.New(domainfleet.MessageAgentName)

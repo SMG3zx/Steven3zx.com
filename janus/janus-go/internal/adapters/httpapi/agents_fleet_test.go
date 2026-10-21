@@ -12,44 +12,25 @@ import (
 	"time"
 
 	"janus/internal/adapters/agentlinktest"
-	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/adapters/storetest"
-	"janus/internal/adapters/tailnettest"
 	"janus/internal/app"
 	"janus/internal/domain/cgi"
+	"janus/internal/services/fleet"
 )
 
-// fleetApp is the HTTP adapter with the Agents and Fleet use cases over test
-// adapters, and an Agent running in process behind a loopback link.
+// fleetApp is the HTTP adapter with the fleet service running in process, and an
+// Agent running in process behind a loopback link.
 type fleetApp struct {
 	*agentApp
 	link  *agentlinktest.Loopback
-	fleet *app.Fleet
+	fleet app.Fleet
 }
 
 func newFleetApp(t *testing.T) *fleetApp {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	t.Cleanup(cancel)
-	store, audit, tailnet, link := storetest.NewMemory(), audittest.NewRecorder(), tailnettest.NewFake(), agentlinktest.NewLoopback()
-	identities := identitytest.NewMemory()
-	catalog := catalogtest.NewMemory()
-	t.Cleanup(func() { link.Close() })
-	authorization, err := app.NewPolicy(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fleet := app.NewFleet(store, tailnet, link, audit)
-	config := Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
-		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
-		Agents: app.NewAgents(store, tailnet, audit, "https://tailnet.example.test", time.Now), Fleet: fleet,
-	}
-	return &fleetApp{agentApp: &agentApp{handler: New(config).Handler(), tailnet: tailnet, audit: audit}, link: link, fleet: fleet}
+	a := newAgentApp(t, true)
+	return &fleetApp{agentApp: a, link: a.fixture.Link, fleet: a.fixture.Fleet}
 }
 
 var pageModule = []byte("\x00asm\x01\x00\x00\x00httpapi")
@@ -69,11 +50,8 @@ func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledB
 	}
 	for _, node := range nodes {
 		if node.Name == "laptop" {
-			f.link.Serve(net.JoinHostPort(node.Addresses[0], strconv.Itoa(app.AgentConnectPort)), runtime)
+			f.link.Serve(net.JoinHostPort(node.Addresses[0], strconv.Itoa(fleet.AgentConnectPort)), runtime)
 		}
-	}
-	if err = f.fleet.Reconcile(context.Background()); err != nil {
-		t.Fatal(err)
 	}
 	f.settled(t, enrolled.AgentID, "report from the Agent", func() bool {
 		agents := decode[[]agentBody](t, perform(f.handler, http.MethodGet, "/api/agents", "", owner))
@@ -86,10 +64,10 @@ func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledB
 // produced, then checks done.
 func (f *fleetApp) settled(t *testing.T, agentID, what string, done func() bool) {
 	t.Helper()
-	f.link.Settle(agentID)
-	if !done() {
-		t.Fatalf("after the link settled, still no %s", what)
-	}
+	f.fixture.Eventually("the link to deliver "+what, func() bool {
+		f.link.Settle(agentID)
+		return done()
+	})
 }
 
 func TestTheOwnerPausesAndResumesAnAgentFromTheWebUI(t *testing.T) {
@@ -129,9 +107,6 @@ func TestPausingAnOfflineAgentSaysSo(t *testing.T) {
 	f := newFleetApp(t)
 	alice := f.register(t, "alice@example.com")
 	enrolled := f.enrollAgent(t, alice, "laptop")
-	if err := f.fleet.Reconcile(context.Background()); err != nil {
-		t.Fatal(err)
-	}
 	response := perform(f.handler, http.MethodPost, "/api/agents/"+enrolled.AgentID+"/pause", "", alice)
 	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "offline") {
 		t.Fatalf("pausing an Agent that is not running = %d: %s", response.Code, response.Body.String())

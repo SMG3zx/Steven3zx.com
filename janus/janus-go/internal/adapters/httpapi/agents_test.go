@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"janus/cmd/janus/fleetfixture"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/storetest"
-	"janus/internal/adapters/tailnettest"
 	"janus/internal/app"
+	"janus/internal/services/fleet/tailnettest"
 )
 
 // agentApp is the HTTP adapter over the Agents use case with test adapters.
@@ -22,13 +23,15 @@ type agentApp struct {
 	handler http.Handler
 	tailnet *tailnettest.Fake
 	audit   *audittest.Recorder
+	// fixture runs the fleet service when Agents are configured; nil otherwise.
+	fixture *fleetfixture.Fixture
 }
 
 func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
-	store, audit, tailnet := storetest.NewMemory(), audittest.NewRecorder(), tailnettest.NewFake()
+	store, audit := storetest.NewMemory(), audittest.NewRecorder()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
 	authorization, err := app.NewPolicy(ctx)
@@ -39,10 +42,25 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
+	a := &agentApp{tailnet: tailnettest.NewFake(), audit: audit}
 	if withAgents {
-		config.Agents = app.NewAgents(store, tailnet, audit, "https://tailnet.example.test", time.Now)
+		a.fixture = fleetfixture.Start(t, fleetfixture.Options{})
+		config.Fleet = a.fixture.Fleet
+		a.tailnet = a.fixture.Tailnet
 	}
-	return &agentApp{handler: New(config).Handler(), tailnet: tailnet, audit: audit}
+	a.handler = New(config).Handler()
+	return a
+}
+
+// auditEvents returns the Audit Events the HTTP adapter and the fleet service wrote.
+func (a *agentApp) auditEvents() []app.AuditEvent {
+	events := a.audit.Events()
+	if a.fixture != nil {
+		for _, event := range a.fixture.AuditEvents() {
+			events = append(events, app.AuditEvent{Level: event.Level, Name: event.Name, Fields: event.Fields})
+		}
+	}
+	return events
 }
 
 func (a *agentApp) register(t *testing.T, email string) *http.Cookie {
@@ -145,7 +163,7 @@ func TestAnOwnerSeesOnlyTheirAgentsAndNeverTheirKeys(t *testing.T) {
 		t.Fatalf("list = %d: %s", listed.Code, listed.Body.String())
 	}
 	agents := decode[[]agentBody](t, listed)
-	if len(agents) != 1 || agents[0].ID != enrolled.AgentID || agents[0].Name != "laptop" || agents[0].Status != app.AgentOnline || agents[0].Tag != enrolled.Tag {
+	if len(agents) != 1 || agents[0].ID != enrolled.AgentID || agents[0].Name != "laptop" || agents[0].Status != "online" || agents[0].Tag != enrolled.Tag {
 		t.Fatalf("alice's Agents = %#v, want her laptop, online", agents)
 	}
 	if strings.Contains(listed.Body.String(), enrolled.AuthKey) {
@@ -208,7 +226,7 @@ func TestAgentAuditEventsNeverCarryACodeOrAKey(t *testing.T) {
 	perform(a.handler, http.MethodDelete, "/api/agents/"+enrolled.AgentID, "", alice)
 
 	var names []string
-	for _, event := range a.audit.Events() {
+	for _, event := range a.auditEvents() {
 		names = append(names, event.Name)
 		text := event.Name + " " + strings.Join(mapValues(event.Fields), " ")
 		if strings.Contains(text, issued.Code) || strings.Contains(text, enrolled.AuthKey) {

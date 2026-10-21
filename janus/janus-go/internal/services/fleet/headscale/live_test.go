@@ -3,14 +3,15 @@
 // Live tests run the Headscale adapter against a real Headscale server in
 // Docker and real tsnet nodes, the way an Agent joins. Run them with
 //
-//	go test -tags live ./internal/adapters/headscale
+//	go test -tags live ./internal/services/fleet/headscale
 //
 // They need Docker and internet access (Headscale fetches the public DERP map).
 // They start one container, remove it when they finish, and leave nothing behind.
-package headscale
+package headscale_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -24,17 +25,19 @@ import (
 
 	"tailscale.com/tsnet"
 
-	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/storetest"
-	"janus/internal/adapters/tailnettest"
+	"janus/cmd/janus/fleetfixture"
 	"janus/internal/app"
+	contractfleet "janus/internal/contract/fleet"
+	"janus/internal/services/fleet/headscale"
+	"janus/internal/services/fleet/tailnettest"
 )
 
 const headscaleImage = "headscale/headscale:v0.29.5"
 
 var (
-	live    *Client
-	liveURL string
+	live       *headscale.Client
+	liveURL    string
+	liveAPIKey string
 )
 
 func TestMain(m *testing.M) {
@@ -117,8 +120,8 @@ func startHeadscale() (stop func(), err error) {
 		stop()
 		return nil, fmt.Errorf("create an API key: %w", err)
 	}
-	apiKey := strings.TrimSpace(regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(string(keyOut), ""))
-	live = New(Config{URL: liveURL, APIKey: apiKey})
+	liveAPIKey = strings.TrimSpace(regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(string(keyOut), ""))
+	live = headscale.New(headscale.Config{URL: liveURL, APIKey: liveAPIKey})
 	if err = live.Prepare(context.Background()); err != nil {
 		stop()
 		return nil, err
@@ -188,7 +191,7 @@ func TestLiveTailnetContract(t *testing.T) {
 	tailnettest.Run(t, func(t *testing.T) tailnettest.Subject {
 		return tailnettest.Subject{
 			Tailnet: live,
-			Join: func(t *testing.T, key app.TailnetKey, name string) error {
+			Join: func(t *testing.T, key headscale.Key, name string) error {
 				_, err := join(t, key.Key, name)
 				return err
 			},
@@ -213,7 +216,7 @@ func TestLiveEnrolledNodesDoNotExpire(t *testing.T) {
 			Expiry *string `json:"expiry"`
 		} `json:"nodes"`
 	}
-	if err = live.do(ctx, http.MethodGet, "/api/v1/node", nil, &listed); err != nil {
+	if err = getJSON(ctx, "/api/v1/node", &listed); err != nil {
 		t.Fatal(err)
 	}
 	for _, node := range listed.Nodes {
@@ -241,7 +244,7 @@ func TestLiveDefaultDenyPolicy(t *testing.T) {
 		serve(t, server, "9000", name)
 		return server
 	}
-	control := newNode(app.ControlTag, "policy-control")
+	control := newNode(contractfleet.ControlTag, "policy-control")
 	agentA := newNode("tag:acct-policy-a", "policy-agent-a")
 	agentB := newNode("tag:acct-policy-b", "policy-agent-b")
 	controlIP, aIP, bIP := addressOf(t, "policy-control"), addressOf(t, "policy-agent-a"), addressOf(t, "policy-agent-b")
@@ -259,13 +262,9 @@ func TestLiveDefaultDenyPolicy(t *testing.T) {
 
 func TestLiveEnrollmentEndToEnd(t *testing.T) {
 	ctx := context.Background()
-	store, audit := storetest.NewMemory(), audittest.NewRecorder()
-	if err := store.AddOwner(ctx, "live-alice"); err != nil {
-		t.Fatal(err)
-	}
-	agents := app.NewAgents(store, live, audit, liveURL, time.Now)
+	fx := fleetfixture.Start(t, fleetfixture.Options{Tailnet: live, ControlURL: liveURL})
 
-	controlKey, err := live.CreatePreAuthKey(ctx, app.ControlTag, time.Now().Add(time.Hour))
+	controlKey, err := live.CreatePreAuthKey(ctx, contractfleet.ControlTag, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,15 +273,15 @@ func TestLiveEnrollmentEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, err := agents.IssueCode(ctx, "live-alice")
+	code, err := fx.Fleet.IssueCode(ctx, "live-alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	enrollment, err := agents.Enroll(ctx, code.Code, "e2e-agent")
+	enrollment, err := fx.Fleet.Enroll(ctx, code.Code, "e2e-agent")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = agents.Enroll(ctx, code.Code, "replay"); err == nil {
+	if _, err = fx.Fleet.Enroll(ctx, code.Code, "replay"); err == nil {
 		t.Fatal("the Enrollment Code worked twice")
 	}
 	agent, err := join(t, enrollment.AuthKey, "e2e-agent")
@@ -294,14 +293,14 @@ func TestLiveEnrollmentEndToEnd(t *testing.T) {
 		t.Fatal("a second machine joined with the Agent's single-use key")
 	}
 
-	listed := waitStatus(t, agents, "live-alice", app.AgentOnline)
+	listed := waitStatus(t, fx.Fleet, "live-alice", "online")
 	if listed.Tag != "tag:acct-live-alice" {
 		t.Fatalf("listed Agent = %#v, want the owner's tag", listed)
 	}
 	agentIP := addressOf(t, "e2e-agent")
 	eventually(t, "the control plane to reach the enrolled Agent", func() bool { return reaches(control, agentIP, "9000") })
 
-	removed, err := agents.Remove(ctx, "live-alice", enrollment.AgentID)
+	removed, err := fx.Fleet.RemoveAgent(ctx, "live-alice", enrollment.AgentID)
 	if err != nil || !removed {
 		t.Fatalf("removing the Agent = %v, %v", removed, err)
 	}
@@ -328,11 +327,11 @@ func eventually(t *testing.T, what string, check func() bool) {
 }
 
 // waitStatus polls List until the owner's only Agent has the wanted status.
-func waitStatus(t *testing.T, agents *app.Agents, owner, want string) app.AgentStatus {
+func waitStatus(t *testing.T, fleet app.Fleet, owner, want string) app.AgentStatus {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		listed, err := agents.List(context.Background(), owner)
+		listed, err := fleet.ListAgents(context.Background(), owner)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -344,4 +343,23 @@ func waitStatus(t *testing.T, agents *app.Agents, owner, want string) app.AgentS
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
+}
+
+// getJSON reads one Headscale REST path with the test's API key and decodes the
+// reply into out.
+func getJSON(ctx context.Context, path string, out any) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, liveURL+path, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+liveAPIKey)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("GET %s: %s", path, response.Status)
+	}
+	return json.NewDecoder(response.Body).Decode(out)
 }

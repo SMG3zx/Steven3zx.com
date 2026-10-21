@@ -22,6 +22,7 @@ type settings struct {
 	IdentityDatabasePath   string
 	ProjectsDatabasePath   string
 	BuildsDatabasePath     string
+	FleetDatabasePath      string
 	JWTSecret              string
 	JWTIssuer              string
 	JWTExpiry              time.Duration
@@ -83,6 +84,10 @@ func loadSettings(ctx context.Context) (settings, error) {
 	buildsDatabasePath := strings.TrimSpace(os.Getenv("JANUS_BUILDS_DATABASE_PATH"))
 	if buildsDatabasePath == "" {
 		buildsDatabasePath = "data/builds.db"
+	}
+	fleetDatabasePath := strings.TrimSpace(os.Getenv("JANUS_FLEET_DATABASE_PATH"))
+	if fleetDatabasePath == "" {
+		fleetDatabasePath = "data/fleet.db"
 	}
 	secret := os.Getenv("JANUS_JWT_SECRET")
 	if len(secret) < 32 {
@@ -167,6 +172,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.String("config.identity.database.path", identityDatabasePath),
 		attribute.String("config.projects.database.path", projectsDatabasePath),
 		attribute.String("config.builds.database.path", buildsDatabasePath),
+		attribute.String("config.fleet.database.path", fleetDatabasePath),
 		attribute.Bool("config.google.enabled", googleEnabled),
 		attribute.Bool("config.github.enabled", githubEnabled),
 		attribute.Bool("config.headscale.enabled", headscaleURL != ""),
@@ -174,7 +180,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.Bool("config.nats.embedded", natsURL == ""),
 	)
 	return settings{
-		HTTPAddress: addr, DatabasePath: databasePath, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
+		HTTPAddress: addr, DatabasePath: databasePath, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, FleetDatabasePath: fleetDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
 		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,

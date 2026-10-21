@@ -2,7 +2,8 @@ package app
 
 import (
 	"errors"
-	"time"
+
+	domainfleet "janus/internal/domain/fleet"
 )
 
 type CreateLocalUser struct {
@@ -145,27 +146,6 @@ type Check struct {
 	NoTests bool   `json:"no_tests"`
 }
 
-// CreateDeployment queues a Deployment of a WASM Build on one of the Owner's
-// Agents. DeployAnyway records that the Owner chose to deploy despite failing
-// checks.
-type CreateDeployment struct {
-	ID, OwnerID, ProjectID, BuildID, AgentID string
-	DeployAnyway                             bool
-}
-
-// DeploymentTransition moves a Deployment to a new state, when it is still in
-// From. Error and Reason are set when the move ends the Deployment.
-type DeploymentTransition struct {
-	ID, From, To, Error, Reason string
-}
-
-// PromoteDeployment makes a starting Deployment healthy, the moment it is ready
-// to serve. Supersedes is the reason given to the Project's other healthy
-// Deployments, which the promotion stops (replaced or rolled back).
-type PromoteDeployment struct {
-	ID, OwnerID, ProjectID, Supersedes string
-}
-
 // Deployment is a Deployment as its Owner sees it.
 type Deployment struct {
 	ID           string `json:"id"`
@@ -270,37 +250,15 @@ func IsReply(err error) bool {
 	return errors.As(err, &reply)
 }
 
-// CreateEnrollmentCode stores an Enrollment Code by its hash, so the Store
-// never holds a code that could be used. It can be consumed once, before
-// ExpiresAt.
-type CreateEnrollmentCode struct {
-	CodeHash, OwnerID string
-	ExpiresAt         time.Time
-}
-
-// CreateAgent records an Agent that enrolled with KeyID, the pre-auth key it
-// was given. Tag is the tailnet tag its node carries.
-type CreateAgent struct {
-	ID, OwnerID, Name, Tag, KeyID string
-	CreatedAt                     time.Time
-}
-
-// AgentRecord is a stored Agent.
-type AgentRecord struct {
-	ID, OwnerID, Name, Tag, KeyID string
-	CreatedAt                     time.Time
-}
-
-// RunUsageRecord is one run an Agent reported, with the Owner and the Agent it
-// came from. The Owner is the Agent's, never a value the Agent sent.
-type RunUsageRecord struct {
-	RunReport
-	OwnerID, AgentID string
-}
-
-// RunUsageQuery selects an Owner's runs. AgentID and DeploymentID narrow it
-// when set. Limit caps how many come back; zero or less means 100.
-type RunUsageQuery struct {
-	OwnerID, AgentID, DeploymentID string
-	Limit                          int
-}
+// The fleet contract's types the single process uses as they are: enrollment,
+// the Agents and the Usage they report, and the Deployments queued for them.
+type (
+	NewDeployment     = domainfleet.NewDeployment
+	IssuedCode        = domainfleet.IssuedCode
+	Enrollment        = domainfleet.Enrollment
+	AgentRecord       = domainfleet.AgentRecord
+	AgentStatus       = domainfleet.AgentStatus
+	AgentStatusReport = domainfleet.AgentStatusReport
+	RunUsageRecord    = domainfleet.RunUsageRecord
+	RunUsageQuery     = domainfleet.RunUsageQuery
+)

@@ -1,7 +1,7 @@
 // Package agentgrpc carries the protocol between the control plane and a Janus
 // Agent (ENG-78): one gRPC bidirectional stream per Agent, opened by the
 // control plane. Server is the Agent's end, which drives an app.AgentRuntime;
-// Link is the control plane's end, an app.AgentLink.
+// Link is the control plane's end, the Agent link of the fleet service.
 package agentgrpc
 
 import (

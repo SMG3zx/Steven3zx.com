@@ -58,12 +58,13 @@ func TestMigrateSplitCopiesTheConfiguredDatabase(t *testing.T) {
 	t.Setenv("JANUS_IDENTITY_DATABASE_PATH", filepath.Join(dir, "identity.db"))
 	t.Setenv("JANUS_PROJECTS_DATABASE_PATH", filepath.Join(dir, "projects.db"))
 	t.Setenv("JANUS_BUILDS_DATABASE_PATH", filepath.Join(dir, "builds.db"))
+	t.Setenv("JANUS_FLEET_DATABASE_PATH", filepath.Join(dir, "fleet.db"))
 
 	var out bytes.Buffer
 	if err := runMigrate(context.Background(), []string{"split"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"identity: copied", "local_credentials", "projects: copied", "projects             1 rows"} {
+	for _, want := range []string{"identity: copied", "local_credentials", "projects: copied", "projects             1 rows", "fleet: copied"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("output lacks %q:\n%s", want, out.String())
 		}
@@ -72,7 +73,7 @@ func TestMigrateSplitCopiesTheConfiguredDatabase(t *testing.T) {
 	if err := runMigrate(context.Background(), []string{"split"}, &out); err != nil {
 		t.Fatalf("running the split again = %v", err)
 	}
-	if !strings.Contains(out.String(), "identity: ") || strings.Count(out.String(), "exists, skipped") != 3 {
+	if !strings.Contains(out.String(), "identity: ") || strings.Count(out.String(), "exists, skipped") != 4 {
 		t.Fatalf("a second run did something:\n%s", out.String())
 	}
 }
@@ -101,6 +102,7 @@ func TestTheIdentityServiceWaitsForTheSplit(t *testing.T) {
 	t.Setenv("JANUS_IDENTITY_DATABASE_PATH", identity)
 	t.Setenv("JANUS_PROJECTS_DATABASE_PATH", filepath.Join(t.TempDir(), "projects.db"))
 	t.Setenv("JANUS_BUILDS_DATABASE_PATH", filepath.Join(t.TempDir(), "builds.db"))
+	t.Setenv("JANUS_FLEET_DATABASE_PATH", filepath.Join(t.TempDir(), "fleet.db"))
 	if err := runMigrate(ctx, []string{"split"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
@@ -134,6 +136,7 @@ func TestTheProjectsServiceWaitsForTheSplit(t *testing.T) {
 	t.Setenv("JANUS_IDENTITY_DATABASE_PATH", filepath.Join(t.TempDir(), "identity.db"))
 	t.Setenv("JANUS_PROJECTS_DATABASE_PATH", projects)
 	t.Setenv("JANUS_BUILDS_DATABASE_PATH", filepath.Join(filepath.Dir(projects), "builds.db"))
+	t.Setenv("JANUS_FLEET_DATABASE_PATH", filepath.Join(filepath.Dir(projects), "fleet.db"))
 	if err := runMigrate(ctx, []string{"split"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}

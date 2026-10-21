@@ -192,3 +192,9 @@ func pack(ctx context.Context) ([]byte, error) {
 	}
 	return compressed.Data, nil
 }
+
+// FindCheck returns the Check of one of an Owner's Builds, as the Store recorded
+// it when the Build was checked.
+func (f *Fake) FindCheck(ctx context.Context, owner, buildID string) (app.Check, bool, error) {
+	return f.store.FindCheck(ctx, buildID, owner)
+}

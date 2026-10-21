@@ -12,7 +12,7 @@ import (
 var (
 	portDecl      = regexp.MustCompile(`(?m)^type (\w+) interface`)
 	adapterAssert = regexp.MustCompile(`_ app\.(\w+) =`)
-	minimumPorts  = 10
+	minimumPorts  = 9
 )
 
 // TestEveryPortHasAnAdapterThatSaysSo reads the ports declared in
