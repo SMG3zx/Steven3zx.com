@@ -10,6 +10,11 @@ export interface GNode {
   x: number;
   y: number;
   params: Record<string, ParamValue>;
+  // A block can stand in a slot of a container block (such as a trash site).
+  // Then parent is the container's id, slot is the slot's number from 0, and
+  // x and y are not used: the slot places the block.
+  parent?: string;
+  slot?: number;
 }
 
 export interface PortRef {
@@ -52,10 +57,13 @@ export interface Fragment {
   wires: Wire[];
 }
 
+// A block in a slot is copied only with its container, since its slot means nothing without it.
 export function copyFragment(graph: Graph, ids: Iterable<string>): Fragment {
   const picked = new Set(ids);
   return {
-    nodes: graph.nodes.filter((n) => picked.has(n.id)).map((n) => structuredClone(n)),
+    nodes: graph.nodes
+      .filter((n) => picked.has(n.id) && (n.parent === undefined || picked.has(n.parent)))
+      .map((n) => structuredClone(n)),
     wires: graph.wires
       .filter((w) => picked.has(w.from.node) && picked.has(w.to.node))
       .map((w) => structuredClone(w)),
@@ -71,6 +79,17 @@ export function pasteFragment(fragment: Fragment, dx: number, dy: number): Fragm
     ids.set(n.id, id);
     return { ...structuredClone(n), id, x: Math.max(0, n.x + dx), y: Math.max(0, n.y + dy) };
   });
+  // A block in a slot keeps its slot, under the container's new id. Its position
+  // comes from the slot, so moving the copy does not move it.
+  for (const n of nodes) {
+    if (n.parent === undefined) continue;
+    const parent = ids.get(n.parent);
+    if (parent) n.parent = parent;
+    else {
+      delete n.parent;
+      delete n.slot;
+    }
+  }
   const wires = fragment.wires.map((w) => ({
     id: newId("w"),
     from: { node: ids.get(w.from.node) ?? w.from.node, port: w.from.port },
@@ -90,6 +109,8 @@ export function parseGraph(value: unknown): Graph {
   for (const n of g.nodes) {
     if (typeof n.id !== "string" || typeof n.kind !== "string") throw new Error("every node needs an id and kind");
     if (typeof n.x !== "number" || typeof n.y !== "number") throw new Error(`node ${n.id} needs numeric x and y`);
+    if (n.parent !== undefined && typeof n.parent !== "string") throw new Error(`node ${n.id} has a parent that is not an id`);
+    if (n.slot !== undefined && !(Number.isInteger(n.slot) && n.slot >= 0)) throw new Error(`node ${n.id} has a slot that is not a number from 0`);
     if (!n.params || typeof n.params !== "object") throw new Error(`node ${n.id} needs a params object`);
   }
   for (const w of g.wires) {

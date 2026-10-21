@@ -39,6 +39,9 @@ export interface EmitIO {
   param(name: string): ParamValue;
   text(name: string): string;
   inLoop(): boolean;
+  // The setting of the container block this block stands in, or undefined when
+  // it stands in none.
+  host(name: string): string | undefined;
 }
 
 export interface Emitted {
@@ -69,6 +72,9 @@ export interface NodeDef {
   // The body port of this block runs once per pass of a loop, so blocks in
   // it are inside a loop (break and continue need that).
   loopBody?: boolean;
+  // Kinds of block that can stand in a slot of this block. The number of
+  // slots is the block's "slots" setting.
+  hosts?: string[];
   emit: (io: EmitIO) => Emitted;
 }
 
@@ -481,16 +487,17 @@ export const CATALOG: NodeDef[] = [
     kind: "trashSite",
     title: "trash site",
     category: "sites",
-    help: "A site that holds kilograms of trash and has slots for cleaners. Keep it in a variable, such as site := newSite(...), then stand cleaners on it.",
-    inputs: [],
-    outputs: [data("site", "any")],
+    help: "A site of trash with slots. Trash cleaners stand in its slots, and dig from it. Its name is the variable its cleaners use.",
+    inputs: [exec("in")],
+    outputs: [exec("next")],
     params: [
       { id: "name", label: "name", type: "text", default: "pit", placeholder: "pit" },
       { id: "reserve", label: "kg of trash", type: "text", default: "500", placeholder: "500" },
       { id: "slots", label: "slots", type: "select", default: "2", options: ["1", "2", "3"] },
     ],
+    hosts: ["trashCleaner"],
     emit: (io) => ({
-      expr: `newSite(${JSON.stringify(io.text("name"))}, ${Number(io.text("reserve")) || 0}, ${Number(io.text("slots")) || 1})`,
+      stmts: [`${io.text("name")} := newSite(${JSON.stringify(io.text("name"))}, ${Number(io.text("reserve")) || 0}, ${Number(io.text("slots")) || 1})`],
       helpers: [{ name: "trash", lines: TRASH_HELPERS }],
     }),
   },
@@ -498,14 +505,20 @@ export const CATALOG: NodeDef[] = [
     kind: "trashCleaner",
     title: "trash cleaner",
     category: "sites",
-    help: "A cleaner that stands on a site and digs trash out of it into a buffer. Its buffer holds the kg it is given, and a full site refuses another cleaner. Keep it in a variable.",
-    inputs: [data("site", "any", true)],
+    help: "Digs trash out of the trash site it stands in, into a buffer of its own. Drop it into a slot of a trash site.",
+    inputs: [],
     outputs: [data("cleaner", "any")],
     params: [{ id: "buffer", label: "buffer (kg)", type: "text", default: "5", placeholder: "5" }],
-    emit: (io) => ({
-      expr: `newCleaner(${io.value("site") ?? "nil"}, ${Number(io.text("buffer")) || 0})`,
-      helpers: [{ name: "trash", lines: TRASH_HELPERS }],
-    }),
+    emit: (io) => {
+      const site = io.host("name");
+      if (site === undefined) {
+        return { expr: "nil", problem: "a trash cleaner has to stand in a slot of a trash site" };
+      }
+      return {
+        expr: `newCleaner(${site}, ${Number(io.text("buffer")) || 0})`,
+        helpers: [{ name: "trash", lines: TRASH_HELPERS }],
+      };
+    },
   },
   {
     kind: "digTrash",

@@ -38,6 +38,7 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 - **Copy and paste:** Ctrl+C copies the selected blocks and the wires between them. Ctrl+V pastes them, and Ctrl+D duplicates them in one step.
 - **Map:** the box in the bottom right of the canvas shows the whole program, with the part you can see outlined. Click or drag on it to scroll.
 - **Square wires:** the Square wires button draws wires with right-angle bends and rounded corners instead of curves. Wires leave and enter their ports horizontally. Drag a square wire to add a bend where you grab it, and drag a bend handle (shown on the selected wire) to move it. Double-click a handle to remove it.
+- **Containers:** a block such as the trash site has slots, and blocks that it hosts (the trash cleaner) stand in them. Drag a block onto a free slot, or drop one from the dock onto a slot. Dragging the container carries the blocks in its slots with it. Dragging a block out of a slot takes it out of the container. The generator checks that a block is in a container that hosts it, that its slot exists and is free, and that the container is in the program. A block in a slot takes its container's name, so it does not need a wire to it.
 - **Block groups:** select some blocks and press Save selection as group, after typing a name in the Groups section of the dock. Groups are saved in `groups/` and listed there. Press a group's name to add its blocks to the middle of the view. A group cannot hold func main or func blocks.
 - **Undo and redo:** Ctrl+Z (Cmd+Z on a Mac) undoes the last change, and Ctrl+Shift+Z or Ctrl+Y redoes it. The Undo and Redo buttons do the same. Typing in a setting counts as one change. Opening or starting a program can be undone too, but the first program you open when the editor starts cannot.
 
@@ -88,8 +89,8 @@ The code in `src/` is split into four parts:
 | call library | Calls | `strings.ToUpper(...)`, `strconv...`, `math...`; the package is imported for you |
 | print formatted | Input / output | `fmt.Printf(format, values)` |
 | format text | Input / output | `fmt.Sprintf(format, values)` |
-| trash site | Sites | `newSite(name, kg, slots)`: a site holding kg of trash with machine slots |
-| trash cleaner | Sites | `newCleaner(site, buffer)`: a cleaner standing on a site, with a buffer of its own |
+| trash site | Sites | `name := newSite(name, kg, slots)`: a container with slots, which hold blocks |
+| trash cleaner | Sites | `newCleaner(site, buffer)`: stands in a slot of a trash site, with a buffer of its own |
 | dig with cleaner | Sites | `cleaner.Dig(workers, hours)`: one kg per worker-hour, as far as the buffer and the site allow |
 | take out trash | Sites | `cleaner.Unload()`: empties the buffer and gives the kg it held |
 | read from cleaner | Sites | `cleaner.Buffer` or `cleaner.Site.Reserve` |

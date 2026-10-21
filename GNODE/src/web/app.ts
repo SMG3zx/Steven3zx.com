@@ -268,6 +268,11 @@ canvas.addEventListener("drop", (e) => {
   const kind = e.dataTransfer?.getData("text/gnode-kind");
   if (!kind) return;
   e.preventDefault();
+  const frame = slotAt(e.clientX, e.clientY, kind);
+  if (frame) {
+    addNodeInSlot(kind, frame);
+    return;
+  }
   const rect = canvas.getBoundingClientRect();
   addNode(kind, e.clientX - rect.left - 80, e.clientY - rect.top - 16);
 });
@@ -299,9 +304,74 @@ function removeNode(id: string) {
   removeNodes([id]);
 }
 
+// ---------- containers ----------
+
+// The slot frames of a container: one for each slot its slots setting gives.
+function slotCount(n: GNode): number {
+  if (!defOf(n)?.hosts) return 0;
+  return Math.max(0, Number(n.params.slots) || 0);
+}
+
+function slotEl(nodeId: string, slot: number): HTMLElement | null {
+  return canvas.querySelector<HTMLElement>(`.site-slot[data-node="${nodeId}"][data-slot="${slot}"]`);
+}
+
+// A block sits in slot of container when a block in the program has that place.
+function slotTaken(container: string, slot: number, except?: string): boolean {
+  return graph.nodes.some((n) => n.id !== except && n.parent === container && (n.slot ?? 0) === slot);
+}
+
+// The free slot under a point on the screen that accepts a block of this kind.
+function slotAt(x: number, y: number, kind: string, except?: string): HTMLElement | null {
+  const frame = document.elementFromPoint(x, y)?.closest<HTMLElement>(".site-slot");
+  if (!frame) return null;
+  const host = nodeById(frame.dataset.node ?? "");
+  if (!host || !defOf(host)?.hosts?.includes(kind)) return null;
+  return slotTaken(host.id, Number(frame.dataset.slot), except) ? null : frame;
+}
+
+// The label on a container's header: its name and the kg of trash it holds.
+function siteMeta(n: GNode): string {
+  return `${n.params.name} · ${n.params.reserve} kg`;
+}
+
+// Puts a block into a slot of a container, as a new block.
+function addNodeInSlot(kind: string, frame: HTMLElement) {
+  const def = CATALOG_BY_KIND.get(kind);
+  if (!def) return;
+  const node: GNode = {
+    id: newId("n"),
+    kind,
+    x: 0,
+    y: 0,
+    params: defaultParams(def),
+    parent: frame.dataset.node,
+    slot: Number(frame.dataset.slot),
+  };
+  checkpoint();
+  graph.nodes.push(node);
+  renderNodes();
+  select({ kind: "node", id: node.id });
+  scheduleGenerate();
+}
+
+// Takes a block out of its slot and puts it on the canvas where it appears,
+// so that it can be dragged freely.
+function liftFromSlot(n: GNode, box: HTMLElement) {
+  const r = box.getBoundingClientRect();
+  const c = canvas.getBoundingClientRect();
+  n.x = Math.max(0, Math.round(r.left - c.left));
+  n.y = Math.max(0, Math.round(r.top - c.top));
+  delete n.parent;
+  delete n.slot;
+  canvas.append(box);
+}
+
 function removeNodes(ids: string[]) {
   checkpoint();
   const gone = new Set(ids);
+  // The blocks in a container's slots go with it.
+  for (const n of graph.nodes) if (n.parent !== undefined && gone.has(n.parent)) gone.add(n.id);
   graph.nodes = graph.nodes.filter((n) => !gone.has(n.id));
   graph.wires = graph.wires.filter((w) => !gone.has(w.from.node) && !gone.has(w.to.node));
   for (const id of gone) {
@@ -341,10 +411,25 @@ function renderNodes() {
     if (!node) {
       node = buildNodeEl(n);
       nodeEls.set(n.id, node);
-      canvas.append(node);
     }
+    if (n.parent !== undefined) continue;
+    if (node.parentElement !== canvas) canvas.append(node);
     node.style.left = `${n.x}px`;
     node.style.top = `${n.y}px`;
+  }
+  // A block in a slot is placed by its slot, inside the container's element, so
+  // it moves with the container. This runs after the containers are on the canvas.
+  for (const n of graph.nodes) {
+    if (n.parent === undefined) continue;
+    const node = nodeEls.get(n.id);
+    const frame = slotEl(n.parent, n.slot ?? 0);
+    if (!node || !frame) continue;
+    if (node.parentElement !== frame) frame.append(node);
+    node.style.left = "";
+    node.style.top = "";
+  }
+  for (const frame of canvas.querySelectorAll<HTMLElement>(".site-slot")) {
+    frame.classList.toggle("empty", !frame.querySelector(":scope > .node"));
   }
   refreshNodeStates();
   paintSelection();
@@ -368,8 +453,23 @@ function buildNodeEl(n: GNode): HTMLElement {
   body.append(inputs, outputs);
   box.append(body);
 
+  if (def?.hosts) {
+    box.classList.add("hosts");
+    head.append(el("span", "site-meta", siteMeta(n)));
+    const frames = el("div", "site-slots");
+    for (let i = 0; i < slotCount(n); i++) {
+      const frame = el("div", "site-slot empty");
+      frame.dataset.node = n.id;
+      frame.dataset.slot = String(i);
+      frames.append(frame);
+    }
+    box.append(frames);
+  }
+
   head.addEventListener("pointerdown", (e) => startNodeDrag(e, n, box));
   box.addEventListener("pointerdown", (e) => {
+    // A press on a block inside this one belongs to that block.
+    if ((e.target as HTMLElement).closest(".node") !== box) return;
     if ((e.target as HTMLElement).closest(".port, .node-head")) return;
     if (e.shiftKey) toggleInSelection(n.id);
     else if (!multi.has(n.id)) select({ kind: "node", id: n.id });
@@ -404,12 +504,15 @@ function startNodeDrag(e: PointerEvent, n: GNode, box: HTMLElement) {
     return;
   }
   if (!multi.has(n.id)) select({ kind: "node", id: n.id });
-  // Every selected block moves together.
-  const group = graph.nodes.filter((g) => multi.has(g.id));
+  const before = structuredClone(graph);
+  // A block in a slot is lifted out to be dragged. Dropping it into a slot puts it back.
+  if (n.parent !== undefined) liftFromSlot(n, box);
+  // Every selected block moves together, except the blocks in slots, which move with their container.
+  const group = graph.nodes.filter((g) => multi.has(g.id) && g.parent === undefined);
   const origins = new Map(group.map((g) => [g.id, { x: g.x, y: g.y }]));
   const startX = e.clientX;
   const startY = e.clientY;
-  const before = structuredClone(graph);
+  if (group.length === 1) box.style.pointerEvents = "none";
   const move = (ev: PointerEvent) => {
     for (const g of group) {
       const o = origins.get(g.id)!;
@@ -423,16 +526,24 @@ function startNodeDrag(e: PointerEvent, n: GNode, box: HTMLElement) {
     }
     renderWires();
   };
-  const up = () => {
+  const up = (ev: PointerEvent) => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
-    const moved = group.some((g) => {
-      const o = origins.get(g.id)!;
-      return g.x !== o.x || g.y !== o.y;
-    });
-    if (moved) {
+    // A single block dropped on a free slot that takes it goes into that slot.
+    // The block is still see-through here, so the slot under the pointer is found.
+    if (group.length === 1) {
+      const frame = slotAt(ev.clientX, ev.clientY, n.kind, n.id);
+      if (frame) {
+        n.parent = frame.dataset.node;
+        n.slot = Number(frame.dataset.slot);
+      }
+    }
+    box.style.pointerEvents = "";
+    renderNodes();
+    if (JSON.stringify(before) !== JSON.stringify(graph)) {
       history.record(before);
       updateHistoryButtons();
+      scheduleGenerate();
     }
   };
   window.addEventListener("pointermove", move);
@@ -525,7 +636,19 @@ function wirePath(out: Pt, inn: Pt, bends: Pt[] = []): string {
 function bendPoints(w: Wire): Pt[] {
   const from = nodeById(w.from.node);
   if (!from || !w.bends) return [];
-  return w.bends.map((b) => ({ x: from.x + b.dx, y: from.y + b.dy }));
+  const at = nodeOrigin(from);
+  return w.bends.map((b) => ({ x: at.x + b.dx, y: at.y + b.dy }));
+}
+
+// Where a block's top left corner is on the canvas. A block in a slot has no
+// position of its own, so its place is read from the screen.
+function nodeOrigin(n: GNode): Pt {
+  if (n.parent === undefined) return { x: n.x, y: n.y };
+  const elt = nodeEls.get(n.id);
+  if (!elt) return { x: n.x, y: n.y };
+  const r = elt.getBoundingClientRect();
+  const c = canvas.getBoundingClientRect();
+  return { x: r.left - c.left, y: r.top - c.top };
 }
 
 function renderWires() {
@@ -594,7 +717,8 @@ function startWireGrab(e: PointerEvent, w: Wire, index?: number) {
       w.bends.splice(at, 0, { dx: 0, dy: 0 });
     }
     const p = pointInCanvas(ev);
-    w.bends![at] = { dx: Math.round(p.x - from.x), dy: Math.round(p.y - from.y) };
+    const origin = nodeOrigin(from);
+    w.bends![at] = { dx: Math.round(p.x - origin.x), dy: Math.round(p.y - origin.y) };
     renderWires();
   };
   const up = () => {
@@ -725,9 +849,28 @@ function renderInspector() {
 }
 
 function setParam(n: GNode, id: string, value: string) {
+  // A container cannot have fewer slots than blocks in them.
+  if (id === "slots" && defOf(n)?.hosts) {
+    const count = Number(value) || 0;
+    const crowded = graph.nodes.some((c) => c.parent === n.id && (c.slot ?? 0) >= count);
+    if (crowded) {
+      setStatus("Move the blocks out of the slots you are removing first");
+      renderInspector();
+      return;
+    }
+  }
   // Typing a value updates it on every key press; the key merges those into one undo step.
   checkpoint(`param:${n.id}:${id}`);
   n.params[id] = value;
+  if (id === "slots" && defOf(n)?.hosts) {
+    // The slots are part of the element, so the container is built again. Its blocks go back into the new slots.
+    nodeEls.get(n.id)?.remove();
+    nodeEls.delete(n.id);
+    renderNodes();
+  } else if (defOf(n)?.hosts) {
+    const meta = nodeEls.get(n.id)?.querySelector(".site-meta");
+    if (meta) meta.textContent = siteMeta(n);
+  }
   scheduleGenerate();
 }
 
@@ -752,8 +895,10 @@ function drawMinimap() {
   for (const n of graph.nodes) {
     const elt = nodeEls.get(n.id);
     const mini = el("div", "mini-node" + (multi.has(n.id) ? " on" : ""));
-    mini.style.left = `${n.x * MAP_SCALE}px`;
-    mini.style.top = `${n.y * MAP_SCALE}px`;
+    // A block in a slot sits where its container is.
+    const at = (n.parent !== undefined && nodeById(n.parent)) || n;
+    mini.style.left = `${at.x * MAP_SCALE}px`;
+    mini.style.top = `${at.y * MAP_SCALE}px`;
     mini.style.width = `${Math.max(3, (elt?.offsetWidth ?? 170) * MAP_SCALE)}px`;
     mini.style.height = `${Math.max(3, (elt?.offsetHeight ?? 80) * MAP_SCALE)}px`;
     map.insertBefore(mini, $("minimap-view"));

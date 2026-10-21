@@ -148,6 +148,12 @@ function makeIO(ctx: Context, node: GNode, def: NodeDef, stack: string[]): EmitI
     param: (name) => param(ctx, node, def, name),
     text: (name) => String(param(ctx, node, def, name)),
     inLoop: () => ctx.loops > 0,
+    host(name) {
+      const parent = node.parent !== undefined ? ctx.nodes.get(node.parent) : undefined;
+      const parentDef = parent ? CATALOG_BY_KIND.get(parent.kind) : undefined;
+      if (!parent || !parentDef) return undefined;
+      return String(param(ctx, parent, parentDef, name));
+    },
   };
 }
 
@@ -202,11 +208,47 @@ function exprOf(ctx: Context, nodeId: string, port: string, stack: string[]): st
   if (!emitted) return "nil";
   const { node, def, result } = emitted;
   if (!portDef(def, "outputs", port)) return "nil";
+  if (result.problem) diag(ctx, "error", result.problem, node.id);
   if (result.expr === undefined) {
     diag(ctx, "error", `${def.title} does not give a value`, node.id);
     return "nil";
   }
   return result.expr;
+}
+
+// A block in a slot must be in a container that allows it, in a slot the container has,
+// and the container must be in the program, so that its name is declared before use.
+function checkHosting(ctx: Context) {
+  const taken = new Map<string, string>();
+  for (const n of ctx.graph.nodes) {
+    if (n.parent === undefined) continue;
+    const def = CATALOG_BY_KIND.get(n.kind);
+    const parent = ctx.nodes.get(n.parent);
+    const parentDef = parent ? CATALOG_BY_KIND.get(parent.kind) : undefined;
+    if (!def || !parent || !parentDef) {
+      diag(ctx, "error", "a block is in a container that is no longer on the canvas", n.id);
+      continue;
+    }
+    if (!(parentDef.hosts ?? []).includes(n.kind)) {
+      diag(ctx, "error", `${def.title} cannot stand in ${parentDef.title}`, n.id);
+      continue;
+    }
+    const slots = Number(param(ctx, parent, parentDef, "slots")) || 0;
+    const slot = n.slot ?? 0;
+    if (slot >= slots) {
+      diag(ctx, "error", `${parentDef.title} has no slot ${slot + 1}`, n.id);
+      continue;
+    }
+    const key = `${n.parent}:${slot}`;
+    if (taken.has(key)) {
+      diag(ctx, "error", `${def.title} and ${taken.get(key)} are in the same slot`, n.id);
+      continue;
+    }
+    taken.set(key, def.title);
+    if (ctx.emitted.has(n.id) && !ctx.emitted.has(parent.id)) {
+      diag(ctx, "error", `${parentDef.title} is not in the program, so ${def.title} has nothing to stand in`, n.id);
+    }
+  }
 }
 
 function checkRequired(ctx: Context) {
@@ -247,6 +289,7 @@ export function generate(graph: Graph): GenerateResult {
     decls.push(emitted.result.decl);
   }
 
+  checkHosting(ctx);
   checkRequired(ctx);
   checkOrphans(ctx);
 

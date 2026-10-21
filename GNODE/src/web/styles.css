@@ -383,3 +383,46 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .tour-card button[hidden] { display: none; }
 .tour-card .tc-close:hover { color: var(--text); border-color: transparent; }
 .tour-card .tc-offer { border-style: dashed; }
+
+/* containers: a block with slots, such as a trash site, holds blocks in its slot frames */
+.node.hosts {
+  width: 260px;
+  border-color: rgba(143, 214, 106, 0.55);
+  background: linear-gradient(180deg, #1d2a1a 0%, #141d13 100%);
+}
+.node.hosts .node-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.site-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: #bcd68c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.site-slots { display: flex; flex-direction: column; gap: 10px; padding: 0 10px 12px; }
+.site-slot {
+  position: relative;
+  min-height: 118px;
+  border: 1px dashed rgba(190, 214, 140, 0.35);
+  border-radius: 6px;
+  background: rgba(10, 14, 10, 0.55);
+}
+.site-slot.empty::before {
+  content: "MACHINE SLOT";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(190, 214, 140, 0.4);
+  pointer-events: none;
+}
+.site-slot > .node {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: calc(100% - 16px);
+  min-width: 0;
+}
