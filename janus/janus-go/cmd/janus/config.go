@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,9 @@ type settings struct {
 	NATSURL                string
 	NATSAddress            string
 	NATSDir                string
+	NATSKeysPath           string
+	NATSLeafAddress        string
+	KeySecret              string
 	WASMBuilderImage       string
 	GoWASMBuilderImage     string
 	JSWASMBuilderImage     string
@@ -165,6 +169,17 @@ func loadSettings(ctx context.Context) (settings, error) {
 	if natsDir == "" {
 		natsDir = "data/nats"
 	}
+	natsKeysPath := strings.TrimSpace(os.Getenv("JANUS_NATS_KEYS"))
+	if natsKeysPath == "" {
+		natsKeysPath = filepath.Join(natsDir, "keys.db")
+	}
+	natsLeafAddress := strings.TrimSpace(os.Getenv("JANUS_NATS_LEAF_ADDRESS"))
+	// The NATS trust keys are opened only when a secret is set. Without one the
+	// embedded server accepts any client, as it did before the keys existed.
+	keySecret := os.Getenv("JANUS_KEY_SECRET")
+	if keySecret != "" && len(keySecret) < 32 {
+		return settings{}, errors.New("JANUS_KEY_SECRET must contain at least 32 bytes")
+	}
 	span.SetAttributes(
 		attribute.String("config.http.address", addr),
 		attribute.String("config.http.address.source", source),
@@ -186,6 +201,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
 		HeadscaleURL: headscaleURL, HeadscaleAPIKey: headscaleKey, HeadscaleControlURL: headscaleControlURL, TailnetDir: tailnetDir,
 		NATSURL: natsURL, NATSAddress: natsAddress, NATSDir: natsDir,
+		NATSKeysPath: natsKeysPath, NATSLeafAddress: natsLeafAddress, KeySecret: keySecret,
 		WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage, JSWASMBuilderImage: jsWASMBuilderImage,
 		PyroscopeServerAddress: pyroscopeAddress,
 	}, nil

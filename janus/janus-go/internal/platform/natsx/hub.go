@@ -12,9 +12,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+
+	"janus/internal/platform/natsauth"
 )
 
 // HubDomain is the JetStream domain of the control plane's server. An Agent's
@@ -37,6 +40,24 @@ type Config struct {
 	StoreDir string
 	// Name names the connection in the server's monitoring.
 	Name string
+	// ClientOptions are the options of the process's own connection, such as
+	// the credentials of the control plane's user when the server is trusted.
+	ClientOptions []nats.Option
+	// Trust makes the embedded server run with decentralised credentials. Nil
+	// means it accepts any client, as before. It is ignored when URL is set.
+	Trust *Trust
+}
+
+// Trust is the decentralised NATS trust of an embedded server: the operator
+// that signs the accounts, and the accounts it serves. Accounts holds every
+// account the server knows, the system account included.
+type Trust struct {
+	Operator      *natsauth.Operator
+	SystemAccount *natsauth.Account
+	Accounts      []*natsauth.Account
+	// LeafAddress is the host:port the server takes leaf connections on. Empty
+	// means it takes none.
+	LeafAddress string
 }
 
 // Hub is a process's connection to NATS and, when embedded, the server itself.
@@ -59,11 +80,11 @@ func Start(ctx context.Context, cfg Config) (*Hub, error) {
 		h.server = srv
 		url = srv.ClientURL()
 	}
-	options := []nats.Option{
+	options := append([]nats.Option{
 		nats.Name(cfg.Name),
 		nats.ClosedHandler(func(*nats.Conn) { close(h.closed) }),
 		nats.MaxReconnects(-1),
-	}
+	}, cfg.ClientOptions...)
 	if deadline, ok := ctx.Deadline(); ok {
 		options = append(options, nats.Timeout(time.Until(deadline)))
 	}
@@ -87,7 +108,7 @@ func embed(cfg Config) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	srv, err := server.NewServer(&server.Options{
+	opts := &server.Options{
 		ServerName:      "janus-hub",
 		Host:            host,
 		Port:            port,
@@ -96,7 +117,13 @@ func embed(cfg Config) (*server.Server, error) {
 		StoreDir:        cfg.StoreDir,
 		NoSigs:          true,
 		NoLog:           true,
-	})
+	}
+	if cfg.Trust != nil {
+		if err := applyTrust(opts, cfg.Trust); err != nil {
+			return nil, err
+		}
+	}
+	srv, err := server.NewServer(opts)
 	if err != nil {
 		return nil, fmt.Errorf("configure embedded NATS server: %w", err)
 	}
@@ -107,6 +134,31 @@ func embed(cfg Config) (*server.Server, error) {
 		return nil, fmt.Errorf("embedded NATS server did not accept connections within %s", readyTimeout)
 	}
 	return srv, nil
+}
+
+// applyTrust makes opts trust the operator and resolve the accounts, and opens
+// the leaf listener when there is a leaf address.
+func applyTrust(opts *server.Options, trust *Trust) error {
+	if trust.Operator == nil || trust.SystemAccount == nil {
+		return errors.New("NATS trust needs an operator and a system account")
+	}
+	resolver := &server.MemAccResolver{}
+	for _, account := range trust.Accounts {
+		if err := resolver.Store(account.Pub, account.JWT); err != nil {
+			return fmt.Errorf("store account %s: %w", account.Pub, err)
+		}
+	}
+	opts.TrustedOperators = []*jwt.OperatorClaims{trust.Operator.Claims}
+	opts.AccountResolver = resolver
+	opts.SystemAccount = trust.SystemAccount.Pub
+	if trust.LeafAddress != "" {
+		host, port, err := listenAddress(trust.LeafAddress)
+		if err != nil {
+			return err
+		}
+		opts.LeafNode = server.LeafNodeOpts{Host: host, Port: port}
+	}
+	return nil
 }
 
 func listenAddress(address string) (string, int, error) {

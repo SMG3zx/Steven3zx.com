@@ -24,6 +24,7 @@ import (
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
+	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natsx"
 	auditservice "janus/internal/services/audit"
 	buildsservice "janus/internal/services/builds"
@@ -47,6 +48,9 @@ type application struct {
 	audit     app.Audit
 	telemetry *telemetry
 	nats      *natsx.Hub
+	// agents is the AGENTS account fleet signs Agents' leaf credentials with.
+	// It is nil when the control plane runs without NATS trust keys.
+	agents *natsauth.Account
 	// auditService writes the Audit Events published to the AUDIT stream.
 	auditService *auditservice.Service
 	database     *sqlstore.Store
@@ -317,7 +321,16 @@ func (a *application) endShutdownSpan() {
 // on JANUS_NATS_ADDRESS with its store in JANUS_NATS_DIR.
 func (a *application) startNATS(ctx context.Context) error {
 	cfg := a.settings
-	hub, err := natsx.Start(ctx, natsx.Config{URL: cfg.NATSURL, Address: cfg.NATSAddress, StoreDir: cfg.NATSDir, Name: "janus"})
+	config := natsx.Config{URL: cfg.NATSURL, Address: cfg.NATSAddress, StoreDir: cfg.NATSDir, Name: "janus"}
+	if cfg.NATSURL == "" && cfg.KeySecret != "" {
+		trust, err := openNATSTrust(ctx, cfg.NATSKeysPath, cfg.KeySecret, cfg.NATSLeafAddress)
+		if err != nil {
+			return fmt.Errorf("open the NATS keys: %w", err)
+		}
+		config.Trust, config.ClientOptions = trust.trust, trust.clientOpts
+		a.agents = trust.agents
+	}
+	hub, err := natsx.Start(ctx, config)
 	if err != nil {
 		return fmt.Errorf("start NATS: %w", err)
 	}
@@ -529,7 +542,7 @@ func (a *application) startFleet(ctx context.Context) error {
 		a.agentLink = agentgrpc.NewLink(node.Dial)
 		link = a.agentLink
 	}
-	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link})
+	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL, Link: link, Agents: a.agents})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
 		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
 	}
