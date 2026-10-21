@@ -21,6 +21,7 @@ import (
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
 	"janus/internal/app"
+	"janus/internal/platform/natsx"
 )
 
 // application is the composition root: it builds the adapters, hands them to
@@ -35,6 +36,7 @@ type application struct {
 	auditLog  *auditlog.Log
 	audit     app.Audit
 	telemetry *telemetry
+	nats      *natsx.Hub
 	database  *sqlstore.Store
 	store     app.Store
 	identity  *app.Identity
@@ -124,6 +126,7 @@ func (a *application) groups() []group {
 		{name: "foundation", components: []component{
 			{name: "audit", start: a.startAudit, stop: a.tracked(a.stopAudit)},
 			{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
+			{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
 			{name: "store", start: a.openStore, stop: a.tracked(a.closeStore)},
 		}},
 		{name: "identity", components: []component{
@@ -257,6 +260,23 @@ func (a *application) endShutdownSpan() {
 	app.RecordError(a.shutdownSpan, a.stopErr)
 	a.shutdownSpan.End()
 	a.shutdownSpan = nil
+}
+
+// startNATS connects to JANUS_NATS_URL, or embeds a JetStream server listening
+// on JANUS_NATS_ADDRESS with its store in JANUS_NATS_DIR.
+func (a *application) startNATS(ctx context.Context) error {
+	cfg := a.settings
+	hub, err := natsx.Start(ctx, natsx.Config{URL: cfg.NATSURL, Address: cfg.NATSAddress, StoreDir: cfg.NATSDir, Name: "janus"})
+	if err != nil {
+		return fmt.Errorf("start NATS: %w", err)
+	}
+	a.nats = hub
+	a.logger.Info("NATS is ready", zap.String("url", hub.URL()), zap.Bool("embedded", hub.Embedded()))
+	return nil
+}
+
+func (a *application) stopNATS(ctx context.Context) error {
+	return wrap("stop NATS", a.nats.Close(ctx))
 }
 
 func (a *application) openStore(context.Context) error {

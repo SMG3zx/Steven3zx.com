@@ -1,6 +1,10 @@
-// Package archtest enforces the dependency rules of section 4 of
+// Package archtest enforces the dependency rules of section 9 of
 // docs/architecture.md. It reads the import graph with `go list` and fails
 // when a package under internal/ or cmd/ imports something its layer forbids.
+//
+// Rules "1" to "4" are ADR 0003's rules for domain, app and adapters, kept
+// until the migration deletes app and adapters. Rules "9.2" to "9.5" are the
+// rules for contract, platform and services.
 package archtest
 
 import (
@@ -57,6 +61,9 @@ const (
 	layerApp
 	layerAdapter
 	layerComposition
+	layerContract
+	layerPlatform
+	layerService
 )
 
 // Only non-test imports are checked: `go list` reports test imports
@@ -102,6 +109,13 @@ func (c checker) layerOf(path string) (layer, string) {
 	case strings.HasPrefix(rel, "internal/adapters/"):
 		name, _, _ := strings.Cut(strings.TrimPrefix(rel, "internal/adapters/"), "/")
 		return layerAdapter, name
+	case within(rel, "internal/contract"):
+		return layerContract, ""
+	case within(rel, "internal/platform"):
+		return layerPlatform, ""
+	case strings.HasPrefix(rel, "internal/services/"):
+		name, _, _ := strings.Cut(strings.TrimPrefix(rel, "internal/services/"), "/")
+		return layerService, name
 	case within(rel, "cmd/janus"), within(rel, "cmd/janus-agent"):
 		return layerComposition, ""
 	}
@@ -127,13 +141,44 @@ func isPure(path string) bool {
 }
 
 func (c checker) checkImport(pkg, imp string) []violation {
-	from, fromAdapter := c.layerOf(pkg)
-	to, toAdapter := c.layerOf(imp)
+	from, fromName := c.layerOf(pkg)
+	to, toName := c.layerOf(imp)
 	_, local := c.rel(imp)
 	bad := func(rule, reason string) []violation {
 		return []violation{{pkg, imp, rule, reason}}
 	}
+	old := to == layerApp || to == layerAdapter
 
+	switch {
+	case to == layerService && from != layerComposition:
+		if from == layerService && fromName == toName {
+			return nil
+		}
+		if from == layerService {
+			return bad("9.4", "a service never imports another service; use its contract")
+		}
+		return bad("9.5", "only cmd/janus imports services")
+	case from == layerContract:
+		if local && to != layerDomain && to != layerContract {
+			return bad("9.2", "contract imports only domain")
+		}
+		if !local && !isStdlib(imp) {
+			return bad("9.2", "contract imports only the standard library")
+		}
+		return nil
+	case from == layerPlatform:
+		if to == layerContract || to == layerComposition || old {
+			return bad("9.3", "platform imports no contract, service, app, adapter or cmd")
+		}
+		return nil
+	case from == layerService:
+		if to == layerComposition || old {
+			return bad("9.4", "a service imports only contract, domain and platform from this repository")
+		}
+		return nil
+	}
+
+	fromAdapter, toAdapter := fromName, toName
 	switch from {
 	case layerDomain:
 		if local && to != layerDomain {
@@ -229,6 +274,12 @@ func TestFixtures(t *testing.T) {
 			"package " + fixtures + "rule3/internal/adapters/httpapi imports " + fixtures + "rule3/internal/adapters/storetest: rule 3",
 		}},
 		{"rule4", []string{"package " + fixtures + "rule4/cmd/other imports " + fixtures + "rule4/internal/adapters/sqlstore: rule 4"}},
+		{"services", []string{
+			"package " + fixtures + "services/internal/contract/projects imports " + fixtures + "services/internal/platform/natsx: rule 9.2",
+			"package " + fixtures + "services/internal/platform/natsx imports " + fixtures + "services/internal/app: rule 9.3",
+			"package " + fixtures + "services/internal/services/builds imports " + fixtures + "services/internal/services/projects: rule 9.4",
+			"package " + fixtures + "services/cmd/other imports " + fixtures + "services/internal/services/projects: rule 9.5",
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

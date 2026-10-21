@@ -35,6 +35,9 @@ type settings struct {
 	HeadscaleAPIKey        string
 	HeadscaleControlURL    string
 	TailnetDir             string
+	NATSURL                string
+	NATSAddress            string
+	NATSDir                string
 	WASMBuilderImage       string
 	GoWASMBuilderImage     string
 	JSWASMBuilderImage     string
@@ -133,6 +136,15 @@ func loadSettings(ctx context.Context) (settings, error) {
 	if tailnetDir == "" {
 		tailnetDir = "data/tailnet"
 	}
+	natsURL := strings.TrimSpace(os.Getenv("JANUS_NATS_URL"))
+	natsAddress := strings.TrimSpace(os.Getenv("JANUS_NATS_ADDRESS"))
+	if natsAddress == "" {
+		natsAddress = "127.0.0.1:4222"
+	}
+	natsDir := strings.TrimSpace(os.Getenv("JANUS_NATS_DIR"))
+	if natsDir == "" {
+		natsDir = "data/nats"
+	}
 	span.SetAttributes(
 		attribute.String("config.http.address", addr),
 		attribute.String("config.http.address.source", source),
@@ -141,6 +153,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.Bool("config.github.enabled", githubEnabled),
 		attribute.Bool("config.headscale.enabled", headscaleURL != ""),
 		attribute.Bool("config.pyroscope.enabled", pyroscopeAddress != ""),
+		attribute.Bool("config.nats.embedded", natsURL == ""),
 	)
 	return settings{
 		HTTPAddress: addr, DatabasePath: databasePath, JWTSecret: secret, JWTIssuer: issuer,
@@ -148,6 +161,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
 		HeadscaleURL: headscaleURL, HeadscaleAPIKey: headscaleKey, HeadscaleControlURL: headscaleControlURL, TailnetDir: tailnetDir,
+		NATSURL: natsURL, NATSAddress: natsAddress, NATSDir: natsDir,
 		WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage, JSWASMBuilderImage: jsWASMBuilderImage,
 		PyroscopeServerAddress: pyroscopeAddress,
 	}, nil

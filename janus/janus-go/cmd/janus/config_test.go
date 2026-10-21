@@ -50,3 +50,23 @@ func TestAgentsJoinTheServerURLUnlessAControlURLIsGiven(t *testing.T) {
 		t.Fatalf("settings = %#v, %v, want the control URL Agents are told to join", got, err)
 	}
 }
+
+func TestNATSIsEmbeddedOnLocalhostUnlessAURLIsGiven(t *testing.T) {
+	headscaleEnvironment(t, "", "", "")
+	for _, name := range []string{"JANUS_NATS_URL", "JANUS_NATS_ADDRESS", "JANUS_NATS_DIR"} {
+		t.Setenv(name, "")
+	}
+	got, err := loadSettings(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NATSURL != "" || got.NATSAddress != "127.0.0.1:4222" || got.NATSDir != "data/nats" {
+		t.Fatalf("settings = %#v, want an embedded server on 127.0.0.1:4222 storing in data/nats", got)
+	}
+
+	t.Setenv("JANUS_NATS_URL", " nats://nats.example:4222 ")
+	got, err = loadSettings(context.Background())
+	if err != nil || got.NATSURL != "nats://nats.example:4222" {
+		t.Fatalf("settings = %#v, %v, want the trimmed external URL", got, err)
+	}
+}

@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 295,
+      "line": 315,
       "title": "The composition root",
       "description": "`func (a *application) startDeployments` is where the core is wired to its adapters. Only cmd/janus knows which adapters exist."
     }

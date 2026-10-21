@@ -1,4 +1,18 @@
 services:
+  # A standalone JetStream server for running services against
+  # JANUS_NATS_URL=nats://127.0.0.1:4222. Without it, janus embeds its own.
+  nats:
+    image: nats:2.15.1-alpine
+    container_name: janus-nats
+    command: ["--config=/etc/nats/nats.conf"]
+    restart: unless-stopped
+    volumes:
+      - ./nats/nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+
   jaeger:
     image: jaegertracing/jaeger:2.22.0
     container_name: janus-jaeger
@@ -102,6 +116,7 @@ services:
       - prometheus
 
 volumes:
+  nats-data:
   grafana-data:
   loki-data:
   prometheus-data:
