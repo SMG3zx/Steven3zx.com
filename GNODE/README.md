@@ -28,6 +28,7 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 - **Save and open:** programs are saved as JSON in `graphs/`. Pick one in the list and press Open.
 - **Read the code:** the bottom panel shows the Go source as you edit it. The Problems tab lists anything that would stop the program from building. Click a problem to jump to its block.
 - **Run:** press Run to generate, build and run the program with `go run`. The Output tab shows what it printed.
+- **Undo and redo:** Ctrl+Z (Cmd+Z on a Mac) undoes the last change, and Ctrl+Shift+Z or Ctrl+Y redoes it. The Undo and Redo buttons do the same. Typing in a setting counts as one change. Opening or starting a program can be undone too, but the first program you open when the editor starts cannot.
 
 ## How it works
 
@@ -76,5 +77,5 @@ bun run typecheck
 
 - Types are not checked by GNODE. Connect an `int` to a `string` operator and the Go compiler reports the error, shown in the output.
 - Function parameters and return types are typed as text, for example `a int, b int`.
-- There is no undo yet.
+- Undo keeps the last 200 changes. It is not saved with the program, so it is gone when you reload the page.
 - `generated/` holds the programs Run writes. It is ignored by git.

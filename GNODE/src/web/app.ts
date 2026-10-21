@@ -4,6 +4,7 @@
 
 import { CATALOG, CATALOG_BY_KIND, type Category, type NodeDef, type PortDef } from "../shared/catalog";
 import { emptyGraph, newId, type GNode, type Graph, type ParamValue, type PortRef, type Wire } from "../shared/graph";
+import { History } from "./history";
 
 interface Diagnostic {
   level: "error" | "warning";
@@ -56,6 +57,7 @@ const graphList = $<HTMLSelectElement>("graph-list");
 const bottom = $("bottom");
 
 let graph: Graph = emptyGraph("hello");
+const history = new History<Graph>();
 let selection: Selection = null;
 let diagnostics: Diagnostic[] = [];
 let emitted = new Set<string>();
@@ -143,6 +145,7 @@ function addNode(kind: string, x: number, y: number) {
     y: Math.max(0, Math.round(y)),
     params: defaultParams(def),
   };
+  checkpoint();
   graph.nodes.push(node);
   renderNodes();
   select({ kind: "node", id: node.id });
@@ -150,6 +153,7 @@ function addNode(kind: string, x: number, y: number) {
 }
 
 function removeNode(id: string) {
+  checkpoint();
   graph.nodes = graph.nodes.filter((n) => n.id !== id);
   graph.wires = graph.wires.filter((w) => w.from.node !== id && w.to.node !== id);
   nodeEls.get(id)?.remove();
@@ -160,6 +164,7 @@ function removeNode(id: string) {
 }
 
 function removeWire(id: string) {
+  checkpoint();
   graph.wires = graph.wires.filter((w) => w.id !== id);
   if (selection?.kind === "wire" && selection.id === id) select(null);
   renderWires();
@@ -238,6 +243,7 @@ function startNodeDrag(e: PointerEvent, n: GNode, box: HTMLElement) {
   const startY = e.clientY;
   const origX = n.x;
   const origY = n.y;
+  const before = structuredClone(graph);
   select({ kind: "node", id: n.id });
   const move = (ev: PointerEvent) => {
     n.x = Math.max(0, origX + ev.clientX - startX);
@@ -249,6 +255,10 @@ function startNodeDrag(e: PointerEvent, n: GNode, box: HTMLElement) {
   const up = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
+    if (n.x !== origX || n.y !== origY) {
+      history.record(before);
+      updateHistoryButtons();
+    }
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
@@ -299,6 +309,7 @@ function connect(out: PortRef, input: PortRef, kindsMatch: boolean) {
     return;
   }
   // Inputs take one source. Exec outputs lead to one block.
+  checkpoint();
   graph.wires = graph.wires.filter((w) => !(w.to.node === input.node && w.to.port === input.port));
   if (outKind === "exec") {
     graph.wires = graph.wires.filter((w) => !(w.from.node === out.node && w.from.port === out.port));
@@ -427,6 +438,8 @@ function renderInspector() {
 }
 
 function setParam(n: GNode, id: string, value: string) {
+  // Typing a value updates it on every key press; the key merges those into one undo step.
+  checkpoint(`param:${n.id}:${id}`);
   n.params[id] = value;
   scheduleGenerate();
 }
@@ -538,15 +551,54 @@ async function refreshGraphList(selectName?: string) {
   if (selectName && data.graphs.includes(selectName)) graphList.value = selectName;
 }
 
-function loadGraph(next: Graph) {
+// ---------- undo and redo ----------
+
+// Call before changing the graph. Stores a copy of the graph as it is now.
+function checkpoint(key?: string) {
+  history.record(structuredClone(graph), key);
+  updateHistoryButtons();
+}
+
+function undo() {
+  const prev = history.undo(structuredClone(graph));
+  if (!prev) return;
+  restoreGraph(prev);
+  setStatus("Undone");
+}
+
+function redo() {
+  const next = history.redo(structuredClone(graph));
+  if (!next) return;
+  restoreGraph(next);
+  setStatus("Redone");
+}
+
+function updateHistoryButtons() {
+  $<HTMLButtonElement>("btn-undo").disabled = !history.canUndo;
+  $<HTMLButtonElement>("btn-redo").disabled = !history.canRedo;
+}
+
+// Replaces the whole graph and redraws it. Node elements hold references to
+// the node objects, so they are rebuilt rather than reused.
+function restoreGraph(next: Graph) {
   graph = next;
   graphNameInput.value = graph.name;
   nodeEls.forEach((n) => n.remove());
   nodeEls.clear();
-  selection = null;
+  const stillThere = selection?.kind === "node"
+    ? nodeById(selection.id) !== undefined
+    : selection?.kind === "wire" && graph.wires.some((w) => w.id === selection?.id);
+  if (!stillThere) selection = null;
   renderNodes();
   renderInspector();
+  updateHistoryButtons();
   scheduleGenerate();
+}
+
+function loadGraph(next: Graph) {
+  checkpoint();
+  selection = null;
+  restoreGraph(next);
 }
 
 async function openGraph(name: string) {
@@ -590,6 +642,8 @@ document.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) =>
 );
 $("btn-toggle-bottom").addEventListener("click", () => bottom.classList.toggle("collapsed"));
 $("btn-run").addEventListener("click", run);
+$("btn-undo").addEventListener("click", undo);
+$("btn-redo").addEventListener("click", redo);
 $("btn-save").addEventListener("click", saveGraph);
 $("btn-open").addEventListener("click", () => openGraph(graphList.value));
 $("btn-new").addEventListener("click", () => {
@@ -605,6 +659,19 @@ graphNameInput.addEventListener("change", () => {
 window.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
   if (target.closest("input, select, textarea")) return;
+  const mod = e.ctrlKey || e.metaKey;
+  const key = e.key.toLowerCase();
+  if (mod && key === "z") {
+    e.preventDefault();
+    if (e.shiftKey) redo();
+    else undo();
+    return;
+  }
+  if (mod && key === "y") {
+    e.preventDefault();
+    redo();
+    return;
+  }
   if (e.key !== "Delete" && e.key !== "Backspace") return;
   if (!selection) return;
   e.preventDefault();
@@ -614,6 +681,7 @@ window.addEventListener("keydown", (e) => {
 
 buildPalette();
 renderInspector();
+updateHistoryButtons();
 (async () => {
   await refreshGraphList();
   const first = graphList.options[0]?.value;
@@ -623,6 +691,9 @@ renderInspector();
   } else {
     loadGraph(emptyGraph("hello"));
   }
+  // The first program is not an edit, so there is nothing to undo back to.
+  history.clear();
+  updateHistoryButtons();
   bottom.classList.remove("collapsed");
   showTab("code");
 })();
