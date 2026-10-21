@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GNODE</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">GNODE</div>
+    <input id="graph-name" class="graph-name" type="text" value="hello" spellcheck="false" aria-label="Program name">
+    <select id="graph-list" aria-label="Saved programs"></select>
+    <button id="btn-open" type="button">Open</button>
+    <button id="btn-save" type="button">Save</button>
+    <button id="btn-new" type="button">New</button>
+    <span class="spacer"></span>
+    <span id="status" class="status"></span>
+    <button id="btn-run" type="button" class="primary">Run</button>
+  </header>
+
+  <div class="workspace">
+    <aside class="palette" id="palette" aria-label="Blocks"></aside>
+
+    <main class="canvas-wrap">
+      <div class="canvas" id="canvas">
+        <svg class="wires" id="wires" aria-hidden="true"></svg>
+      </div>
+    </main>
+
+    <aside class="inspector" id="inspector" aria-label="Selected block"></aside>
+  </div>
+
+  <section class="bottom" id="bottom">
+    <div class="tabs">
+      <button type="button" data-tab="code" class="active">Go code</button>
+      <button type="button" data-tab="output">Output</button>
+      <button type="button" data-tab="problems">Problems <span id="problem-count"></span></button>
+      <button type="button" id="btn-toggle-bottom" class="toggle" aria-label="Toggle panel">&#x25BE;</button>
+    </div>
+    <pre id="code-view" class="panel-body" data-panel="code"></pre>
+    <pre id="output-view" class="panel-body hidden" data-panel="output"></pre>
+    <ul id="problem-list" class="panel-body hidden" data-panel="problems"></ul>
+  </section>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
