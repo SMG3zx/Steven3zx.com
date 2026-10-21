@@ -88,6 +88,8 @@ func (t *treeFiles) Close() error {
 
 // Files reads the files of the tree. When want is not nil, only the files
 // whose paths it lists are read and the others are skipped.
+var _ app.SourceTree = (*treeFiles)(nil)
+
 func (t *treeFiles) Files(want map[string]bool) ([]app.SnapshotFile, error) {
 	files := make([]app.SnapshotFile, 0)
 	var total int64

@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/internal/app/fleet.go",
-      "line": 197,
+      "line": 199,
       "title": "Fleet sends the command",
       "description": "`func (f *Fleet) Deploy` sends the Deploy command over AgentLink, and the Agent answers with its state."
     },
@@ -65,7 +65,7 @@
     },
     {
       "file": "janus-go/internal/adapters/sqlstore/store.go",
-      "line": 289,
+      "line": 294,
       "title": "The one-in-flight rule in the schema",
       "description": "`CREATE UNIQUE INDEX IF NOT EXISTS one_inflight_deployment_per_project` backs the rule with a partial unique index, so the database enforces it too."
     }

@@ -100,6 +100,11 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+var (
+	_ querier = (*sql.DB)(nil)
+	_ querier = (*sql.Tx)(nil)
+)
+
 // start begins the span and the time limit of one operation. The returned
 // function ends them and passes err through in the form the Store returns it.
 func (s *Store) start(ctx context.Context, operation string) (context.Context, func(error) error) {

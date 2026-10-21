@@ -566,6 +566,3 @@ func (a *Server) authorizedSubject(c *call, action string, resource map[string]a
 	allowed, err := a.allowed(c.Request.Context(), owner, action, resource)
 	return owner, err == nil && allowed
 }
-
-var _ = fmt.Sprintf
-var _ = json.Valid

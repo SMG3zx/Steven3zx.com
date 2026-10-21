@@ -39,6 +39,8 @@ func (s *DirSource) Open(_ context.Context, request app.SourceRequest) (app.Sour
 
 type dirTree struct{ dir string }
 
+var _ app.SourceTree = dirTree{}
+
 func (dirTree) Close() error { return nil }
 
 // Files reads the regular files of the directory, as Git records them: mode

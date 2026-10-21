@@ -35,7 +35,7 @@
     },
     {
       "file": "janus-go/internal/app/fleet.go",
-      "line": 213,
+      "line": 215,
       "title": "An Owner reads their usage",
       "description": "`func (f *Fleet) Usage` returns only the Owner's own runs, newest first."
     }

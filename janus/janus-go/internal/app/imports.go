@@ -214,6 +214,8 @@ func (i *Imports) SetEntryPoint(ctx context.Context, owner, projectID, snapshotI
 // The Account's queued imports are cancelled in the Store by the caller.
 func (i *Imports) CancelOwner(owner string) int { return i.jobs.CancelOwner(owner) }
 
+var _ JobCanceller = (*Imports)(nil)
+
 // Drain makes Request refuse new imports and waits for the running ones, or
 // until ctx ends.
 func (i *Imports) Drain(ctx context.Context) error { return i.jobs.Drain(ctx) }

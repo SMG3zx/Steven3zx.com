@@ -154,6 +154,8 @@ func (b *Builds) Resume(ctx context.Context) (int, error) {
 // Account's queued Builds are cancelled in the Store by the caller.
 func (b *Builds) CancelOwner(owner string) int { return b.jobs.CancelOwner(owner) }
 
+var _ JobCanceller = (*Builds)(nil)
+
 // Drain makes Request refuse new Builds and waits for the running ones, or
 // until ctx ends.
 func (b *Builds) Drain(ctx context.Context) error { return b.jobs.Drain(ctx) }

@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/internal/app/imports.go",
-      "line": 410,
+      "line": 412,
       "title": "The import runs",
       "description": "`func (i *Imports) run` fetches the commit, scans it, and stores a Staging Snapshot, then completes it."
     },

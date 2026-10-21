@@ -184,6 +184,8 @@ func (f *Fleet) Ready(ctx context.Context, ownerID, agentID string) error {
 	return nil
 }
 
+var _ AgentDeployer = (*Fleet)(nil)
+
 // StopDeployment tells the Owner's Agent to stop serving a Deployment.
 func (f *Fleet) StopDeployment(ctx context.Context, ownerID, agentID, deploymentID string) error {
 	return f.command(ctx, ownerID, agentID, AgentCommand{Stop: deploymentID}, "agent.deployment.stopped")
