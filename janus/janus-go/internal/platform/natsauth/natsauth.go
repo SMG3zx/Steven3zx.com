@@ -120,6 +120,12 @@ type Credentials struct {
 	seed    []byte
 }
 
+// CredsFile is the .creds file a server or client reads to join with these
+// credentials: the JWT and the seed in one file.
+func (c Credentials) CredsFile() ([]byte, error) {
+	return jwt.FormatUserConfig(c.JWT, c.seed)
+}
+
 // Options returns the client options that sign the server's nonce with the
 // user's key.
 func (c Credentials) Options() []nats.Option {
@@ -165,6 +171,26 @@ func AgentSubjects(agentID, ownerID string) (pub, sub []string) {
 func (a *Account) IssueAgentUser(agentID, ownerID string) (Credentials, error) {
 	pubAllow, subAllow := AgentSubjects(agentID, ownerID)
 	return a.IssueUser("agent-"+agentID, pubAllow, subAllow, true)
+}
+
+// LeafSubjects are what an Agent's leaf connection may carry across the link.
+// They are AgentSubjects, plus the Agent's own JetStream domain, which the hub
+// reaches through the leaf to read Usage. The leaf also answers requests that
+// reach it through an import, whose replies the server routes on the `_R_`
+// prefix, so that prefix is allowed for publishing.
+func LeafSubjects(agentID, ownerID string) (pub, sub []string) {
+	pub, sub = AgentSubjects(agentID, ownerID)
+	sub = append(sub, "$JS.agent-"+agentID+".API.>")
+	pub = append(pub, "_R_.>")
+	return pub, sub
+}
+
+// IssueLeafUser makes the credentials an Agent's leaf connection joins the hub
+// with. They are separate from the Agent's own user, so the link can be
+// revoked without touching the Agent's client credentials.
+func (a *Account) IssueLeafUser(agentID, ownerID string) (Credentials, error) {
+	pub, sub := LeafSubjects(agentID, ownerID)
+	return a.IssueUser("leaf-"+agentID, pub, sub, true)
 }
 
 // IssueUser makes a user in this account that may publish to pub and

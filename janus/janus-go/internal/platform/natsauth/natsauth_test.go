@@ -19,10 +19,13 @@ const denyWait = 5 * time.Second
 // fixture is a hub with the operator's trust and the JANUS and AGENTS
 // accounts, the way fleet and the control plane set them up.
 type fixture struct {
-	hub    *server.Server
-	op     *Operator
-	agents *Account
-	janus  *Account
+	hub      *server.Server
+	leafPort int
+	resolver *server.MemAccResolver
+	sys      *Account
+	op       *Operator
+	agents   *Account
+	janus    *Account
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -57,6 +60,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 
+	leafPort := freePort(t)
 	resolver := &server.MemAccResolver{}
 	for _, a := range []*Account{agents, janus, sys} {
 		if err := resolver.Store(a.Pub, a.JWT); err != nil {
@@ -73,6 +77,7 @@ func newFixture(t *testing.T) *fixture {
 		JetStream:        true,
 		JetStreamDomain:  "hub",
 		StoreDir:         t.TempDir(),
+		LeafNode:         server.LeafNodeOpts{Host: "127.0.0.1", Port: leafPort},
 		NoLog:            true,
 		NoSigs:           true,
 	})
@@ -87,7 +92,7 @@ func newFixture(t *testing.T) *fixture {
 		hub.Shutdown()
 		hub.WaitForShutdown()
 	})
-	return &fixture{hub: hub, op: op, agents: agents, janus: janus}
+	return &fixture{hub: hub, leafPort: leafPort, resolver: resolver, sys: sys, op: op, agents: agents, janus: janus}
 }
 
 // connect dials the hub as creds and collects the permission errors the
