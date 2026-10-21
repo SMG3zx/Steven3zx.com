@@ -23,7 +23,7 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 220,
+      "line": 214,
       "title": "The Tailnet port",
       "description": "`type Tailnet interface` issues keys, lists nodes, and removes a node. The control server behind it enforces who may connect to whom."
     },
@@ -35,7 +35,7 @@
     },
     {
       "file": "janus-go/internal/app/fleet.go",
-      "line": 55,
+      "line": 63,
       "title": "The control plane connects",
       "description": "`func (f *Fleet) Reconcile` connects to every Agent whose node has joined the tailnet, and disconnects from Agents that were removed."
     }

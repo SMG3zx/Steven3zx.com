@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/internal/adapters/sqlstore/deployments.go",
-      "line": 64,
+      "line": 45,
       "title": "The SQLite adapter",
       "description": "`func (s *Store) CreateDeployment` implements the Store port over SQLite, and enforces the one-in-flight rule inside one transaction."
     },
@@ -53,13 +53,13 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 199,
+      "line": 193,
       "title": "The Audit port",
       "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 380,
+      "line": 427,
       "title": "The composition root",
       "description": "`func (a *application) startDeployments` is where the core is wired to its adapters. Only cmd/janus knows which adapters exist."
     }

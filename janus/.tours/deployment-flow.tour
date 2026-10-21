@@ -17,7 +17,7 @@
     },
     {
       "file": "janus-go/internal/app/fleet.go",
-      "line": 170,
+      "line": 178,
       "title": "What Ready checks",
       "description": "`func (f *Fleet) Ready` reports whether the Owner's Agent is connected and not paused."
     },
@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/internal/app/fleet.go",
-      "line": 199,
+      "line": 207,
       "title": "Fleet sends the command",
       "description": "`func (f *Fleet) Deploy` sends the Deploy command over AgentLink, and the Agent answers with its state."
     },
@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/internal/adapters/sqlstore/deployments.go",
-      "line": 91,
+      "line": 72,
       "title": "Compare and swap in SQLite",
       "description": "`func (s *Store) TransitionDeployment` writes the move only if the stored state is still the one the caller saw."
     },

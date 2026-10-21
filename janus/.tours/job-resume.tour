@@ -4,28 +4,28 @@
   "description": "How a restart affects jobs: WASM Builds run under the job runner and are recovered from janus.db at startup; Imports are JetStream jobs of the projects service that are handed out again.",
   "steps": [
     {
-      "file": "janus-go/internal/app/jobrunner.go",
-      "line": 59,
+      "file": "janus-go/internal/services/builds/worker.go",
+      "line": 45,
       "title": "Jobs start under a limit",
-      "description": "`func (r *JobRunner) Start` runs a job on a goroutine the runner owns, and refuses when the runner is shutting down."
+      "description": "`func (s *Service) startWorkers` starts one consumer per worker, each taking one job at a time, so this process runs at most that many builds at once."
     },
     {
-      "file": "janus-go/internal/app/jobrunner.go",
-      "line": 88,
+      "file": "janus-go/internal/services/builds/worker.go",
+      "line": 187,
       "title": "A crash becomes a failed job",
-      "description": "`func (r *JobRunner) run` runs the job and hands any panic to the crashed callback, so a bad job fails without taking the process down."
+      "description": "`func (s *Service) runBuildSafely` runs the build and turns a panic into a failed build, so a bad build fails without taking the process down."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/jobs.go",
-      "line": 105,
-      "title": "Recovery at startup",
-      "description": "`func migrateAndRecoverJobs` moves WASM Builds that were running at the last shutdown back to queued, so they can resume."
+      "file": "janus-go/internal/services/builds/worker.go",
+      "line": 70,
+      "title": "Recovery at startup is JetStream's job",
+      "description": "`func (s *Service) handleBuild` finds a Build that was running at the last shutdown still unacknowledged. JetStream hands the job to a worker again after AckWait, and the Build starts again from queued."
     },
     {
-      "file": "janus-go/internal/adapters/sqlstore/jobs.go",
-      "line": 172,
+      "file": "janus-go/internal/services/builds/worker.go",
+      "line": 89,
       "title": "The resume limit",
-      "description": "`func recoverJobTable` counts resumes and fails a job that has been interrupted too many times, instead of retrying it forever."
+      "description": "`NumDelivered >= maxDeliveries` counts deliveries. A Build whose workers keep dying fails on its last delivery instead of waiting forever."
     },
     {
       "file": "janus-go/internal/services/projects/imports.go",
@@ -34,16 +34,16 @@
       "description": "`func (s *Service) handleImport` gets an Import's job again when its worker stopped. It moves the Import back to queued and resumes from its Staging Snapshot, and on the last delivery fails it instead of retrying forever."
     },
     {
-      "file": "janus-go/internal/app/builds.go",
-      "line": 147,
+      "file": "janus-go/internal/services/builds/worker.go",
+      "line": 187,
       "title": "Builds resume",
-      "description": "`func (b *Builds) Resume` restarts each interrupted build from scratch. A build whose language no longer has a builder fails instead."
+      "description": "`func (s *Service) runBuild` restarts an interrupted build from scratch: the source is read and compiled again."
     },
     {
-      "file": "janus-go/internal/app/jobrunner.go",
-      "line": 139,
+      "file": "janus-go/internal/services/builds/service.go",
+      "line": 168,
       "title": "Shutdown waits for jobs",
-      "description": "`func (r *JobRunner) Drain` stops accepting new jobs and waits for the running ones, or for the context to end."
+      "description": "`func (s *Service) Stop` stops taking jobs and cancels the running ones, which JetStream hands out again. It waits for them to stop, or for the context to end."
     }
   ]
 }
