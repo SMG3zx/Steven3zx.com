@@ -472,3 +472,24 @@ func TestGitHubListsGoThroughTheOwnersConnection(t *testing.T) {
 		t.Fatalf("branches without a connection = %v", err)
 	}
 }
+
+func TestAProjectHasOneImportAtATime(t *testing.T) {
+	h := start(t)
+	h.project("alice", "p1")
+	commit := h.github.Commit(t, "alice/demo", map[string]string{"main.go": mainGo})
+	if _, err := h.svc.db.Exec(`INSERT INTO project_import_jobs(id,owner_id,project_id,repository,branch,commit_sha,status) VALUES('running','alice','p1','alice/demo','main',?,'scanning')`, commit); err != nil {
+		t.Fatal(err)
+	}
+	err := h.call(contractprojects.SubjectRequestImport, contractprojects.RequestImport{OwnerID: "alice", ProjectID: "p1", Repository: "alice/demo", Branch: "main", Commit: commit}, nil)
+	if !errors.Is(err, contract.ErrInvalid) || !strings.Contains(err.Error(), "already in progress") {
+		t.Fatalf("a second import while one runs = %v", err)
+	}
+	if _, err := h.svc.db.Exec(`UPDATE project_import_jobs SET status='failed' WHERE id='running'`); err != nil {
+		t.Fatal(err)
+	}
+	var retried contractprojects.ImportQueued
+	h.must(contractprojects.SubjectRetryImport, contractprojects.ImportKey{OwnerID: "alice", JobID: "running"}, &retried)
+	if outcome := h.waitImport(retried.JobID); outcome != "project.import.completed" {
+		t.Fatalf("the retried import ended with %s", outcome)
+	}
+}
