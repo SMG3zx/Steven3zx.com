@@ -57,6 +57,39 @@ func (a *Server) getDeployment(c *call) any {
 	return jsonResponse(http.StatusOK, deployment)
 }
 
+// rollbackDeployment redeploys the WASM Build of one of the Account's recent
+// stopped Deployments and answers 202 with the new Deployment's ID.
+func (a *Server) rollbackDeployment(c *call) any {
+	owner, ok := a.authorizedSubject(c, "project.deploy", map[string]any{"owner_id": ""})
+	if !ok {
+		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	}
+	if a.dependencies.Deployments == nil {
+		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Deployments are unavailable"})
+	}
+	id, err := a.dependencies.Deployments.Rollback(c.Request.Context(), owner, c.Param("id"))
+	if err != nil {
+		return jsonResponse(deploymentErrorStatus(err), map[string]string{"error": err.Error()})
+	}
+	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"id": id, "state": "queued"}}
+}
+
+// stopDeployment stops one of the Account's Deployments and answers 200 when the
+// Agent has stopped it.
+func (a *Server) stopDeployment(c *call) any {
+	owner, ok := a.authorizedSubject(c, "project.deploy", map[string]any{"owner_id": ""})
+	if !ok {
+		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	}
+	if a.dependencies.Deployments == nil {
+		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "Deployments are unavailable"})
+	}
+	if err := a.dependencies.Deployments.Stop(c.Request.Context(), owner, c.Param("id")); err != nil {
+		return jsonResponse(deploymentErrorStatus(err), map[string]string{"error": err.Error()})
+	}
+	return jsonResponse(http.StatusOK, map[string]string{"id": c.Param("id"), "state": "stopped"})
+}
+
 // deploymentErrorStatus maps a refused Deploy to its status: 404 for something
 // the Account does not have, 409 for a Deploy the current state of the Project
 // or its build does not allow.

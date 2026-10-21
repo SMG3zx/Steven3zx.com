@@ -17,19 +17,19 @@
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 67,
+      "line": 92,
       "title": "The use case",
       "description": "`func (d *Deployments) Create` checks the build, its Check and the Agent. The business rules live here, in the core."
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 102,
+      "line": 280,
       "title": "Calling an outbound port",
       "description": "`d.deployer.Ready(` asks the Agent port whether it can take a Deploy. The use case depends on the interface, not on Fleet."
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 22,
+      "line": 28,
       "title": "The port the use case needs",
       "description": "`type AgentDeployer interface` is declared in the core. Fleet implements it, and a test fake can too."
     },
@@ -47,19 +47,19 @@
     },
     {
       "file": "janus-go/internal/domain/deployments/deployments.go",
-      "line": 29,
+      "line": 40,
       "title": "A domain rule",
       "description": "`func CanMove` is the legal-moves rule. Adapters call it rather than reimplementing it."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 174,
+      "line": 181,
       "title": "The Audit port",
       "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 294,
+      "line": 295,
       "title": "The composition root",
       "description": "`func (a *application) startDeployments` is where the core is wired to its adapters. Only cmd/janus knows which adapters exist."
     }

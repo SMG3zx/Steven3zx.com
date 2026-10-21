@@ -16,6 +16,17 @@ const (
 	Stopped  State = "stopped"
 )
 
+// Reason is why a stopped Deployment was stopped (GLOSSARY.md, Deployment states).
+type Reason string
+
+const (
+	Replaced       Reason = "replaced"
+	Removed        Reason = "removed"
+	RolledBack     Reason = "rolled back"
+	Expired        Reason = "expired"
+	AccountDeleted Reason = "account deleted"
+)
+
 // machine lists, for each non-terminal state, the states a Deployment may move
 // to. Failed and Stopped are terminal and have no entry.
 var machine = map[State][]State{

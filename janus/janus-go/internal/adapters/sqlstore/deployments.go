@@ -123,3 +123,69 @@ func (s *Store) FindDeployment(ctx context.Context, id, ownerID string) (deploym
 	deployment.DeployAnyway = anyway != 0
 	return deployment, err == nil, done(err)
 }
+
+// PromoteDeployment makes a starting Deployment healthy and stops the Project's
+// other healthy Deployments with the reason given, in one transaction, so the
+// Project never has no live Deployment or two.
+func (s *Store) PromoteDeployment(ctx context.Context, promotion app.PromoteDeployment) ([]app.Deployment, error) {
+	ctx, done := s.start(ctx, "PromoteDeployment")
+	var superseded []app.Deployment
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `SELECT id,project_id,agent_id,state FROM deployments WHERE owner_id=? AND project_id=? AND state=? AND id<>?`,
+			promotion.OwnerID, promotion.ProjectID, deployments.Healthy, promotion.ID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var other app.Deployment
+			if err = rows.Scan(&other.ID, &other.ProjectID, &other.AgentID, &other.State); err != nil {
+				rows.Close()
+				return err
+			}
+			superseded = append(superseded, other)
+		}
+		if err = rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+
+		result, err := tx.ExecContext(ctx, `UPDATE deployments SET state=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND owner_id=? AND project_id=? AND state=?`,
+			deployments.Healthy, promotion.ID, promotion.OwnerID, promotion.ProjectID, deployments.Starting)
+		if err != nil {
+			return err
+		}
+		if n, _ := result.RowsAffected(); n != 1 {
+			return errors.New("deployment changed while it was being updated")
+		}
+		if len(superseded) == 0 {
+			return nil
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE deployments SET state=?,reason=?,updated_at=CURRENT_TIMESTAMP WHERE owner_id=? AND project_id=? AND state=? AND id<>?`,
+			deployments.Stopped, promotion.Supersedes, promotion.OwnerID, promotion.ProjectID, deployments.Healthy, promotion.ID)
+		return err
+	})
+	return superseded, done(err)
+}
+
+// ListDeployments returns one Project's Deployments of an Account, newest first.
+func (s *Store) ListDeployments(ctx context.Context, projectID, ownerID string) ([]app.Deployment, error) {
+	ctx, done := s.start(ctx, "ListDeployments")
+	rows, err := s.db.QueryContext(ctx, `SELECT id,project_id,build_id,agent_id,state,reason,error,deploy_anyway,created_at,updated_at FROM deployments
+		WHERE project_id=? AND owner_id=? ORDER BY created_at DESC, rowid DESC`, projectID, ownerID)
+	if err != nil {
+		return nil, done(err)
+	}
+	defer rows.Close()
+	var listed []app.Deployment
+	for rows.Next() {
+		var deployment app.Deployment
+		var anyway int
+		if err = rows.Scan(&deployment.ID, &deployment.ProjectID, &deployment.BuildID, &deployment.AgentID, &deployment.State, &deployment.Reason, &deployment.Error, &anyway, &deployment.CreatedAt, &deployment.UpdatedAt); err != nil {
+			return nil, done(err)
+		}
+		deployment.DeployAnyway = anyway != 0
+		listed = append(listed, deployment)
+	}
+	return listed, done(rows.Err())
+}

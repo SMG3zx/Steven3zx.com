@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"sort"
 
 	"janus/internal/app"
 	"janus/internal/domain/deployments"
@@ -17,6 +18,7 @@ type memCheck struct {
 type memDeployment struct {
 	app.Deployment
 	ownerID string
+	order   int
 }
 
 // inFlightMessage is the error CreateDeployment gives while another Deployment
@@ -81,7 +83,8 @@ func (m *Memory) CreateDeployment(_ context.Context, deployment app.CreateDeploy
 		}
 	}
 	now := m.now()
-	m.deployments[deployment.ID] = &memDeployment{ownerID: deployment.OwnerID, Deployment: app.Deployment{ID: deployment.ID,
+	m.deploySeq++
+	m.deployments[deployment.ID] = &memDeployment{ownerID: deployment.OwnerID, order: m.deploySeq, Deployment: app.Deployment{ID: deployment.ID,
 		ProjectID: deployment.ProjectID, BuildID: deployment.BuildID, AgentID: deployment.AgentID, State: string(deployments.Queued),
 		DeployAnyway: deployment.DeployAnyway, CreatedAt: now, UpdatedAt: now}}
 	return nil
@@ -112,4 +115,47 @@ func (m *Memory) FindDeployment(_ context.Context, id, ownerID string) (app.Depl
 		return app.Deployment{}, false, nil
 	}
 	return stored.Deployment, true, nil
+}
+
+func (m *Memory) PromoteDeployment(_ context.Context, p app.PromoteDeployment) ([]app.Deployment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stored, ok := m.deployments[p.ID]
+	if !ok || stored.ownerID != p.OwnerID || stored.ProjectID != p.ProjectID {
+		return nil, fail("deployment not found")
+	}
+	if !deployments.CanMove(deployments.State(stored.State), deployments.Healthy) {
+		return nil, fail("deployment cannot move from %s to %s", stored.State, deployments.Healthy)
+	}
+	if stored.State != string(deployments.Starting) {
+		return nil, fail("deployment changed while it was being updated")
+	}
+	now := m.now()
+	stored.State, stored.UpdatedAt = string(deployments.Healthy), now
+	var superseded []app.Deployment
+	for _, other := range m.deployments {
+		if other.ID == p.ID || other.ownerID != p.OwnerID || other.ProjectID != p.ProjectID || other.State != string(deployments.Healthy) {
+			continue
+		}
+		other.State, other.Reason, other.UpdatedAt = string(deployments.Stopped), p.Supersedes, now
+		superseded = append(superseded, other.Deployment)
+	}
+	return superseded, nil
+}
+
+func (m *Memory) ListDeployments(_ context.Context, projectID, ownerID string) ([]app.Deployment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var matched []*memDeployment
+	for _, stored := range m.deployments {
+		if stored.ProjectID == projectID && stored.ownerID == ownerID {
+			matched = append(matched, stored)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool { return matched[i].order > matched[j].order })
+	listed := make([]app.Deployment, 0, len(matched))
+	for _, stored := range matched {
+		listed = append(listed, stored.Deployment)
+	}
+	return listed, nil
 }

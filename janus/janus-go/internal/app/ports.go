@@ -73,6 +73,13 @@ type Store interface {
 	CreateDeployment(ctx context.Context, deployment CreateDeployment) error
 	TransitionDeployment(ctx context.Context, transition DeploymentTransition) error
 	FindDeployment(ctx context.Context, id, ownerID string) (deployment Deployment, found bool, err error)
+	// PromoteDeployment makes a starting Deployment healthy and stops the
+	// Project's other healthy Deployments with the reason it names, in one change.
+	// It returns the Deployments it stopped, with their Agents, so the Agents can
+	// be told. A Deployment that is not starting is refused.
+	PromoteDeployment(ctx context.Context, promotion PromoteDeployment) (superseded []Deployment, err error)
+	// ListDeployments returns the Owner's Deployments of a Project, newest first.
+	ListDeployments(ctx context.Context, projectID, ownerID string) ([]Deployment, error)
 
 	// Agents and Enrollment Codes. A code is stored by hash and can be consumed
 	// once; every Agent lookup is scoped to its owner.

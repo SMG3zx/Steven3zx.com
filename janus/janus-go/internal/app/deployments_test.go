@@ -23,7 +23,10 @@ type fakeDeployer struct {
 	notReady error
 	panics   bool
 	gate     chan struct{}
+	entered  chan struct{}
 	calls    []string
+	stopErr  error
+	stops    []string
 }
 
 func (d *fakeDeployer) Ready(_ context.Context, _, _ string) error {
@@ -37,6 +40,9 @@ func (d *fakeDeployer) Deploy(_ context.Context, owner, agent, deployment, build
 	gate := d.gate
 	d.calls = append(d.calls, owner+"/"+agent+"/"+deployment+"/"+build)
 	d.mu.Unlock()
+	if d.entered != nil {
+		d.entered <- struct{}{}
+	}
 	if gate != nil {
 		<-gate
 	}
@@ -46,6 +52,22 @@ func (d *fakeDeployer) Deploy(_ context.Context, owner, agent, deployment, build
 		panic("Agent hand-off broke")
 	}
 	return d.err
+}
+
+func (d *fakeDeployer) Stop(_ context.Context, owner, agent, deployment string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stopErr != nil {
+		return d.stopErr
+	}
+	d.stops = append(d.stops, owner+"/"+agent+"/"+deployment)
+	return nil
+}
+
+func (d *fakeDeployer) setStopErr(err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.stopErr = err
 }
 
 func (d *fakeDeployer) setErr(err error) {

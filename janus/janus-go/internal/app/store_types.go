@@ -207,6 +207,13 @@ type DeploymentTransition struct {
 	ID, From, To, Error, Reason string
 }
 
+// PromoteDeployment makes a starting Deployment healthy, the moment it is ready
+// to serve. Supersedes is the reason given to the Project's other healthy
+// Deployments, which the promotion stops (replaced or rolled back).
+type PromoteDeployment struct {
+	ID, OwnerID, ProjectID, Supersedes string
+}
+
 // Deployment is a Deployment as its Owner sees it.
 type Deployment struct {
 	ID           string `json:"id"`

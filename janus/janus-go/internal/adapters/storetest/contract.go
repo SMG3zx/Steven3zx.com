@@ -28,6 +28,7 @@ func Run(t *testing.T, newStore func(t *testing.T) app.Store) {
 		{"CompletingACancelledImportFails", testCompletingACancelledImportFails},
 		{"BuildsFollowTheirStateMachine", testBuildsFollowTheirStateMachine},
 		{"ChecksAndDeploymentsFollowTheirRules", testChecksAndDeployments},
+		{"RedeployAndStopFollowTheirRules", testRedeployAndStop},
 		{"DeletingAnAccountCascades", testDeletingAnAccountCascades},
 		{"EnrollmentCodesAreSingleUseAndExpire", testEnrollmentCodes},
 		{"AgentsAreOwned", testAgents},

@@ -157,10 +157,6 @@ func (a *application) groups() []group {
 			{name: "builds", start: a.startBuilds, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain WASM builds", a.builds.Drain(ctx))
 			})},
-			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.imports, a.builds).WithAgents(a.agents)
-				return nil
-			}},
 			{name: "resume", start: a.resumeInterruptedJobs},
 		}},
 		{name: "runtime", components: []component{
@@ -174,6 +170,11 @@ func (a *application) groups() []group {
 			{name: "deployments", start: a.startDeployments, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("drain Deployments", a.deployments.Drain(ctx))
 			})},
+			// Accounts come last in runtime: deleting one stops its Deployments first.
+			{name: "accounts", start: func(context.Context) error {
+				a.accounts = app.NewAccounts(a.store, a.imports, a.builds).WithAgents(a.agents).WithDeployments(a.deployments)
+				return nil
+			}},
 		}},
 		{name: "web", components: []component{
 			{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {

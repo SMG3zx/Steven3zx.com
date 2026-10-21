@@ -23,7 +23,7 @@
     },
     {
       "file": "janus-go/internal/app/store_types.go",
-      "line": 352,
+      "line": 359,
       "title": "What the Store keeps",
       "description": "`type RunUsageRecord struct` pairs a run with its Owner and Agent. The Owner is always the Agent's, never a value the Agent sent."
     },

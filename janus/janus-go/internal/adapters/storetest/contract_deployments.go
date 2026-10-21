@@ -87,3 +87,68 @@ func testChecksAndDeployments(t *testing.T, store app.Store) {
 		t.Fatalf("deploy anyway was not kept: %+v", deployment)
 	}
 }
+
+// testRedeployAndStop holds the rules a redeploy, a rollback and a stop rely on.
+// A starting Deployment becomes healthy and stops the Project's healthy
+// Deployments in one change, with the reason it was given. The Project's
+// Deployments are listed newest first and only for their Owner.
+func testRedeployAndStop(t *testing.T, store app.Store) {
+	ctx := context.Background()
+	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "carol", Email: "carol@example.com", PasswordHash: "h"}))
+	must(t, store.CreateLocalUser(ctx, app.CreateLocalUser{ID: "dana", Email: "dana@example.com", PasswordHash: "h"}))
+	_, err := store.CreateProject(ctx, app.CreateProject{ID: "p9", OwnerID: "carol", Name: "P"})
+	must(t, err)
+	snapshot := importSnapshot(t, store, "carol", "p9", "nine")
+	must(t, store.CreateAgent(ctx, app.CreateAgent{ID: "desk", OwnerID: "carol", Name: "desk", Tag: "tag:acct-carol", KeyID: "key-carol"}))
+	must(t, store.CreateWASMBuild(ctx, app.CreateWASMBuild{ID: "b9", OwnerID: "carol", ProjectID: "p9", SnapshotID: snapshot, Target: "wasm32-unknown-unknown"}))
+	must(t, store.TransitionWASMBuild(ctx, app.JobTransition{ID: "b9", From: "queued", To: "building", Progress: 5}))
+	must(t, store.CompleteWASMBuild(ctx, app.CompleteWASMBuild{ID: "b9", ArtifactName: "wasm.zip", Artifact: []byte("zip")}))
+
+	must(t, store.CreateDeployment(ctx, app.CreateDeployment{ID: "r1", OwnerID: "carol", ProjectID: "p9", BuildID: "b9", AgentID: "desk"}))
+	must(t, store.TransitionDeployment(ctx, app.DeploymentTransition{ID: "r1", From: "queued", To: "starting"}))
+	superseded, err := store.PromoteDeployment(ctx, app.PromoteDeployment{ID: "r1", OwnerID: "carol", ProjectID: "p9"})
+	must(t, err)
+	if len(superseded) != 0 {
+		t.Fatalf("the first Deployment superseded %v", superseded)
+	}
+
+	must(t, store.CreateDeployment(ctx, app.CreateDeployment{ID: "r2", OwnerID: "carol", ProjectID: "p9", BuildID: "b9", AgentID: "desk"}))
+	must(t, store.TransitionDeployment(ctx, app.DeploymentTransition{ID: "r2", From: "queued", To: "starting"}))
+	if _, err = store.PromoteDeployment(ctx, app.PromoteDeployment{ID: "r1", OwnerID: "carol", ProjectID: "p9"}); err == nil {
+		t.Fatal("a healthy Deployment was promoted again")
+	}
+	if _, err = store.PromoteDeployment(ctx, app.PromoteDeployment{ID: "r2", OwnerID: "dana", ProjectID: "p9"}); err == nil {
+		t.Fatal("another Account promoted the Deployment")
+	}
+	superseded, err = store.PromoteDeployment(ctx, app.PromoteDeployment{ID: "r2", OwnerID: "carol", ProjectID: "p9", Supersedes: "replaced"})
+	must(t, err)
+	if len(superseded) != 1 || superseded[0].ID != "r1" || superseded[0].AgentID != "desk" {
+		t.Fatalf("superseded = %+v", superseded)
+	}
+	old, _, err := store.FindDeployment(ctx, "r1", "carol")
+	must(t, err)
+	if old.State != "stopped" || old.Reason != "replaced" {
+		t.Fatalf("replaced Deployment = %+v", old)
+	}
+	current, _, err := store.FindDeployment(ctx, "r2", "carol")
+	must(t, err)
+	if current.State != "healthy" {
+		t.Fatalf("new Deployment = %+v", current)
+	}
+
+	listed, err := store.ListDeployments(ctx, "p9", "carol")
+	must(t, err)
+	if len(listed) != 2 || listed[0].ID != "r2" || listed[1].ID != "r1" {
+		t.Fatalf("listed Deployments = %+v", listed)
+	}
+	if others, _ := store.ListDeployments(ctx, "p9", "dana"); len(others) != 0 {
+		t.Fatalf("another Account listed the Deployments: %+v", others)
+	}
+
+	must(t, store.TransitionDeployment(ctx, app.DeploymentTransition{ID: "r2", From: "healthy", To: "stopped", Reason: "removed"}))
+	stopped, _, err := store.FindDeployment(ctx, "r2", "carol")
+	must(t, err)
+	if stopped.State != "stopped" || stopped.Reason != "removed" {
+		t.Fatalf("stopped Deployment = %+v", stopped)
+	}
+}

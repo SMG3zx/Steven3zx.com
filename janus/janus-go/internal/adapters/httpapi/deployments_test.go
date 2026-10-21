@@ -26,6 +26,8 @@ func (d agentDeployer) Ready(context.Context, string, string) error { return nil
 
 func (d agentDeployer) Deploy(context.Context, string, string, string, string) error { return d.err }
 
+func (d agentDeployer) Stop(context.Context, string, string, string) error { return nil }
+
 // appCheckFailed is the Check of a WASM build whose tests failed.
 func appCheckFailed() app.CheckResult {
 	return app.CheckResult{Passed: false, Log: []byte("test failed\n")}

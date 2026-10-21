@@ -17,7 +17,7 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 146,
+      "line": 153,
       "title": "The Source port",
       "description": "`type Source interface` opens a repository at a commit and lists its files. The core never calls git or GitHub directly."
     },

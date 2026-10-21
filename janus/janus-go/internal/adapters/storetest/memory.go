@@ -39,6 +39,7 @@ type Memory struct {
 	runs        map[string]app.RunUsageRecord // by run ID
 	checks      map[string]*memCheck          // by WASM Build ID
 	deployments map[string]*memDeployment     // by Deployment ID
+	deploySeq   int                           // orders Deployments as they are created
 }
 
 var _ app.Store = (*Memory)(nil)

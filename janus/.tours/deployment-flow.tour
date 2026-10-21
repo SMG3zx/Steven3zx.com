@@ -5,13 +5,13 @@
   "steps": [
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 67,
+      "line": 92,
       "title": "Refusals come first",
       "description": "`func (d *Deployments) Create` refuses an incomplete build, a running or failed Check, and an unknown Agent, before any record is written."
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 102,
+      "line": 280,
       "title": "Up-front Agent check",
       "description": "`d.deployer.Ready(` refuses a paused, offline or missing Agent before a Deployment is created."
     },
@@ -23,19 +23,19 @@
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 174,
+      "line": 359,
       "title": "The Deployment runs in the background",
       "description": "`func (d *Deployments) run` runs on its own goroutine. The request has already returned queued."
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 183,
+      "line": 368,
       "title": "Queued to starting",
       "description": "`From: string(deployments.Queued)` moves the Deployment to starting. The Store compares the state it saw, so a concurrent change is detected."
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 187,
+      "line": 372,
       "title": "The Agent handoff",
       "description": "`d.deployer.Deploy(` hands the module to the Agent, and blocks until the Agent reports it healthy or refuses it."
     },
@@ -47,13 +47,13 @@
     },
     {
       "file": "janus-go/internal/app/deployments.go",
-      "line": 200,
+      "line": 398,
       "title": "Every failure ends here",
       "description": "`func (d *Deployments) fail` ends a Deployment as failed from whichever state it is in. It uses its own context, so a timeout cannot leave it in flight."
     },
     {
       "file": "janus-go/internal/domain/deployments/deployments.go",
-      "line": 29,
+      "line": 40,
       "title": "The state machine",
       "description": "`func CanMove` says which moves are legal. The transitions themselves are listed in the machine map just above it."
     },

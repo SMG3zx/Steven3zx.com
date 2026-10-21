@@ -11,55 +11,55 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 112,
+      "line": 119,
       "title": "Builder",
       "description": "`type Builder interface`. Real: dockerbuild.Docker. Test: buildertest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 120,
+      "line": 127,
       "title": "Checker",
       "description": "`type Checker interface`. Real: dockerbuild.Docker. Test: checktest.Fake. The checktest package has no contract suite yet."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 138,
+      "line": 145,
       "title": "Runner",
       "description": "`type Runner interface`. Real: wasmtime.Wasmtime. Test: runnertest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 146,
+      "line": 153,
       "title": "Source",
       "description": "`type Source interface`. Real: gitsource.Git. Test: hosttest.Source."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 163,
+      "line": 170,
       "title": "GitHost",
       "description": "`type GitHost interface`. Real: githubapi.Client. Test: hosttest.Host."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 174,
+      "line": 181,
       "title": "Audit",
       "description": "`type Audit interface`. Real: auditlog.Log. Test: audittest.Recorder."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 195,
+      "line": 202,
       "title": "Tailnet",
       "description": "`type Tailnet interface`. Real: headscale.Client. Test: tailnettest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 213,
+      "line": 220,
       "title": "LocalState",
       "description": "`type LocalState interface`. Real: agentdisk. Test: localstatetest.Memory."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 243,
+      "line": 250,
       "title": "AgentLink",
       "description": "`type AgentLink interface`. Real: agentgrpc.Link. Test: agentlinktest.Loopback."
     }
