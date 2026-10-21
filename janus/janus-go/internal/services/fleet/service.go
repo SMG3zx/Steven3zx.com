@@ -23,6 +23,7 @@ import (
 	"janus/internal/contract"
 	contractaudit "janus/internal/contract/audit"
 	contractfleet "janus/internal/contract/fleet"
+	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natsx"
 	"janus/internal/platform/tursodb"
 	"janus/internal/services/fleet/headscale"
@@ -70,6 +71,9 @@ type Config struct {
 	ControlURL string
 	// Link carries commands to the Agents and their events back.
 	Link AgentLink
+	// Agents is the AGENTS account the hub signs Agents' leaf credentials with.
+	// Nil means enrollment issues no leaf credentials.
+	Agents *natsauth.Account
 	// ReconcileInterval is how often the service connects to Agents. Zero means 15
 	// seconds.
 	ReconcileInterval time.Duration

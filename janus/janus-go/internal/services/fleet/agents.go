@@ -82,17 +82,39 @@ func (s *Service) enroll(ctx context.Context, request contractfleet.EnrollReques
 		return contractfleet.Enrollment{}, invalid("%s", contractfleet.MessageEnrollmentCodeInvalid)
 	}
 	tag := AgentTag(ownerID)
+	agentID := uuid.NewString()
+	leafCreds, err := s.leafCredentials(agentID, ownerID)
+	if err != nil {
+		return contractfleet.Enrollment{}, err
+	}
 	key, err := s.cfg.Tailnet.CreatePreAuthKey(ctx, tag, now.Add(preAuthKeyTTL))
 	if err != nil {
 		return contractfleet.Enrollment{}, fmt.Errorf("create a pre-auth key: %w", err)
 	}
-	agent := contractfleet.AgentRecord{ID: uuid.NewString(), OwnerID: ownerID, Name: name, Tag: tag, KeyID: key.ID, CreatedAt: now.UTC()}
+	agent := contractfleet.AgentRecord{ID: agentID, OwnerID: ownerID, Name: name, Tag: tag, KeyID: key.ID, CreatedAt: now.UTC()}
 	if err = s.insertAgent(ctx, agent); err != nil {
 		_ = s.cfg.Tailnet.ExpirePreAuthKey(ctx, key.ID)
 		return contractfleet.Enrollment{}, err
 	}
 	s.audit(ctx, "info", "agent.enrolled", map[string]string{"user_id": ownerID, "agent_id": agent.ID})
-	return contractfleet.Enrollment{AgentID: agent.ID, AuthKey: key.Key, Tag: tag, ControlURL: s.cfg.ControlURL, KeyExpires: key.Expires}, nil
+	return contractfleet.Enrollment{AgentID: agent.ID, AuthKey: key.Key, Tag: tag, ControlURL: s.cfg.ControlURL, KeyExpires: key.Expires, LeafCreds: leafCreds}, nil
+}
+
+// leafCredentials makes the .creds file of an Agent's leaf connection, or nil
+// when the service has no AGENTS account to sign it with.
+func (s *Service) leafCredentials(agentID, ownerID string) ([]byte, error) {
+	if s.cfg.Agents == nil {
+		return nil, nil
+	}
+	creds, err := s.cfg.Agents.IssueLeafUser(agentID, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("issue the leaf credentials: %w", err)
+	}
+	body, err := creds.CredsFile()
+	if err != nil {
+		return nil, fmt.Errorf("encode the leaf credentials: %w", err)
+	}
+	return body, nil
 }
 
 // listAgents returns the Owner's Agents, oldest first, with whether each is

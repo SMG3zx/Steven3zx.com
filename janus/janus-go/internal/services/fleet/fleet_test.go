@@ -3,10 +3,13 @@ package fleet_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/nats-io/jwt/v2"
 
 	"janus/cmd/janus/fleetfixture"
 	"janus/internal/adapters/localstatetest"
@@ -14,6 +17,7 @@ import (
 	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"
+	"janus/internal/platform/natsauth"
 )
 
 // pageModule is a WebAssembly module that answers the probe every Deployment
@@ -491,4 +495,35 @@ func TestASnapshotDeletedRemovesTheDeploymentsOfItsBuild(t *testing.T) {
 		_, found, err := s.Fleet.FindDeployment(context.Background(), s.owner, id)
 		return err == nil && !found
 	})
+}
+
+func TestEnrollmentGivesTheAgentItsLeafCredentials(t *testing.T) {
+	op, err := natsauth.NewOperator("janus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents, err := natsauth.NewAccount(op, "AGENTS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := fleetfixture.Start(t, fleetfixture.Options{Agents: agents})
+	enrollment := f.Enroll("owner", "laptop")
+
+	token, err := jwt.ParseDecoratedJWT(enrollment.LeafCreds)
+	if err != nil {
+		t.Fatalf("leaf credentials are not a .creds file: %v", err)
+	}
+	claims, err := jwt.DecodeUserClaims(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.Issuer != agents.Pub {
+		t.Fatalf("leaf user signed by %s, want the AGENTS account", claims.Issuer)
+	}
+	if want := "leaf-" + enrollment.AgentID; claims.Name != want {
+		t.Fatalf("leaf user named %q, want %q", claims.Name, want)
+	}
+	if want := "janus.agent." + enrollment.AgentID + ".>"; !slices.Contains(claims.Pub.Allow, want) {
+		t.Fatalf("leaf user may not publish %s: %v", want, claims.Pub.Allow)
+	}
 }

@@ -28,6 +28,7 @@ import (
 	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"
+	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natstest"
 	"janus/internal/platform/natsx"
 	"janus/internal/services/audit"
@@ -52,6 +53,9 @@ type Options struct {
 	// ControlURL is the control server's URL that Agents are told to join. Empty
 	// means a placeholder.
 	ControlURL string
+	// Agents is the AGENTS account enrollment signs leaf credentials with. Nil
+	// means enrollment issues none.
+	Agents *natsauth.Account
 }
 
 // Fixture is a running fleet service and the parts around it.
@@ -104,7 +108,7 @@ func Start(t testing.TB, opts Options) *Fixture {
 	}
 	f.Builds = newBuilds(t, conn)
 	service := fleet.New(fleet.Config{DatabasePath: t.TempDir() + "/fleet.db", Tailnet: tailnet, ControlURL: controlURL,
-		Link: link, ReconcileInterval: opts.ReconcileInterval, Now: opts.Now})
+		Link: link, Agents: opts.Agents, ReconcileInterval: opts.ReconcileInterval, Now: opts.Now})
 	if err := service.Start(ctx, conn); err != nil {
 		t.Fatalf("start the fleet service: %v", err)
 	}

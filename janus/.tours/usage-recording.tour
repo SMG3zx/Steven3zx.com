@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/internal/domain/fleet/fleet.go",
-      "line": 92,
+      "line": 95,
       "title": "What an Agent reports",
       "description": "`type RunReport struct`. The fields of one run as the Agent measured it, carried over the Agent link."
     },
@@ -23,7 +23,7 @@
     },
     {
       "file": "janus-go/internal/domain/fleet/fleet.go",
-      "line": 106,
+      "line": 109,
       "title": "What the service keeps",
       "description": "`type RunUsageRecord struct`. A run with the Owner and the Agent it came from."
     },

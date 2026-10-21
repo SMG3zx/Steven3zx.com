@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/service.go",
-      "line": 56,
+      "line": 57,
       "title": "AgentLink",
       "description": "`type AgentLink interface`. The Agent link the fleet service sends commands through. Real: agentgrpc.Link. Test: agentlinktest.Loopback."
     }

@@ -37,12 +37,15 @@ type IssuedCode struct {
 
 // Enrollment is what an Agent needs to join the tailnet: a single-use key, the
 // control server to join, and the tag its node will carry. AuthKey is a secret.
+// LeafCreds is the .creds file of the Agent's leaf connection to the hub, also a
+// secret; it is empty when the hub issues no NATS credentials.
 type Enrollment struct {
 	AgentID    string    `json:"agent_id"`
 	AuthKey    string    `json:"auth_key"`
 	Tag        string    `json:"tag"`
 	ControlURL string    `json:"control_url"`
 	KeyExpires time.Time `json:"key_expires"`
+	LeafCreds  []byte    `json:"leaf_creds,omitempty"`
 }
 
 // AgentRecord is a stored Agent.
