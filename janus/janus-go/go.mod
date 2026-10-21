@@ -13,8 +13,10 @@ require (
 	github.com/klauspost/compress v1.20.3
 	github.com/markbates/goth v1.82.0
 	github.com/mxschmitt/playwright-go v0.6201.1
+	github.com/nats-io/jwt/v2 v2.8.2
 	github.com/nats-io/nats-server/v2 v2.15.1
 	github.com/nats-io/nats.go v1.54.0
+	github.com/nats-io/nkeys v0.4.16
 	github.com/open-policy-agent/opa v1.21.2
 	go.opentelemetry.io/contrib/bridges/otelzap v0.21.0
 	go.opentelemetry.io/otel v1.47.0
@@ -94,8 +96,6 @@ require (
 	github.com/mdlayher/socket v0.7.0 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
-	github.com/nats-io/jwt/v2 v2.8.2 // indirect
-	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pires/go-proxyproto v0.15.0 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
