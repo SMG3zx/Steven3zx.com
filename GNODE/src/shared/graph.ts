@@ -17,10 +17,18 @@ export interface PortRef {
   port: string;
 }
 
+// A point a square wire turns at, measured from the top left of the block the
+// wire leaves, so the bend moves with that block.
+export interface Bend {
+  dx: number;
+  dy: number;
+}
+
 export interface Wire {
   id: string;
   from: PortRef;
   to: PortRef;
+  bends?: Bend[];
 }
 
 export interface Graph {
@@ -86,6 +94,34 @@ export function parseGraph(value: unknown): Graph {
   }
   for (const w of g.wires) {
     if (typeof w.id !== "string" || !w.from || !w.to) throw new Error("every wire needs an id, from and to");
+    if (w.bends === undefined) continue;
+    if (!Array.isArray(w.bends)) throw new Error(`wire ${w.id} bends must be a list`);
+    for (const b of w.bends) {
+      if (!Number.isFinite(b?.dx) || !Number.isFinite(b?.dy)) throw new Error(`wire ${w.id} has a bend without numeric dx and dy`);
+    }
   }
   return g as Graph;
+}
+
+// The blocks upstream (feeding into it) and downstream (fed by it) of a block,
+// with the block itself, and the wires joining two of them.
+export function chainOf(graph: Graph, id: string): { nodes: Set<string>; wires: Set<string> } {
+  const upstream = (cur: string) => graph.wires.filter((w) => w.to.node === cur).map((w) => w.from.node);
+  const downstream = (cur: string) => graph.wires.filter((w) => w.from.node === cur).map((w) => w.to.node);
+  const nodes = new Set<string>([id]);
+  for (const step of [upstream, downstream]) {
+    const seen = new Set<string>([id]);
+    const queue = [id];
+    while (queue.length > 0) {
+      const cur = queue.pop()!;
+      for (const next of step(cur)) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        nodes.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  const wires = new Set(graph.wires.filter((w) => nodes.has(w.from.node) && nodes.has(w.to.node)).map((w) => w.id));
+  return { nodes, wires };
 }
