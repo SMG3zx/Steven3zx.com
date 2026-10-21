@@ -25,7 +25,7 @@ Set `PORT` to use another port: `PORT=5000 bun run dev`.
 - **Wire blocks:** drag from one port to another port of the opposite side. White diamonds are *flow* ports, which decide the order blocks run in. Round ports carry *values*, such as numbers or text. A flow port can lead to one block; an input takes one source.
 - **Edit a block:** select it and change its settings in the right-hand panel.
 - **Delete:** select a block or wire and press Delete, or use the Delete button in the panel.
-- **Save and open:** programs are saved as JSON in `graphs/`. Pick one in the list and press Open.
+- **Save and open:** programs are saved as JSON in `graphs/`. Pick one in the list and press Open. When a save changes a program, the version it replaces is copied to `graphs/backups/<name>/`. The newest 20 copies are kept. To go back, copy one of those files over the program's JSON file.
 - **Read the code:** the bottom panel shows the Go source as you edit it. The Problems tab lists anything that would stop the program from building. Click a problem to jump to its block.
 - **Run:** press Run to generate, build and run the program with `go run`. The Output tab shows what it printed.
 - **Trace flow:** the Trace flow button highlights the blocks and wires the program runs from func main, and dims the rest. Blocks that are not part of the program are already dimmed.
