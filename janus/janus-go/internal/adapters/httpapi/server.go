@@ -41,7 +41,7 @@ type Config struct {
 	Audit          app.Audit
 	Identity       Identity
 	Projects       *app.Projects
-	GitHub         *app.GitHub
+	Catalog        Catalog
 	Imports        *app.Imports
 	Builds         *app.Builds
 	Accounts       *app.Accounts

@@ -14,19 +14,9 @@ func NewProjects(catalog Catalog) *Projects {
 	return &Projects{catalog: catalog}
 }
 
-// List returns the Projects the Account owns.
-func (p *Projects) List(ctx context.Context, ownerID string) ([]Project, error) {
-	return p.catalog.ListProjects(ctx, ownerID)
-}
-
 // Create adds a Project to the Account.
 func (p *Projects) Create(ctx context.Context, project CreateProject) (Project, error) {
 	return p.catalog.CreateProject(ctx, project)
-}
-
-// Get returns one Project of the Account, if it exists.
-func (p *Projects) Get(ctx context.Context, id, ownerID string) (Project, bool, error) {
-	return p.catalog.GetProject(ctx, id, ownerID)
 }
 
 // Update changes the name and description of a Project of the Account.
@@ -38,11 +28,6 @@ func (p *Projects) Update(ctx context.Context, project UpdateProject) (Project, 
 // Builds and Deployments go once the projects service says it is gone.
 func (p *Projects) Delete(ctx context.Context, id, ownerID string) (bool, error) {
 	return p.catalog.DeleteProject(ctx, id, ownerID)
-}
-
-// Snapshots lists the Snapshots of a Project of the Account.
-func (p *Projects) Snapshots(ctx context.Context, ownerID, projectID string) ([]ProjectSnapshot, error) {
-	return p.catalog.ListSnapshots(ctx, ownerID, projectID)
 }
 
 // ActivateSnapshot makes a Snapshot the active one of its Project.

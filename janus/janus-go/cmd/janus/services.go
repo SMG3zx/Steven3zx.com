@@ -83,7 +83,6 @@ type application struct {
 	runsService *runsservice.Service
 	identity    httpapi.Identity
 	projects    *app.Projects
-	github      *app.GitHub
 	tailnet     *headscale.Client
 	tailnode    *tailnode.Node
 	agentLink   *agentnats.Link
@@ -198,7 +197,6 @@ func (a *application) groups() []group {
 			})},
 			{name: "projects", start: func(context.Context) error {
 				a.projects = app.NewProjects(a.catalog)
-				a.github = app.NewGitHub(a.catalog)
 				a.imports = app.NewImports(a.catalog)
 				return nil
 			}},
@@ -513,7 +511,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Projects: a.projects, GitHub: a.github, Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Fleet: a.fleet, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Projects: a.projects, Catalog: projectsnats.NewGateway(a.nats.Conn()), Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Fleet: a.fleet, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,

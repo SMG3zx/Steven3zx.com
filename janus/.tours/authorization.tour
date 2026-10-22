@@ -5,7 +5,7 @@
   "steps": [
     {
       "file": "janus-go/internal/adapters/httpapi/projects.go",
-      "line": 577,
+      "line": 578,
       "title": "The check every route makes",
       "description": "`func (a *Server) authorizedSubject` names the action and the resource, asks the policy, and answers 401 when the person is not allowed."
     },

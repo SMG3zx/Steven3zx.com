@@ -26,7 +26,6 @@ func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
-	gh := app.NewGitHub(catalog)
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(catalog)
 	builds := app.NewBuilds(store, catalog, buildstest.NewFake(store))
@@ -35,7 +34,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 		t.Fatal(err)
 	}
 	return New(Config{
-		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Projects: app.NewProjects(catalog), Catalog: catalogtest.NewReads(catalog), Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler(), catalog
 }

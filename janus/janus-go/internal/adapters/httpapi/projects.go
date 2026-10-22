@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"janus/internal/app"
+	contractprojects "janus/internal/contract/projects"
 	"net/http"
 	"strings"
 
@@ -49,7 +50,7 @@ func (a *Server) projectsPage(c *call) any {
 	if !ok {
 		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
 	}
-	projects, err := a.dependencies.Projects.List(c.Request.Context(), owner)
+	projects, err := a.dependencies.Catalog.ListProjects(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -123,7 +124,7 @@ func (a *Server) listProjects(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	projects, err := a.dependencies.Projects.List(c.Request.Context(), owner)
+	projects, err := a.dependencies.Catalog.ListProjects(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -177,7 +178,7 @@ func (a *Server) getProjectAPI(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	project, found, err := a.dependencies.Projects.Get(c.Request.Context(), c.Param("id"), owner)
+	project, found, err := a.dependencies.Catalog.GetProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -192,7 +193,7 @@ func (a *Server) listProjectSnapshots(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	snapshots, err := a.dependencies.Projects.Snapshots(c.Request.Context(), owner, c.Param("id"))
+	snapshots, err := a.dependencies.Catalog.ListSnapshots(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		if app.IsReply(err) {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
@@ -263,7 +264,7 @@ func (a *Server) listGitHubRepos(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	list, err := a.dependencies.GitHub.Repositories(c.Request.Context(), owner)
+	list, err := a.dependencies.Catalog.Repositories(c.Request.Context(), owner)
 	if err != nil {
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 	}
@@ -274,7 +275,7 @@ func (a *Server) listGitHubBranches(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	branches, err := a.dependencies.GitHub.Branches(c.Request.Context(), owner, c.Query.Get("repository"))
+	branches, err := a.dependencies.Catalog.Branches(c.Request.Context(), owner, c.Query.Get("repository"))
 	if err != nil {
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 	}
@@ -285,7 +286,7 @@ func (a *Server) listGitHubCommits(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	commits, err := a.dependencies.GitHub.Commits(c.Request.Context(), owner, c.Query.Get("repository"), c.Query.Get("branch"))
+	commits, err := a.dependencies.Catalog.Commits(c.Request.Context(), owner, c.Query.Get("repository"), c.Query.Get("branch"))
 	if err != nil {
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 	}
@@ -492,7 +493,7 @@ func (a *Server) projectPage(c *call) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
-	project, found, err := a.dependencies.Projects.Get(c.Request.Context(), c.Param("id"), owner)
+	project, found, err := a.dependencies.Catalog.GetProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -505,7 +506,7 @@ func (a *Server) projectPage(c *call) any {
 	}
 	var metadata projectMetadata
 	_ = json.Unmarshal([]byte(project.MetadataJSON), &metadata)
-	snapshots, err := a.dependencies.Projects.Snapshots(c.Request.Context(), owner, project.ID)
+	snapshots, err := a.dependencies.Catalog.ListSnapshots(c.Request.Context(), owner, project.ID)
 	if err != nil {
 		return internalError()
 	}
@@ -532,16 +533,16 @@ type projectMetadata struct {
 	}
 }
 type projectsPageData struct {
-	Projects                       []app.Project
+	Projects                       []contractprojects.Project
 	GitHubConnected, GitHubEnabled bool
 }
 type projectPageData struct {
-	Project                        app.Project
+	Project                        contractprojects.Project
 	GitHubConnected, GitHubEnabled bool
 	CanBuildWASM                   bool
 	BuildTargets                   []string
 	Candidates                     []scan.Candidate
-	Snapshots                      []app.ProjectSnapshot
+	Snapshots                      []contractprojects.Snapshot
 }
 
 var snapshotHistoryTemplate = template.Must(template.New("snapshot-history").Funcs(template.FuncMap{"formatMB": formatMB}).Parse(`<section style="font:16px system-ui;background:#101827;color:#e6edf7;max-width:900px;margin:0 auto 3rem;padding:1rem"><h2>Repository snapshots</h2><p>The five most recent successful imports are kept. Activating a snapshot switches the project back to that saved revision.</p><ol>{{range .Snapshots}}<li style="padding:.6rem 0">{{.Repository}} · {{.Branch}} @ {{printf "%.7s" .Commit}} — {{.FileCount}} files, {{formatMB .TotalBytes}}{{if .Active}} · <strong>Active</strong>{{else}} <button type="button" onclick="activateSnapshot('{{.ID}}')">Use this snapshot</button>{{end}}</li>{{else}}<li>No imported snapshots yet.</li>{{end}}</ol><p id="snapshot-status" role="status"></p><script id="snapshot-history" data-project-id="{{.Project.ID}}">const snapshotProjectID=document.getElementById('snapshot-history').dataset.projectId;async function activateSnapshot(id){const status=document.getElementById('snapshot-status');status.textContent='Switching snapshot…';try{const response=await fetch('/api/projects/'+encodeURIComponent(snapshotProjectID)+'/snapshots/'+encodeURIComponent(id)+'/activate',{method:'POST'});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||'Could not activate snapshot')}location.reload()}catch(error){status.textContent=error.message}}</script></section>`))
