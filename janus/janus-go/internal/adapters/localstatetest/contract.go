@@ -1,5 +1,5 @@
-// Package localstatetest holds an in-memory app.LocalState and the contract
-// suite every app.LocalState adapter, real or test, must pass.
+// Package localstatetest holds an in-memory agent.LocalState and the contract
+// suite every agent.LocalState adapter, real or test, must pass.
 package localstatetest
 
 import (
@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"janus/internal/app"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 // Subject is an adapter under test. Reopen returns a second LocalState over the
 // same storage, as a restarted Agent or the Agent's command line would open it.
 type Subject struct {
-	State  app.LocalState
-	Reopen func(t *testing.T) app.LocalState
+	State  agent.LocalState
+	Reopen func(t *testing.T) agent.LocalState
 }
 
 // Run runs the LocalState contract against subjects made by newSubject. Each
@@ -48,19 +48,19 @@ func must(t *testing.T, err error) {
 	}
 }
 
-func deployment(id string, module string) app.HostedDeployment {
-	return app.HostedDeployment{ID: id, SHA256: "hash-of-" + module, Module: []byte(module),
+func deployment(id string, module string) domainfleet.HostedDeployment {
+	return domainfleet.HostedDeployment{ID: id, SHA256: "hash-of-" + module, Module: []byte(module),
 		Limits: agent.RunLimits{Fuel: 1234, MemoryBytes: 5678, Timeout: time.Second}}
 }
 
-func deployments(t *testing.T, s app.LocalState) []app.HostedDeployment {
+func deployments(t *testing.T, s agent.LocalState) []domainfleet.HostedDeployment {
 	t.Helper()
 	got, err := s.Deployments(ctx)
 	must(t, err)
 	return got
 }
 
-func same(a, b app.HostedDeployment) bool {
+func same(a, b domainfleet.HostedDeployment) bool {
 	return a.ID == b.ID && a.SHA256 == b.SHA256 && bytes.Equal(a.Module, b.Module) &&
 		a.Limits.Fuel == b.Limits.Fuel && a.Limits.MemoryBytes == b.Limits.MemoryBytes
 }

@@ -17,12 +17,12 @@ import (
 
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 var module = []byte("\x00asm\x01\x00\x00\x00agenthttp")
 
-func env(input app.RunInput, name string) string {
+func env(input agent.RunInput, name string) string {
 	for _, entry := range input.Env {
 		if key, value, ok := strings.Cut(entry, "="); ok && key == name {
 			return value
@@ -34,14 +34,14 @@ func env(input app.RunInput, name string) string {
 func serving(t *testing.T, authorize func(context.Context, string) error) (*agent.Runtime, *httptest.Server) {
 	t.Helper()
 	runner := runnertest.NewFake()
-	runner.Handle(module, func(input app.RunInput) (app.RunResult, error) {
+	runner.Handle(module, func(input agent.RunInput) (agent.RunResult, error) {
 		out := fmt.Sprintf("Status: 201 Created\nContent-Type: text/plain\nX-Seen-Deployment: %s\n\n%s %s from %s: %s",
 			env(input, "HTTP_JANUS_DEPLOYMENT"), env(input, "REQUEST_METHOD"), env(input, "REQUEST_URI"), env(input, "REMOTE_ADDR"), input.Stdin)
-		return app.RunResult{Stdout: []byte(out)}, nil
+		return agent.RunResult{Stdout: []byte(out)}, nil
 	})
 	runtime := agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 	sum := sha256.Sum256(module)
-	if err := runtime.Deploy(context.Background(), app.HostedDeployment{ID: "dep-1", SHA256: hex.EncodeToString(sum[:]), Module: module}); err != nil {
+	if err := runtime.Deploy(context.Background(), domainfleet.HostedDeployment{ID: "dep-1", SHA256: hex.EncodeToString(sum[:]), Module: module}); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(Handler(runtime, authorize))

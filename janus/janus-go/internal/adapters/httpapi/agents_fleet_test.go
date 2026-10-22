@@ -13,8 +13,8 @@ import (
 	"janus/internal/adapters/agentlinktest"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
 	"janus/internal/domain/cgi"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 // fleetApp is the HTTP adapter with the fleet service running in process, and an
@@ -38,8 +38,8 @@ var pageModule = []byte("\x00asm\x01\x00\x00\x00httpapi")
 func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledBody) *agent.Runtime {
 	t.Helper()
 	runner := runnertest.NewFake()
-	runner.Handle(pageModule, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
+	runner.Handle(pageModule, func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
 	runtime := agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 	f.link.Serve(enrolled.AgentID, runtime)
@@ -109,7 +109,7 @@ func TestAnOwnerReadsTheirAgentsRuns(t *testing.T) {
 	enrolled := f.enrollAgent(t, alice, "laptop")
 	runtime := f.runAgent(t, alice, enrolled)
 	sum := sha256.Sum256(pageModule)
-	if err := runtime.Deploy(context.Background(), app.HostedDeployment{ID: "dep-1", SHA256: hex.EncodeToString(sum[:]), Module: pageModule}); err != nil {
+	if err := runtime.Deploy(context.Background(), domainfleet.HostedDeployment{ID: "dep-1", SHA256: hex.EncodeToString(sum[:]), Module: pageModule}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runtime.Serve(context.Background(), "dep-1", agent.ServeRequest{Request: cgi.Request{Method: "GET", Path: "/"}, Body: []byte("abc")}); err != nil {

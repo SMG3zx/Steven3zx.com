@@ -11,18 +11,17 @@ import (
 
 var (
 	portDecl      = regexp.MustCompile(`(?m)^type (\w+) interface`)
-	adapterAssert = regexp.MustCompile(`_ app\.(\w+) =`)
-	minimumPorts  = 6
+	adapterAssert = regexp.MustCompile(`_ agent\.(\w+) =`)
+	minimumPorts  = 2
 )
 
-// TestEveryPortHasAnAdapterThatSaysSo reads the ports declared in
-// internal/app/ports.go and internal/domain/agent/ports.go and fails when no
-// adapter asserts it. Go satisfies
-// interfaces implicitly, so the assertion is what makes the link visible to a
-// reader: `var _ app.Store = (*sqlstore.Store)(nil)` names the adapter.
+// TestEveryPortHasAnAdapterThatSaysSo reads the ports the Agent declares in
+// internal/domain/agent/ports.go and fails when no implementation asserts it. Go
+// satisfies interfaces implicitly, so the assertion is what makes the link
+// visible to a reader: `var _ agent.Runner = Wasmtime{}` names the adapter.
 func TestEveryPortHasAnAdapterThatSaysSo(t *testing.T) {
 	var names []string
-	for _, file := range []string{filepath.Join("..", "app", "ports.go"), filepath.Join("..", "domain", "agent", "ports.go")} {
+	for _, file := range []string{filepath.Join("..", "domain", "agent", "ports.go")} {
 		ports, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
@@ -54,7 +53,7 @@ func TestEveryPortHasAnAdapterThatSaysSo(t *testing.T) {
 	}
 	for _, name := range names {
 		if !asserted[name] {
-			t.Errorf("port app.%s has no adapter with `var _ app.%s = (*Adapter)(nil)`", name, name)
+			t.Errorf("port agent.%s has no implementation with `var _ agent.%s = (*Adapter)(nil)`", name, name)
 		}
 	}
 }

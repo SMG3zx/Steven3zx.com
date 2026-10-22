@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"janus/cmd/janus/fleetfixture"
+	"janus/cmd/janus/identityfixture"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/identitytest"
 	contractaudit "janus/internal/contract/audit"
 	"janus/internal/services/fleet/tailnettest"
 )
@@ -33,14 +33,14 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
 	audit := audittest.NewRecorder()
-	identities := identitytest.NewMemory()
+	identities := identityfixture.Start(t)
 	catalog := catalogtest.NewMemory()
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	config := Config{
-		Audit: audit, Identity: identitytest.NewDirectory(identities), Catalog: catalogtest.NewGateway(catalog),
+		Audit: audit, Identity: identities, Catalog: catalog,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
 	a := &agentApp{tailnet: tailnettest.NewFake(), audit: audit}

@@ -13,22 +13,23 @@ import (
 	"testing"
 	"time"
 
+	"janus/cmd/janus/identityfixture"
 	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/identitytest"
-	"janus/internal/app"
+	contractid "janus/internal/contract/identity"
+	contractprojects "janus/internal/contract/projects"
 )
 
 func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	identities := identitytest.NewMemory()
+	identities := identityfixture.Start(t)
 	catalog := catalogtest.NewMemory()
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audittest.NewRecorder(), Identity: identitytest.NewDirectory(identities), Catalog: catalogtest.NewGateway(catalog),
+		Audit: audittest.NewRecorder(), Identity: identities, Catalog: catalog,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
@@ -49,7 +50,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	if projectResponse.Code != http.StatusCreated {
 		t.Fatalf("project create status = %d, body = %s", projectResponse.Code, projectResponse.Body.String())
 	}
-	var createdProject app.Project
+	var createdProject contractprojects.Project
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &createdProject); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	const entrypointCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	catalog.SeedSnapshot(createdProject.OwnerID, createdProject.ID, catalogtest.Seed{ID: entrypointSnapshotID, Repository: "alice/repo", Commit: entrypointCommit, TotalBytes: 10_591_486,
 		MetadataJSON: `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"fixture"}]}}`,
-		Files:        []app.SnapshotFile{{Path: "cmd/server/main.go", Mode: "100644", Content: []byte("package main")}}})
+		Files:        []catalogtest.File{{Path: "cmd/server/main.go", Mode: "100644", Content: []byte("package main")}}})
 	listedProjects := perform(handler, http.MethodGet, "/api/projects", "", session[0])
 	if listedProjects.Code != http.StatusOK || !bytes.Contains(listedProjects.Body.Bytes(), []byte(createdProject.ID)) {
 		t.Fatalf("project list status = %d body=%s", listedProjects.Code, listedProjects.Body.String())
@@ -115,11 +116,11 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		t.Fatalf("unconfigured homepage Google sign-in = status %d, headers %#v, body %s", home.Code, home.Header(), home.Body.String())
 	}
 
-	firstIdentity, err := identities.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"})
+	firstIdentity, err := identities.ResolveGoogleIdentity(ctx, contractid.ResolveIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondIdentity, err := identities.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: "google-subject", Email: "updated@example.com", DisplayName: "Alice Updated"})
+	secondIdentity, err := identities.ResolveGoogleIdentity(ctx, contractid.ResolveIdentity{Subject: "google-subject", Email: "updated@example.com", DisplayName: "Alice Updated"})
 	if err != nil {
 		t.Fatal(err)
 	}

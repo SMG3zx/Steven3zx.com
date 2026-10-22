@@ -1,4 +1,4 @@
-// Package wasmtime is the app.Runner adapter that executes WASI modules with the
+// Package wasmtime is the agent.Runner adapter that executes WASI modules with the
 // Wasmtime runtime of platform/wasmrun (cgo; a build without cgo reports the
 // runtime as unavailable).
 package wasmtime
@@ -7,27 +7,27 @@ import (
 	"context"
 	"errors"
 
-	"janus/internal/app"
+	"janus/internal/domain/agent"
 	"janus/internal/platform/wasmrun"
 )
 
-// Wasmtime is the app.Runner backed by the CGO Wasmtime runtime. In a build
+// Wasmtime is the agent.Runner backed by the CGO Wasmtime runtime. In a build
 // without CGO every Run fails. A Run ends at input.Limits.Timeout or when ctx
 // ends.
 type Wasmtime struct{}
 
-var _ app.Runner = Wasmtime{}
+var _ agent.Runner = Wasmtime{}
 
 // Run executes module as a WASI command with input.
-func (Wasmtime) Run(ctx context.Context, module []byte, input app.RunInput) (app.RunResult, error) {
+func (Wasmtime) Run(ctx context.Context, module []byte, input agent.RunInput) (agent.RunResult, error) {
 	result, err := wasmrun.Run(ctx, module, wasmrun.Input{Args: input.Args, Env: input.Env, Stdin: input.Stdin,
 		Dir: input.Dir, MaxStdout: input.MaxStdout, Limits: input.Limits})
-	out := app.RunResult{Stdout: result.Stdout, Stderr: result.Stderr, StdoutTruncated: result.StdoutTruncated, Usage: result.Usage}
+	out := agent.RunResult{Stdout: result.Stdout, Stderr: result.Stderr, StdoutTruncated: result.StdoutTruncated, Usage: result.Usage}
 	switch {
 	case errors.Is(err, wasmrun.ErrOutOfFuel):
-		err = app.ErrOutOfFuel
+		err = agent.ErrOutOfFuel
 	case errors.Is(err, wasmrun.ErrRunTimeout):
-		err = app.ErrRunTimeout
+		err = agent.ErrRunTimeout
 	}
 	return out, err
 }

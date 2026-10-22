@@ -16,8 +16,8 @@ import (
 
 	"janus/internal/adapters/agentlinktest"
 	"janus/internal/adapters/localstatetest"
-	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/platform/natstest"
 )
 
@@ -91,8 +91,8 @@ func startAgent(t *testing.T, leafAddress string, runtime *agent.Runtime) func()
 // stagedRunner runs every module as a CGI program that answers ok.
 type stagedRunner struct{}
 
-func (stagedRunner) Run(context.Context, []byte, app.RunInput) (app.RunResult, error) {
-	return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
+func (stagedRunner) Run(context.Context, []byte, agent.RunInput) (agent.RunResult, error) {
+	return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 }
 
 func TestTheAgentLinkPassesTheContractOverNATS(t *testing.T) {
@@ -148,7 +148,7 @@ func TestAModuleStagedOnTheHubIsReadByTheAgent(t *testing.T) {
 	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := startAgent(t, leafAddress, runtime)
 	defer stop()
-	link.Connect(agentID, func(app.AgentEvent) error { return nil })
+	link.Connect(agentID, func(domainfleet.AgentEvent) error { return nil })
 
 	deadline := time.Now().Add(30 * time.Second)
 	for {
@@ -194,14 +194,14 @@ func TestAStagedModuleThatDoesNotMatchItsHashIsRefused(t *testing.T) {
 	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := startAgent(t, leafAddress, runtime)
 	defer stop()
-	link.Connect(agentID, func(app.AgentEvent) error { return nil })
+	link.Connect(agentID, func(domainfleet.AgentEvent) error { return nil })
 
 	var sendErr error
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		sendErr = link.Send(ctx, agentID, contractfleet.AgentCommand{Deploy: &contractfleet.HostedDeployment{
 			ID: "dep-1", SHA256: wrongSHA, Limits: agent.RunLimits{Fuel: 1, MemoryBytes: 1}}})
-		if sendErr == nil || time.Now().After(deadline) || !errors.Is(sendErr, app.ErrAgentUnreachable) {
+		if sendErr == nil || time.Now().After(deadline) || !errors.Is(sendErr, domainfleet.ErrAgentUnreachable) {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)

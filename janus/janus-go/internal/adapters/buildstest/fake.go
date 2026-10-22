@@ -1,7 +1,7 @@
-// Package buildstest holds an in-memory app.WASMBuilds for tests that need WASM
-// Builds without a container or the builds service. It completes each Build as
-// it is started and keeps its states and Checks itself, as the builds service
-// does.
+// Package buildstest holds an in-memory builds service for the gateway's tests
+// that need WASM Builds without a container or the service. It answers with the
+// contract's types, completes each Build as it is started and keeps its states and
+// Checks itself, as the builds service does.
 package buildstest
 
 import (
@@ -12,7 +12,8 @@ import (
 	"fmt"
 	"sync"
 
-	"janus/internal/app"
+	"janus/internal/contract"
+	contractbuilds "janus/internal/contract/builds"
 	"janus/internal/domain/artifact"
 )
 
@@ -26,7 +27,7 @@ type Result struct {
 	Log             string
 }
 
-// Fake is an app.WASMBuilds that builds nothing. It returns an Artifact holding
+// Fake is a builds service that builds nothing. It returns an Artifact holding
 // Module, and answers each Build's checks with the Result set by Answer, or with
 // the error set by Break. It is safe for concurrent use.
 type Fake struct {
@@ -37,13 +38,10 @@ type Fake struct {
 	builds  map[string]*build
 }
 
-var _ app.WASMBuilds = (*Fake)(nil)
-
 type build struct {
-	app.WASMBuild
-	owner    string
+	contractbuilds.Build
 	artifact []byte
-	check    *app.Check
+	check    *contractbuilds.Check
 }
 
 // NewFake returns a Fake whose checks pass.
@@ -74,86 +72,87 @@ func (f *Fake) Produce(data []byte) {
 	f.produce = append([]byte(nil), data...)
 }
 
-// StartBuild completes a Build of the request's Snapshot and runs its checks.
-func (f *Fake) StartBuild(ctx context.Context, request app.StartBuild) (app.WASMBuild, error) {
+// Request completes a Build of the request's Snapshot and runs its checks.
+func (f *Fake) Request(ctx context.Context, request contractbuilds.RequestBuild) (contractbuilds.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, exists := f.builds[request.ID]; exists {
-		return app.WASMBuild{}, errors.New("a WASM build with this ID exists")
+		return contractbuilds.Build{}, errors.New("a WASM build with this ID exists")
 	}
-	stored := &build{owner: request.OwnerID, WASMBuild: app.WASMBuild{ID: request.ID, ProjectID: request.ProjectID,
+	stored := &build{Build: contractbuilds.Build{ID: request.ID, OwnerID: request.OwnerID, ProjectID: request.ProjectID,
 		SnapshotID: request.SnapshotID, Target: request.Target, Status: "queued"}}
 	f.builds[request.ID] = stored
 	data := f.produce
 	if data == nil {
 		var err error
 		if data, err = pack(ctx); err != nil {
-			return app.WASMBuild{}, err
+			return contractbuilds.Build{}, err
 		}
 	}
 	stored.Status, stored.Progress, stored.ArtifactName, stored.artifact = "complete", 100, "wasm-artifacts.zip"+artifact.ZstdExtension, data
 	f.check(stored)
-	return stored.WASMBuild, nil
+	return stored.Build, nil
 }
 
 // check runs the checks of a complete Build and keeps the result.
 func (f *Fake) check(stored *build) {
-	change := app.CheckChange{BuildID: stored.ID, OwnerID: stored.owner, Status: "passed", Log: f.result.Log, NoTests: f.result.NoTests}
+	check := &contractbuilds.Check{BuildID: stored.ID, Status: "passed", Log: f.result.Log, NoTests: f.result.NoTests}
 	switch {
 	case f.err != nil:
-		change.Status, change.Error, change.Log = "failed", f.err.Error(), ""
+		check.Status, check.Error, check.Log = "failed", f.err.Error(), ""
 	case !f.result.Passed:
-		change.Status = "failed"
+		check.Status = "failed"
 	}
-	stored.check = &app.Check{BuildID: change.BuildID, Status: change.Status, Log: change.Log, Error: change.Error, NoTests: change.NoTests}
+	stored.check = check
 }
 
-// RetryBuild starts a new Build of a failed Build's Snapshot.
-func (f *Fake) RetryBuild(ctx context.Context, owner, buildID string) (app.WASMBuild, error) {
+// Retry starts a new Build of a failed Build's Snapshot.
+func (f *Fake) Retry(ctx context.Context, owner, buildID string) (contractbuilds.Build, error) {
 	f.mu.Lock()
 	stored, ok := f.builds[buildID]
 	f.mu.Unlock()
-	if !ok || stored.owner != owner {
-		return app.WASMBuild{}, errors.New("WASM build not found")
+	if !ok || stored.OwnerID != owner {
+		return contractbuilds.Build{}, contract.Errorf(contract.StatusNotFound, "WASM build not found")
 	}
 	if stored.Status != "failed" {
-		return app.WASMBuild{}, errors.New("only a failed WASM build can be retried")
+		return contractbuilds.Build{}, contract.Errorf(contract.StatusInvalid, "only a failed WASM build can be retried")
 	}
-	return f.StartBuild(ctx, app.StartBuild{ID: buildID + "-retry", OwnerID: owner, ProjectID: stored.ProjectID, SnapshotID: stored.SnapshotID, Target: stored.Target})
+	return f.Request(ctx, contractbuilds.RequestBuild{ID: buildID + "-retry", OwnerID: owner, ProjectID: stored.ProjectID, SnapshotID: stored.SnapshotID, Target: stored.Target})
 }
 
-// FindBuild returns one of an Owner's Builds.
-func (f *Fake) FindBuild(_ context.Context, owner, buildID string) (app.WASMBuild, bool, error) {
+// Find returns one of an Owner's Builds.
+func (f *Fake) Find(_ context.Context, owner, buildID string) (contractbuilds.Build, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	stored, ok := f.builds[buildID]
-	if !ok || stored.owner != owner {
-		return app.WASMBuild{}, false, nil
+	if !ok || stored.OwnerID != owner {
+		return contractbuilds.Build{}, false, nil
 	}
-	return stored.WASMBuild, true, nil
+	return stored.Build, true, nil
 }
 
-// Artifact returns the Artifact of one of an Owner's complete Builds.
-func (f *Fake) Artifact(_ context.Context, owner, buildID string) (app.WASMBuildArtifact, error) {
+// Artifact returns the Artifact of one of an Owner's complete Builds with its
+// bytes. Found is false when there is none.
+func (f *Fake) Artifact(_ context.Context, owner, buildID string) (contractbuilds.ArtifactFound, []byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	stored, ok := f.builds[buildID]
-	if !ok || stored.owner != owner || stored.Status != "complete" {
-		return app.WASMBuildArtifact{}, nil
+	if !ok || stored.OwnerID != owner || stored.Status != "complete" {
+		return contractbuilds.ArtifactFound{}, nil, nil
 	}
-	return app.WASMBuildArtifact{Name: stored.ArtifactName, Data: append([]byte(nil), stored.artifact...), Found: true}, nil
+	return contractbuilds.ArtifactFound{Found: true, ArtifactName: stored.ArtifactName}, append([]byte(nil), stored.artifact...), nil
 }
 
-// DeleteOwner forgets an Owner's Builds.
-func (f *Fake) DeleteOwner(_ context.Context, owner string) error {
+// Check returns the Check of one of an Owner's Builds, as it was when the Build was
+// checked.
+func (f *Fake) Check(_ context.Context, owner, buildID string) (contractbuilds.Check, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for id, stored := range f.builds {
-		if stored.owner == owner {
-			delete(f.builds, id)
-		}
+	stored, ok := f.builds[buildID]
+	if !ok || stored.OwnerID != owner || stored.check == nil {
+		return contractbuilds.Check{}, false, nil
 	}
-	return nil
+	return *stored.check, true, nil
 }
 
 // pack returns the Artifact of a Build: a compressed ZIP holding Module.
@@ -175,16 +174,4 @@ func pack(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	return compressed.Data, nil
-}
-
-// FindCheck returns the Check of one of an Owner's Builds, as it was when the
-// Build was checked.
-func (f *Fake) FindCheck(ctx context.Context, owner, buildID string) (app.Check, bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	stored, ok := f.builds[buildID]
-	if !ok || stored.owner != owner || stored.check == nil {
-		return app.Check{}, false, nil
-	}
-	return *stored.check, true, nil
 }

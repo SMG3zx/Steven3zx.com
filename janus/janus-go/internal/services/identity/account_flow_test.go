@@ -15,7 +15,6 @@ import (
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
 	"janus/internal/contract/account"
 	contractbuilds "janus/internal/contract/builds"
 	contractid "janus/internal/contract/identity"
@@ -107,8 +106,8 @@ func TestDeletingAnAccountRemovesItsRecordsAcrossServicesAfterARestart(t *testin
 
 	service := startIdentity(t, conn, path)
 	t.Cleanup(func() { _ = service.Stop(context.Background()) })
-	ids := identitynats.New(conn)
-	if err := ids.CreateLocalUser(ctx, app.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}); err != nil {
+	ids := identitynats.NewGateway(conn)
+	if err := ids.CreateLocalUser(ctx, contractid.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}); err != nil {
 		t.Fatal(err)
 	}
 

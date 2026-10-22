@@ -12,8 +12,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"janus/internal/adapters/localstatetest"
-	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 // TestALargeModuleStagedForATrustedOwnerIsReadByTheAgent reads a module of several
@@ -45,7 +45,7 @@ func TestALargeModuleStagedForATrustedOwnerIsReadByTheAgent(t *testing.T) {
 	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := trustedAgent(t, trust, leafAddress, runtime)
 	defer stop()
-	link.Connect(agentID, func(app.AgentEvent) error { return nil })
+	link.Connect(agentID, func(domainfleet.AgentEvent) error { return nil })
 
 	deadline := time.Now().Add(40 * time.Second)
 	for {
@@ -54,7 +54,7 @@ func TestALargeModuleStagedForATrustedOwnerIsReadByTheAgent(t *testing.T) {
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, app.ErrAgentUnreachable) || time.Now().After(deadline) {
+		if !errors.Is(err, domainfleet.ErrAgentUnreachable) || time.Now().After(deadline) {
 			t.Fatalf("deploy with the large module staged on the hub: %v", err)
 		}
 		time.Sleep(50 * time.Millisecond)

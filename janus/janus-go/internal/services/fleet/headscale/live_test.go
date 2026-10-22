@@ -26,8 +26,8 @@ import (
 	"tailscale.com/tsnet"
 
 	"janus/cmd/janus/fleetfixture"
-	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/services/fleet/headscale"
 	"janus/internal/services/fleet/tailnettest"
 )
@@ -327,7 +327,9 @@ func eventually(t *testing.T, what string, check func() bool) {
 }
 
 // waitStatus polls List until the owner's only Agent has the wanted status.
-func waitStatus(t *testing.T, fleet app.Fleet, owner, want string) app.AgentStatus {
+func waitStatus(t *testing.T, fleet interface {
+	ListAgents(ctx context.Context, owner string) ([]domainfleet.AgentStatus, error)
+}, owner, want string) domainfleet.AgentStatus {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for {

@@ -8,24 +8,25 @@ import (
 	"strings"
 	"sync"
 
-	"janus/internal/app"
+	"janus/internal/domain/agent"
+	domainfleet "janus/internal/domain/fleet"
 )
 
-// Memory is an app.LocalState kept in maps. Handles made by Reopen share it, as
+// Memory is an agent.LocalState kept in maps. Handles made by Reopen share it, as
 // two processes share a directory. It is safe for concurrent use.
 type Memory struct{ data *memoryData }
 
 type memoryData struct {
 	mu          sync.Mutex
 	paused      bool
-	deployments map[string]app.HostedDeployment
+	deployments map[string]domainfleet.HostedDeployment
 }
 
-var _ app.LocalState = Memory{}
+var _ agent.LocalState = Memory{}
 
 // NewMemory returns an empty, unpaused Memory.
 func NewMemory() Memory {
-	return Memory{data: &memoryData{deployments: map[string]app.HostedDeployment{}}}
+	return Memory{data: &memoryData{deployments: map[string]domainfleet.HostedDeployment{}}}
 }
 
 // Reopen returns another handle on the same data.
@@ -37,7 +38,7 @@ func ValidID(id string) bool {
 	return id != "" && id != "." && id != ".." && !strings.ContainsAny(id, `/\:`)
 }
 
-func (m Memory) SaveDeployment(_ context.Context, deployment app.HostedDeployment) error {
+func (m Memory) SaveDeployment(_ context.Context, deployment domainfleet.HostedDeployment) error {
 	if !ValidID(deployment.ID) {
 		return errors.New("a Deployment ID cannot be empty or contain a path")
 	}
@@ -55,10 +56,10 @@ func (m Memory) DeleteDeployment(_ context.Context, id string) error {
 	return nil
 }
 
-func (m Memory) Deployments(context.Context) ([]app.HostedDeployment, error) {
+func (m Memory) Deployments(context.Context) ([]domainfleet.HostedDeployment, error) {
 	m.data.mu.Lock()
 	defer m.data.mu.Unlock()
-	out := make([]app.HostedDeployment, 0, len(m.data.deployments))
+	out := make([]domainfleet.HostedDeployment, 0, len(m.data.deployments))
 	for _, deployment := range m.data.deployments {
 		deployment.Module = bytes.Clone(deployment.Module)
 		out = append(out, deployment)

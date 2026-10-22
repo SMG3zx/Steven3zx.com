@@ -1,32 +1,8 @@
 {
   "$schema": "https://aka.ms/codetour-schema",
-  "title": "Ports overview: each port, its real adapter, and its test adapter",
-  "description": "One step per outbound port declared in internal/app. Every port has a real adapter and a test adapter, and both pass the same contract suite.",
+  "title": "Ports overview: the Agent's ports, their real implementations and test doubles",
+  "description": "One step per port the Agent runtime declares in internal/domain/agent, and the Agent link the fleet service sends commands through. The gateway and the services declare no ports: they call each other over NATS.",
   "steps": [
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 35,
-      "title": "WASMBuilds",
-      "description": "`type WASMBuilds interface`. Real: buildsnats.Client, which asks the builds service over NATS. Test: buildstest.Fake. The builds service's own tests cover the service behind it."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 13,
-      "title": "Identities",
-      "description": "`type Identities interface`. Real: identitynats.Client, which asks the identity service over NATS. Test: identitytest.Memory. Contract: identitytest.Run."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 67,
-      "title": "Catalog",
-      "description": "`type Catalog interface`. Real: projectsnats.Client, which asks the projects service over NATS. Test: catalogtest.Memory. Contract: catalogtest.Run."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 54,
-      "title": "BuildArtifacts",
-      "description": "`type BuildArtifacts interface`. Real: buildsnats.Client, which reads the Artifact from the artifacts store. Test: the Builds use case over buildstest.Fake."
-    },
     {
       "file": "janus-go/internal/domain/agent/ports.go",
       "line": 36,

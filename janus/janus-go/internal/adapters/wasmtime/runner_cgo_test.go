@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
+	"janus/internal/domain/agent"
 )
 
 func TestWasmtimePassesTheRunnerContract(t *testing.T) {
-	runnertest.Run(t, func(*testing.T) app.Runner { return Wasmtime{} })
+	runnertest.Run(t, func(*testing.T) agent.Runner { return Wasmtime{} })
 }

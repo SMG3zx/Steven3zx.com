@@ -10,17 +10,15 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"janus/internal/app"
 )
 
 // Run runs the Runner contract against adapters made by newRunner. Each case
 // gets a fresh Runner.
-func Run(t *testing.T, newRunner func(t *testing.T) app.Runner) {
+func Run(t *testing.T, newRunner func(t *testing.T) agent.Runner) {
 	t.Helper()
 	for _, c := range []struct {
 		name string
-		test func(t *testing.T, r app.Runner)
+		test func(t *testing.T, r agent.Runner)
 	}{
 		{"CapturesStdout", testCapturesStdout},
 		{"ReportsFuelAndPeakMemory", testReportsUsage},
@@ -45,12 +43,12 @@ func limits() agent.RunLimits {
 	return agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20, Timeout: 5 * time.Second}
 }
 
-func run(t *testing.T, r app.Runner, module []byte, l agent.RunLimits) (app.RunResult, error) {
+func run(t *testing.T, r agent.Runner, module []byte, l agent.RunLimits) (agent.RunResult, error) {
 	t.Helper()
-	return r.Run(context.Background(), module, app.RunInput{Limits: l})
+	return r.Run(context.Background(), module, agent.RunInput{Limits: l})
 }
 
-func testCapturesStdout(t *testing.T, r app.Runner) {
+func testCapturesStdout(t *testing.T, r agent.Runner) {
 	got, err := run(t, r, Hello, limits())
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +58,7 @@ func testCapturesStdout(t *testing.T, r app.Runner) {
 	}
 }
 
-func testReportsUsage(t *testing.T, r app.Runner) {
+func testReportsUsage(t *testing.T, r agent.Runner) {
 	got, err := run(t, r, Hello, limits())
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +71,7 @@ func testReportsUsage(t *testing.T, r app.Runner) {
 	}
 }
 
-func testFuelIsRepeatable(t *testing.T, r app.Runner) {
+func testFuelIsRepeatable(t *testing.T, r agent.Runner) {
 	first, err := run(t, r, Hello, limits())
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +85,7 @@ func testFuelIsRepeatable(t *testing.T, r app.Runner) {
 	}
 }
 
-func testExhaustsFuel(t *testing.T, r app.Runner) {
+func testExhaustsFuel(t *testing.T, r agent.Runner) {
 	l := limits()
 	l.Fuel = 10_000
 	got, err := run(t, r, Spins, l)
@@ -99,35 +97,35 @@ func testExhaustsFuel(t *testing.T, r app.Runner) {
 	}
 }
 
-func testRefusesGarbage(t *testing.T, r app.Runner) {
+func testRefusesGarbage(t *testing.T, r agent.Runner) {
 	if _, err := run(t, r, []byte("this is not WebAssembly"), limits()); err == nil {
 		t.Fatal("garbage ran")
 	}
 }
 
-func testRefusesNoStart(t *testing.T, r app.Runner) {
+func testRefusesNoStart(t *testing.T, r agent.Runner) {
 	// A module with no exports at all: the header only.
 	if _, err := run(t, r, []byte("\x00asm\x01\x00\x00\x00"), limits()); err == nil {
 		t.Fatal("a module without _start ran")
 	}
 }
 
-func testOutOfFuelError(t *testing.T, r app.Runner) {
+func testOutOfFuelError(t *testing.T, r agent.Runner) {
 	l := limits()
 	l.Fuel = 10_000
 	_, err := run(t, r, Spins, l)
-	if !errors.Is(err, app.ErrOutOfFuel) {
+	if !errors.Is(err, agent.ErrOutOfFuel) {
 		t.Fatalf("err = %v, want ErrOutOfFuel", err)
 	}
 }
 
-func testTimeoutError(t *testing.T, r app.Runner) {
+func testTimeoutError(t *testing.T, r agent.Runner) {
 	l := limits()
 	l.Fuel = 1 << 62
 	l.Timeout = 100 * time.Millisecond
 	started := time.Now()
 	_, err := run(t, r, Spins, l)
-	if !errors.Is(err, app.ErrRunTimeout) {
+	if !errors.Is(err, agent.ErrRunTimeout) {
 		t.Fatalf("err = %v, want ErrRunTimeout", err)
 	}
 	if took := time.Since(started); took > 5*time.Second {
@@ -135,8 +133,8 @@ func testTimeoutError(t *testing.T, r app.Runner) {
 	}
 }
 
-func testPassesStdin(t *testing.T, r app.Runner) {
-	got, err := r.Run(context.Background(), Echo, app.RunInput{Stdin: []byte("request body"), Limits: limits()})
+func testPassesStdin(t *testing.T, r agent.Runner) {
+	got, err := r.Run(context.Background(), Echo, agent.RunInput{Stdin: []byte("request body"), Limits: limits()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,8 +143,8 @@ func testPassesStdin(t *testing.T, r app.Runner) {
 	}
 }
 
-func testPassesEnvironment(t *testing.T, r app.Runner) {
-	got, err := r.Run(context.Background(), Environ, app.RunInput{Env: []string{"REQUEST_METHOD=GET", "PATH_INFO=/a b"}, Limits: limits()})
+func testPassesEnvironment(t *testing.T, r agent.Runner) {
+	got, err := r.Run(context.Background(), Environ, agent.RunInput{Env: []string{"REQUEST_METHOD=GET", "PATH_INFO=/a b"}, Limits: limits()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,9 +155,9 @@ func testPassesEnvironment(t *testing.T, r app.Runner) {
 	}
 }
 
-func testCutsStdout(t *testing.T, r app.Runner) {
+func testCutsStdout(t *testing.T, r agent.Runner) {
 	stdin := bytes.Repeat([]byte("x"), 10_000)
-	got, err := r.Run(context.Background(), Echo, app.RunInput{Stdin: stdin, MaxStdout: 1000, Limits: limits()})
+	got, err := r.Run(context.Background(), Echo, agent.RunInput{Stdin: stdin, MaxStdout: 1000, Limits: limits()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,11 +184,11 @@ func folder(t *testing.T) string {
 	return dir
 }
 
-func readFixture(r app.Runner, dir, path string) (app.RunResult, error) {
-	return r.Run(context.Background(), ReadFile, app.RunInput{Stdin: []byte(path), Dir: dir, Limits: limits()})
+func readFixture(r agent.Runner, dir, path string) (agent.RunResult, error) {
+	return r.Run(context.Background(), ReadFile, agent.RunInput{Stdin: []byte(path), Dir: dir, Limits: limits()})
 }
 
-func testReadsInsideFolder(t *testing.T, r app.Runner) {
+func testReadsInsideFolder(t *testing.T, r agent.Runner) {
 	got, err := readFixture(r, folder(t), "inside.txt")
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +198,7 @@ func testReadsInsideFolder(t *testing.T, r app.Runner) {
 	}
 }
 
-func testCannotLeaveFolder(t *testing.T, r app.Runner) {
+func testCannotLeaveFolder(t *testing.T, r agent.Runner) {
 	dir := folder(t)
 	outside := filepath.Join(filepath.Dir(dir), "outside.txt")
 	for _, path := range []string{"../outside.txt", "/../outside.txt", "./../outside.txt", outside, filepath.ToSlash(outside)} {
@@ -211,7 +209,7 @@ func testCannotLeaveFolder(t *testing.T, r app.Runner) {
 	}
 }
 
-func testNoFolderNoFiles(t *testing.T, r app.Runner) {
+func testNoFolderNoFiles(t *testing.T, r agent.Runner) {
 	got, err := readFixture(r, "", "inside.txt")
 	if err == nil || len(got.Stdout) != 0 {
 		t.Fatalf("read %q, err %v, with no folder", got.Stdout, err)

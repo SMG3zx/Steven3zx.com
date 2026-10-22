@@ -12,41 +12,56 @@ import (
 	"testing"
 	"time"
 
+	"janus/cmd/janus/identityfixture"
 	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/identitytest"
-	"janus/internal/app"
 	contractid "janus/internal/contract/identity"
+	contractprojects "janus/internal/contract/projects"
 )
 
-// unfinishedJobs is the identity service as a test needs it when the Account has
-// unfinished jobs: it refuses to delete the Account unless the request cancels
-// them, as identity does after asking projects and builds.
-type unfinishedJobs struct {
-	*identitytest.Directory
-	jobs []contractid.ActiveJob
+// deletingAccounts is the identity service as the Account deletion test needs it.
+// With unfinished jobs it refuses to delete the Account unless the request cancels
+// them; once a deletion has started the User is gone and the deletion reports it
+// has finished, as identity does after projects, builds and fleet confirm. Those
+// services are not running here, so the flow across them is tested in the identity
+// service.
+type deletingAccounts struct {
+	Identity
+	jobs    []contractid.ActiveJob
+	started bool
 }
 
-func (u *unfinishedJobs) DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (contractid.AccountDeletion, error) {
+func (u *deletingAccounts) DeleteAccount(_ context.Context, _ string, cancelActiveJobs bool) (contractid.AccountDeletion, error) {
 	if len(u.jobs) > 0 && !cancelActiveJobs {
 		return contractid.AccountDeletion{Status: contractid.AccountRefused, ActiveJobs: u.jobs}, nil
 	}
-	return u.Directory.DeleteAccount(ctx, userID, cancelActiveJobs)
+	if u.started {
+		return contractid.AccountDeletion{Status: contractid.AccountMissing}, nil
+	}
+	u.started = true
+	return contractid.AccountDeletion{Status: contractid.AccountDeleting}, nil
 }
 
-func newLifecycleApp(t *testing.T) (http.Handler, *unfinishedJobs) {
+func (u *deletingAccounts) FindUser(ctx context.Context, id string) (contractid.User, error) {
+	if u.started {
+		return contractid.User{}, nil
+	}
+	return u.Identity.FindUser(ctx, id)
+}
+
+func newLifecycleApp(t *testing.T) (http.Handler, *deletingAccounts) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	identities := &unfinishedJobs{Directory: identitytest.NewDirectory(identitytest.NewMemory())}
+	identities := &deletingAccounts{Identity: identityfixture.Start(t)}
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	builds := buildstest.NewGateway(buildstest.NewFake())
+	builds := buildstest.NewFake()
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return New(Config{
-		Audit: audit, Identity: identities, Catalog: catalogtest.NewGateway(catalog), Builds: builds,
+		Audit: audit, Identity: identities, Catalog: catalog, Builds: builds,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler(), identities
 }
@@ -60,7 +75,7 @@ func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testin
 	}
 	session := register.Result().Cookies()[0]
 	projectResponse := perform(handler, http.MethodPost, "/api/projects", `{"name":"Doomed","description":""}`, session)
-	var project app.Project
+	var project contractprojects.Project
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &project); err != nil || project.ID == "" {
 		t.Fatalf("project create = %d %s", projectResponse.Code, projectResponse.Body.String())
 	}

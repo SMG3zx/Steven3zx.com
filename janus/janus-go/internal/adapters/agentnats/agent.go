@@ -11,8 +11,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/platform/natsx"
 )
 
@@ -179,7 +179,7 @@ func (a *serving) publishUsage(ctx context.Context) {
 	}
 }
 
-func (a *serving) publish(ctx context.Context, report app.RunReport) error {
+func (a *serving) publish(ctx context.Context, report domainfleet.RunReport) error {
 	body, err := json.Marshal(report)
 	if err != nil {
 		return err

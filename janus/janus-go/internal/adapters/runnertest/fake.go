@@ -1,5 +1,5 @@
-// Package runnertest holds an in-memory app.Runner, WASI modules to run in its
-// contract suite, and the suite every app.Runner adapter, real or test, must
+// Package runnertest holds an in-memory agent.Runner, WASI modules to run in its
+// contract suite, and the suite every agent.Runner adapter, real or test, must
 // pass.
 package runnertest
 
@@ -13,12 +13,12 @@ import (
 	"strings"
 	"sync"
 
-	"janus/internal/app"
+	"janus/internal/domain/agent"
 )
 
 const defaultMaxOutput = 64 << 10
 
-// Fake is an app.Runner that runs no WebAssembly. It knows the fixture modules of
+// Fake is an agent.Runner that runs no WebAssembly. It knows the fixture modules of
 // this package and any module a test registers with Handle, and refuses the
 // rest. It is safe for concurrent use.
 type Fake struct {
@@ -29,37 +29,37 @@ type Fake struct {
 // Program is what a registered module does when it runs. It returns the Run's
 // output and Usage and the error the run ends with. The Fake cuts Stdout to
 // input.MaxStdout afterwards.
-type Program func(input app.RunInput) (app.RunResult, error)
+type Program func(input agent.RunInput) (agent.RunResult, error)
 
-var _ app.Runner = (*Fake)(nil)
+var _ agent.Runner = (*Fake)(nil)
 
 // NewFake returns a Fake that runs the fixture modules of this package.
 func NewFake() *Fake {
 	f := &Fake{programs: map[string]Program{}}
-	f.Handle(Exits, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Usage: usageOf(2, 0)}, nil
+	f.Handle(Exits, func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Usage: usageOf(2, 0)}, nil
 	})
-	f.Handle(Hello, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("hi\n"), Usage: usageOf(9, 64<<10)}, nil
+	f.Handle(Hello, func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: []byte("hi\n"), Usage: usageOf(9, 64<<10)}, nil
 	})
-	f.Handle(Spins, func(input app.RunInput) (app.RunResult, error) {
+	f.Handle(Spins, func(input agent.RunInput) (agent.RunResult, error) {
 		// Time is not simulated: a fuel limit too large to spend first means the
 		// timeout ended the run.
 		if input.Limits.Fuel >= 1<<40 {
-			return app.RunResult{Usage: usageOf(1<<20, 0)}, app.ErrRunTimeout
+			return agent.RunResult{Usage: usageOf(1<<20, 0)}, agent.ErrRunTimeout
 		}
-		return app.RunResult{Usage: usageOf(input.Limits.Fuel, 0)}, app.ErrOutOfFuel
+		return agent.RunResult{Usage: usageOf(input.Limits.Fuel, 0)}, agent.ErrOutOfFuel
 	})
-	f.Handle(Echo, func(input app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: bytes.Clone(input.Stdin), Usage: usageOf(uint64(100+len(input.Stdin)), 64<<10)}, nil
+	f.Handle(Echo, func(input agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: bytes.Clone(input.Stdin), Usage: usageOf(uint64(100+len(input.Stdin)), 64<<10)}, nil
 	})
-	f.Handle(Environ, func(input app.RunInput) (app.RunResult, error) {
+	f.Handle(Environ, func(input agent.RunInput) (agent.RunResult, error) {
 		var out bytes.Buffer
 		for _, variable := range input.Env {
 			out.WriteString(variable)
 			out.WriteByte(0)
 		}
-		return app.RunResult{Stdout: out.Bytes(), Usage: usageOf(50, 64<<10)}, nil
+		return agent.RunResult{Stdout: out.Bytes(), Usage: usageOf(50, 64<<10)}, nil
 	})
 	f.Handle(ReadFile, readFile)
 	return f
@@ -67,8 +67,8 @@ func NewFake() *Fake {
 
 // readFile does what the ReadFile fixture does, with the folder opened as an
 // os.Root so that, like a WASI preopen, nothing outside it can be reached.
-func readFile(input app.RunInput) (app.RunResult, error) {
-	result := app.RunResult{Usage: usageOf(80, 64<<10)}
+func readFile(input agent.RunInput) (agent.RunResult, error) {
+	result := agent.RunResult{Usage: usageOf(80, 64<<10)}
 	const badf, notcapable = 8, 76
 	if input.Dir == "" {
 		return result, fmt.Errorf("program exited with status %d", badf)
@@ -100,15 +100,15 @@ func (f *Fake) Handle(module []byte, program Program) {
 
 // Run runs a registered module, and fails for bytes that are not a WebAssembly
 // module or that no program was registered for. It does not consult ctx.
-func (f *Fake) Run(_ context.Context, module []byte, input app.RunInput) (app.RunResult, error) {
+func (f *Fake) Run(_ context.Context, module []byte, input agent.RunInput) (agent.RunResult, error) {
 	if !bytes.HasPrefix(module, []byte("\x00asm")) {
-		return app.RunResult{}, errors.New("not a WebAssembly module")
+		return agent.RunResult{}, errors.New("not a WebAssembly module")
 	}
 	f.mu.Lock()
 	program, ok := f.programs[string(module)]
 	f.mu.Unlock()
 	if !ok {
-		return app.RunResult{}, errors.New("runnertest: no program registered for this module")
+		return agent.RunResult{}, errors.New("runnertest: no program registered for this module")
 	}
 	result, err := program(input)
 	limit := input.MaxStdout

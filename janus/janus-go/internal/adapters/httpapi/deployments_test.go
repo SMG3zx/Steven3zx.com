@@ -13,14 +13,14 @@ import (
 	"time"
 
 	"janus/cmd/janus/fleetfixture"
+	"janus/cmd/janus/identityfixture"
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/buildsnats"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
+	contractprojects "janus/internal/contract/projects"
 )
 
 // brokenModule is a WebAssembly module the test Agent has no program for, so its
@@ -34,7 +34,7 @@ type deployApp struct {
 	fixture  *fleetfixture.Fixture
 	session  *http.Cookie
 	intruder *http.Cookie
-	project  app.Project
+	project  contractprojects.Project
 	agent    string
 	builds   int
 }
@@ -46,7 +46,7 @@ func newDeployApp(t *testing.T) *deployApp {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	fixture := fleetfixture.Start(t, fleetfixture.Options{})
-	identities := identitytest.NewMemory()
+	identities := identityfixture.Start(t)
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
 	builds, err := buildsnats.NewGateway(ctx, fixture.Conn())
@@ -58,7 +58,7 @@ func newDeployApp(t *testing.T) *deployApp {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audit, Identity: identitytest.NewDirectory(identities), Catalog: catalogtest.NewGateway(catalog), Builds: builds,
+		Audit: audit, Identity: identities, Catalog: catalog, Builds: builds,
 		Fleet:          fixture.Fleet,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
@@ -85,8 +85,8 @@ func newDeployApp(t *testing.T) *deployApp {
 // pageAgent is an Agent that serves pageModule, the module of every passing build.
 func pageAgent() *agent.Runtime {
 	runner := runnertest.NewFake()
-	runner.Handle(pageModule, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
+	runner.Handle(pageModule, func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
 	return agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 }

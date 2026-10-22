@@ -1,5 +1,7 @@
-// Package catalogtest holds an in-memory app.Catalog and the contract suite
-// every app.Catalog adapter, real or test, must pass.
+// Package catalogtest holds an in-memory projects service for the gateway's
+// tests that need Projects, Snapshots and Imports without the service. It answers
+// with the contract's types and errors, as the gateway's client of the service
+// does.
 package catalogtest
 
 import (
@@ -14,11 +16,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"janus/internal/app"
+	"janus/internal/contract"
+	contractprojects "janus/internal/contract/projects"
 	"janus/internal/domain/scan"
 )
 
-// Memory is an app.Catalog over maps, safe for concurrent use. An Import it
+// Memory is the projects service over maps, safe for concurrent use. An Import it
 // accepts runs at once: by the time RequestImport returns, the Snapshot is
 // ready. The repositories it can import from are the ones Publish wrote, and an
 // Owner can import only after Connect.
@@ -27,26 +30,26 @@ type Memory struct {
 	clock     int
 	projects  map[string]*project
 	snapshots map[string]*snapshot
-	imports   map[string]*app.ImportJob
+	imports   map[string]*contractprojects.ImportJob
 	repos     map[string]*repository
 	connected map[string]bool
 }
 
 type project struct {
-	app.Project
+	contractprojects.Project
 	updated int
 }
 
 type snapshot struct {
-	app.ProjectSnapshot
+	contractprojects.Snapshot
 	projectID, ownerID, metadataJSON string
 	repositoryID                     int64
 	order                            int
-	files                            []app.SnapshotFile
+	files                            []File
 }
 
 type repository struct {
-	app.Repository
+	contractprojects.Repository
 	commits []commit // newest first
 }
 
@@ -55,11 +58,9 @@ type commit struct {
 	files map[string]string
 }
 
-var _ app.Catalog = (*Memory)(nil)
-
 // NewMemory returns an empty Memory.
 func NewMemory() *Memory {
-	return &Memory{projects: map[string]*project{}, snapshots: map[string]*snapshot{}, imports: map[string]*app.ImportJob{},
+	return &Memory{projects: map[string]*project{}, snapshots: map[string]*snapshot{}, imports: map[string]*contractprojects.ImportJob{},
 		repos: map[string]*repository{}, connected: map[string]bool{}}
 }
 
@@ -77,12 +78,18 @@ func (m *Memory) Publish(fullName string, files map[string]string) string {
 	defer m.mu.Unlock()
 	r := m.repos[fullName]
 	if r == nil {
-		r = &repository{Repository: app.Repository{ID: int64(len(m.repos) + 1), FullName: fullName, DefaultBranch: "main", Language: "Go", Stars: 3, Forks: 1}}
+		r = &repository{Repository: contractprojects.Repository{ID: int64(len(m.repos) + 1), FullName: fullName, DefaultBranch: "main", Language: "Go", Stars: 3, Forks: 1}}
 		m.repos[fullName] = r
 	}
 	sha := fmt.Sprintf("%040x", len(m.repos)*1000+len(r.commits)+1)
 	r.commits = append([]commit{{sha: sha, files: files}}, r.commits...)
 	return sha
+}
+
+// File is a file of a Snapshot a test seeds.
+type File struct {
+	Path, Mode, Hash string
+	Content          []byte
 }
 
 // Seed is a ready Snapshot SeedSnapshot adds without an Import.
@@ -91,7 +98,7 @@ type Seed struct {
 	Language, Runtime      string
 	MetadataJSON           string
 	TotalBytes             int64
-	Files                  []app.SnapshotFile
+	Files                  []File
 }
 
 // SeedSnapshot adds a ready Snapshot to an Owner's Project and makes it the
@@ -108,9 +115,9 @@ func (m *Memory) SeedSnapshot(owner, projectID string, seed Seed) {
 			total += int64(len(f.Content))
 		}
 	}
-	m.addSnapshot(owner, projectID, &snapshot{ProjectSnapshot: app.ProjectSnapshot{ID: seed.ID, Repository: seed.Repository, Branch: "main", Commit: seed.Commit,
+	m.addSnapshot(owner, projectID, &snapshot{Snapshot: contractprojects.Snapshot{ID: seed.ID, Repository: seed.Repository, Branch: "main", Commit: seed.Commit,
 		Language: seed.Language, Runtime: seed.Runtime, DefaultBranch: "main", FileCount: len(seed.Files), TotalBytes: total},
-		metadataJSON: seed.MetadataJSON, files: append([]app.SnapshotFile(nil), seed.Files...)})
+		metadataJSON: seed.MetadataJSON, files: append([]File(nil), seed.Files...)})
 }
 
 // SeedImport adds an Import of an Owner's Project in status, as one a worker
@@ -119,7 +126,7 @@ func (m *Memory) SeedImport(owner, projectID, jobID, status string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.tick()
-	m.imports[jobID] = &app.ImportJob{ID: jobID, OwnerID: owner, ProjectID: projectID, Repository: "seeded/repo", Branch: "main", Commit: strings.Repeat("0", 40), Status: status, CreatedAt: now, UpdatedAt: now}
+	m.imports[jobID] = &contractprojects.ImportJob{ID: jobID, OwnerID: owner, ProjectID: projectID, Repository: "seeded/repo", Branch: "main", Commit: strings.Repeat("0", 40), Status: status, CreatedAt: now, UpdatedAt: now}
 }
 
 func (m *Memory) tick() string {
@@ -127,8 +134,19 @@ func (m *Memory) tick() string {
 	return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(m.clock) * time.Millisecond).Format("2006-01-02 15:04:05.000")
 }
 
+// refused is a refusal of the service: a missing record is not found, a clash
+// with what is running is a conflict, and anything else the Account asked for
+// wrongly is invalid.
 func refused(format string, args ...any) error {
-	return &app.ReplyError{Err: fmt.Errorf(format, args...)}
+	message := fmt.Sprintf(format, args...)
+	switch {
+	case strings.HasSuffix(message, "not found"):
+		return contract.Errorf(contract.StatusNotFound, "%s", message)
+	case strings.Contains(message, "in progress"), message == "project could not be created":
+		return contract.Errorf(contract.StatusConflict, "%s", message)
+	default:
+		return contract.Errorf(contract.StatusInvalid, "%s", message)
+	}
 }
 
 func (m *Memory) owned(id, owner string) (*project, bool) {
@@ -140,7 +158,7 @@ func (m *Memory) owned(id, owner string) (*project, bool) {
 }
 
 // view is the Project with its active Snapshot's details.
-func (m *Memory) view(p *project) app.Project {
+func (m *Memory) view(p *project) contractprojects.Project {
 	view := p.Project
 	view.MetadataJSON = "{}"
 	for _, s := range m.snapshots {
@@ -165,30 +183,30 @@ func validProject(name, description string) error {
 	return nil
 }
 
-func (m *Memory) CreateProject(_ context.Context, request app.CreateProject) (app.Project, error) {
+func (m *Memory) CreateProject(_ context.Context, request contractprojects.CreateProject) (contractprojects.Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := validProject(request.Name, request.Description); err != nil {
-		return app.Project{}, err
+		return contractprojects.Project{}, err
 	}
 	if _, exists := m.projects[request.ID]; exists {
-		return app.Project{}, refused("project could not be created")
+		return contractprojects.Project{}, refused("project could not be created")
 	}
 	now := m.tick()
-	p := &project{Project: app.Project{ID: request.ID, OwnerID: request.OwnerID, Name: strings.TrimSpace(request.Name), Description: strings.TrimSpace(request.Description), CreatedAt: now, UpdatedAt: now}, updated: m.clock}
+	p := &project{Project: contractprojects.Project{ID: request.ID, OwnerID: request.OwnerID, Name: strings.TrimSpace(request.Name), Description: strings.TrimSpace(request.Description), CreatedAt: now, UpdatedAt: now}, updated: m.clock}
 	m.projects[p.ID] = p
 	return m.view(p), nil
 }
 
-func (m *Memory) UpdateProject(_ context.Context, request app.UpdateProject) (app.Project, error) {
+func (m *Memory) UpdateProject(_ context.Context, request contractprojects.UpdateProject) (contractprojects.Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := validProject(request.Name, request.Description); err != nil {
-		return app.Project{}, err
+		return contractprojects.Project{}, err
 	}
 	p, ok := m.owned(request.ID, request.OwnerID)
 	if !ok {
-		return app.Project{}, refused("project not found")
+		return contractprojects.Project{}, refused("project not found")
 	}
 	p.Name, p.Description, p.UpdatedAt, p.updated = strings.TrimSpace(request.Name), strings.TrimSpace(request.Description), m.tick(), m.clock
 	return m.view(p), nil
@@ -223,7 +241,7 @@ func (m *Memory) deleteProject(id string) {
 	}
 }
 
-func (m *Memory) ListProjects(_ context.Context, owner string) ([]app.Project, error) {
+func (m *Memory) ListProjects(_ context.Context, owner string) ([]contractprojects.Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var mine []*project
@@ -233,19 +251,19 @@ func (m *Memory) ListProjects(_ context.Context, owner string) ([]app.Project, e
 		}
 	}
 	sort.Slice(mine, func(i, j int) bool { return mine[i].updated > mine[j].updated })
-	list := make([]app.Project, 0, len(mine))
+	list := make([]contractprojects.Project, 0, len(mine))
 	for _, p := range mine {
 		list = append(list, m.view(p))
 	}
 	return list, nil
 }
 
-func (m *Memory) GetProject(_ context.Context, id, owner string) (app.Project, bool, error) {
+func (m *Memory) GetProject(_ context.Context, id, owner string) (contractprojects.Project, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.owned(id, owner)
 	if !ok {
-		return app.Project{}, false, nil
+		return contractprojects.Project{}, false, nil
 	}
 	return m.view(p), true, nil
 }
@@ -262,15 +280,15 @@ func (m *Memory) ready(projectID string) []*snapshot {
 	return list
 }
 
-func (m *Memory) ListSnapshots(_ context.Context, owner, projectID string) ([]app.ProjectSnapshot, error) {
+func (m *Memory) ListSnapshots(_ context.Context, owner, projectID string) ([]contractprojects.Snapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.owned(projectID, owner); !ok {
 		return nil, refused("project not found")
 	}
-	list := make([]app.ProjectSnapshot, 0)
+	list := make([]contractprojects.Snapshot, 0)
 	for _, s := range m.ready(projectID) {
-		list = append(list, s.ProjectSnapshot)
+		list = append(list, s.Snapshot)
 	}
 	return list, nil
 }
@@ -289,7 +307,8 @@ func (m *Memory) ActivateSnapshot(_ context.Context, owner, projectID, snapshotI
 	return true, nil
 }
 
-func (m *Memory) SetEntryPoint(_ context.Context, owner, projectID, snapshotID, entryPoint string) error {
+func (m *Memory) SetEntryPoint(_ context.Context, request contractprojects.SetEntryPoint) error {
+	owner, projectID, snapshotID, entryPoint := request.OwnerID, request.ProjectID, request.SnapshotID, request.EntryPoint
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.owned(projectID, owner)
@@ -313,32 +332,6 @@ func (m *Memory) SetEntryPoint(_ context.Context, owner, projectID, snapshotID, 
 	return nil
 }
 
-func (m *Memory) ListProjectFiles(_ context.Context, page app.ListProjectFiles) ([]app.SnapshotFile, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.owned(page.ProjectID, page.OwnerID); !ok {
-		return nil, refused("project not found")
-	}
-	s, ok := m.snapshots[page.SnapshotID]
-	if !ok || s.projectID != page.ProjectID {
-		return []app.SnapshotFile{}, nil
-	}
-	files := append([]app.SnapshotFile(nil), s.files...)
-	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
-	limit := page.Limit
-	if limit <= 0 {
-		limit = 200
-	}
-	start := min(page.Offset, len(files))
-	end := min(start+limit, len(files))
-	out := make([]app.SnapshotFile, 0, end-start)
-	for _, f := range files[start:end] {
-		f.Content = append([]byte(nil), f.Content...)
-		out = append(out, f)
-	}
-	return out, nil
-}
-
 func active(status string) bool {
 	switch status {
 	case "queued", "cloning", "scanning", "storing":
@@ -349,7 +342,7 @@ func active(status string) bool {
 
 // RequestImport checks the request as the projects service does and, when it
 // can run, imports the commit at once.
-func (m *Memory) RequestImport(_ context.Context, request app.ImportRequest) (string, error) {
+func (m *Memory) RequestImport(_ context.Context, request contractprojects.RequestImport) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if request.OwnerID == "" || request.ProjectID == "" || request.Repository == "" || request.Branch == "" || len(request.Commit) != 40 {
@@ -384,25 +377,25 @@ func (m *Memory) RequestImport(_ context.Context, request app.ImportRequest) (st
 	}
 	jobID := uuid.NewString()
 	now := m.tick()
-	m.imports[jobID] = &app.ImportJob{ID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, Repository: r.FullName, Branch: request.Branch,
+	m.imports[jobID] = &contractprojects.ImportJob{ID: jobID, OwnerID: request.OwnerID, ProjectID: request.ProjectID, Repository: r.FullName, Branch: request.Branch,
 		Commit: chosen.sha, Status: "complete", Progress: 100, CreatedAt: now, UpdatedAt: now}
-	files := make([]app.SnapshotFile, 0, len(chosen.files))
+	files := make([]File, 0, len(chosen.files))
 	input := make([]scan.File, 0, len(chosen.files))
 	var total int64
 	for path, content := range chosen.files {
-		files = append(files, app.SnapshotFile{Path: path, Mode: "100644", Hash: fmt.Sprintf("%x", len(content)), Content: []byte(content)})
+		files = append(files, File{Path: path, Mode: "100644", Hash: fmt.Sprintf("%x", len(content)), Content: []byte(content)})
 		input = append(input, scan.File{Path: path, Content: []byte(content)})
 		total += int64(len(content))
 	}
 	found := scan.Files(input)
 	metadata, err := json.Marshal(struct {
-		Repository app.Repository `json:"repository"`
-		Scan       scan.Result    `json:"scan"`
+		Repository contractprojects.Repository `json:"repository"`
+		Scan       scan.Result                 `json:"scan"`
 	}{r.Repository, found})
 	if err != nil {
 		return "", err
 	}
-	m.addSnapshot(request.OwnerID, request.ProjectID, &snapshot{ProjectSnapshot: app.ProjectSnapshot{ID: uuid.NewString(), Repository: r.FullName, Branch: "main", Commit: chosen.sha,
+	m.addSnapshot(request.OwnerID, request.ProjectID, &snapshot{Snapshot: contractprojects.Snapshot{ID: uuid.NewString(), Repository: r.FullName, Branch: "main", Commit: chosen.sha,
 		Language: scan.DominantLanguage(found.Languages), Runtime: found.Runtime, DefaultBranch: "main", Stars: r.Stars, Forks: r.Forks, FileCount: len(files), TotalBytes: total},
 		repositoryID: r.ID, metadataJSON: string(metadata), files: files})
 	return jobID, nil
@@ -437,49 +430,25 @@ func (m *Memory) RetryImport(ctx context.Context, owner, jobID string) (string, 
 		m.mu.Unlock()
 		return "", refused("only a failed import can be retried")
 	}
-	request := app.ImportRequest{OwnerID: owner, ProjectID: job.ProjectID, Repository: job.Repository, Branch: job.Branch, Commit: job.Commit}
+	request := contractprojects.RequestImport{OwnerID: owner, ProjectID: job.ProjectID, Repository: job.Repository, Branch: job.Branch, Commit: job.Commit}
 	m.mu.Unlock()
 	return m.RequestImport(ctx, request)
 }
 
-func (m *Memory) FindImportJob(_ context.Context, id, owner string) (app.ImportJob, bool, error) {
+func (m *Memory) FindImportJob(_ context.Context, id, owner string) (contractprojects.ImportJob, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	job, ok := m.imports[id]
 	if !ok || job.OwnerID != owner {
-		return app.ImportJob{}, false, nil
+		return contractprojects.ImportJob{}, false, nil
 	}
 	return *job, true, nil
 }
 
-func (m *Memory) ActiveImports(_ context.Context, owner string) ([]app.ActiveJob, error) {
+func (m *Memory) Repositories(_ context.Context, owner string) (contractprojects.Repositories, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	list := make([]app.ActiveJob, 0)
-	for _, job := range m.imports {
-		if job.OwnerID == owner && active(job.Status) {
-			list = append(list, app.ActiveJob{Kind: "import", ID: job.ID, ProjectID: job.ProjectID, Status: job.Status})
-		}
-	}
-	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
-	return list, nil
-}
-
-func (m *Memory) DeleteOwner(_ context.Context, owner string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for id, p := range m.projects {
-		if p.OwnerID == owner {
-			m.deleteProject(id)
-		}
-	}
-	return nil
-}
-
-func (m *Memory) Repositories(_ context.Context, owner string) (app.RepositoryList, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	list := app.RepositoryList{Repositories: []app.Repository{}, Connected: m.connected[owner]}
+	list := contractprojects.Repositories{Repositories: []contractprojects.Repository{}, Connected: m.connected[owner]}
 	if !list.Connected {
 		return list, nil
 	}
@@ -505,31 +474,31 @@ func (m *Memory) connectedRepository(owner, name string) (*repository, error) {
 	return r, nil
 }
 
-func (m *Memory) Branches(_ context.Context, owner, name string) ([]app.Branch, error) {
+func (m *Memory) Branches(_ context.Context, owner, name string) ([]contractprojects.Branch, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r, err := m.connectedRepository(owner, name)
 	if err != nil {
 		return nil, err
 	}
-	branch := app.Branch{Name: "main"}
+	branch := contractprojects.Branch{Name: "main"}
 	branch.Commit.SHA = r.commits[0].sha
-	return []app.Branch{branch}, nil
+	return []contractprojects.Branch{branch}, nil
 }
 
-func (m *Memory) Commits(_ context.Context, owner, name, branch string) ([]app.Commit, error) {
+func (m *Memory) Commits(_ context.Context, owner, name, branch string) ([]contractprojects.Commit, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r, err := m.connectedRepository(owner, name)
 	if err != nil {
 		return nil, err
 	}
-	commits := make([]app.Commit, 0, len(r.commits))
+	commits := make([]contractprojects.Commit, 0, len(r.commits))
 	if branch != "main" {
 		return commits, nil
 	}
 	for _, c := range r.commits {
-		commits = append(commits, app.Commit{SHA: c.sha})
+		commits = append(commits, contractprojects.Commit{SHA: c.sha})
 	}
 	return commits, nil
 }

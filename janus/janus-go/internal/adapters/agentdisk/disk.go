@@ -1,4 +1,4 @@
-// Package agentdisk is the app.LocalState an Agent keeps in a directory on its
+// Package agentdisk is the agent.LocalState an Agent keeps in a directory on its
 // machine: one module file and one description file per Deployment, and a file
 // that is present while the Agent is paused.
 package agentdisk
@@ -15,12 +15,12 @@ import (
 	"strings"
 	"sync"
 
-	"janus/internal/app"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 const pausedFile = "paused"
 
-// Disk is an app.LocalState in a directory. Every write goes to a temporary
+// Disk is an agent.LocalState in a directory. Every write goes to a temporary
 // file that is then renamed into place, so a crash leaves either the old or the
 // new file. Two Disks, even in two processes, may share a directory.
 type Disk struct {
@@ -30,7 +30,7 @@ type Disk struct {
 	mu sync.Mutex
 }
 
-var _ app.LocalState = (*Disk)(nil)
+var _ agent.LocalState = (*Disk)(nil)
 
 // Open returns a Disk over dir, creating it if it does not exist.
 func Open(dir string) (*Disk, error) {
@@ -54,7 +54,7 @@ func validID(id string) bool {
 
 func (d *Disk) path(id, ext string) string { return filepath.Join(d.dir, "deployments", id+ext) }
 
-func (d *Disk) SaveDeployment(_ context.Context, deployment app.HostedDeployment) error {
+func (d *Disk) SaveDeployment(_ context.Context, deployment domainfleet.HostedDeployment) error {
 	if !validID(deployment.ID) {
 		return errors.New("a Deployment ID cannot be empty or contain a path")
 	}
@@ -86,14 +86,14 @@ func (d *Disk) DeleteDeployment(_ context.Context, id string) error {
 	return nil
 }
 
-func (d *Disk) Deployments(context.Context) ([]app.HostedDeployment, error) {
+func (d *Disk) Deployments(context.Context) ([]domainfleet.HostedDeployment, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	names, err := filepath.Glob(filepath.Join(d.dir, "deployments", "*.json"))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]app.HostedDeployment, 0, len(names))
+	out := make([]domainfleet.HostedDeployment, 0, len(names))
 	for _, name := range names {
 		data, err := os.ReadFile(name)
 		if err != nil {
@@ -107,7 +107,7 @@ func (d *Disk) Deployments(context.Context) ([]app.HostedDeployment, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, app.HostedDeployment{ID: desc.ID, SHA256: desc.SHA256, Module: module,
+		out = append(out, domainfleet.HostedDeployment{ID: desc.ID, SHA256: desc.SHA256, Module: module,
 			Limits: agent.RunLimits{Fuel: desc.Fuel, MemoryBytes: desc.MemoryBytes}})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

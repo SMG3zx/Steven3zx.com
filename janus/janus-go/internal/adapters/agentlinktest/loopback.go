@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"janus/internal/app"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 // Loopback is an Agent link to Agents in the same process: each address is
@@ -31,7 +31,7 @@ type Loopback struct {
 
 type loopConn struct {
 	agentID string
-	events  func(app.AgentEvent) error
+	events  func(domainfleet.AgentEvent) error
 	stop    chan struct{}
 	// moved wakes the connection when its Agent changes; settle asks it to
 	// deliver what is waiting and answer.
@@ -78,7 +78,7 @@ func (l *Loopback) moveLocked(agentID string, runtime *agent.Runtime) {
 	}
 }
 
-func (l *Loopback) Connect(agentID string, events func(app.AgentEvent) error) {
+func (l *Loopback) Connect(agentID string, events func(domainfleet.AgentEvent) error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if _, ok := l.conns[agentID]; ok {
@@ -149,7 +149,7 @@ func (l *Loopback) run(conn *loopConn) {
 			}
 		}
 		state := runtime.State()
-		_ = conn.events(app.AgentEvent{State: &state, At: time.Now()})
+		_ = conn.events(domainfleet.AgentEvent{State: &state, At: time.Now()})
 	forward:
 		for {
 			select {
@@ -158,10 +158,10 @@ func (l *Loopback) run(conn *loopConn) {
 			case <-conn.moved:
 				break forward
 			case report := <-runtime.Reports():
-				_ = conn.events(app.AgentEvent{Usage: &report})
+				_ = conn.events(domainfleet.AgentEvent{Usage: &report})
 			case <-runtime.Changes():
 				state := runtime.State()
-				_ = conn.events(app.AgentEvent{State: &state, At: time.Now()})
+				_ = conn.events(domainfleet.AgentEvent{State: &state, At: time.Now()})
 			case done := <-conn.settle:
 				drain(conn, runtime)
 				close(done)
@@ -175,10 +175,10 @@ func drain(conn *loopConn, runtime *agent.Runtime) {
 	for {
 		select {
 		case report := <-runtime.Reports():
-			_ = conn.events(app.AgentEvent{Usage: &report})
+			_ = conn.events(domainfleet.AgentEvent{Usage: &report})
 		case <-runtime.Changes():
 			state := runtime.State()
-			_ = conn.events(app.AgentEvent{State: &state, At: time.Now()})
+			_ = conn.events(domainfleet.AgentEvent{State: &state, At: time.Now()})
 		default:
 			return
 		}
@@ -197,28 +197,28 @@ func (c *loopConn) current() *agent.Runtime {
 	return c.attached
 }
 
-func (l *Loopback) Send(ctx context.Context, agentID string, command app.AgentCommand) error {
+func (l *Loopback) Send(ctx context.Context, agentID string, command domainfleet.AgentCommand) error {
 	l.mu.Lock()
 	conn := l.conns[agentID]
 	l.mu.Unlock()
 	if conn == nil {
-		return app.ErrAgentUnreachable
+		return domainfleet.ErrAgentUnreachable
 	}
 	runtime := conn.current()
 	if runtime == nil {
-		return app.ErrAgentUnreachable
+		return domainfleet.ErrAgentUnreachable
 	}
 	if command.Deploy != nil && command.Deploy.Module == nil && l.ModuleSource != nil {
 		module, err := l.ModuleSource(ctx, agentID, command.Deploy.SHA256)
 		if err != nil {
-			return &app.AgentError{Message: err.Error()}
+			return &domainfleet.AgentError{Message: err.Error()}
 		}
 		deploy := *command.Deploy
 		deploy.Module = module
 		command.Deploy = &deploy
 	}
 	if err := runtime.Apply(ctx, command); err != nil {
-		return &app.AgentError{Message: err.Error()}
+		return &domainfleet.AgentError{Message: err.Error()}
 	}
 	return nil
 }

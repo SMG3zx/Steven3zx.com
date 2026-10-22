@@ -10,7 +10,6 @@ import (
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
-	"janus/internal/app"
 	contractid "janus/internal/contract/identity"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
@@ -319,7 +318,7 @@ func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identi
 // in-memory Catalog, so a test can seed the Snapshot an Import would make;
 // the real projects service is tested through its adapter. It returns the
 // Catalog, the Identities, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identitynats.Gateway, *buildstest.Gateway, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identitynats.Gateway, *buildstest.Fake, http.Handler) {
 	t.Helper()
 	hub := natstest.Start(t)
 	identityService := identity.New(identity.Config{DatabasePath: path.Join(t.TempDir(), "identity.db"), TokenSecret: jwtSecret})
@@ -335,11 +334,10 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, *id
 	}
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	wasm := buildstest.NewFake()
-	wasm.Produce([]byte("playwright-wasm-archive"))
-	builds := buildstest.NewGateway(wasm)
+	builds := buildstest.NewFake()
+	builds.Produce([]byte("playwright-wasm-archive"))
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: identities, Catalog: catalogtest.NewGateway(catalog), Builds: builds,
+		Audit: audit, Identity: identities, Catalog: catalog, Builds: builds,
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
@@ -388,7 +386,7 @@ func seedSnapshot(catalog *catalogtest.Memory, ownerID, projectID, jobID, snapsh
 func seedLanguageSnapshot(catalog *catalogtest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
 	catalog.SeedImport(ownerID, projectID, jobID, "complete")
 	catalog.SeedSnapshot(ownerID, projectID, catalogtest.Seed{ID: snapshotID, Repository: "SMG3zx/demo", Commit: commit, Language: language, MetadataJSON: metadata, TotalBytes: 1_234_567,
-		Files: []app.SnapshotFile{
+		Files: []catalogtest.File{
 			{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
 			{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
 		}})
