@@ -85,18 +85,11 @@ func (s *Store) ApplyWASMBuild(ctx context.Context, build app.WASMBuildChange) e
 	}))
 }
 
-// ListActiveJobs returns the Owner's WASM builds that have not finished.
-// Imports are the projects service's.
-func (s *Store) ListActiveJobs(ctx context.Context, ownerID string) ([]app.ActiveJob, error) {
-	ctx, done := s.start(ctx, "ListActiveJobs")
-	active, err := activeJobs(ctx, s.db, ownerID)
-	return active, done(err)
-}
-
-// DeleteAccount removes an Account and everything it owns. If the Account has
-// active jobs, nothing is deleted unless cancelActiveJobs is set, in which case
-// those jobs are cancelled first. The whole change happens in one transaction.
-func (s *Store) DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (app.AccountDeleted, error) {
+// DeleteAccount removes an Account's User and the records that refer to it. Whether
+// the Account may be deleted is identity's decision, made after the services report
+// their unfinished jobs, so this does not check for them. The whole change happens
+// in one transaction.
+func (s *Store) DeleteAccount(ctx context.Context, userID string) (app.AccountDeleted, error) {
 	ctx, done := s.start(ctx, "DeleteAccount")
 	var result app.AccountDeleted
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
@@ -107,20 +100,7 @@ func (s *Store) DeleteAccount(ctx context.Context, userID string, cancelActiveJo
 		if exists == 0 {
 			return nil
 		}
-		active, err := activeJobs(ctx, tx, userID)
-		if err != nil {
-			return err
-		}
-		if len(active) > 0 && !cancelActiveJobs {
-			result.ActiveJobs = active
-			return nil
-		}
-		if len(active) > 0 {
-			if _, err = tx.ExecContext(ctx, `UPDATE project_wasm_builds SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE owner_id=? AND status IN ('queued','building')`, userID); err != nil {
-				return err
-			}
-		}
-		if _, err = tx.ExecContext(ctx, `DELETE FROM users WHERE id=?`, userID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id=?`, userID); err != nil {
 			return err
 		}
 		result.Deleted = true
@@ -132,19 +112,3 @@ func (s *Store) DeleteAccount(ctx context.Context, userID string, cancelActiveJo
 	return result, done(err)
 }
 
-func activeJobs(ctx context.Context, q querier, ownerID string) ([]app.ActiveJob, error) {
-	rows, err := q.QueryContext(ctx, `SELECT 'wasm_build',id,project_id,status FROM project_wasm_builds WHERE owner_id=? AND status IN ('queued','building')`, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	active := make([]app.ActiveJob, 0)
-	for rows.Next() {
-		var job app.ActiveJob
-		if err = rows.Scan(&job.Kind, &job.ID, &job.ProjectID, &job.Status); err != nil {
-			return nil, err
-		}
-		active = append(active, job)
-	}
-	return active, rows.Err()
-}

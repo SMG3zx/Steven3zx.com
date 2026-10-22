@@ -15,19 +15,19 @@ type NewBuild struct {
 	SnapshotID string
 }
 
-// Builds is the single process's use of WASM Builds. The builds service compiles
-// and checks them; Builds records the references that Deployments need and
-// answers the Account's requests through WASMBuilds.
+// Builds is the single process's use of WASM Builds. The builds service compiles,
+// checks and keeps them; Builds reads the Projects and Snapshots a Build needs
+// from the projects service and answers the Account's requests through
+// WASMBuilds.
 type Builds struct {
-	store   Store
 	catalog Catalog
 	service WASMBuilds
 }
 
-// NewBuilds returns a Builds that reads Projects and Snapshots from catalog,
-// records the references in store and asks service for the Builds themselves.
-func NewBuilds(store Store, catalog Catalog, service WASMBuilds) *Builds {
-	return &Builds{store: store, catalog: catalog, service: service}
+// NewBuilds returns a Builds that reads Projects and Snapshots from catalog and
+// asks service for the Builds themselves.
+func NewBuilds(catalog Catalog, service WASMBuilds) *Builds {
+	return &Builds{catalog: catalog, service: service}
 }
 
 // Request queues a Build and returns its ID. It returns a plain error whose text
@@ -50,20 +50,10 @@ func (b *Builds) Request(ctx context.Context, request NewBuild) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	// The Build refers to the Project and Snapshot, which live in the projects
-	// service; the Store keeps a reference to each first.
-	if err = b.store.AddProject(ctx, ProjectRef{ID: request.ProjectID, OwnerID: request.OwnerID}); err != nil {
-		return "", err
-	}
-	if err = b.store.AddSnapshot(ctx, snapshot); err != nil {
-		return "", err
-	}
 	id := uuid.NewString()
-	build, err := b.service.StartBuild(ctx, StartBuild{ID: id, OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshot.ID, Target: request.Target})
-	if err != nil {
+	if _, err = b.service.StartBuild(ctx, StartBuild{ID: id, OwnerID: request.OwnerID, ProjectID: request.ProjectID, SnapshotID: snapshot.ID, Target: request.Target}); err != nil {
 		return "", err
 	}
-	b.reference(ctx, request.OwnerID, build)
 	return id, nil
 }
 
@@ -92,7 +82,6 @@ func (b *Builds) Retry(ctx context.Context, owner, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b.reference(ctx, owner, build)
 	return build.ID, nil
 }
 
@@ -103,26 +92,6 @@ func (b *Builds) DeleteOwner(ctx context.Context, owner string) error {
 		return nil
 	}
 	return b.service.DeleteOwner(ctx, owner)
-}
-
-// ForgetProject deletes the references to the WASM Builds of a Project the
-// projects service deleted, with what refers to them. Forgetting a Project the
-// Store never heard of changes nothing.
-func (b *Builds) ForgetProject(ctx context.Context, projectID string) error {
-	return b.store.RemoveProject(ctx, projectID)
-}
-
-// ForgetSnapshot deletes the references to the WASM Builds of a Snapshot the
-// projects service deleted, like ForgetProject.
-func (b *Builds) ForgetSnapshot(ctx context.Context, snapshotID string) error {
-	return b.store.RemoveSnapshot(ctx, snapshotID)
-}
-
-// reference stores a Build's state so a Deployment can refer to it at once. The
-// builds service publishes the same state on EVENTS, so a failure here is not
-// the Account's: the event brings the reference later.
-func (b *Builds) reference(ctx context.Context, owner string, build WASMBuild) {
-	_ = b.store.ApplyWASMBuild(ctx, WASMBuildChange{ID: build.ID, OwnerID: owner, ProjectID: build.ProjectID, SnapshotID: build.SnapshotID, Target: build.Target, Status: build.Status, Error: build.Error})
 }
 
 // buildSource returns the Snapshot a Build compiles, with its detected language

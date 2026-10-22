@@ -94,9 +94,6 @@ func exerciseEveryMethod(store app.Store, name string) (err error) {
 	if !do("ApplyCheck", store.ApplyCheck(ctx, app.CheckChange{BuildID: build, OwnerID: name, Status: app.CheckPassed, Log: "ok"})) {
 		return
 	}
-	if active, e := store.ListActiveJobs(ctx, name); !do("ListActiveJobs", e) || len(active) != 0 {
-		return fmt.Errorf("%s: ListActiveJobs = %v, %v", name, active, e)
-	}
 	if got, found, e := store.FindWASMBuild(ctx, build, name); !do("FindWASMBuild", e) || !found || got.Status != "complete" {
 		return fmt.Errorf("%s: FindWASMBuild = %+v, %v, %v", name, got, found, e)
 	}
@@ -110,7 +107,7 @@ func exerciseEveryMethod(store app.Store, name string) (err error) {
 	if !do("RemoveProject", store.RemoveProject(ctx, project)) {
 		return
 	}
-	if deleted, e := store.DeleteAccount(ctx, name, false); !do("DeleteAccount", e) || !deleted.Deleted {
+	if deleted, e := store.DeleteAccount(ctx, name); !do("DeleteAccount", e) || !deleted.Deleted {
 		return fmt.Errorf("%s: DeleteAccount = %+v, %v", name, deleted, e)
 	}
 	return err

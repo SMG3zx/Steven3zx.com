@@ -56,7 +56,7 @@ func newDeployApp(t *testing.T) *deployApp {
 	if err != nil {
 		t.Fatal(err)
 	}
-	builds := app.NewBuilds(store, catalog, service)
+	builds := app.NewBuilds(catalog, service)
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)

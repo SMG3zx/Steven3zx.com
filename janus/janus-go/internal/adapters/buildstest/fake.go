@@ -1,7 +1,7 @@
 // Package buildstest holds an in-memory app.WASMBuilds for tests that need WASM
 // Builds without a container or the builds service. It completes each Build as
-// it is started and records its states in a Store, the way the builds events
-// would.
+// it is started and keeps its states and Checks itself, as the builds service
+// does.
 package buildstest
 
 import (
@@ -30,8 +30,6 @@ type Result struct {
 // Module, and answers each Build's checks with the Result set by Answer, or with
 // the error set by Break. It is safe for concurrent use.
 type Fake struct {
-	store app.Store
-
 	mu      sync.Mutex
 	result  Result
 	err     error
@@ -45,12 +43,12 @@ type build struct {
 	app.WASMBuild
 	owner    string
 	artifact []byte
+	check    *app.Check
 }
 
-// NewFake returns a Fake whose checks pass. It records each Build's state in
-// store, as the builds service's events would.
-func NewFake(store app.Store) *Fake {
-	return &Fake{store: store, result: Result{Passed: true, Log: "checks passed\n"}, builds: map[string]*build{}}
+// NewFake returns a Fake whose checks pass.
+func NewFake() *Fake {
+	return &Fake{result: Result{Passed: true, Log: "checks passed\n"}, builds: map[string]*build{}}
 }
 
 // Answer makes the checks of later Builds answer with result.
@@ -86,9 +84,6 @@ func (f *Fake) StartBuild(ctx context.Context, request app.StartBuild) (app.WASM
 	stored := &build{owner: request.OwnerID, WASMBuild: app.WASMBuild{ID: request.ID, ProjectID: request.ProjectID,
 		SnapshotID: request.SnapshotID, Target: request.Target, Status: "queued"}}
 	f.builds[request.ID] = stored
-	if err := f.record(ctx, stored); err != nil {
-		return app.WASMBuild{}, err
-	}
 	data := f.produce
 	if data == nil {
 		var err error
@@ -97,17 +92,12 @@ func (f *Fake) StartBuild(ctx context.Context, request app.StartBuild) (app.WASM
 		}
 	}
 	stored.Status, stored.Progress, stored.ArtifactName, stored.artifact = "complete", 100, "wasm-artifacts.zip"+artifact.ZstdExtension, data
-	if err := f.record(ctx, stored); err != nil {
-		return app.WASMBuild{}, err
-	}
-	if err := f.check(ctx, stored); err != nil {
-		return app.WASMBuild{}, err
-	}
+	f.check(stored)
 	return stored.WASMBuild, nil
 }
 
-// check runs the checks of a complete Build and records them.
-func (f *Fake) check(ctx context.Context, stored *build) error {
+// check runs the checks of a complete Build and keeps the result.
+func (f *Fake) check(stored *build) {
 	change := app.CheckChange{BuildID: stored.ID, OwnerID: stored.owner, Status: "passed", Log: f.result.Log, NoTests: f.result.NoTests}
 	switch {
 	case f.err != nil:
@@ -115,13 +105,7 @@ func (f *Fake) check(ctx context.Context, stored *build) error {
 	case !f.result.Passed:
 		change.Status = "failed"
 	}
-	return f.store.ApplyCheck(ctx, change)
-}
-
-// record stores a Build's state in the Store, as its event would.
-func (f *Fake) record(ctx context.Context, stored *build) error {
-	return f.store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: stored.ID, OwnerID: stored.owner, ProjectID: stored.ProjectID,
-		SnapshotID: stored.SnapshotID, Target: stored.Target, Status: stored.Status, Error: stored.Error})
+	stored.check = &app.Check{BuildID: change.BuildID, Status: change.Status, Log: change.Log, Error: change.Error, NoTests: change.NoTests}
 }
 
 // RetryBuild starts a new Build of a failed Build's Snapshot.
@@ -193,8 +177,14 @@ func pack(ctx context.Context) ([]byte, error) {
 	return compressed.Data, nil
 }
 
-// FindCheck returns the Check of one of an Owner's Builds, as the Store recorded
-// it when the Build was checked.
+// FindCheck returns the Check of one of an Owner's Builds, as it was when the
+// Build was checked.
 func (f *Fake) FindCheck(ctx context.Context, owner, buildID string) (app.Check, bool, error) {
-	return f.store.FindCheck(ctx, buildID, owner)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	stored, ok := f.builds[buildID]
+	if !ok || stored.owner != owner || stored.check == nil {
+		return app.Check{}, false, nil
+	}
+	return *stored.check, true, nil
 }

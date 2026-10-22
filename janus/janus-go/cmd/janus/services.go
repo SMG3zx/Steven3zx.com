@@ -16,12 +16,10 @@ import (
 
 	"janus/internal/adapters/agentnats"
 	"janus/internal/adapters/auditnats"
-	"janus/internal/adapters/buildevents"
 	"janus/internal/adapters/buildsnats"
 	"janus/internal/adapters/fleetnats"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
-	"janus/internal/adapters/projectevents"
 	"janus/internal/adapters/projectsnats"
 	"janus/internal/adapters/runsnats"
 	"janus/internal/adapters/sqlstore"
@@ -70,14 +68,12 @@ type application struct {
 	identityService *identityservice.Service
 	identities      app.Identities
 	// projectsService owns projects.db and runs Imports; catalog reaches it
-	// over NATS, and projectEvents applies its deletions to the Store.
+	// over NATS.
 	projectsService *projectsservice.Service
 	catalog         app.Catalog
-	projectEvents   *projectevents.Events
-	// buildsService owns builds.db and runs WASM Builds; buildEvents applies its
-	// events to the Store, and builds is the single process's use of it.
+	// buildsService owns builds.db and runs WASM Builds, and builds is the single
+	// process's use of it.
 	buildsService *buildsservice.Service
-	buildEvents   *buildevents.Events
 	// runsService answers the runs subjects and runs WASM Runs; runs is the
 	// single process's use of it.
 	runsService *runsservice.Service
@@ -197,12 +193,6 @@ func (a *application) groups() []group {
 				return wrap("stop the builds service", a.buildsService.Stop(ctx))
 			})},
 			{name: "builds", start: a.startBuilds},
-			{name: "build events", start: a.startBuildEvents, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("stop applying build events", a.buildEvents.Stop(ctx))
-			})},
-			{name: "project events", start: a.startProjectEvents, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("stop applying project events", a.projectEvents.Stop(ctx))
-			})},
 			{name: "runs service", start: a.startRunsService, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("stop the runs service", a.runsService.Stop(ctx))
 			})},
@@ -436,7 +426,7 @@ func (a *application) startBuilds(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("open the artifacts store: %w", err)
 	}
-	a.builds = app.NewBuilds(a.store, a.catalog, client)
+	a.builds = app.NewBuilds(a.catalog, client)
 	return nil
 }
 
@@ -454,17 +444,6 @@ func (a *application) startRunsService(ctx context.Context) error {
 // startRuns makes the WASM Runs use case, which asks the runs service over NATS.
 func (a *application) startRuns(context.Context) error {
 	a.runs = runsnats.New(a.nats.Conn())
-	return nil
-}
-
-// startBuildEvents applies the builds service's events to the Store, from where
-// it left off, so Deployments see each Build's and Check's state.
-func (a *application) startBuildEvents(ctx context.Context) error {
-	events := buildevents.New(a.store)
-	if err := events.Start(ctx, a.nats.Conn()); err != nil {
-		return fmt.Errorf("apply build events: %w", err)
-	}
-	a.buildEvents = events
 	return nil
 }
 
@@ -486,17 +465,6 @@ func (a *application) startProjectsService(ctx context.Context) error {
 	}
 	a.projectsService = service
 	a.catalog = projectsnats.New(a.nats.Conn())
-	return nil
-}
-
-// startProjectEvents applies the projects service's deletions to the WASM
-// Builds the Store keeps, from where it left off.
-func (a *application) startProjectEvents(ctx context.Context) error {
-	events := projectevents.New(a.builds)
-	if err := events.Start(ctx, a.nats.Conn()); err != nil {
-		return fmt.Errorf("apply project events: %w", err)
-	}
-	a.projectEvents = events
 	return nil
 }
 

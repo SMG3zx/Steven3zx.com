@@ -214,31 +214,11 @@ func (m *Memory) FindWASMBuild(_ context.Context, id, ownerID string) (app.WASMB
 	return build.WASMBuild, true, nil
 }
 
-func (m *Memory) ListActiveJobs(_ context.Context, ownerID string) ([]app.ActiveJob, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.activeJobs(ownerID), nil
-}
-
-func (m *Memory) activeJobs(ownerID string) []app.ActiveJob {
-	jobs := make([]app.ActiveJob, 0)
-	for _, build := range m.builds {
-		if build.ownerID == ownerID && isIn(build.Status, activeBuildStatuses) {
-			jobs = append(jobs, app.ActiveJob{Kind: "wasm_build", ID: build.ID, ProjectID: build.ProjectID, Status: build.Status})
-		}
-	}
-	sort.Slice(jobs, func(i, j int) bool { return jobs[i].ID < jobs[j].ID })
-	return jobs
-}
-
-func (m *Memory) DeleteAccount(_ context.Context, userID string, cancelActiveJobs bool) (app.AccountDeleted, error) {
+func (m *Memory) DeleteAccount(_ context.Context, userID string) (app.AccountDeleted, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.users[userID]; !ok {
 		return app.AccountDeleted{}, nil
-	}
-	if active := m.activeJobs(userID); len(active) > 0 && !cancelActiveJobs {
-		return app.AccountDeleted{ActiveJobs: active}, nil
 	}
 	for id, p := range m.projects {
 		if p.ownerID == userID {

@@ -341,9 +341,9 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 	}
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	wasm := buildstest.NewFake(store)
+	wasm := buildstest.NewFake()
 	wasm.Produce([]byte("playwright-wasm-archive"))
-	builds := app.NewBuilds(store, catalog, wasm)
+	builds := app.NewBuilds(catalog, wasm)
 	server := httpapi.New(httpapi.Config{
 		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Catalog: catalogtest.NewGateway(catalog), Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authentication, Authorization: authorization,

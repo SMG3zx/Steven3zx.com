@@ -106,8 +106,8 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	// NATS link; the builds it deploys are seeded through its fixture.
 	fx := fleetfixture.Start(t, fleetfixture.Options{Hub: hub, AgentsConn: agentsConn, Agents: trust.Agents, Trust: publicTrust(trust),
 		Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
-	wasm := buildstest.NewFake(store)
-	builds := app.NewBuilds(store, catalog, wasm)
+	wasm := buildstest.NewFake()
+	builds := app.NewBuilds(catalog, wasm)
 	policy, err := authz.New(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{

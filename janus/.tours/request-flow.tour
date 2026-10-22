@@ -53,13 +53,13 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 178,
+      "line": 177,
       "title": "The Audit port",
       "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 557,
+      "line": 525,
       "title": "The composition root starts the fleet",
       "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the single process its client."
     }

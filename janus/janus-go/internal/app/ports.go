@@ -40,13 +40,12 @@ type Store interface {
 	ApplyWASMBuild(ctx context.Context, build WASMBuildChange) error
 	ApplyCheck(ctx context.Context, check CheckChange) error
 	FindWASMBuild(ctx context.Context, id, ownerID string) (build WASMBuild, found bool, err error)
-	ListActiveJobs(ctx context.Context, ownerID string) ([]ActiveJob, error)
 	FindCheck(ctx context.Context, buildID, ownerID string) (check Check, found bool, err error)
 
-	// DeleteAccount deletes an Account and everything it owns. Without
-	// cancelActiveJobs an Account with unfinished jobs is left untouched and the
-	// result lists those jobs.
-	DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (AccountDeleted, error)
+	// DeleteAccount deletes the records the Store keeps for an Account and the
+	// Account's User. Whether the Account may be deleted is decided by identity,
+	// which asks the services for their unfinished jobs first.
+	DeleteAccount(ctx context.Context, userID string) (AccountDeleted, error)
 }
 
 // Identities is where Users, their sign-in methods and their GitHub

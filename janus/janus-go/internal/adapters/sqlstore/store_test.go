@@ -154,24 +154,18 @@ func TestRemovingAProjectRemovesItsSnapshotsAndBuilds(t *testing.T) {
 	}
 }
 
-func TestDeleteAccountIsBlockedByActiveBuildsUntilCancelled(t *testing.T) {
+func TestDeleteAccountCascadesToItsBuildsWhileOneRuns(t *testing.T) {
 	store := openTest(t, filepath.Join(t.TempDir(), "account-delete.db"))
 	ctx := testContext(t)
 	seedSnapshot(t, store, "bob", "bob-project", "bob-snapshot")
 	startBuildAt(t, store, "bob", "bob-project", "bob-snapshot", "bob-build", "building")
-	blocked, err := store.DeleteAccount(ctx, "bob", false)
-	if err != nil || blocked.Deleted || len(blocked.ActiveJobs) != 1 || blocked.ActiveJobs[0].ID != "bob-build" {
-		t.Fatalf("expected a blocked deletion listing bob-build, got %#v, %v", blocked, err)
-	}
-	if projects, _ := store.ListOwnedProjects(ctx, "bob"); len(projects) != 1 {
-		t.Fatal("blocked deletion removed the account's project")
-	}
 
-	deleted, err := store.DeleteAccount(ctx, "bob", true)
+	// Identity decides whether an Account may be deleted; the store only deletes.
+	deleted, err := store.DeleteAccount(ctx, "bob")
 	if err != nil || !deleted.Deleted {
-		t.Fatalf("cancelling deletion failed: %#v, %v", deleted, err)
+		t.Fatalf("deleting the Account failed: %#v, %v", deleted, err)
 	}
-	if again, _ := store.DeleteAccount(ctx, "bob", false); again.Deleted {
+	if again, _ := store.DeleteAccount(ctx, "bob"); again.Deleted {
 		t.Fatal("the Owner still exists after deletion")
 	}
 	if projects, _ := store.ListOwnedProjects(ctx, "bob"); len(projects) != 0 {
@@ -188,7 +182,7 @@ func TestDeleteAccountLeavesOtherAccountsUntouched(t *testing.T) {
 	seedSnapshot(t, store, "erin", "erin-project", "erin-snapshot")
 	seedSnapshot(t, store, "frank", "frank-project", "frank-snapshot")
 
-	if deleted, err := store.DeleteAccount(ctx, "frank", false); err != nil || !deleted.Deleted {
+	if deleted, err := store.DeleteAccount(ctx, "frank"); err != nil || !deleted.Deleted {
 		t.Fatalf("delete account: %#v, %v", deleted, err)
 	}
 	if projects, err := store.ListOwnedProjects(ctx, "erin"); err != nil || len(projects) != 1 {

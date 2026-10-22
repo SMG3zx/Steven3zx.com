@@ -64,7 +64,7 @@ func testOwners(t *testing.T, store app.Store) {
 	if projects, err := store.ListOwnedProjects(ctx, "alice"); err != nil || len(projects) != 1 || projects[0] != "p1" {
 		t.Fatalf("adding an Owner again lost its Project: %v, %v", projects, err)
 	}
-	if deleted, err := store.DeleteAccount(ctx, "nobody", false); err != nil || deleted.Deleted {
+	if deleted, err := store.DeleteAccount(ctx, "nobody"); err != nil || deleted.Deleted {
 		t.Fatalf("deleting an Owner that was never added = %#v, %v, want nothing deleted", deleted, err)
 	}
 }
@@ -166,24 +166,10 @@ func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	snapshot := ReadySnapshot(t, store, "alice", "p1", "one-snapshot", "Rust")
 	must(t, store.ApplyWASMBuild(ctx, app.WASMBuildChange{ID: "b1", OwnerID: "alice", ProjectID: "p1", SnapshotID: snapshot, Target: "t", Status: "queued"}))
 
-	active, err := store.ListActiveJobs(ctx, "alice")
-	must(t, err)
-	if len(active) != 1 || active[0] != (app.ActiveJob{Kind: "wasm_build", ID: "b1", ProjectID: "p1", Status: "queued"}) {
-		t.Fatalf("active jobs = %#v", active)
-	}
-	refused, err := store.DeleteAccount(ctx, "alice", false)
-	must(t, err)
-	if refused.Deleted || len(refused.ActiveJobs) != 1 {
-		t.Fatalf("deleting with an unfinished build = %#v, want a refusal listing it", refused)
-	}
-	if projects, _ := store.ListOwnedProjects(ctx, "alice"); len(projects) != 1 {
-		t.Fatal("a refused deletion removed the Account's project")
-	}
-
-	deleted, err := store.DeleteAccount(ctx, "alice", true)
+	deleted, err := store.DeleteAccount(ctx, "alice")
 	must(t, err)
 	if !deleted.Deleted {
-		t.Fatalf("deleting with cancel = %#v", deleted)
+		t.Fatalf("deleting an Account = %#v", deleted)
 	}
 	if projects, _ := store.ListOwnedProjects(ctx, "alice"); len(projects) != 0 {
 		t.Fatal("the project survived its Account")
@@ -191,13 +177,13 @@ func testDeletingAnAccountCascades(t *testing.T, store app.Store) {
 	if _, found, _ := store.FindWASMBuild(ctx, "b1", "alice"); found {
 		t.Fatal("the build survived its Account")
 	}
-	if again, err := store.DeleteAccount(ctx, "alice", false); err != nil || again.Deleted {
+	if again, err := store.DeleteAccount(ctx, "alice"); err != nil || again.Deleted {
 		t.Fatalf("deleting the Owner again = %#v, %v, want nothing left to delete", again, err)
 	}
 	if projects, _ := store.ListOwnedProjects(ctx, "bob"); len(projects) != 1 {
 		t.Fatal("deleting alice removed bob's project")
 	}
-	if missing, err := store.DeleteAccount(ctx, "ghost", false); err != nil || missing.Deleted {
+	if missing, err := store.DeleteAccount(ctx, "ghost"); err != nil || missing.Deleted {
 		t.Fatalf("deleting a missing Account = %#v, %v", missing, err)
 	}
 }

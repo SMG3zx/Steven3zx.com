@@ -38,12 +38,8 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	if err != nil {
 		return AccountDeleted{}, err
 	}
-	builds, err := a.store.ListActiveJobs(ctx, owner)
-	if err != nil {
-		return AccountDeleted{}, err
-	}
-	if active := append(imports, builds...); len(active) > 0 && !cancelActiveJobs {
-		return AccountDeleted{ActiveJobs: active}, nil
+	if len(imports) > 0 && !cancelActiveJobs {
+		return AccountDeleted{ActiveJobs: imports}, nil
 	}
 	deletion, err := a.identities.DeleteAccount(ctx, owner, cancelActiveJobs)
 	if err != nil {
@@ -55,8 +51,8 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	case DeletionRefused:
 		return AccountDeleted{ActiveJobs: deletion.ActiveJobs}, nil
 	}
-	result, err := a.store.DeleteAccount(ctx, owner, cancelActiveJobs)
-	if err != nil || len(result.ActiveJobs) > 0 {
+	result, err := a.store.DeleteAccount(ctx, owner)
+	if err != nil {
 		return result, err
 	}
 	if err := a.awaitDeletion(ctx, owner, cancelActiveJobs); err != nil {
