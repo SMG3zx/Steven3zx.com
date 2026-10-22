@@ -47,7 +47,15 @@ type Indexer struct {
 	embedded  atomic.Int64 // chunks sent to the embedding model
 	reused    atomic.Int64 // chunks that reused an existing vector
 	truncated atomic.Int64 // files cut off at max_chunks_per_file
+
+	indexed   atomic.Int64 // files (re)indexed
+	unchanged atomic.Int64 // files skipped because mtime and size matched
+	dropped   atomic.Int64 // files removed or skipped as gone, ignored, unsupported or too large
+	current   atomic.Value // string: file being processed, for progress lines
 }
+
+// progressEvery is how often a long scan prints a status line.
+const progressEvery = 5 * time.Second
 
 func New(st Store, emb embed.Embedder, gov *throttle.Governor, match *crawl.Matcher, cfg config.Config, log *slog.Logger) *Indexer {
 	return &Indexer{st: st, emb: emb, gov: gov, match: match, cfg: cfg, log: log}
@@ -59,9 +67,30 @@ func New(st Store, emb embed.Embedder, gov *throttle.Governor, match *crawl.Matc
 func (ix *Indexer) IndexFile(ctx context.Context, path string) error {
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
+	ix.current.Store(path)
 
+	e0, r0 := ix.embedded.Load(), ix.reused.Load()
+	i0, u0, d0 := ix.indexed.Load(), ix.unchanged.Load(), ix.dropped.Load()
+	err := ix.indexFile(ctx, path)
+	if err != nil {
+		return err
+	}
+	switch {
+	case ix.indexed.Load() > i0:
+		ix.log.Debug("indexed", "path", path,
+			"chunks_embedded", ix.embedded.Load()-e0, "chunks_reused", ix.reused.Load()-r0)
+	case ix.unchanged.Load() > u0:
+		ix.log.Debug("unchanged", "path", path)
+	case ix.dropped.Load() > d0:
+		ix.log.Debug("skipped or removed", "path", path)
+	}
+	return nil
+}
+
+func (ix *Indexer) indexFile(ctx context.Context, path string) error {
 	info, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
+		ix.dropped.Add(1)
 		return ix.st.DeleteFile(ctx, path)
 	}
 	if err != nil {
@@ -69,6 +98,7 @@ func (ix *Indexer) IndexFile(ctx context.Context, path string) error {
 	}
 	if !info.Mode().IsRegular() || crawl.Skip(info) || ix.match.Ignored(path, false) ||
 		info.Size() > ix.sizeLimit(path) {
+		ix.dropped.Add(1)
 		return ix.st.DeleteFile(ctx, path)
 	}
 
@@ -78,6 +108,7 @@ func (ix *Indexer) IndexFile(ctx context.Context, path string) error {
 		return err
 	}
 	if known && prev == state {
+		ix.unchanged.Add(1)
 		return nil
 	}
 
@@ -87,6 +118,7 @@ func (ix *Indexer) IndexFile(ctx context.Context, path string) error {
 	}
 	text, err := extract.Text(path, data, ix.cfg.MaxLineBytes)
 	if errors.Is(err, extract.ErrUnsupported) {
+		ix.dropped.Add(1)
 		return ix.st.DeleteFile(ctx, path)
 	}
 	if err != nil {
@@ -105,7 +137,11 @@ func (ix *Indexer) IndexFile(ctx context.Context, path string) error {
 	if ix.emb != nil {
 		ix.embedRows(ctx, path, rows)
 	}
-	return ix.st.ReplaceFile(ctx, path, state, rows)
+	if err := ix.st.ReplaceFile(ctx, path, state, rows); err != nil {
+		return err
+	}
+	ix.indexed.Add(1)
+	return nil
 }
 
 // sizeLimit is the largest file of path's kind that is worth reading.
@@ -197,6 +233,13 @@ func (ix *Indexer) embedRows(ctx context.Context, path string, rows []store.NewC
 // processed.
 func (ix *Indexer) Scan(ctx context.Context) (int, error) {
 	embedded0, reused0, truncated0 := ix.embedded.Load(), ix.reused.Load(), ix.truncated.Load()
+	indexed0, unchanged0, dropped0 := ix.indexed.Load(), ix.unchanged.Load(), ix.dropped.Load()
+	began := time.Now()
+	ix.log.Info("scan started", "roots", ix.match.Roots())
+
+	done := make(chan struct{})
+	defer close(done)
+	go ix.reportProgress(done, began, indexed0, unchanged0, dropped0, embedded0, reused0)
 
 	// Drop entries that are now ignored or outside the roots first, so stale
 	// results disappear right away rather than at the end of a long scan.
@@ -249,6 +292,10 @@ func (ix *Indexer) Scan(ctx context.Context) (int, error) {
 
 	ix.log.Info("scan finished",
 		"files", count,
+		"indexed", ix.indexed.Load()-indexed0,
+		"unchanged", ix.unchanged.Load()-unchanged0,
+		"skipped", ix.dropped.Load()-dropped0,
+		"elapsed", time.Since(began).Round(time.Second),
 		"chunks_embedded", ix.embedded.Load()-embedded0,
 		"chunks_reused", ix.reused.Load()-reused0,
 		"files_truncated", ix.truncated.Load()-truncated0,
@@ -285,4 +332,28 @@ func (ix *Indexer) pruneIneligible(ctx context.Context) int {
 		removed++
 	}
 	return removed
+}
+
+// reportProgress prints a status line every few seconds until done closes, so
+// a long first scan visibly makes progress.
+func (ix *Indexer) reportProgress(done <-chan struct{}, began time.Time, i0, u0, d0, e0, r0 int64) {
+	t := time.NewTicker(progressEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-t.C:
+			cur, _ := ix.current.Load().(string)
+			embedded := ix.embedded.Load() - e0
+			ix.log.Info("scanning",
+				"indexed", ix.indexed.Load()-i0,
+				"unchanged", ix.unchanged.Load()-u0,
+				"skipped", ix.dropped.Load()-d0,
+				"chunks_embedded", embedded,
+				"chunks_reused", ix.reused.Load()-r0,
+				"chunks_per_sec", int(float64(embedded)/time.Since(began).Seconds()),
+				"current", cur)
+		}
+	}
 }

@@ -26,9 +26,14 @@ import (
 func main() {
 	cfgPath := flag.String("config", "config.json", "path to the JSON config file")
 	once := flag.Bool("once", false, "run one full index pass and exit")
+	verbose := flag.Bool("v", false, "log every file as it is indexed, skipped or removed")
 	flag.Parse()
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	level := slog.LevelInfo
+	if *verbose {
+		level = slog.LevelDebug
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	if err := run(*cfgPath, *once, log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
@@ -95,8 +100,10 @@ func run(cfgPath string, once bool, log *slog.Logger) error {
 	}()
 
 	if cfg.Watch {
+		log.Info("watching for changes", "roots", cfg.Roots)
 		go func() {
 			err := watch.Run(ctx, match, func(c context.Context, p string) {
+				log.Info("file changed", "path", p)
 				if err := ix.IndexFile(c, p); err != nil {
 					log.Warn("index failed", "path", p, "err", err)
 				}
