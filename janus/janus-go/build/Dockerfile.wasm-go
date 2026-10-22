@@ -1,0 +1,5 @@
+# Trusted builder for Go WASM Builds and Checks. Containers run with no network
+# and GOPROXY=off, so a project's modules must be vendored or cached in this image.
+FROM golang:1.27-bookworm
+
+WORKDIR /workspace

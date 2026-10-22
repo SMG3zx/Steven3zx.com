@@ -1,0 +1,16 @@
+# Trusted builder for JavaScript and TypeScript WASM Builds. Bun bundles the
+# Entrypoint and Javy compiles the bundle with QuickJS to a wasm32-wasip1 module.
+# Containers run with no network, so dependencies must be vendored.
+FROM oven/bun:1.4.3-debian
+
+ARG JAVY_VERSION=v9.1.0
+ARG JAVY_SHA256=a68b122d48eb3dfc1b801d4e14c39271fde3638243d3272d206e376ac9189e39
+
+ADD https://github.com/bytecodealliance/javy/releases/download/${JAVY_VERSION}/javy-x86_64-linux-${JAVY_VERSION}.gz /tmp/javy.gz
+RUN set -eux; \
+    echo "${JAVY_SHA256}  /tmp/javy.gz" | sha256sum -c -; \
+    gunzip /tmp/javy.gz; \
+    install -m 0755 /tmp/javy /usr/local/bin/javy; \
+    rm -f /tmp/javy
+
+WORKDIR /workspace

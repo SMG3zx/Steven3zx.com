@@ -36,6 +36,7 @@
 **/target/
 **/dist/
 **/build/
+!janus/janus-go/build/
 **/.zig-cache/
 **/zig-cache/
 **/zig-out/

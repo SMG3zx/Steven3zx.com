@@ -182,12 +182,10 @@ func TestProjectBrowserActions(t *testing.T) {
 	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Import selected commit"}).Click(); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByText("Imported repository", playwright.PageGetByTextOptions{Exact: playwright.Bool(true)}).WaitFor(); err != nil {
-		t.Fatalf("completed import was not rendered: %v", err)
-	}
-	bodyText, err := page.Locator("body").TextContent()
-	if err != nil || !strings.Contains(bodyText, "1.23 MB") {
-		t.Fatalf("imported snapshot statistics were not displayed in MB (body=%q, err=%v)", bodyText, err)
+	// The reload after a completed import shows the snapshot's size. Wait for it, rather
+	// than reading the page once, which can run before the reload.
+	if err := page.GetByText("1.23 MB").First().WaitFor(); err != nil {
+		t.Fatalf("imported snapshot statistics were not displayed in MB: %v", err)
 	}
 
 	// The user can confirm a detected entrypoint and see it persisted after reload.
@@ -203,7 +201,7 @@ func TestProjectBrowserActions(t *testing.T) {
 	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Build WASM", Exact: playwright.Bool(true)}).Click(); err != nil {
 		t.Fatalf("could not start WASM build: %v", err)
 	}
-	downloadLink := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Download wasm-artifacts.zip", Exact: playwright.Bool(true)})
+	downloadLink := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Download wasm-artifacts.zip.zst", Exact: playwright.Bool(true)})
 	if err := downloadLink.WaitFor(); err != nil {
 		t.Fatalf("successful WASM artifact was not made available: %v", err)
 	}
@@ -240,7 +238,8 @@ func TestProjectBrowserActions(t *testing.T) {
 	if err := activate.Click(); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByText("@ aaaaaaa", playwright.PageGetByTextOptions{Exact: playwright.Bool(false)}).WaitFor(); err != nil {
+	// The current revision is the first match; the history list repeats the commit further down.
+	if err := page.GetByText("@ aaaaaaa", playwright.PageGetByTextOptions{Exact: playwright.Bool(false)}).First().WaitFor(); err != nil {
 		t.Fatalf("activating the older snapshot did not restore its commit: %v", err)
 	}
 
