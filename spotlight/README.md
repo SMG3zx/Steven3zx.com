@@ -60,6 +60,23 @@ Each result has `path`, `offset` (rune offset of the matched chunk), `snippet`,
 `score`, and `sources` (`keyword`, `vector`, or both). Without Ollama running,
 search still works using keywords only.
 
+## What gets indexed
+
+Skipped automatically (always on, not configurable away):
+
+- dependency, build and cache folders: `node_modules`, `vendor`, `target`, `dist`, `build`, `.venv`, `.cache`, `.zig-cache`, `zig-pkg`, `.terraform`, `.next`, ... and `.claude/worktrees`
+- lock files, `go.sum`, `*.min.js`, `*.map`, SQLite/DB files
+- secrets: `.env*`, private keys and certificates (`*.pem`, `*.key`, `id_rsa*`, ...), `.netrc`, `.npmrc`, `kubeconfig`, `app.ini`, `*.tfstate`, and data files named `secrets*`, `credentials*`, `token*`
+- the index database itself (`db_path`, `-wal`, `-shm`)
+- anything a `.gitignore` under a root excludes (`respect_gitignore`)
+- minified or generated files (a line longer than `max_line_bytes` in non-prose files), JSON/YAML/XML/CSV/log files over `max_data_bytes`
+
+Files are capped at `max_chunks_per_file` chunks. Excalidraw drawings are indexed by their text labels.
+
+`ignore_dirs`, `ignore_paths` and `ignore_files` **add** to the built-in lists. `.gitignore` can hide files you still want to search (for example a git-ignored `index.md`); list them in `force_include` using gitignore patterns relative to a root, e.g. `"/index.md"`, `"/tech-func/"`. `force_include` never overrides the built-in rules or secret exclusion.
+
+Identical chunk text is embedded once and its vector reused across files and edits. Existing indexes upgrade in place; changing `embed_model` clears the index so vectors from two models never mix. Each scan prunes entries that are now ignored and compacts the database when it holds a lot of free space.
+
 ## Resource limits
 
 Indexing is throttled so it can't pin the machine. These keys in `config.json`

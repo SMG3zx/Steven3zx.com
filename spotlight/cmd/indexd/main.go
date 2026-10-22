@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"spotlight/internal/config"
+	"spotlight/internal/crawl"
 	"spotlight/internal/embed"
 	"spotlight/internal/indexer"
 	"spotlight/internal/search"
@@ -56,7 +57,25 @@ func run(cfgPath string, once bool, log *slog.Logger) error {
 	gov.Probe(ctx)
 
 	emb := embed.NewOllama(cfg.OllamaURL, cfg.EmbedModel)
-	ix := indexer.New(st, emb, gov, cfg, log)
+
+	if wiped, err := st.SetEmbedModel(ctx, cfg.EmbedModel); err != nil {
+		return err
+	} else if wiped {
+		log.Warn("embed_model changed; the old index was cleared and will be rebuilt", "model", cfg.EmbedModel)
+	}
+
+	// The index's own files must never be indexed or watched: every batch the
+	// indexer stores would otherwise trigger more indexing.
+	match := crawl.NewMatcher(crawl.Options{
+		Roots:            cfg.Roots,
+		IgnoreDirs:       cfg.IgnoreDirs,
+		IgnorePaths:      cfg.IgnorePaths,
+		IgnoreFiles:      cfg.IgnoreFiles,
+		ExactFiles:       []string{cfg.DBPath, cfg.DBPath + "-wal", cfg.DBPath + "-shm", cfg.DBPath + "-journal"},
+		RespectGitignore: cfg.RespectGitignore,
+		ForceInclude:     cfg.ForceInclude,
+	})
+	ix := indexer.New(st, emb, gov, match, cfg, log)
 
 	if once {
 		n, err := ix.Scan(ctx)
@@ -77,7 +96,7 @@ func run(cfgPath string, once bool, log *slog.Logger) error {
 
 	if cfg.Watch {
 		go func() {
-			err := watch.Run(ctx, cfg.Roots, cfg.IgnoreDirs, func(c context.Context, p string) {
+			err := watch.Run(ctx, match, func(c context.Context, p string) {
 				if err := ix.IndexFile(c, p); err != nil {
 					log.Warn("index failed", "path", p, "err", err)
 				}

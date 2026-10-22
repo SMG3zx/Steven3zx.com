@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
 	"errors"
@@ -17,6 +18,8 @@ import (
 	_ "modernc.org/sqlite" // pure-Go driver, no CGO needed on Windows
 )
 
+// schema creates a fresh database. Databases created by earlier versions lack
+// chunks.text_hash and its index; migrate adds them.
 const schema = `
 CREATE TABLE IF NOT EXISTS files (
 	id    INTEGER PRIMARY KEY,
@@ -30,9 +33,14 @@ CREATE TABLE IF NOT EXISTS chunks (
 	ord       INTEGER NOT NULL,
 	start_off INTEGER NOT NULL,
 	text      TEXT NOT NULL,
+	text_hash BLOB,
 	embedding BLOB
 );
 CREATE INDEX IF NOT EXISTS chunks_file ON chunks(file_id);
+CREATE TABLE IF NOT EXISTS meta (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
 	text, content='chunks', content_rowid='id'
 );
@@ -43,6 +51,16 @@ CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
 	INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES ('delete', old.id, old.text);
 END;
 `
+
+const (
+	// A database is compacted when at least this share of its pages is free
+	// and it is big enough for that to matter.
+	compactFreeRatio = 0.25
+	compactMinPages  = 2560 // 10 MiB at 4 KiB pages
+
+	hashLen    = 16  // bytes of SHA-256 kept as the chunk text identity
+	inChunkMax = 400 // bound parameters per IN (...) query
+)
 
 type Store struct {
 	db  *sql.DB
@@ -55,9 +73,11 @@ type FileState struct {
 }
 
 // NewChunk is a chunk to store. Vec is nil when the chunk has no embedding.
+// Hash identifies the chunk text (see HashText); it is computed when empty.
 type NewChunk struct {
 	Offset int
 	Text   string
+	Hash   []byte
 	Vec    []float32
 }
 
@@ -75,6 +95,12 @@ type EmbRow struct {
 	Vec []float32
 }
 
+// HashText returns the identity used to recognise identical chunk text.
+func HashText(text string) []byte {
+	sum := sha256.Sum256([]byte(text))
+	return sum[:hashLen]
+}
+
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
@@ -86,9 +112,14 @@ func Open(path string) (*Store, error) {
 	}
 	// One connection keeps writes serialized and avoids SQLITE_BUSY surprises.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	if err := migrate(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return &Store{db: db}, nil
 }
@@ -97,6 +128,110 @@ func (s *Store) Close() error { return s.db.Close() }
 
 // Generation changes whenever the index is written.
 func (s *Store) Generation() uint64 { return s.gen.Load() }
+
+// migrate upgrades databases created before chunk text hashes existed.
+func migrate(ctx context.Context, db *sql.DB) error {
+	var one int
+	err := db.QueryRowContext(ctx,
+		`SELECT 1 FROM pragma_table_info('chunks') WHERE name = 'text_hash'`).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE chunks ADD COLUMN text_hash BLOB`); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS chunks_hash ON chunks(text_hash)`); err != nil {
+		return err
+	}
+	return backfillHashes(ctx, db)
+}
+
+// backfillHashes computes text_hash for rows that predate the column, so their
+// embeddings can be reused instead of recomputed.
+func backfillHashes(ctx context.Context, db *sql.DB) error {
+	type pending struct {
+		id   int64
+		hash []byte
+	}
+	var todo []pending
+
+	// The pool has a single connection, so read everything before writing.
+	rows, err := db.QueryContext(ctx, `SELECT id, text FROM chunks WHERE text_hash IS NULL`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id int64
+		var text string
+		if err := rows.Scan(&id, &text); err != nil {
+			rows.Close()
+			return err
+		}
+		todo = append(todo, pending{id, HashText(text)})
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil || len(todo) == 0 {
+		return err
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.PrepareContext(ctx, `UPDATE chunks SET text_hash = ? WHERE id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, p := range todo {
+		if _, err := stmt.ExecContext(ctx, p.hash, p.id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SetEmbedModel records which model produced the stored vectors. The first call
+// adopts whatever is in the index. If the model has changed, the old vectors are
+// meaningless for the new model, so the whole index is cleared (wiped=true) and
+// the next scan rebuilds it.
+func (s *Store) SetEmbedModel(ctx context.Context, model string) (wiped bool, err error) {
+	var current string
+	err = s.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'embed_model'`).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = s.db.ExecContext(ctx, `INSERT INTO meta (key, value) VALUES ('embed_model', ?)`, model)
+		return false, err
+	}
+	if err != nil {
+		return false, err
+	}
+	if current == model {
+		return false, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM chunks`); err != nil {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM files`); err != nil {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE meta SET value = ? WHERE key = 'embed_model'`, model); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	s.gen.Add(1)
+	return true, nil
+}
 
 // FileState returns the stored stamp for path, if the file is indexed.
 func (s *Store) FileState(ctx context.Context, path string) (FileState, bool, error) {
@@ -128,18 +263,22 @@ func (s *Store) ReplaceFile(ctx context.Context, path string, st FileState, chun
 		return err
 	}
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO chunks (file_id, ord, start_off, text, embedding) VALUES (?, ?, ?, ?, ?)`)
+		`INSERT INTO chunks (file_id, ord, start_off, text, text_hash, embedding) VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for i, c := range chunks {
+		hash := c.Hash
+		if len(hash) == 0 {
+			hash = HashText(c.Text)
+		}
 		var emb any // NULL when nil
 		if c.Vec != nil {
 			emb = encodeVec(c.Vec)
 		}
-		if _, err := stmt.ExecContext(ctx, fileID, i, c.Offset, c.Text, emb); err != nil {
+		if _, err := stmt.ExecContext(ctx, fileID, i, c.Offset, c.Text, hash, emb); err != nil {
 			return err
 		}
 	}
@@ -148,6 +287,48 @@ func (s *Store) ReplaceFile(ctx context.Context, path string, st FileState, chun
 	}
 	s.gen.Add(1)
 	return nil
+}
+
+// CachedVectors returns the stored embedding for each hash that has one,
+// keyed by string(hash). Identical chunk text anywhere in the index shares a
+// vector, so unchanged chunks never need to be embedded twice.
+func (s *Store) CachedVectors(ctx context.Context, hashes [][]byte) (map[string][]float32, error) {
+	out := make(map[string][]float32)
+	for start := 0; start < len(hashes); start += inChunkMax {
+		batch := hashes[start:min(start+inChunkMax, len(hashes))]
+		placeholders := make([]string, len(batch))
+		args := make([]any, len(batch))
+		for i, h := range batch {
+			placeholders[i] = "?"
+			args[i] = h
+		}
+		rows, err := s.db.QueryContext(ctx,
+			`SELECT text_hash, embedding FROM chunks
+			 WHERE text_hash IN (`+strings.Join(placeholders, ",")+`) AND embedding IS NOT NULL
+			 GROUP BY text_hash`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var hash, blob []byte
+			if err := rows.Scan(&hash, &blob); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			vec, err := decodeVec(blob)
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[string(hash)] = vec
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // DeleteFile removes a file and its chunks. Missing paths are not an error.
@@ -177,6 +358,34 @@ func (s *Store) DeleteFile(ctx context.Context, path string) error {
 	}
 	s.gen.Add(1)
 	return nil
+}
+
+// CompactIfWasteful shrinks the database file when deletions have left a large
+// share of it free: it merges the keyword index's segments and runs VACUUM.
+// SQLite never gives freed pages back to the file system on its own. It reports
+// whether it ran. Searches wait while it runs, typically a few seconds.
+func (s *Store) CompactIfWasteful(ctx context.Context) (bool, error) {
+	var free, pages int64
+	if err := s.db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil {
+		return false, err
+	}
+	if err := s.db.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&pages); err != nil {
+		return false, err
+	}
+	if pages < compactMinPages || float64(free)/float64(pages) < compactFreeRatio {
+		return false, nil
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO chunks_fts(chunks_fts) VALUES ('optimize')`); err != nil {
+		return false, fmt.Errorf("optimize keyword index: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `VACUUM`); err != nil {
+		return false, fmt.Errorf("vacuum: %w", err)
+	}
+	var busy, logFrames, checkpointed int64
+	if err := s.db.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
+		return true, fmt.Errorf("checkpoint after vacuum: %w", err)
+	}
+	return true, nil
 }
 
 // Paths lists every indexed file path.
