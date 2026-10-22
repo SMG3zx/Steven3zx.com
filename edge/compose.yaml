@@ -96,11 +96,15 @@ services:
       - ./headscale/derp.yaml:/etc/headscale/derp.yaml:ro
       - headscale_data:/var/lib/headscale
 
-  # Tailscale's DERP and STUN relay. Traefik passes derp.steven3zx.com through by TLS
-  # SNI, so derper terminates TLS with the wildcard certificate in derper_certs. STUN
-  # is published directly on UDP 3478. The image is built from the pinned Tailscale module:
-  #   docker build -t janus-derper:v1.104.2 build/derper
+  # Tailscale's DERP relay as a container. NOT the active relay: derper runs natively on
+  # Windows (C:\janus\derp\bin\derper.exe), because a container's published UDP port
+  # rewrites the source address STUN reports, which made netcheck see 172.19.0.1 and
+  # MappingVariesByDestIP: true. The native relay reports the real address. Kept for
+  # reference; start it only with --profile derper-container and stop derper.exe first.
+  # The image is built from the pinned Tailscale module:
+  #   docker build -t janus-derper:v1.104.2 edge/derper
   derper:
+    profiles: [derper-container]
     image: janus-derper:v1.104.2
     restart: unless-stopped
     command:

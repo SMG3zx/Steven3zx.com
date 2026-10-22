@@ -13,4 +13,5 @@ tcp:
     derp:
       loadBalancer:
         servers:
-          - address: "derper:8443"
+          # derper runs natively on the Windows host, so STUN sees the real source address.
+          - address: "host.docker.internal:8443"
