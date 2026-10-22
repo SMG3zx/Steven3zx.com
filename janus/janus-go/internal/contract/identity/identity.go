@@ -20,6 +20,20 @@ const (
 	SubjectConnectGitHub      = "janus.identity.github.connect"
 	SubjectGitHubToken        = "janus.identity.github.token"
 	SubjectDisconnectGitHub   = "janus.identity.github.disconnect"
+	SubjectDeleteAccount      = "janus.identity.account.delete"
+)
+
+// Statuses of an Account deletion, as AccountDeletion reports them.
+const (
+	// AccountMissing means there is no such User. A deletion that has finished
+	// reads as missing too, since the User is gone.
+	AccountMissing = "missing"
+	// AccountRefused means the Account has unfinished jobs and the request did not
+	// cancel them. The jobs are listed in AccountDeletion.ActiveJobs.
+	AccountRefused = "refused"
+	// AccountDeleting means the deletion has started and the services are still
+	// removing what they keep. Asking again resumes it.
+	AccountDeleting = "deleting"
 )
 
 // Empty is the reply of a request that returns nothing.
@@ -115,4 +129,26 @@ type GitHubTokenFound struct {
 // stay.
 type DisconnectGitHub struct {
 	UserID string `json:"user_id"`
+}
+
+// DeleteAccount starts deleting a User's Account, or asks how far a deletion
+// has got. Without CancelActiveJobs an Account with unfinished imports or WASM
+// builds is refused. With it, those jobs are cancelled.
+type DeleteAccount struct {
+	UserID           string `json:"user_id"`
+	CancelActiveJobs bool   `json:"cancel_active_jobs"`
+}
+
+// ActiveJob is an import or WASM build that has not finished.
+type ActiveJob struct {
+	Kind      string `json:"kind"`
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Status    string `json:"status"`
+}
+
+// AccountDeletion answers DeleteAccount with one of the Account statuses.
+type AccountDeletion struct {
+	Status     string      `json:"status"`
+	ActiveJobs []ActiveJob `json:"active_jobs,omitempty"`
 }

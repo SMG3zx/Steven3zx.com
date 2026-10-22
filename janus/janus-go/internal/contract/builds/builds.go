@@ -20,6 +20,7 @@ const (
 	SubjectFindArtifact    = "janus.builds.artifact.find"
 	SubjectRestoreArtifact = "janus.builds.artifact.restore"
 	SubjectDeleteOwner     = "janus.builds.owner.delete"
+	SubjectActiveBuilds    = "janus.builds.build.active"
 )
 
 // SubjectBuildJob carries the ID of a Build to run, in the JOBS stream.
@@ -150,3 +151,15 @@ const (
 	StatusFailed    = "failed"
 	StatusCancelled = "cancelled"
 )
+
+// ActiveBuild is a WASM Build that is queued or building.
+type ActiveBuild struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Status    string `json:"status"`
+}
+
+// ActiveBuilds answers SubjectActiveBuilds.
+type ActiveBuilds struct {
+	Builds []ActiveBuild `json:"builds"`
+}
