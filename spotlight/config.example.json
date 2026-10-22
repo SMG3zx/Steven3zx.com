@@ -1,0 +1,19 @@
+{
+  "roots": [
+    "C:\\Users\\YOU\\Documents",
+    "C:\\Users\\YOU\\Obsidian"
+  ],
+  "ignore_dirs": [
+    ".git", "node_modules", "target", "dist", "build", ".venv",
+    "__pycache__", "$RECYCLE.BIN", "System Volume Information"
+  ],
+  "max_file_bytes": 2097152,
+  "db_path": "C:\\Users\\YOU\\AppData\\Local\\spotlight\\index.db",
+  "listen_addr": "127.0.0.1:7788",
+  "ollama_url": "http://127.0.0.1:11434",
+  "embed_model": "nomic-embed-text",
+  "chunk_size": 1200,
+  "chunk_overlap": 200,
+  "watch": true,
+  "rescan_minutes": 30
+}
