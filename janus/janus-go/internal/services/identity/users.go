@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	contractid "janus/internal/contract/identity"
+	"janus/internal/platform/outbox"
 	"janus/internal/platform/tursodb"
 )
 
@@ -37,7 +38,17 @@ CREATE TABLE github_connections (
 	subject TEXT NOT NULL UNIQUE,
 	token_ciphertext BLOB NOT NULL,
 	connected_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);`}
+);`,
+	// A User whose Account is being deleted. Its sign-in stops, and the User goes
+	// once every service in account.Services has confirmed.
+	`ALTER TABLE users ADD COLUMN deleting INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE account_clearances (
+	user_id TEXT NOT NULL,
+	service TEXT NOT NULL,
+	PRIMARY KEY (user_id, service)
+);`,
+	outbox.Schema,
+}
 
 func isUnique(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "unique constraint")
@@ -63,7 +74,7 @@ func (s *Service) createLocalUser(ctx context.Context, user contractid.CreateLoc
 
 func (s *Service) findLocalUser(ctx context.Context, request contractid.FindLocalUser) (contractid.LocalUser, error) {
 	var found contractid.LocalUser
-	err := s.db.QueryRowContext(ctx, `SELECT user_id,email,password_hash FROM local_credentials WHERE email=? COLLATE NOCASE`, strings.TrimSpace(request.Email)).Scan(&found.ID, &found.Email, &found.PasswordHash)
+	err := s.db.QueryRowContext(ctx, `SELECT c.user_id,c.email,c.password_hash FROM local_credentials c JOIN users u ON u.id=c.user_id WHERE c.email=? COLLATE NOCASE AND u.deleting=0`, strings.TrimSpace(request.Email)).Scan(&found.ID, &found.Email, &found.PasswordHash)
 	switch {
 	case err == nil:
 		found.Found = true
@@ -75,7 +86,7 @@ func (s *Service) findLocalUser(ctx context.Context, request contractid.FindLoca
 
 func (s *Service) findUser(ctx context.Context, request contractid.FindUser) (contractid.User, error) {
 	var found contractid.User
-	err := s.db.QueryRowContext(ctx, `SELECT id,email,display_name FROM users WHERE id=?`, request.ID).Scan(&found.ID, &found.Email, &found.DisplayName)
+	err := s.db.QueryRowContext(ctx, `SELECT id,email,display_name FROM users WHERE id=? AND deleting=0`, request.ID).Scan(&found.ID, &found.Email, &found.DisplayName)
 	switch {
 	case err == nil:
 		found.Found = true
