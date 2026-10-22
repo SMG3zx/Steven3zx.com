@@ -19,6 +19,9 @@ type Identity interface {
 	FindUser(ctx context.Context, id string) (contractid.User, error)
 	ResolveGoogleIdentity(ctx context.Context, identity contractid.ResolveIdentity) (contractid.Resolved, error)
 	ResolveGitHubLogin(ctx context.Context, login contractid.ResolveIdentity) (contractid.Resolved, error)
+	ConnectGitHub(ctx context.Context, connection contractid.ConnectGitHub) error
+	FindGitHubToken(ctx context.Context, userID string) (contractid.GitHubTokenFound, error)
+	DisconnectGitHub(ctx context.Context, userID string) error
 }
 
 // Registry passes sign-ins to identity and adds each User they find or create to
@@ -76,4 +79,19 @@ func (r *Registry) ResolveGitHubLogin(ctx context.Context, login contractid.Reso
 		return resolved, err
 	}
 	return resolved, r.store.AddOwner(ctx, resolved.ID)
+}
+
+// ConnectGitHub stores a User's GitHub Connection. The User is already an Owner.
+func (r *Registry) ConnectGitHub(ctx context.Context, connection contractid.ConnectGitHub) error {
+	return r.identity.ConnectGitHub(ctx, connection)
+}
+
+// FindGitHubToken returns a User's GitHub access token and whether it is connected.
+func (r *Registry) FindGitHubToken(ctx context.Context, userID string) (contractid.GitHubTokenFound, error) {
+	return r.identity.FindGitHubToken(ctx, userID)
+}
+
+// DisconnectGitHub removes a User's GitHub Connection.
+func (r *Registry) DisconnectGitHub(ctx context.Context, userID string) error {
+	return r.identity.DisconnectGitHub(ctx, userID)
 }

@@ -26,7 +26,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
-	gh := app.NewGitHub(identities, catalog)
+	gh := app.NewGitHub(catalog)
 	imports := app.NewImports(catalog)
 	authorization, err := authz.New(ctx)
 	if err != nil {

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -52,7 +53,7 @@ func (a *Server) projectsPage(c *call) any {
 	if err != nil {
 		return internalError()
 	}
-	_, connected, tokenErr := a.dependencies.GitHub.Token(c.Request.Context(), owner)
+	connected, tokenErr := a.gitHubConnected(c.Request.Context(), owner)
 	if tokenErr != nil {
 		connected = false
 	}
@@ -78,7 +79,7 @@ func (a *Server) repoImportPage(c *call) any {
 	if !a.dependencies.GitHubEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "GitHub OAuth is not configured"})
 	}
-	_, connected, err := a.dependencies.GitHub.Token(c.Request.Context(), owner)
+	connected, err := a.gitHubConnected(c.Request.Context(), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -498,7 +499,7 @@ func (a *Server) projectPage(c *call) any {
 	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 	}
-	_, connected, tokenErr := a.dependencies.GitHub.Token(c.Request.Context(), owner)
+	connected, tokenErr := a.gitHubConnected(c.Request.Context(), owner)
 	if tokenErr != nil {
 		connected = false
 	}
@@ -584,4 +585,12 @@ func (a *Server) authorizedSubject(c *call, action string, resource map[string]a
 	resource["owner_id"] = owner
 	allowed, err := a.allowed(c.Request.Context(), owner, action, resource)
 	return owner, err == nil && allowed
+}
+
+// gitHubConnected reports whether the Account has a GitHub Connection. The token
+// stays with the identity service; the projects service uses it for the
+// Account's repositories.
+func (a *Server) gitHubConnected(ctx context.Context, owner string) (bool, error) {
+	found, err := a.dependencies.Identity.FindGitHubToken(ctx, owner)
+	return found.Connected, err
 }

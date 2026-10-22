@@ -62,3 +62,22 @@ func (g *Gateway) ResolveGitHubLogin(ctx context.Context, login contractid.Resol
 	err := g.call(ctx, contractid.SubjectResolveGitHubLogin, login, &resolved)
 	return resolved, err
 }
+
+// ConnectGitHub stores the GitHub Connection of a User, replacing an earlier one.
+// A GitHub account linked to another Account is a contract.ErrConflict.
+func (g *Gateway) ConnectGitHub(ctx context.Context, connection contractid.ConnectGitHub) error {
+	return g.call(ctx, contractid.SubjectConnectGitHub, connection, nil)
+}
+
+// FindGitHubToken returns a User's GitHub access token, and whether the User has a
+// GitHub Connection at all.
+func (g *Gateway) FindGitHubToken(ctx context.Context, userID string) (contractid.GitHubTokenFound, error) {
+	var found contractid.GitHubTokenFound
+	err := g.call(ctx, contractid.SubjectGitHubToken, contractid.GitHubToken{UserID: userID}, &found)
+	return found, err
+}
+
+// DisconnectGitHub removes a User's GitHub Connection. Its sign-in identities stay.
+func (g *Gateway) DisconnectGitHub(ctx context.Context, userID string) error {
+	return g.call(ctx, contractid.SubjectDisconnectGitHub, contractid.DisconnectGitHub{UserID: userID}, nil)
+}

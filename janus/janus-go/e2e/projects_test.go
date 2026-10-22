@@ -340,7 +340,7 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 		t.Fatalf("prepare authorization: %v", err)
 	}
 	catalog := catalogtest.NewMemory()
-	gh := app.NewGitHub(identities, catalog)
+	gh := app.NewGitHub(catalog)
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(catalog)
 	wasm := buildstest.NewFake(store)

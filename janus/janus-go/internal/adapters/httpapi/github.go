@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"janus/internal/app"
+	"janus/internal/contract"
 	contractid "janus/internal/contract/identity"
 	"net/http"
 	"net/http/httptest"
@@ -172,8 +173,8 @@ func (a *Server) githubCallback(c *call) any {
 		if !ok || current != owner {
 			return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "sign in to the same Janus account and reconnect GitHub"})
 		}
-		if connectErr := a.dependencies.GitHub.Connect(ctx, app.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
-			if app.IsConflict(connectErr) {
+		if connectErr := a.dependencies.Identity.ConnectGitHub(ctx, contractid.ConnectGitHub{UserID: owner, Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile), Token: token.AccessToken}); connectErr != nil {
+			if errors.Is(connectErr, contract.ErrConflict) {
 				return jsonResponse(http.StatusConflict, map[string]string{"error": connectErr.Error()})
 			}
 			return internalError()
@@ -225,7 +226,7 @@ func (a *Server) githubDisconnect(c *call) any {
 	if !allowed {
 		return jsonResponse(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
-	if err := a.dependencies.GitHub.Disconnect(ctx, owner); err != nil {
+	if err := a.dependencies.Identity.DisconnectGitHub(ctx, owner); err != nil {
 		return internalError()
 	}
 	a.log(ctx, "info", "github.disconnected", map[string]string{"user_id": owner})

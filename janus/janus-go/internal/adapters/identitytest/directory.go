@@ -53,3 +53,19 @@ func asContract(err error) error {
 	}
 	return err
 }
+
+// ConnectGitHub stores the GitHub Connection of a User.
+func (d *Directory) ConnectGitHub(ctx context.Context, connection contractid.ConnectGitHub) error {
+	return asContract(d.memory.ConnectGitHub(ctx, app.ConnectGitHub{UserID: connection.UserID, Subject: connection.Subject, Email: connection.Email, DisplayName: connection.DisplayName, Token: connection.Token}))
+}
+
+// FindGitHubToken returns a User's GitHub access token and whether it is connected.
+func (d *Directory) FindGitHubToken(ctx context.Context, userID string) (contractid.GitHubTokenFound, error) {
+	token, connected, err := d.memory.FindGitHubToken(ctx, userID)
+	return contractid.GitHubTokenFound{Connected: connected, Token: token}, err
+}
+
+// DisconnectGitHub removes a User's GitHub Connection.
+func (d *Directory) DisconnectGitHub(ctx context.Context, userID string) error {
+	return d.memory.DisconnectGitHub(ctx, userID)
+}

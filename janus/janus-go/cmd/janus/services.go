@@ -198,7 +198,7 @@ func (a *application) groups() []group {
 			})},
 			{name: "projects", start: func(context.Context) error {
 				a.projects = app.NewProjects(a.catalog)
-				a.github = app.NewGitHub(a.identities, a.catalog)
+				a.github = app.NewGitHub(a.catalog)
 				a.imports = app.NewImports(a.catalog)
 				return nil
 			}},

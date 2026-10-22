@@ -26,7 +26,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
-	gh := app.NewGitHub(identities, catalog)
+	gh := app.NewGitHub(catalog)
 	audit := audittest.NewRecorder()
 	imports := app.NewImports(catalog)
 	builds := app.NewBuilds(store, catalog, buildstest.NewFake(store))

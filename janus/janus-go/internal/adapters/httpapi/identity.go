@@ -15,4 +15,7 @@ type Identity interface {
 	FindUser(ctx context.Context, id string) (contractid.User, error)
 	ResolveGoogleIdentity(ctx context.Context, identity contractid.ResolveIdentity) (contractid.Resolved, error)
 	ResolveGitHubLogin(ctx context.Context, login contractid.ResolveIdentity) (contractid.Resolved, error)
+	ConnectGitHub(ctx context.Context, connection contractid.ConnectGitHub) error
+	FindGitHubToken(ctx context.Context, userID string) (contractid.GitHubTokenFound, error)
+	DisconnectGitHub(ctx context.Context, userID string) error
 }
