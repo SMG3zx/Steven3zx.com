@@ -91,7 +91,7 @@ type application struct {
 	fleet          app.Fleet
 	authentication *authn.Authentication
 	authorization  *authz.Policy
-	builds         *app.Builds
+	builds         *buildsnats.Gateway
 	accounts       *app.Accounts
 	runs           app.WASMRuns
 	httpServer     *httpapi.Server
@@ -419,14 +419,14 @@ func (a *application) startBuildsService(ctx context.Context) error {
 	return nil
 }
 
-// startBuilds makes the WASM Builds use case, which asks the builds service over
+// startBuilds makes the gateway's WASM Builds, which asks the builds service over
 // NATS and reads the Artifacts from the artifacts store.
 func (a *application) startBuilds(ctx context.Context) error {
-	client, err := buildsnats.New(ctx, a.nats.Conn())
+	gateway, err := buildsnats.NewGateway(ctx, a.nats.Conn())
 	if err != nil {
 		return fmt.Errorf("open the artifacts store: %w", err)
 	}
-	a.builds = app.NewBuilds(a.catalog, client)
+	a.builds = gateway
 	return nil
 }
 

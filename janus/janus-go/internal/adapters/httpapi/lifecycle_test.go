@@ -27,7 +27,7 @@ func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	builds := app.NewBuilds(catalog, buildstest.NewFake())
+	builds := buildstest.NewGateway(buildstest.NewFake())
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)

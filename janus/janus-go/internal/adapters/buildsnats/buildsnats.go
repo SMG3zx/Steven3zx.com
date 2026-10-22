@@ -2,7 +2,8 @@
 // over NATS. It translates app types to the builds contract, a refusal of the
 // service (400, 404, 409) to an *app.ReplyError carrying the service's sentence,
 // and reads Artifacts from the artifacts object store, copying one back from
-// builds.db first when the object is missing.
+// builds.db first when the object is missing. The Gateway does the requests in
+// the contract's types; the Client is the app port over it.
 package buildsnats
 
 import (
@@ -10,18 +11,15 @@ import (
 	"errors"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 
 	"janus/internal/app"
 	"janus/internal/contract"
 	contractbuilds "janus/internal/contract/builds"
-	"janus/internal/platform/natsx"
 )
 
-// Client is an app.WASMBuilds over a NATS connection and the artifacts store.
+// Client is an app.WASMBuilds over a Gateway.
 type Client struct {
-	conn      *nats.Conn
-	artifacts jetstream.ObjectStore
+	gateway *Gateway
 }
 
 var _ app.WASMBuilds = (*Client)(nil)
@@ -30,30 +28,25 @@ var _ app.BuildArtifacts = (*Client)(nil)
 // New returns a Client that sends its requests on conn and reads Artifacts from
 // the artifacts object store.
 func New(ctx context.Context, conn *nats.Conn) (*Client, error) {
-	js, err := jetstream.New(conn)
+	gateway, err := NewGateway(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
-	artifacts, err := natsx.DeclareObjectStore(ctx, js, natsx.ArtifactsBucket)
-	if err != nil {
-		return nil, err
-	}
-	return &Client{conn: conn, artifacts: artifacts}, nil
+	return &Client{gateway: gateway}, nil
 }
 
-// call sends one request and turns a refusal the service reported into the
-// error the port documents.
-func (c *Client) call(ctx context.Context, subject string, request, reply any) error {
-	err := natsx.Call(ctx, c.conn, subject, request, reply)
-	var remote *natsx.RemoteError
-	if !errors.As(err, &remote) {
+// portError turns a refusal the service reported into the *app.ReplyError the port
+// documents. Other errors are returned as they are.
+func portError(err error) error {
+	var failure *contract.Error
+	if !errors.As(err, &failure) {
 		return err
 	}
-	switch remote.Status {
+	switch failure.Status {
 	case contract.StatusInvalid, contract.StatusNotFound, contract.StatusConflict:
-		return &app.ReplyError{Err: errors.New(remote.Message)}
+		return &app.ReplyError{Err: errors.New(failure.Message)}
 	}
-	return contract.FromStatus(remote.Status, remote.Message)
+	return err
 }
 
 func build(b contractbuilds.Build) app.WASMBuild {
@@ -62,57 +55,40 @@ func build(b contractbuilds.Build) app.WASMBuild {
 }
 
 func (c *Client) StartBuild(ctx context.Context, request app.StartBuild) (app.WASMBuild, error) {
-	var found contractbuilds.BuildFound
-	err := c.call(ctx, contractbuilds.SubjectRequestBuild, contractbuilds.RequestBuild{ID: request.ID, OwnerID: request.OwnerID,
-		ProjectID: request.ProjectID, SnapshotID: request.SnapshotID, Target: request.Target}, &found)
-	return build(found.Build), err
+	created, err := c.gateway.Request(ctx, contractbuilds.RequestBuild{ID: request.ID, OwnerID: request.OwnerID,
+		ProjectID: request.ProjectID, SnapshotID: request.SnapshotID, Target: request.Target})
+	return build(created), portError(err)
 }
 
 func (c *Client) RetryBuild(ctx context.Context, owner, buildID string) (app.WASMBuild, error) {
-	var found contractbuilds.BuildFound
-	err := c.call(ctx, contractbuilds.SubjectRetryBuild, contractbuilds.BuildKey{OwnerID: owner, BuildID: buildID}, &found)
-	return build(found.Build), err
+	retried, err := c.gateway.Retry(ctx, owner, buildID)
+	return build(retried), portError(err)
 }
 
 func (c *Client) FindBuild(ctx context.Context, owner, buildID string) (app.WASMBuild, bool, error) {
-	var found contractbuilds.BuildFound
-	err := c.call(ctx, contractbuilds.SubjectFindBuild, contractbuilds.BuildKey{OwnerID: owner, BuildID: buildID}, &found)
-	return build(found.Build), found.Found, err
+	found, ok, err := c.gateway.Find(ctx, owner, buildID)
+	return build(found), ok, portError(err)
 }
 
-// Artifact returns the Artifact of a complete Build. The bytes come from the
-// artifacts store; when the object is not there, the service copies it back from
-// builds.db and the read is tried once more.
+// Artifact returns the Artifact of a complete Build.
 func (c *Client) Artifact(ctx context.Context, owner, buildID string) (app.WASMBuildArtifact, error) {
-	key := contractbuilds.BuildKey{OwnerID: owner, BuildID: buildID}
-	var stored contractbuilds.ArtifactFound
-	if err := c.call(ctx, contractbuilds.SubjectFindArtifact, key, &stored); err != nil || !stored.Found {
-		return app.WASMBuildArtifact{}, err
-	}
-	data, found, err := natsx.GetObject(ctx, c.artifacts, stored.ObjectName)
+	stored, data, err := c.gateway.Artifact(ctx, owner, buildID)
 	if err != nil {
-		return app.WASMBuildArtifact{}, err
+		return app.WASMBuildArtifact{}, portError(err)
 	}
-	if !found {
-		if err = c.call(ctx, contractbuilds.SubjectRestoreArtifact, key, nil); err != nil {
-			return app.WASMBuildArtifact{}, err
-		}
-		if data, found, err = natsx.GetObject(ctx, c.artifacts, stored.ObjectName); err != nil || !found {
-			return app.WASMBuildArtifact{}, errors.Join(err, errors.New("the artifact could not be restored"))
-		}
+	if !stored.Found {
+		return app.WASMBuildArtifact{}, nil
 	}
 	return app.WASMBuildArtifact{Name: stored.ArtifactName, Data: data, Found: true}, nil
 }
 
 func (c *Client) DeleteOwner(ctx context.Context, owner string) error {
-	return c.call(ctx, contractbuilds.SubjectDeleteOwner, contractbuilds.Owner{OwnerID: owner}, nil)
+	return portError(c.gateway.call(ctx, contractbuilds.SubjectDeleteOwner, contractbuilds.Owner{OwnerID: owner}, nil))
 }
 
 // FindCheck returns the Check of one of the Owner's Builds. found is false when
 // the Build has no Check yet.
 func (c *Client) FindCheck(ctx context.Context, owner, buildID string) (app.Check, bool, error) {
-	var found contractbuilds.CheckFound
-	err := c.call(ctx, contractbuilds.SubjectFindCheck, contractbuilds.BuildKey{OwnerID: owner, BuildID: buildID}, &found)
-	check := found.Check
-	return app.Check{BuildID: check.BuildID, Status: check.Status, Error: check.Error, Log: check.Log, NoTests: check.NoTests}, found.Found, err
+	check, found, err := c.gateway.Check(ctx, owner, buildID)
+	return app.Check{BuildID: check.BuildID, Status: check.Status, Error: check.Error, Log: check.Log, NoTests: check.NoTests}, found, portError(err)
 }

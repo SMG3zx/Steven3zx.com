@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"janus/internal/app"
 	"janus/internal/contract"
+	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"
 	"net/http"
 	"strings"
@@ -351,10 +351,11 @@ func (a *Server) startWASMBuild(c *call) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "select a supported WASM target"})
 	}
-	jobID, err := a.dependencies.Builds.Request(c.Request.Context(), app.NewBuild{OwnerID: owner, ProjectID: c.Param("id"), Target: input.Target})
+	requested, err := a.dependencies.Builds.Request(c.Request.Context(), contractbuilds.RequestBuild{ID: uuid.NewString(), OwnerID: owner, ProjectID: c.Param("id"), Target: input.Target})
 	if err != nil {
 		return jsonResponse(wasmBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
+	jobID := requested.ID
 	a.log(c.Request.Context(), "info", "project.wasm.build.requested", map[string]string{"user_id": owner, "project_id": c.Param("id"), "job_id": jobID, "target": input.Target})
 	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"job_id": jobID, "status": "queued"}}
 }
@@ -402,7 +403,7 @@ func (a *Server) getWASMBuild(c *call) any {
 	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "WASM build not found"})
 	}
-	return build
+	return buildView(build)
 }
 
 func (a *Server) getWASMArtifact(c *call) any {
@@ -410,7 +411,7 @@ func (a *Server) getWASMArtifact(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	artifact, err := a.dependencies.Builds.Artifact(c.Request.Context(), owner, c.Param("id"))
+	artifact, data, err := a.dependencies.Builds.Artifact(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return internalError()
 	}
@@ -418,10 +419,10 @@ func (a *Server) getWASMArtifact(c *call) any {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "WASM artifact not found"})
 	}
 	contentType := "application/zip"
-	if strings.HasSuffix(strings.ToLower(artifact.Name), ".zst") {
+	if strings.HasSuffix(strings.ToLower(artifact.ArtifactName), ".zst") {
 		contentType = "application/zstd"
 	}
-	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {contentType}, "Content-Disposition": {`attachment; filename="` + artifact.Name + `"`}}, Body: artifact.Data}
+	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {contentType}, "Content-Disposition": {`attachment; filename="` + artifact.ArtifactName + `"`}}, Body: data}
 }
 
 func (a *Server) startWASMRun(c *call) any {

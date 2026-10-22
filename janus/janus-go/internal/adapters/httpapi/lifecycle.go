@@ -29,10 +29,11 @@ func (a *Server) retryWASMBuildAPI(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	jobID, err := a.dependencies.Builds.Retry(c.Request.Context(), owner, c.Param("id"))
+	retried, err := a.dependencies.Builds.Retry(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return jsonResponse(retryBuildErrorStatus(err), map[string]string{"error": err.Error()})
 	}
+	jobID := retried.ID
 	return jsonResponse(http.StatusAccepted, map[string]string{"job_id": jobID})
 }
 

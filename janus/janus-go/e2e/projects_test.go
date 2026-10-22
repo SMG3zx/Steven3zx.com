@@ -320,7 +320,7 @@ func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Ide
 // in-memory Catalog, so a test can seed the Snapshot an Import would make;
 // the real projects service is tested through its adapter. It returns the
 // Catalog, the Identities, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, *app.Builds, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, *buildstest.Gateway, http.Handler) {
 	t.Helper()
 	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"))
 	if err != nil {
@@ -343,7 +343,7 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 	audit := audittest.NewRecorder()
 	wasm := buildstest.NewFake()
 	wasm.Produce([]byte("playwright-wasm-archive"))
-	builds := app.NewBuilds(catalog, wasm)
+	builds := buildstest.NewGateway(wasm)
 	server := httpapi.New(httpapi.Config{
 		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Catalog: catalogtest.NewGateway(catalog), Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authentication, Authorization: authorization,

@@ -41,7 +41,7 @@ type Config struct {
 	Audit          app.Audit
 	Identity       Identity
 	Catalog        Catalog
-	Builds         *app.Builds
+	Builds         Builds
 	Accounts       *app.Accounts
 	// Fleet is the fleet service: Agents, their Deployments and their Usage. It is
 	// nil when the control plane is not on the tailnet; Agent and Deployment

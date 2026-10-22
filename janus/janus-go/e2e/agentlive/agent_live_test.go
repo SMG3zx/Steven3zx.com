@@ -107,7 +107,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	fx := fleetfixture.Start(t, fleetfixture.Options{Hub: hub, AgentsConn: agentsConn, Agents: trust.Agents, Trust: publicTrust(trust),
 		Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
 	wasm := buildstest.NewFake()
-	builds := app.NewBuilds(catalog, wasm)
+	builds := buildstest.NewGateway(wasm)
 	policy, err := authz.New(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{

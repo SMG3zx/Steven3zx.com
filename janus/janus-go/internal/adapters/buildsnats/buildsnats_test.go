@@ -131,7 +131,7 @@ func TestBuildsAreStartedReadAndRestoredThroughTheService(t *testing.T) {
 	}
 
 	// The object goes missing; the next read copies it back from builds.db.
-	if err := client.artifacts.Delete(ctx, "b1"); err != nil {
+	if err := client.gateway.artifacts.Delete(ctx, "b1"); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := client.Artifact(ctx, "alice", "b1")

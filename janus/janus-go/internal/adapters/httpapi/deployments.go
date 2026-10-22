@@ -60,7 +60,7 @@ func (a *Server) getDeployment(c *call) any {
 			return internalError()
 		}
 		if ok {
-			deployment.Check = &check
+			deployment.Check = &app.Check{BuildID: check.BuildID, Status: check.Status, Error: check.Error, Log: check.Log, NoTests: check.NoTests}
 		}
 	}
 	return jsonResponse(http.StatusOK, deployment)

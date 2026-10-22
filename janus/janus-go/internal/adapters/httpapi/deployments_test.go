@@ -52,11 +52,10 @@ func newDeployApp(t *testing.T) *deployApp {
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	service, err := buildsnats.New(ctx, fixture.Conn())
+	builds, err := buildsnats.NewGateway(ctx, fixture.Conn())
 	if err != nil {
 		t.Fatal(err)
 	}
-	builds := app.NewBuilds(catalog, service)
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
