@@ -1,0 +1,26 @@
+name: janus-go
+
+on:
+  push:
+    branches: [master]
+    paths: ["janus/janus-go/**", "janus/.tours/**"]
+  pull_request:
+    paths: ["janus/janus-go/**", "janus/.tours/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: janus/janus-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: janus/janus-go/go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...

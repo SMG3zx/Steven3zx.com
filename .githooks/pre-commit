@@ -1,0 +1,21 @@
+#!/bin/sh
+# Checks janus-go before a commit that stages its Go files: gofmt on those files,
+# then go vet on the whole module. Enable once per clone with:
+#   git config core.hooksPath .githooks
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACM -- 'janus/janus-go/*.go')
+[ -n "$staged" ] || exit 0
+
+root=$(git rev-parse --show-toplevel)
+cd "$root/janus/janus-go"
+
+files=$(printf '%s\n' "$staged" | sed 's|^janus/janus-go/||')
+unformatted=$(printf '%s\n' "$files" | xargs gofmt -l)
+if [ -n "$unformatted" ]; then
+	echo "pre-commit: gofmt -w these files before committing:" >&2
+	echo "$unformatted" >&2
+	exit 1
+fi
+
+go vet ./...
