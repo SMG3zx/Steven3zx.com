@@ -18,6 +18,7 @@ import (
 	"spotlight/internal/search"
 	"spotlight/internal/server"
 	"spotlight/internal/store"
+	"spotlight/internal/throttle"
 	"spotlight/internal/watch"
 )
 
@@ -44,11 +45,18 @@ func run(cfgPath string, once bool, log *slog.Logger) error {
 	}
 	defer st.Close()
 
-	emb := embed.NewOllama(cfg.OllamaURL, cfg.EmbedModel)
-	ix := indexer.New(st, emb, cfg, log)
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	gov := throttle.New(throttle.Limits{
+		CPU: cfg.MaxCPUPercent,
+		Mem: cfg.MaxMemPercent,
+		GPU: cfg.MaxGPUPercent,
+	}, log)
+	gov.Probe(ctx)
+
+	emb := embed.NewOllama(cfg.OllamaURL, cfg.EmbedModel)
+	ix := indexer.New(st, emb, gov, cfg, log)
 
 	if once {
 		n, err := ix.Scan(ctx)

@@ -60,6 +60,36 @@ Each result has `path`, `offset` (rune offset of the matched chunk), `snippet`,
 `score`, and `sources` (`keyword`, `vector`, or both). Without Ollama running,
 search still works using keywords only.
 
+## Resource limits
+
+Indexing is throttled so it can't pin the machine. These keys in `config.json`
+default to 80, and 0 turns a limit off:
+
+```json
+"max_cpu_percent": 80,
+"max_mem_percent": 80,
+"max_gpu_percent": 80,
+"embed_batch": 8
+```
+
+- **Yielding.** Before every embedding batch, the daemon checks system-wide CPU,
+  memory, GPU utilisation and GPU memory. If any is over its limit, indexing
+  pauses (re-checking every second) until it drops. So it also backs off when a
+  game, build or other GPU job is running.
+- **Pacing.** After each batch it idles long enough that the indexer alone keeps
+  the GPU busy at most `max_gpu_percent` of the time (80% means 1 part idle for
+  every 4 parts busy). Because it also yields to other load, it often settles
+  below the limit.
+- **Sensors.** CPU and memory come from the OS (Win32 `GetSystemTimes` and
+  `GlobalMemoryStatusEx`, or `/proc` on Linux). GPU comes from `nvidia-smi`. At
+  startup the daemon logs which sensors work. If `nvidia-smi` is missing, the
+  GPU limit falls back to pacing only.
+- **Not throttled.** Search queries embed one short string and are not limited.
+
+Utilisation limits bound how *busy* the GPU is, not its peak power draw or
+heat. If your machine is unstable under load, also cap board power
+(`nvidia-smi -pl 120` as admin) while you diagnose it.
+
 ## Layout
 
 ```
@@ -71,6 +101,7 @@ internal/chunk/        overlapping windows on paragraph or word boundaries
 internal/embed/        Embedder interface and Ollama client
 internal/store/        SQLite schema, FTS5 triggers, BLOB vectors
 internal/indexer/      per-file index pipeline and full scan with pruning
+internal/throttle/     CPU/memory/GPU limits: pause while busy, pace GPU work
 internal/watch/        fsnotify with recursive add and debounce
 internal/search/       keyword + vector retrieval, RRF fusion
 internal/server/       HTTP handlers
@@ -98,6 +129,9 @@ internal/server/       HTTP handlers
 - Changing `embed_model` leaves old vectors in place. Delete `index.db` (or
   the `embedding` column) and run `-once` again.
 - `chunk_size` is in characters, not tokens. About 1200 is a reasonable start.
+- Point `roots` at folders you actually search (notes, documents, projects).
+  Indexing a whole drive pulls in app bundles and minified JavaScript that
+  produce thousands of useless chunks.
 
 ## Security
 

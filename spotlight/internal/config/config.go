@@ -21,6 +21,14 @@ type Config struct {
 	ChunkOverlap  int      `json:"chunk_overlap"`
 	Watch         bool     `json:"watch"`
 	RescanMinutes int      `json:"rescan_minutes"`
+
+	// Indexing pauses while system-wide load is above these percentages, and
+	// GPU work is paced so this process stays at or under MaxGPUPercent.
+	// 0 disables a limit.
+	MaxCPUPercent float64 `json:"max_cpu_percent"`
+	MaxMemPercent float64 `json:"max_mem_percent"`
+	MaxGPUPercent float64 `json:"max_gpu_percent"`
+	EmbedBatch    int     `json:"embed_batch"` // chunks per Ollama request
 }
 
 // Load reads path and fills unset fields with defaults.
@@ -38,6 +46,10 @@ func Load(path string) (Config, error) {
 		ChunkOverlap:  200,
 		Watch:         true,
 		RescanMinutes: 30,
+		MaxCPUPercent: 80,
+		MaxMemPercent: 80,
+		MaxGPUPercent: 80,
+		EmbedBatch:    8,
 	}
 
 	b, err := os.ReadFile(path)
@@ -57,6 +69,21 @@ func Load(path string) (Config, error) {
 	}
 	if len(c.Roots) == 0 {
 		return c, errors.New("config: no roots configured")
+	}
+	for _, l := range []struct {
+		name string
+		v    float64
+	}{
+		{"max_cpu_percent", c.MaxCPUPercent},
+		{"max_mem_percent", c.MaxMemPercent},
+		{"max_gpu_percent", c.MaxGPUPercent},
+	} {
+		if l.v < 0 || l.v > 100 {
+			return c, fmt.Errorf("config: %s must be between 0 and 100 (0 disables the limit), got %v", l.name, l.v)
+		}
+	}
+	if c.EmbedBatch < 1 {
+		c.EmbedBatch = 1
 	}
 	return c, nil
 }

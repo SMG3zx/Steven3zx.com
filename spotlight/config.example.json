@@ -15,5 +15,9 @@
   "chunk_size": 1200,
   "chunk_overlap": 200,
   "watch": true,
-  "rescan_minutes": 30
+  "rescan_minutes": 30,
+  "max_cpu_percent": 80,
+  "max_mem_percent": 80,
+  "max_gpu_percent": 80,
+  "embed_batch": 8
 }

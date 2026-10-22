@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"time"
 
 	"spotlight/internal/chunk"
 	"spotlight/internal/config"
@@ -16,20 +17,20 @@ import (
 	"spotlight/internal/embed"
 	"spotlight/internal/extract"
 	"spotlight/internal/store"
+	"spotlight/internal/throttle"
 )
-
-const embedBatch = 16
 
 type Indexer struct {
 	st  *store.Store
-	emb embed.Embedder // nil disables vectors; keyword search still works
+	emb embed.Embedder     // nil disables vectors; keyword search still works
+	gov *throttle.Governor // nil means no resource limits
 	cfg config.Config
 	log *slog.Logger
 	mu  sync.Mutex // serialises index work; the store uses one connection
 }
 
-func New(st *store.Store, emb embed.Embedder, cfg config.Config, log *slog.Logger) *Indexer {
-	return &Indexer{st: st, emb: emb, cfg: cfg, log: log}
+func New(st *store.Store, emb embed.Embedder, gov *throttle.Governor, cfg config.Config, log *slog.Logger) *Indexer {
+	return &Indexer{st: st, emb: emb, gov: gov, cfg: cfg, log: log}
 }
 
 // IndexFile (re)indexes one file. Files whose mtime and size are unchanged are
@@ -83,20 +84,33 @@ func (ix *Indexer) IndexFile(ctx context.Context, path string) error {
 
 // embedRows fills in Vec for as many rows as possible. On failure the rest stay
 // without vectors, so they remain keyword-searchable.
+//
+// Every batch goes through the resource governor: it waits while the machine is
+// over its CPU, memory or GPU limits, and idles after each batch so this process
+// keeps the GPU at or under its share.
 func (ix *Indexer) embedRows(ctx context.Context, path string, rows []store.NewChunk) {
-	for start := 0; start < len(rows); start += embedBatch {
-		end := min(start+embedBatch, len(rows))
+	batch := max(ix.cfg.EmbedBatch, 1)
+	for start := 0; start < len(rows); start += batch {
+		if err := ix.gov.Wait(ctx); err != nil {
+			return // shutting down
+		}
+		end := min(start+batch, len(rows))
 		inputs := make([]string, 0, end-start)
 		for _, r := range rows[start:end] {
 			inputs = append(inputs, r.Text)
 		}
+		began := time.Now()
 		vecs, err := ix.emb.Embed(ctx, inputs)
+		busy := time.Since(began)
 		if err != nil {
 			ix.log.Warn("embedding failed; file is keyword-only until re-indexed", "path", path, "err", err)
 			return
 		}
 		for i := range vecs {
 			rows[start+i].Vec = vecs[i]
+		}
+		if err := ix.gov.Pace(ctx, busy); err != nil {
+			return // shutting down
 		}
 	}
 }
