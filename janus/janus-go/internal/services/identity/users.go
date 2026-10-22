@@ -13,8 +13,7 @@ import (
 	"janus/internal/platform/tursodb"
 )
 
-// migrations is identity.db's schema. Its first entry matches the identity
-// tables janus.db had,.
+// migrations is identity.db's schema.
 var migrations = []string{`
 CREATE TABLE users (
 	id TEXT PRIMARY KEY,

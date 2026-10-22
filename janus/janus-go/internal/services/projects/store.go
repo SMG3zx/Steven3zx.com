@@ -15,9 +15,8 @@ import (
 	"janus/internal/platform/tursodb"
 )
 
-// migrations is projects.db's schema. Its tables have the columns janus.db's
-// had; an Owner is a plain
-// ID here, as Users live in the identity service.
+// migrations is projects.db's schema. An Owner is a plain ID here, as Users
+// live in the identity service.
 var migrations = []string{`
 CREATE TABLE projects (
 	id TEXT PRIMARY KEY,

@@ -12,8 +12,7 @@ import (
 	"janus/internal/platform/tursodb"
 )
 
-// migrations is fleet.db's schema. Its tables have the columns janus.db's had,
-// . An Owner, Project, Snapshot
+// migrations is fleet.db's schema. An Owner, Project, Snapshot
 // and Build are plain IDs here: they live in the other services. Times of Agents
 // and runs are stored as Unix nanoseconds, so a comparison in SQL is a comparison
 // of instants.
