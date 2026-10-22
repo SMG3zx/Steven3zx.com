@@ -81,6 +81,16 @@ Identical chunk text is embedded once and its vector reused across files and edi
 
 `ui/` holds a hotkey launcher window (default Win+Space) built with Wails. See `ui/README.md`.
 
+## Run at startup (Windows)
+
+```
+.\scripts\install-startup.ps1 -Build
+```
+
+This builds a windowless `bin\indexd.exe` (and the launcher) and registers two per-user scheduled tasks, no administrator rights needed: **Spotlight Indexer** (30 seconds after logon, logging to `%LOCALAPPDATA%\spotlight\indexd.log`, rotated at 10 MB) and **Spotlight UI** (at logon; the window stays hidden until the hotkey). Both restart if they crash and aren't stopped by the Task Scheduler's 72-hour limit. Re-run the script after rebuilding to update; `scripts\uninstall-startup.ps1` removes them. Start them immediately with `Start-ScheduledTask 'Spotlight Indexer'`. `-SkipUi` installs only the indexer.
+
+The `-log <file>` flag works on any platform and is required for the windowless build, which has no console.
+
 ## Console output
 
 The daemon logs to stderr: scan start and finish (with counts and elapsed time), a progress line every 5 seconds during a scan (files indexed/unchanged/skipped, chunks embedded/reused, chunks per second, current file), watcher events, and throttle pauses. Add `-v` to also log every file as it is indexed, skipped or removed.

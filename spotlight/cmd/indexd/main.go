@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -26,6 +28,7 @@ import (
 func main() {
 	cfgPath := flag.String("config", "config.json", "path to the JSON config file")
 	once := flag.Bool("once", false, "run one full index pass and exit")
+	logFile := flag.String("log", "", "also write logs to this file (needed for the windowless build); rotated at 10 MB")
 	verbose := flag.Bool("v", false, "log every file as it is indexed, skipped or removed")
 	flag.Parse()
 
@@ -33,7 +36,17 @@ func main() {
 	if *verbose {
 		level = slog.LevelDebug
 	}
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	var out io.Writer = os.Stderr
+	if *logFile != "" {
+		f, err := openLog(*logFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "log file:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		out = io.MultiWriter(f, os.Stderr) // file first: stderr is invalid in a windowless build
+	}
+	log := slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: level}))
 	if err := run(*cfgPath, *once, log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
