@@ -5,39 +5,6 @@ import (
 	"time"
 
 	domainfleet "janus/internal/domain/fleet"
-	"janus/internal/domain/templates"
-	"janus/internal/domain/usage"
-)
-
-// RunResult is what a WASM Run produced. Stdout and Stderr are bounded, and
-// StdoutTruncated reports that Stdout was cut. Usage is filled in whenever the
-// module started running, including when it traps, so a Run that exhausts its
-// fuel still reports the fuel it spent.
-type RunResult struct {
-	Stdout, Stderr  []byte
-	StdoutTruncated bool
-	Usage           usage.Usage
-}
-
-// RunInput is what a module starts with: its arguments, its environment as
-// "NAME=value" entries, its standard input, the host directory it may use, and
-// its limits. See Runner for what each means.
-type RunInput struct {
-	Args, Env []string
-	Stdin     []byte
-	Dir       string
-	MaxStdout int
-	Limits    RunLimits
-}
-
-// RunLimits are the fuel, memory and time limits a WASM Run starts with.
-type RunLimits = templates.Resources
-
-// ErrOutOfFuel and ErrRunTimeout are what a Runner's error matches when a run
-// spent all its fuel or ran out of time.
-var (
-	ErrOutOfFuel  = errors.New("all fuel consumed by WebAssembly")
-	ErrRunTimeout = errors.New("the WebAssembly run timed out")
 )
 
 // Repository is host repository metadata available to an authenticated user.

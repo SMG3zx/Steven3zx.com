@@ -1,4 +1,4 @@
-package app
+package agent
 
 import (
 	"context"
@@ -61,7 +61,7 @@ type ServeRequest struct {
 // ServeResponse is the HTTP response to a ServeRequest.
 type ServeResponse = cgi.Response
 
-// AgentRuntime is the Janus Agent: it serves the Deployments the control plane
+// Runtime is the Janus Agent: it serves the Deployments the control plane
 // hands it, one module run per request (ADR 0002), with every run confined to
 // the Owner's host folder. It keeps its Deployments and its pause in
 // LocalState, so a restart resumes them. It reports the Usage of every run on
@@ -69,7 +69,7 @@ type ServeResponse = cgi.Response
 //
 // Reports and Changes are meant for one reader, the connection to the control
 // plane. A report that finds the backlog full drops the oldest one.
-type AgentRuntime struct {
+type Runtime struct {
 	runner Runner
 	state  LocalState
 	folder string
@@ -86,11 +86,11 @@ type AgentRuntime struct {
 	deployments map[string]HostedDeployment
 }
 
-// NewAgentRuntime returns an AgentRuntime that runs modules with runner, keeps
+// NewRuntime returns an Runtime that runs modules with runner, keeps
 // its state in state and lets modules use the host directory folder. It reads
 // the time from now.
-func NewAgentRuntime(runner Runner, state LocalState, folder string, now func() time.Time) *AgentRuntime {
-	return &AgentRuntime{
+func NewRuntime(runner Runner, state LocalState, folder string, now func() time.Time) *Runtime {
+	return &Runtime{
 		runner: runner, state: state, folder: folder, now: now,
 		slots:       make(chan struct{}, MaxConcurrentRequests),
 		reports:     make(chan RunReport, maxReportBacklog),
@@ -102,7 +102,7 @@ func NewAgentRuntime(runner Runner, state LocalState, folder string, now func() 
 // Start loads the Deployments and the pause the Agent kept, and serves them.
 // A kept Deployment whose module no longer matches its hash is not served, and
 // the error names it; the others are served all the same.
-func (r *AgentRuntime) Start(ctx context.Context) error {
+func (r *Runtime) Start(ctx context.Context) error {
 	paused, err := r.state.Paused(ctx)
 	if err != nil {
 		return fmt.Errorf("read the pause: %w", err)
@@ -130,7 +130,7 @@ func (r *AgentRuntime) Start(ctx context.Context) error {
 // the probe ends without a trap, a timeout or running out of fuel, keeps the
 // Deployment and serves it. The status the module answers is not judged. A
 // Deployment with the same ID is replaced. A paused Agent refuses.
-func (r *AgentRuntime) Deploy(ctx context.Context, deployment HostedDeployment) error {
+func (r *Runtime) Deploy(ctx context.Context, deployment HostedDeployment) error {
 	if r.isPaused() {
 		return ErrAgentPaused
 	}
@@ -162,7 +162,7 @@ func (r *AgentRuntime) Deploy(ctx context.Context, deployment HostedDeployment) 
 
 // Stop stops serving a Deployment and forgets it. Stopping one the Agent does
 // not serve is not an error.
-func (r *AgentRuntime) Stop(ctx context.Context, deploymentID string) error {
+func (r *Runtime) Stop(ctx context.Context, deploymentID string) error {
 	if err := r.state.DeleteDeployment(ctx, deploymentID); err != nil {
 		return fmt.Errorf("forget the Deployment: %w", err)
 	}
@@ -177,7 +177,7 @@ func (r *AgentRuntime) Stop(ctx context.Context, deploymentID string) error {
 }
 
 // Apply carries out one command from the control plane.
-func (r *AgentRuntime) Apply(ctx context.Context, command AgentCommand) error {
+func (r *Runtime) Apply(ctx context.Context, command AgentCommand) error {
 	switch {
 	case command.Deploy != nil:
 		return r.Deploy(ctx, *command.Deploy)
@@ -193,12 +193,12 @@ func (r *AgentRuntime) Apply(ctx context.Context, command AgentCommand) error {
 
 // Pause stops serving every Deployment until Resume. Requests already running
 // finish. The pause is kept, so it outlasts a restart.
-func (r *AgentRuntime) Pause(ctx context.Context) error { return r.setPaused(ctx, true) }
+func (r *Runtime) Pause(ctx context.Context) error { return r.setPaused(ctx, true) }
 
 // Resume serves the Deployments again after Pause.
-func (r *AgentRuntime) Resume(ctx context.Context) error { return r.setPaused(ctx, false) }
+func (r *Runtime) Resume(ctx context.Context) error { return r.setPaused(ctx, false) }
 
-func (r *AgentRuntime) setPaused(ctx context.Context, paused bool) error {
+func (r *Runtime) setPaused(ctx context.Context, paused bool) error {
 	if err := r.state.SetPaused(ctx, paused); err != nil {
 		return fmt.Errorf("keep the pause: %w", err)
 	}
@@ -206,7 +206,7 @@ func (r *AgentRuntime) setPaused(ctx context.Context, paused bool) error {
 	return nil
 }
 
-func (r *AgentRuntime) applyPause(paused bool) {
+func (r *Runtime) applyPause(paused bool) {
 	r.mu.Lock()
 	changed := r.paused != paused
 	r.paused = paused
@@ -218,7 +218,7 @@ func (r *AgentRuntime) applyPause(paused bool) {
 
 // Refresh reads the pause from LocalState again, so a pause or resume written
 // by the Agent's command line takes effect.
-func (r *AgentRuntime) Refresh(ctx context.Context) error {
+func (r *Runtime) Refresh(ctx context.Context) error {
 	paused, err := r.state.Paused(ctx)
 	if err != nil {
 		return err
@@ -228,7 +228,7 @@ func (r *AgentRuntime) Refresh(ctx context.Context) error {
 }
 
 // Watch calls Refresh every interval until ctx ends.
-func (r *AgentRuntime) Watch(ctx context.Context, interval time.Duration) {
+func (r *Runtime) Watch(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -242,7 +242,7 @@ func (r *AgentRuntime) Watch(ctx context.Context, interval time.Duration) {
 }
 
 // State returns whether the Agent is paused and the Deployments it serves.
-func (r *AgentRuntime) State() AgentState {
+func (r *Runtime) State() AgentState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	state := AgentState{Paused: r.paused, Deployments: make([]DeploymentHash, 0, len(r.deployments))}
@@ -254,23 +254,23 @@ func (r *AgentRuntime) State() AgentState {
 }
 
 // Reports delivers a RunReport for every run, the probes included.
-func (r *AgentRuntime) Reports() <-chan RunReport { return r.reports }
+func (r *Runtime) Reports() <-chan RunReport { return r.reports }
 
 // Requeue puts back a report taken from Reports that could not be delivered,
 // so the next connection sends it. The control plane keeps a run once, so a
 // report that did arrive and is sent again changes nothing.
-func (r *AgentRuntime) Requeue(report RunReport) { r.report(report) }
+func (r *Runtime) Requeue(report RunReport) { r.report(report) }
 
 // Changes receives a value after the AgentState changes. Changes that happen
 // before it is read are merged into one.
-func (r *AgentRuntime) Changes() <-chan struct{} { return r.changes }
+func (r *Runtime) Changes() <-chan struct{} { return r.changes }
 
 // Serve answers one request for a Deployment by running its module. A request
 // the Agent refuses before running anything fails with ErrAgentPaused,
 // ErrDeploymentNotFound, ErrBodyTooLarge or ErrAgentBusy. Once the module runs,
 // Serve always returns a response: when the run fails or hits a limit it is a
 // 5xx, and the failure is in the RunReport.
-func (r *AgentRuntime) Serve(ctx context.Context, deploymentID string, request ServeRequest) (ServeResponse, error) {
+func (r *Runtime) Serve(ctx context.Context, deploymentID string, request ServeRequest) (ServeResponse, error) {
 	r.mu.Lock()
 	paused := r.paused
 	deployment, found := r.deployments[deploymentID]
@@ -298,7 +298,7 @@ func (r *AgentRuntime) Serve(ctx context.Context, deploymentID string, request S
 }
 
 // Drain refuses new requests and waits for the running ones, or until ctx ends.
-func (r *AgentRuntime) Drain(ctx context.Context) error {
+func (r *Runtime) Drain(ctx context.Context) error {
 	r.closing.Store(true)
 	done := make(chan struct{})
 	go func() { r.serving.Wait(); close(done) }()
@@ -312,7 +312,7 @@ func (r *AgentRuntime) Drain(ctx context.Context) error {
 
 // run runs the module once for request and reports it. The error is the run's
 // own failure: a trap, a limit, or the runner's refusal of the module.
-func (r *AgentRuntime) run(ctx context.Context, deployment HostedDeployment, request ServeRequest, probe bool) (ServeResponse, error) {
+func (r *Runtime) run(ctx context.Context, deployment HostedDeployment, request ServeRequest, probe bool) (ServeResponse, error) {
 	request.ContentLength = len(request.Body)
 	limits := deployment.Limits
 	limits.Timeout = RequestTimeout
@@ -371,7 +371,7 @@ func plainResponse(status int, text string) ServeResponse {
 }
 
 // report queues a RunReport, dropping the oldest when the backlog is full.
-func (r *AgentRuntime) report(report RunReport) {
+func (r *Runtime) report(report RunReport) {
 	for {
 		select {
 		case r.reports <- report:
@@ -386,14 +386,14 @@ func (r *AgentRuntime) report(report RunReport) {
 }
 
 // changed signals Changes without blocking.
-func (r *AgentRuntime) changed() {
+func (r *Runtime) changed() {
 	select {
 	case r.changes <- struct{}{}:
 	default:
 	}
 }
 
-func (r *AgentRuntime) isPaused() bool {
+func (r *Runtime) isPaused() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.paused

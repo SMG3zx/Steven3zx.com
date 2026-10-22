@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"janus/internal/domain/agent"
 	"os"
 	"path/filepath"
 	"sort"
@@ -107,7 +108,7 @@ func (d *Disk) Deployments(context.Context) ([]app.HostedDeployment, error) {
 			return nil, err
 		}
 		out = append(out, app.HostedDeployment{ID: desc.ID, SHA256: desc.SHA256, Module: module,
-			Limits: app.RunLimits{Fuel: desc.Fuel, MemoryBytes: desc.MemoryBytes}})
+			Limits: agent.RunLimits{Fuel: desc.Fuel, MemoryBytes: desc.MemoryBytes}})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil

@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"janus/internal/domain/agent"
 	"sync"
 	"testing"
 	"time"
@@ -169,7 +170,7 @@ func (f *Fixture) Enroll(owner, name string) app.Enrollment {
 // Attach joins the Agent of enrollment to the tailnet as a node named name, and
 // serves runtime as that Agent, where the service's link reaches it. It waits
 // until the service has the Agent's first state report.
-func (f *Fixture) Attach(owner string, enrollment app.Enrollment, name string, runtime *app.AgentRuntime) {
+func (f *Fixture) Attach(owner string, enrollment app.Enrollment, name string, runtime *agent.Runtime) {
 	f.t.Helper()
 	if _, err := f.Tailnet.Join(enrollment.AuthKey, name); err != nil {
 		f.t.Fatalf("join the tailnet as %s: %v", name, err)

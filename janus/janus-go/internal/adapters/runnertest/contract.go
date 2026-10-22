@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"janus/internal/domain/agent"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,11 +41,11 @@ func Run(t *testing.T, newRunner func(t *testing.T) app.Runner) {
 	}
 }
 
-func limits() app.RunLimits {
-	return app.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20, Timeout: 5 * time.Second}
+func limits() agent.RunLimits {
+	return agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20, Timeout: 5 * time.Second}
 }
 
-func run(t *testing.T, r app.Runner, module []byte, l app.RunLimits) (app.RunResult, error) {
+func run(t *testing.T, r app.Runner, module []byte, l agent.RunLimits) (app.RunResult, error) {
 	t.Helper()
 	return r.Run(context.Background(), module, app.RunInput{Limits: l})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"janus/internal/domain/agent"
 	"sync"
 	"time"
 
@@ -29,7 +30,7 @@ type Config struct {
 	Conn    *nats.Conn
 	AgentID string
 	OwnerID string
-	Runtime *app.AgentRuntime
+	Runtime *agent.Runtime
 	// Heartbeat is how often the state is written when nothing changed. Zero
 	// means 10 seconds.
 	Heartbeat time.Duration
@@ -102,7 +103,7 @@ func (a *serving) command(message *nats.Msg) {
 // apply runs command on the runtime. Module bytes are read from the hub first,
 // and must match the SHA-256 the command names.
 func (a *serving) apply(command contractfleet.AgentCommand) error {
-	ctx, cancel := context.WithTimeout(context.Background(), app.RequestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), agent.RequestTimeout)
 	defer cancel()
 	if command.Deploy != nil && command.Deploy.Module == nil {
 		module, err := a.fetchModule(ctx, command.Deploy.SHA256)
@@ -183,7 +184,7 @@ func (a *serving) publish(ctx context.Context, report app.RunReport) error {
 	if err != nil {
 		return err
 	}
-	publishCtx, cancel := context.WithTimeout(ctx, app.RequestTimeout)
+	publishCtx, cancel := context.WithTimeout(ctx, agent.RequestTimeout)
 	defer cancel()
 	_, err = a.local.Publish(publishCtx, contractfleet.AgentUsageSubject(a.cfg.AgentID), body, jetstream.WithMsgID(report.RunID))
 	return err

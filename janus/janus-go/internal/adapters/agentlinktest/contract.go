@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"janus/internal/domain/agent"
 	"sort"
 	"sync"
 	"testing"
@@ -29,7 +30,7 @@ type Link interface {
 // restarted Agent is served again by another Start.
 type Subject struct {
 	Link  Link
-	Start func(t *testing.T, runtime *app.AgentRuntime) (stop func())
+	Start func(t *testing.T, runtime *agent.Runtime) (stop func())
 }
 
 // Run runs the Agent link contract against subjects made by newSubject.
@@ -114,14 +115,14 @@ func (k *keptState) Paused(context.Context) (bool, error) {
 	return k.paused, nil
 }
 
-func newRuntime(state app.LocalState) *app.AgentRuntime {
-	return app.NewAgentRuntime(helloRunner{}, state, "", time.Now)
+func newRuntime(state app.LocalState) *agent.Runtime {
+	return agent.NewRuntime(helloRunner{}, state, "", time.Now)
 }
 
 func deployment(id string) app.HostedDeployment {
 	sum := sha256.Sum256(module)
 	return app.HostedDeployment{ID: id, SHA256: hex.EncodeToString(sum[:]), Module: module,
-		Limits: app.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}
+		Limits: agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}
 }
 
 // events collects what a link delivers for one Agent.
@@ -155,7 +156,7 @@ func isState(paused bool) func(app.AgentEvent) bool {
 
 // connected starts an Agent, connects the link to it and waits for the first
 // State, so the connection is up.
-func connected(t *testing.T, s Subject, runtime *app.AgentRuntime) (events, func()) {
+func connected(t *testing.T, s Subject, runtime *agent.Runtime) (events, func()) {
 	t.Helper()
 	stop := s.Start(t, runtime)
 	got := make(events, 64)
@@ -229,7 +230,7 @@ func testDeployAndUsage(t *testing.T, s Subject) {
 		}
 		return sawState && sawProbe
 	})
-	response, err := runtime.Serve(context.Background(), "dep-1", app.ServeRequest{Request: cgi.Request{Method: "GET", Path: "/"}, Body: []byte("abc")})
+	response, err := runtime.Serve(context.Background(), "dep-1", agent.ServeRequest{Request: cgi.Request{Method: "GET", Path: "/"}, Body: []byte("abc")})
 	if err != nil || string(response.Body) != "hello" {
 		t.Fatalf("serve: %q, %v", response.Body, err)
 	}
@@ -252,8 +253,8 @@ func testRefusal(t *testing.T, s Subject) {
 	bad.SHA256 = "0000"
 	err := s.Link.Send(context.Background(), "agent-1", app.AgentCommand{Deploy: &bad})
 	var refused *app.AgentError
-	if !errors.As(err, &refused) || refused.Message != app.ErrModuleHash.Error() {
-		t.Fatalf("err = %v, want an AgentError saying %q", err, app.ErrModuleHash)
+	if !errors.As(err, &refused) || refused.Message != agent.ErrModuleHash.Error() {
+		t.Fatalf("err = %v, want an AgentError saying %q", err, agent.ErrModuleHash)
 	}
 }
 

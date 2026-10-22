@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"janus/internal/domain/agent"
 	"net"
 	"net/url"
 	"os"
@@ -76,7 +77,7 @@ func trustedHub(t *testing.T) (*natsx.Hub, natstrust.Trust, *nats.Conn, string) 
 // trustedAgent starts the Agent agentID with runtime as janus-agent does: its
 // server trusts the enrollment's trust, joins the hub through its leaf
 // credentials and serves its clients with the local ones.
-func trustedAgent(t *testing.T, trust natstrust.Trust, leafAddress string, runtime *app.AgentRuntime) func() {
+func trustedAgent(t *testing.T, trust natstrust.Trust, leafAddress string, runtime *agent.Runtime) func() {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "agent")
 	if err != nil {
@@ -192,7 +193,7 @@ func TestTheAgentLinkPassesTheContractOverATrustedHub(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return agentlinktest.Subject{Link: link, Start: func(t *testing.T, runtime *app.AgentRuntime) func() {
+		return agentlinktest.Subject{Link: link, Start: func(t *testing.T, runtime *agent.Runtime) func() {
 			return trustedAgent(t, trust, leafAddress, runtime)
 		}}
 	})
@@ -222,7 +223,7 @@ func TestAModuleStagedForATrustedOwnerIsReadByTheAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer link.Close()
-	runtime := app.NewAgentRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
+	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := trustedAgent(t, trust, leafAddress, runtime)
 	defer stop()
 	link.Connect(agentID, func(app.AgentEvent) error { return nil })
@@ -230,7 +231,7 @@ func TestAModuleStagedForATrustedOwnerIsReadByTheAgent(t *testing.T) {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		err := link.Send(ctx, agentID, contractfleet.AgentCommand{Deploy: &contractfleet.HostedDeployment{
-			ID: "dep-1", SHA256: sha, Limits: app.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}})
+			ID: "dep-1", SHA256: sha, Limits: agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}})
 		if err == nil {
 			break
 		}

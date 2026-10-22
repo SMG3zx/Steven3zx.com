@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"janus/internal/domain/agent"
 	"net/http"
 	"strings"
 	"testing"
@@ -83,12 +84,12 @@ func newDeployApp(t *testing.T) *deployApp {
 }
 
 // pageAgent is an Agent that serves pageModule, the module of every passing build.
-func pageAgent() *app.AgentRuntime {
+func pageAgent() *agent.Runtime {
 	runner := runnertest.NewFake()
 	runner.Handle(pageModule, func(app.RunInput) (app.RunResult, error) {
 		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
-	return app.NewAgentRuntime(runner, localstatetest.NewMemory(), "", time.Now)
+	return agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 }
 
 // addBuild records a complete WASI build of the project, whose checks have the

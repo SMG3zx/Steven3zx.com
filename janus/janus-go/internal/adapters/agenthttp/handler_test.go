@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"janus/internal/domain/agent"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,7 +31,7 @@ func env(input app.RunInput, name string) string {
 	return ""
 }
 
-func serving(t *testing.T, authorize func(context.Context, string) error) (*app.AgentRuntime, *httptest.Server) {
+func serving(t *testing.T, authorize func(context.Context, string) error) (*agent.Runtime, *httptest.Server) {
 	t.Helper()
 	runner := runnertest.NewFake()
 	runner.Handle(module, func(input app.RunInput) (app.RunResult, error) {
@@ -38,7 +39,7 @@ func serving(t *testing.T, authorize func(context.Context, string) error) (*app.
 			env(input, "HTTP_JANUS_DEPLOYMENT"), env(input, "REQUEST_METHOD"), env(input, "REQUEST_URI"), env(input, "REMOTE_ADDR"), input.Stdin)
 		return app.RunResult{Stdout: []byte(out)}, nil
 	})
-	runtime := app.NewAgentRuntime(runner, localstatetest.NewMemory(), "", time.Now)
+	runtime := agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 	sum := sha256.Sum256(module)
 	if err := runtime.Deploy(context.Background(), app.HostedDeployment{ID: "dep-1", SHA256: hex.EncodeToString(sum[:]), Module: module}); err != nil {
 		t.Fatal(err)
@@ -57,7 +58,7 @@ func call(t *testing.T, server *httptest.Server, deployment, path string, body [
 		t.Fatal(err)
 	}
 	if deployment != "" {
-		request.Header.Set(app.DeploymentHeader, deployment)
+		request.Header.Set(agent.DeploymentHeader, deployment)
 	}
 	request.Header.Set("X-Forwarded-For", "198.51.100.7")
 	response, err := http.DefaultClient.Do(request)
@@ -88,7 +89,7 @@ func TestHandlerRefusals(t *testing.T) {
 	if response, _ := call(t, server, "other", "/", nil); response.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown Deployment: %d", response.StatusCode)
 	}
-	if response, _ := call(t, server, "dep-1", "/", make([]byte, app.MaxBodyBytes+1)); response.StatusCode != http.StatusRequestEntityTooLarge {
+	if response, _ := call(t, server, "dep-1", "/", make([]byte, agent.MaxBodyBytes+1)); response.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Errorf("large body: %d", response.StatusCode)
 	}
 	if err := runtime.Pause(context.Background()); err != nil {

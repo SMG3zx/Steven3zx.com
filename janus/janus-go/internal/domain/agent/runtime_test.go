@@ -1,4 +1,4 @@
-package app_test
+package agent_test
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
+	"janus/internal/domain/agent"
 	"janus/internal/domain/cgi"
 	"janus/internal/domain/usage"
 )
@@ -37,42 +37,42 @@ func envValue(env []string, name string) string {
 
 func cgiRunner() *runnertest.Fake {
 	runner := runnertest.NewFake()
-	runner.Handle(cgiModule, func(input app.RunInput) (app.RunResult, error) {
+	runner.Handle(cgiModule, func(input agent.RunInput) (agent.RunResult, error) {
 		out := fmt.Sprintf("Content-Type: text/plain\r\nX-Folder: %s\r\n\r\n%s %s?%s body=%s",
 			input.Dir, envValue(input.Env, "REQUEST_METHOD"), envValue(input.Env, "PATH_INFO"),
 			envValue(input.Env, "QUERY_STRING"), input.Stdin)
-		return app.RunResult{Stdout: []byte(out), Usage: usage.Usage{Fuel: 42, PeakMemoryBytes: 65536, DurationMS: 3}}, nil
+		return agent.RunResult{Stdout: []byte(out), Usage: usage.Usage{Fuel: 42, PeakMemoryBytes: 65536, DurationMS: 3}}, nil
 	})
 	return runner
 }
 
-func hosted(id string, module []byte) app.HostedDeployment {
+func hosted(id string, module []byte) agent.HostedDeployment {
 	sum := sha256.Sum256(module)
-	return app.HostedDeployment{ID: id, SHA256: hex.EncodeToString(sum[:]), Module: module,
-		Limits: app.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20, Timeout: time.Second}}
+	return agent.HostedDeployment{ID: id, SHA256: hex.EncodeToString(sum[:]), Module: module,
+		Limits: agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20, Timeout: time.Second}}
 }
 
-func newRuntime(t *testing.T, runner app.Runner, state app.LocalState) *app.AgentRuntime {
+func newRuntime(t *testing.T, runner agent.Runner, state agent.LocalState) *agent.Runtime {
 	t.Helper()
-	return app.NewAgentRuntime(runner, state, "/owner/folder", time.Now)
+	return agent.NewRuntime(runner, state, "/owner/folder", time.Now)
 }
 
-func get(path string) app.ServeRequest {
-	return app.ServeRequest{Request: cgi.Request{Method: "GET", Path: path, Host: "abc.example", RemoteAddr: "203.0.113.1"}}
+func get(path string) agent.ServeRequest {
+	return agent.ServeRequest{Request: cgi.Request{Method: "GET", Path: path, Host: "abc.example", RemoteAddr: "203.0.113.1"}}
 }
 
-func nextReport(t *testing.T, runtime *app.AgentRuntime) app.RunReport {
+func nextReport(t *testing.T, runtime *agent.Runtime) agent.RunReport {
 	t.Helper()
 	select {
 	case report := <-runtime.Reports():
 		return report
 	case <-time.After(5 * time.Second):
 		t.Fatal("no run report")
-		return app.RunReport{}
+		return agent.RunReport{}
 	}
 }
 
-func TestAgentRuntimeDeploysAndServesThroughCGI(t *testing.T) {
+func TestRuntimeDeploysAndServesThroughCGI(t *testing.T) {
 	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestAgentRuntimeDeploysAndServesThroughCGI(t *testing.T) {
 		t.Fatalf("response = %d %v %q", response.Status, response.Header, response.Body)
 	}
 	report := nextReport(t, runtime)
-	want := app.RunReport{DeploymentID: "dep-1", Usage: usage.Usage{Fuel: 42, PeakMemoryBytes: 65536, DurationMS: 3},
+	want := agent.RunReport{DeploymentID: "dep-1", Usage: usage.Usage{Fuel: 42, PeakMemoryBytes: 65536, DurationMS: 3},
 		NetworkBytesIn: 4, NetworkBytesOut: wireBytes(response), Status: usage.StatusOK}
 	if report.RunID == "" || report.Probe || report.StartedAt.IsZero() {
 		t.Fatalf("report = %+v", report)
@@ -105,22 +105,22 @@ func TestAgentRuntimeDeploysAndServesThroughCGI(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeRefusesAModuleThatDoesNotMatchItsHash(t *testing.T) {
+func TestRuntimeRefusesAModuleThatDoesNotMatchItsHash(t *testing.T) {
 	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
 	deployment := hosted("dep-1", cgiModule)
 	deployment.SHA256 = strings.Repeat("0", 64)
-	if err := runtime.Deploy(ctx, deployment); !errors.Is(err, app.ErrModuleHash) {
+	if err := runtime.Deploy(ctx, deployment); !errors.Is(err, agent.ErrModuleHash) {
 		t.Fatalf("err = %v", err)
 	}
-	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, app.ErrDeploymentNotFound) {
+	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, agent.ErrDeploymentNotFound) {
 		t.Fatalf("serve err = %v", err)
 	}
 }
 
-func TestAgentRuntimeFailsADeployWhoseProbeTraps(t *testing.T) {
+func TestRuntimeFailsADeployWhoseProbeTraps(t *testing.T) {
 	state := localstatetest.NewMemory()
 	runtime := newRuntime(t, runnertest.NewFake(), state)
-	if err := runtime.Deploy(ctx, hosted("dep-1", runnertest.Spins)); !errors.Is(err, app.ErrOutOfFuel) {
+	if err := runtime.Deploy(ctx, hosted("dep-1", runnertest.Spins)); !errors.Is(err, agent.ErrOutOfFuel) {
 		t.Fatalf("err = %v", err)
 	}
 	if report := nextReport(t, runtime); !report.Probe || report.Status != usage.StatusOutOfFuel {
@@ -132,11 +132,11 @@ func TestAgentRuntimeFailsADeployWhoseProbeTraps(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeDoesNotJudgeTheProbesStatus(t *testing.T) {
+func TestRuntimeDoesNotJudgeTheProbesStatus(t *testing.T) {
 	runner := runnertest.NewFake()
 	module := []byte("\x00asm\x01\x00\x00\x00notfound")
-	runner.Handle(module, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("Status: 404 Not Found\n\nnothing here")}, nil
+	runner.Handle(module, func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: []byte("Status: 404 Not Found\n\nnothing here")}, nil
 	})
 	runtime := newRuntime(t, runner, localstatetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", module)); err != nil {
@@ -148,7 +148,7 @@ func TestAgentRuntimeDoesNotJudgeTheProbesStatus(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimePauseStopsServingAndResumeRestoresIt(t *testing.T) {
+func TestRuntimePauseStopsServingAndResumeRestoresIt(t *testing.T) {
 	state := localstatetest.NewMemory()
 	runtime := newRuntime(t, cgiRunner(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
@@ -163,10 +163,10 @@ func TestAgentRuntimePauseStopsServingAndResumeRestoresIt(t *testing.T) {
 	default:
 		t.Fatal("pausing did not signal a change")
 	}
-	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, app.ErrAgentPaused) {
+	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, agent.ErrAgentPaused) {
 		t.Fatalf("serve while paused: %v", err)
 	}
-	if err := runtime.Deploy(ctx, hosted("dep-2", cgiModule)); !errors.Is(err, app.ErrAgentPaused) {
+	if err := runtime.Deploy(ctx, hosted("dep-2", cgiModule)); !errors.Is(err, agent.ErrAgentPaused) {
 		t.Fatalf("deploy while paused: %v", err)
 	}
 	if paused, _ := state.Paused(ctx); !paused || !runtime.State().Paused {
@@ -180,7 +180,7 @@ func TestAgentRuntimePauseStopsServingAndResumeRestoresIt(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeTakesAPauseWrittenByItsCommandLine(t *testing.T) {
+func TestRuntimeTakesAPauseWrittenByItsCommandLine(t *testing.T) {
 	state := localstatetest.NewMemory()
 	runtime := newRuntime(t, cgiRunner(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
@@ -194,7 +194,7 @@ func TestAgentRuntimeTakesAPauseWrittenByItsCommandLine(t *testing.T) {
 	if err := runtime.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, app.ErrAgentPaused) {
+	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, agent.ErrAgentPaused) {
 		t.Fatalf("serve after a command-line pause: %v", err)
 	}
 	if err := cli.Resume(ctx); err != nil {
@@ -208,7 +208,7 @@ func TestAgentRuntimeTakesAPauseWrittenByItsCommandLine(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeResumesItsDeploymentsAfterARestart(t *testing.T) {
+func TestRuntimeResumesItsDeploymentsAfterARestart(t *testing.T) {
 	state := localstatetest.NewMemory()
 	first := newRuntime(t, cgiRunner(), state)
 	if err := first.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
@@ -234,18 +234,18 @@ func TestAgentRuntimeResumesItsDeploymentsAfterARestart(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeSkipsAKeptModuleThatChanged(t *testing.T) {
+func TestRuntimeSkipsAKeptModuleThatChanged(t *testing.T) {
 	state := localstatetest.NewMemory()
 	good, bad := hosted("good", cgiModule), hosted("bad", cgiModule)
 	bad.Module = []byte("\x00asm\x01\x00\x00\x00tampered")
-	for _, deployment := range []app.HostedDeployment{good, bad} {
+	for _, deployment := range []agent.HostedDeployment{good, bad} {
 		if err := state.SaveDeployment(ctx, deployment); err != nil {
 			t.Fatal(err)
 		}
 	}
 	runtime := newRuntime(t, cgiRunner(), state)
 	err := runtime.Start(ctx)
-	if !errors.Is(err, app.ErrModuleHash) || !strings.Contains(err.Error(), "bad") {
+	if !errors.Is(err, agent.ErrModuleHash) || !strings.Contains(err.Error(), "bad") {
 		t.Fatalf("start err = %v", err)
 	}
 	if got := runtime.State().Deployments; len(got) != 1 || got[0].ID != "good" {
@@ -253,7 +253,7 @@ func TestAgentRuntimeSkipsAKeptModuleThatChanged(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeStopForgetsADeployment(t *testing.T) {
+func TestRuntimeStopForgetsADeployment(t *testing.T) {
 	state := localstatetest.NewMemory()
 	runtime := newRuntime(t, cgiRunner(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
@@ -265,7 +265,7 @@ func TestAgentRuntimeStopForgetsADeployment(t *testing.T) {
 	if err := runtime.Stop(ctx, "dep-1"); err != nil {
 		t.Fatalf("stopping twice: %v", err)
 	}
-	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, app.ErrDeploymentNotFound) {
+	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, agent.ErrDeploymentNotFound) {
 		t.Fatalf("serve err = %v", err)
 	}
 	if kept, _ := state.Deployments(ctx); len(kept) != 0 {
@@ -273,34 +273,34 @@ func TestAgentRuntimeStopForgetsADeployment(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeAnswersALimitWithA5xxAndReportsIt(t *testing.T) {
+func TestRuntimeAnswersALimitWithA5xxAndReportsIt(t *testing.T) {
 	runner := cgiRunner()
 	timeout, fuel, broken, huge, garbled := []byte("\x00asm\x01\x00\x00\x00timeout"), []byte("\x00asm\x01\x00\x00\x00fuel"),
 		[]byte("\x00asm\x01\x00\x00\x00broken"), []byte("\x00asm\x01\x00\x00\x00huge"), []byte("\x00asm\x01\x00\x00\x00garbled")
 	var probed sync.Map
 	// Each module passes its probe, then fails the way its name says.
-	failing := func(name string, fail func(app.RunInput) (app.RunResult, error)) runnertest.Program {
-		return func(input app.RunInput) (app.RunResult, error) {
+	failing := func(name string, fail func(agent.RunInput) (agent.RunResult, error)) runnertest.Program {
+		return func(input agent.RunInput) (agent.RunResult, error) {
 			if _, done := probed.LoadOrStore(name, true); !done {
-				return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
+				return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 			}
 			return fail(input)
 		}
 	}
-	runner.Handle(timeout, failing("timeout", func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Usage: usage.Usage{DurationMS: 30_000}}, app.ErrRunTimeout
+	runner.Handle(timeout, failing("timeout", func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Usage: usage.Usage{DurationMS: 30_000}}, agent.ErrRunTimeout
 	}))
-	runner.Handle(fuel, failing("fuel", func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Usage: usage.Usage{Fuel: 1_000_000}}, app.ErrOutOfFuel
+	runner.Handle(fuel, failing("fuel", func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Usage: usage.Usage{Fuel: 1_000_000}}, agent.ErrOutOfFuel
 	}))
-	runner.Handle(broken, failing("broken", func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{}, errors.New("program exited with status 2")
+	runner.Handle(broken, failing("broken", func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{}, errors.New("program exited with status 2")
 	}))
-	runner.Handle(huge, failing("huge", func(input app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: bytes.Repeat([]byte("x"), input.MaxStdout+1)}, nil
+	runner.Handle(huge, failing("huge", func(input agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: bytes.Repeat([]byte("x"), input.MaxStdout+1)}, nil
 	}))
-	runner.Handle(garbled, failing("garbled", func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("no headers at all")}, nil
+	runner.Handle(garbled, failing("garbled", func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: []byte("no headers at all")}, nil
 	}))
 	runtime := newRuntime(t, runner, localstatetest.NewMemory())
 	for _, c := range []struct {
@@ -329,38 +329,38 @@ func TestAgentRuntimeAnswersALimitWithA5xxAndReportsIt(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeRefusesABodyOver10MiB(t *testing.T) {
+func TestRuntimeRefusesABodyOver10MiB(t *testing.T) {
 	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
 	}
 	request := get("/")
-	request.Body = make([]byte, app.MaxBodyBytes+1)
-	if _, err := runtime.Serve(ctx, "dep-1", request); !errors.Is(err, app.ErrBodyTooLarge) {
+	request.Body = make([]byte, agent.MaxBodyBytes+1)
+	if _, err := runtime.Serve(ctx, "dep-1", request); !errors.Is(err, agent.ErrBodyTooLarge) {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-func TestAgentRuntimeServesAtMost16RequestsAtOnce(t *testing.T) {
+func TestRuntimeServesAtMost16RequestsAtOnce(t *testing.T) {
 	runner := cgiRunner()
 	module := []byte("\x00asm\x01\x00\x00\x00slow")
 	release, started := make(chan struct{}), make(chan struct{}, 32)
 	var probed sync.Once
-	runner.Handle(module, func(app.RunInput) (app.RunResult, error) {
+	runner.Handle(module, func(agent.RunInput) (agent.RunResult, error) {
 		first := false
 		probed.Do(func() { first = true })
 		if !first {
 			started <- struct{}{}
 			<-release
 		}
-		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
+		return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
 	runtime := newRuntime(t, runner, localstatetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", module)); err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
-	for range app.MaxConcurrentRequests {
+	for range agent.MaxConcurrentRequests {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -369,10 +369,10 @@ func TestAgentRuntimeServesAtMost16RequestsAtOnce(t *testing.T) {
 			}
 		}()
 	}
-	for range app.MaxConcurrentRequests {
+	for range agent.MaxConcurrentRequests {
 		<-started
 	}
-	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, app.ErrAgentBusy) {
+	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, agent.ErrAgentBusy) {
 		t.Fatalf("17th request: %v", err)
 	}
 	close(release)
@@ -382,12 +382,12 @@ func TestAgentRuntimeServesAtMost16RequestsAtOnce(t *testing.T) {
 	if err := runtime.Drain(drainCtx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, app.ErrAgentPaused) {
+	if _, err := runtime.Serve(ctx, "dep-1", get("/")); !errors.Is(err, agent.ErrAgentPaused) {
 		t.Fatalf("serve after drain: %v", err)
 	}
 }
 
-func TestAgentRuntimeKeepsTheNewestReports(t *testing.T) {
+func TestRuntimeKeepsTheNewestReports(t *testing.T) {
 	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
@@ -401,7 +401,7 @@ func TestAgentRuntimeKeepsTheNewestReports(t *testing.T) {
 		}
 	}
 	// The probe and the first runs were dropped; the last report is the last run.
-	var last app.RunReport
+	var last agent.RunReport
 	count := 0
 	for len(runtime.Reports()) > 0 {
 		last = <-runtime.Reports()
@@ -414,7 +414,7 @@ func TestAgentRuntimeKeepsTheNewestReports(t *testing.T) {
 
 // wireBytes is the size of a response as Usage counts it: each header as
 // "Name: value" and a line break, then the body.
-func wireBytes(response app.ServeResponse) uint64 {
+func wireBytes(response agent.ServeResponse) uint64 {
 	n := len(response.Body)
 	for name, values := range response.Header {
 		for _, value := range values {

@@ -23,7 +23,7 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 163,
+      "line": 145,
       "title": "Catalog",
       "description": "`type Catalog interface`. Real: projectsnats.Client, which asks the projects service over NATS. Test: catalogtest.Memory. Contract: catalogtest.Run."
     },
@@ -34,14 +34,14 @@
       "description": "`type BuildArtifacts interface`. Real: buildsnats.Client, which reads the Artifact from the artifacts store. Test: the Builds use case over buildstest.Fake."
     },
     {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 150,
+      "file": "janus-go/internal/domain/agent/ports.go",
+      "line": 36,
       "title": "Runner",
       "description": "`type Runner interface`. Real: wasmtime.Wasmtime. Test: runnertest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 196,
+      "line": 178,
       "title": "Audit",
       "description": "`type Audit interface`. Real: auditnats.Publisher, which publishes to the AUDIT stream for the audit service. Test: audittest.Recorder. Contract: audittest.Run."
     },
@@ -52,8 +52,8 @@
       "description": "`type Fleet interface`. Real: fleetnats.Client, which asks the fleet service over NATS. Test: the fleettest fixture, which runs the real service on an embedded server."
     },
     {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 204,
+      "file": "janus-go/internal/domain/agent/ports.go",
+      "line": 75,
       "title": "LocalState",
       "description": "`type LocalState interface`. Real: agentdisk. Test: localstatetest.Memory."
     },

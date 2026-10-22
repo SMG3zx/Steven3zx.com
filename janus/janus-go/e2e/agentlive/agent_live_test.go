@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"janus/internal/domain/agent"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -148,7 +149,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	// Reach it the way the edge will: from the control plane's node over the
 	// tailnet, naming the Deployment in the header.
 	address := agentAddress(t, tailnet, fx.Fleet, alice, agentID)
-	edge := &edgeClient{t: t, http: control.HTTPClient(), base: "http://" + net.JoinHostPort(address, strconv.Itoa(app.AgentServePort)), deployment: deployed}
+	edge := &edgeClient{t: t, http: control.HTTPClient(), base: "http://" + net.JoinHostPort(address, strconv.Itoa(agent.AgentServePort)), deployment: deployed}
 	edge.expect(http.MethodGet, "/?x=1", nil, 200, "hello from GET x=1")
 	edge.expect(http.MethodGet, "/read?name=inside.txt", nil, 200, "inside-content")
 	edge.expect(http.MethodPost, "/write?name=written.txt", []byte("from the module"), 201, "wrote 15 bytes")
@@ -514,7 +515,7 @@ func (e *edgeClient) call(method, path string, body []byte) (int, string, error)
 	if err != nil {
 		return 0, "", err
 	}
-	request.Header.Set(app.DeploymentHeader, e.deployment)
+	request.Header.Set(agent.DeploymentHeader, e.deployment)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	response, err := e.http.Do(request.WithContext(ctx))

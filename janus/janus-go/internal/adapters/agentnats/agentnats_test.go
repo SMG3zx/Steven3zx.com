@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"janus/internal/domain/agent"
 	"net/url"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func agentServer(t *testing.T, leafAddress string) *server.Server {
 
 // startAgent runs the Agent with runtime on its own server, joined to the hub at
 // leafAddress. The returned function stops it, as a crash would.
-func startAgent(t *testing.T, leafAddress string, runtime *app.AgentRuntime) func() {
+func startAgent(t *testing.T, leafAddress string, runtime *agent.Runtime) func() {
 	t.Helper()
 	srv := agentServer(t, leafAddress)
 	conn, err := nats.Connect(srv.ClientURL())
@@ -110,7 +111,7 @@ func TestTheAgentLinkPassesTheContractOverNATS(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return agentlinktest.Subject{Link: link, Start: func(t *testing.T, runtime *app.AgentRuntime) func() {
+		return agentlinktest.Subject{Link: link, Start: func(t *testing.T, runtime *agent.Runtime) func() {
 			return startAgent(t, leafAddress, runtime)
 		}}
 	})
@@ -144,7 +145,7 @@ func TestAModuleStagedOnTheHubIsReadByTheAgent(t *testing.T) {
 	}
 	defer link.Close()
 
-	runtime := app.NewAgentRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
+	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := startAgent(t, leafAddress, runtime)
 	defer stop()
 	link.Connect(agentID, func(app.AgentEvent) error { return nil })
@@ -152,7 +153,7 @@ func TestAModuleStagedOnTheHubIsReadByTheAgent(t *testing.T) {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		err := link.Send(ctx, agentID, contractfleet.AgentCommand{Deploy: &contractfleet.HostedDeployment{
-			ID: "dep-1", SHA256: sha, Limits: app.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}})
+			ID: "dep-1", SHA256: sha, Limits: agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}})
 		if err == nil {
 			break
 		}
@@ -190,7 +191,7 @@ func TestAStagedModuleThatDoesNotMatchItsHashIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer link.Close()
-	runtime := app.NewAgentRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
+	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := startAgent(t, leafAddress, runtime)
 	defer stop()
 	link.Connect(agentID, func(app.AgentEvent) error { return nil })
@@ -199,7 +200,7 @@ func TestAStagedModuleThatDoesNotMatchItsHashIsRefused(t *testing.T) {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		sendErr = link.Send(ctx, agentID, contractfleet.AgentCommand{Deploy: &contractfleet.HostedDeployment{
-			ID: "dep-1", SHA256: wrongSHA, Limits: app.RunLimits{Fuel: 1, MemoryBytes: 1}}})
+			ID: "dep-1", SHA256: wrongSHA, Limits: agent.RunLimits{Fuel: 1, MemoryBytes: 1}}})
 		if sendErr == nil || time.Now().After(deadline) || !errors.Is(sendErr, app.ErrAgentUnreachable) {
 			break
 		}

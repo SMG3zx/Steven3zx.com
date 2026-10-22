@@ -16,24 +16,27 @@ var (
 )
 
 // TestEveryPortHasAnAdapterThatSaysSo reads the ports declared in
-// internal/app/ports.go and fails when no adapter asserts it. Go satisfies
+// internal/app/ports.go and internal/domain/agent/ports.go and fails when no
+// adapter asserts it. Go satisfies
 // interfaces implicitly, so the assertion is what makes the link visible to a
 // reader: `var _ app.Store = (*sqlstore.Store)(nil)` names the adapter.
 func TestEveryPortHasAnAdapterThatSaysSo(t *testing.T) {
-	ports, err := os.ReadFile(filepath.Join("..", "app", "ports.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var names []string
-	for _, match := range portDecl.FindAllStringSubmatch(string(ports), -1) {
-		names = append(names, match[1])
+	for _, file := range []string{filepath.Join("..", "app", "ports.go"), filepath.Join("..", "domain", "agent", "ports.go")} {
+		ports, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, match := range portDecl.FindAllStringSubmatch(string(ports), -1) {
+			names = append(names, match[1])
+		}
 	}
 	if len(names) < minimumPorts {
 		t.Fatalf("found %d ports in ports.go, expected at least %d; the pattern may have stopped matching", len(names), minimumPorts)
 	}
 
 	asserted := map[string]bool{}
-	err = filepath.WalkDir(filepath.Join("..", "adapters"), func(path string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(filepath.Join("..", "adapters"), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return err
 		}

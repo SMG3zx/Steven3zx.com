@@ -3,6 +3,7 @@ package fleet_test
 import (
 	"context"
 	"errors"
+	"janus/internal/domain/agent"
 	"slices"
 	"strings"
 	"sync"
@@ -49,12 +50,12 @@ func (c *clock) Advance(d time.Duration) {
 }
 
 // agentRuntime is an Agent that serves pageModule and nothing else.
-func agentRuntime() *app.AgentRuntime {
+func agentRuntime() *agent.Runtime {
 	runner := runnertest.NewFake()
 	runner.Handle(pageModule, func(app.RunInput) (app.RunResult, error) {
 		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
-	return app.NewAgentRuntime(runner, localstatetest.NewMemory(), "", time.Now)
+	return agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 }
 
 // setup starts the fleet service with one Agent of owner, named laptop, joined
@@ -64,7 +65,7 @@ type setup struct {
 	t       testing.TB
 	owner   string
 	agent   app.Enrollment
-	runtime *app.AgentRuntime
+	runtime *agent.Runtime
 }
 
 func newSetup(t *testing.T) *setup {

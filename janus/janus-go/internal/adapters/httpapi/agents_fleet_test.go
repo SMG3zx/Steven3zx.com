@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"janus/internal/domain/agent"
 	"net/http"
 	"strings"
 	"testing"
@@ -34,13 +35,13 @@ var pageModule = []byte("\x00asm\x01\x00\x00\x00httpapi")
 
 // runAgent starts the enrolled Agent in process where the Fleet will look for
 // it, connects the Fleet, and waits until the Agent has reported its state.
-func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledBody) *app.AgentRuntime {
+func (f *fleetApp) runAgent(t *testing.T, owner *http.Cookie, enrolled enrolledBody) *agent.Runtime {
 	t.Helper()
 	runner := runnertest.NewFake()
 	runner.Handle(pageModule, func(app.RunInput) (app.RunResult, error) {
 		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
-	runtime := app.NewAgentRuntime(runner, localstatetest.NewMemory(), "", time.Now)
+	runtime := agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 	f.link.Serve(enrolled.AgentID, runtime)
 	f.settled(t, enrolled.AgentID, "report from the Agent", func() bool {
 		agents := decode[[]agentBody](t, perform(f.handler, http.MethodGet, "/api/agents", "", owner))
@@ -111,7 +112,7 @@ func TestAnOwnerReadsTheirAgentsRuns(t *testing.T) {
 	if err := runtime.Deploy(context.Background(), app.HostedDeployment{ID: "dep-1", SHA256: hex.EncodeToString(sum[:]), Module: pageModule}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Serve(context.Background(), "dep-1", app.ServeRequest{Request: cgi.Request{Method: "GET", Path: "/"}, Body: []byte("abc")}); err != nil {
+	if _, err := runtime.Serve(context.Background(), "dep-1", agent.ServeRequest{Request: cgi.Request{Method: "GET", Path: "/"}, Body: []byte("abc")}); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/agents/" + enrolled.AgentID + "/runs"

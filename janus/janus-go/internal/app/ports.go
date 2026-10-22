@@ -133,24 +133,6 @@ type Fleet interface {
 	DeleteOwner(ctx context.Context, owner string) error
 }
 
-// Runner runs a WASI module under input.Limits. Limits.Timeout bounds the run,
-// and an adapter may also stop early when ctx ends. It reports what the module
-// wrote and what the run consumed. A module that cannot be loaded, traps or
-// exceeds a limit fails with an error, and the RunResult still holds the output
-// and Usage measured up to that point. A run that spends all its fuel fails with
-// an error matching ErrOutOfFuel, and one stopped by the timeout with an error
-// matching ErrRunTimeout.
-//
-// The module reads input.Stdin and sees input.Env as its environment and
-// input.Args as its arguments. When input.Dir is set, that host directory is
-// the module's one preopened directory (file descriptor 3, named "/"), which it
-// may read and write; nothing outside it is reachable. Without Dir the module
-// has no files at all. Stdout is cut at input.MaxStdout bytes, 64 KiB when it
-// is zero, and StdoutTruncated says so. Stderr is cut at 64 KiB.
-type Runner interface {
-	Run(ctx context.Context, module []byte, input RunInput) (RunResult, error)
-}
-
 // Catalog is where Projects, their Snapshots and files, and their Imports
 // live: the projects service. It also lists the GitHub repositories, branches
 // and commits an Account can import, with the Account's GitHub Connection.
@@ -195,23 +177,4 @@ type Catalog interface {
 // Field is recorded.
 type Audit interface {
 	Record(ctx context.Context, event AuditEvent)
-}
-
-// LocalState is what an Agent keeps on its own machine, so that it serves the
-// same Deployments, paused or not, after a restart. It is safe for concurrent
-// use, and a pause written by another process using the same storage, such as
-// the Agent's command line, is what the next Paused reads.
-type LocalState interface {
-	// SaveDeployment keeps a Deployment, replacing one with the same ID.
-	SaveDeployment(ctx context.Context, deployment HostedDeployment) error
-	// DeleteDeployment forgets a Deployment. Forgetting one that is not kept is
-	// not an error.
-	DeleteDeployment(ctx context.Context, id string) error
-	// Deployments returns every kept Deployment, ordered by ID.
-	Deployments(ctx context.Context) ([]HostedDeployment, error)
-	// SetPaused records whether the Agent is paused.
-	SetPaused(ctx context.Context, paused bool) error
-	// Paused reads the pause as last recorded through any handle on the same
-	// storage. It is false until SetPaused is first called.
-	Paused(ctx context.Context) (bool, error)
 }

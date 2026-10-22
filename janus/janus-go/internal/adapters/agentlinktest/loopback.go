@@ -4,6 +4,7 @@ package agentlinktest
 
 import (
 	"context"
+	"janus/internal/domain/agent"
 	"sync"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 // Loopback is an Agent link to Agents in the same process: each address is
-// an *app.AgentRuntime registered with Serve. It carries commands and events
+// an *agent.Runtime registered with Serve. It carries commands and events
 // the way a network link does, including connections that drop when an Agent
 // goes away and come back when it returns. A connection to an Agent that is
 // served is up as soon as Connect or Serve returns, and Settle waits for its
@@ -23,8 +24,8 @@ type Loopback struct {
 	ModuleSource func(ctx context.Context, agentID, sha string) ([]byte, error)
 
 	mu     sync.Mutex
-	agents map[string]*app.AgentRuntime // by Agent ID
-	conns  map[string]*loopConn         // by Agent ID
+	agents map[string]*agent.Runtime // by Agent ID
+	conns  map[string]*loopConn      // by Agent ID
 	wg     sync.WaitGroup
 }
 
@@ -38,16 +39,16 @@ type loopConn struct {
 	settle chan chan struct{}
 
 	mu       sync.Mutex
-	attached *app.AgentRuntime
+	attached *agent.Runtime
 }
 
 // NewLoopback returns a Loopback with no Agents.
 func NewLoopback() *Loopback {
-	return &Loopback{agents: map[string]*app.AgentRuntime{}, conns: map[string]*loopConn{}}
+	return &Loopback{agents: map[string]*agent.Runtime{}, conns: map[string]*loopConn{}}
 }
 
 // Serve makes runtime the Agent with agentID, replacing any Agent with that ID.
-func (l *Loopback) Serve(agentID string, runtime *app.AgentRuntime) {
+func (l *Loopback) Serve(agentID string, runtime *agent.Runtime) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.agents[agentID] = runtime
@@ -65,7 +66,7 @@ func (l *Loopback) Unserve(agentID string) {
 
 // moveLocked attaches every connection to the Agent with agentID to runtime. The
 // caller holds mu.
-func (l *Loopback) moveLocked(agentID string, runtime *app.AgentRuntime) {
+func (l *Loopback) moveLocked(agentID string, runtime *agent.Runtime) {
 	for _, conn := range l.conns {
 		if conn.agentID == agentID {
 			conn.attach(runtime)
@@ -170,7 +171,7 @@ func (l *Loopback) run(conn *loopConn) {
 }
 
 // drain delivers what runtime has waiting without blocking.
-func drain(conn *loopConn, runtime *app.AgentRuntime) {
+func drain(conn *loopConn, runtime *agent.Runtime) {
 	for {
 		select {
 		case report := <-runtime.Reports():
@@ -184,13 +185,13 @@ func drain(conn *loopConn, runtime *app.AgentRuntime) {
 	}
 }
 
-func (c *loopConn) attach(runtime *app.AgentRuntime) {
+func (c *loopConn) attach(runtime *agent.Runtime) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.attached = runtime
 }
 
-func (c *loopConn) current() *app.AgentRuntime {
+func (c *loopConn) current() *agent.Runtime {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.attached

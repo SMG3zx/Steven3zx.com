@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"janus/internal/domain/agent"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestALargeModuleStagedForATrustedOwnerIsReadByTheAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer link.Close()
-	runtime := app.NewAgentRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
+	runtime := agent.NewRuntime(stagedRunner{}, localstatetest.NewMemory(), "", time.Now)
 	stop := trustedAgent(t, trust, leafAddress, runtime)
 	defer stop()
 	link.Connect(agentID, func(app.AgentEvent) error { return nil })
@@ -49,7 +50,7 @@ func TestALargeModuleStagedForATrustedOwnerIsReadByTheAgent(t *testing.T) {
 	deadline := time.Now().Add(40 * time.Second)
 	for {
 		err := link.Send(ctx, agentID, contractfleet.AgentCommand{Deploy: &contractfleet.HostedDeployment{
-			ID: "dep-1", SHA256: sha, Limits: app.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}})
+			ID: "dep-1", SHA256: sha, Limits: agent.RunLimits{Fuel: 1_000_000, MemoryBytes: 16 << 20}}})
 		if err == nil {
 			break
 		}

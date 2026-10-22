@@ -3,6 +3,7 @@ package identity_test
 import (
 	"context"
 	"encoding/json"
+	"janus/internal/domain/agent"
 	"testing"
 	"time"
 
@@ -113,7 +114,7 @@ func TestDeletingAnAccountRemovesItsRecordsAcrossServicesAfterARestart(t *testin
 
 	fixture := fleetfixture.Start(t, fleetfixture.Options{Hub: hub})
 	enrollment := fixture.Enroll("alice", "laptop")
-	fixture.Attach("alice", enrollment, "laptop", app.NewAgentRuntime(runnertest.NewFake(), localstatetest.NewMemory(), "", time.Now))
+	fixture.Attach("alice", enrollment, "laptop", agent.NewRuntime(runnertest.NewFake(), localstatetest.NewMemory(), "", time.Now))
 	if agents, err := fixture.Fleet.ListAgents(ctx, "alice"); err != nil || len(agents) != 1 {
 		t.Fatalf("agents before the deletion = %+v, %v", agents, err)
 	}

@@ -5,6 +5,7 @@ package localstatetest
 import (
 	"bytes"
 	"context"
+	"janus/internal/domain/agent"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func must(t *testing.T, err error) {
 
 func deployment(id string, module string) app.HostedDeployment {
 	return app.HostedDeployment{ID: id, SHA256: "hash-of-" + module, Module: []byte(module),
-		Limits: app.RunLimits{Fuel: 1234, MemoryBytes: 5678, Timeout: time.Second}}
+		Limits: agent.RunLimits{Fuel: 1234, MemoryBytes: 5678, Timeout: time.Second}}
 }
 
 func deployments(t *testing.T, s app.LocalState) []app.HostedDeployment {

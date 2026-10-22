@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"janus/internal/domain/agent"
 	"log"
 	"net/http"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"janus/internal/adapters/agentnats"
 	"janus/internal/adapters/tailnode"
 	"janus/internal/adapters/wasmtime"
-	"janus/internal/app"
 	contractfleet "janus/internal/contract/fleet"
 )
 
@@ -148,7 +148,7 @@ func serve(ctx context.Context, state string) error {
 	if err != nil {
 		return err
 	}
-	runtime := app.NewAgentRuntime(wasmtime.Wasmtime{}, disk, s.Folder, time.Now)
+	runtime := agent.NewRuntime(wasmtime.Wasmtime{}, disk, s.Folder, time.Now)
 	if err = runtime.Start(ctx); err != nil {
 		// A Deployment whose module changed on disk is not served; the rest are.
 		logger.Printf("some kept Deployments are not served: %v", err)
@@ -160,7 +160,7 @@ func serve(ctx context.Context, state string) error {
 	defer node.Close()
 	authorize := node.RequireTag(contractfleet.ControlTag)
 
-	serveListener, err := node.Listen(app.AgentServePort)
+	serveListener, err := node.Listen(agent.AgentServePort)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func serve(ctx context.Context, state string) error {
 	case serveErr = <-failed:
 	}
 	logger.Printf("stopping")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), app.RequestTimeout+5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), agent.RequestTimeout+5*time.Second)
 	defer cancel()
 	stopWatch()
 	stopServe()
@@ -217,7 +217,7 @@ func setPaused(ctx context.Context, out io.Writer, state string, paused bool) er
 	if err != nil {
 		return err
 	}
-	runtime := app.NewAgentRuntime(nil, disk, "", time.Now)
+	runtime := agent.NewRuntime(nil, disk, "", time.Now)
 	if paused {
 		if err = runtime.Pause(ctx); err != nil {
 			return err
