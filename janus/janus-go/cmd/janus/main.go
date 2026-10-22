@@ -1,11 +1,13 @@
 // Command janus is the Janus control plane. It is the composition root: the only
 // place that knows which adapters exist and how they are wired to the use cases.
 //
-// `janus` runs the control plane.
+// `janus` runs the control plane: every service and the gateway in one process.
+// `janus serve <service>...` runs only the named services against a NATS server.
 package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +20,18 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	services := serviceNames
+	if len(os.Args) > 1 {
+		if os.Args[1] != "serve" {
+			fmt.Fprintln(os.Stderr, serveUsage)
+			os.Exit(2)
+		}
+		var err error
+		if services, err = parseServe(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+	}
 	logger, err := zap.NewProduction()
 	if err != nil {
 		return
@@ -28,7 +42,7 @@ func main() {
 	defer logger.Sync()
 
 	processErrors := make(chan error, 1)
-	application := newApplication(logger, processErrors)
+	application := newServing(logger, processErrors, services)
 
 	startCtx, cancel := context.WithTimeout(ctx, startupTimeout)
 	err = application.Start(startCtx)

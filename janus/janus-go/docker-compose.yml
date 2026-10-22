@@ -13,6 +13,82 @@ services:
       - "127.0.0.1:4222:4222"
       - "127.0.0.1:8222:8222"
 
+  # Janus with one container per service, all on the NATS server above:
+  #   docker compose --profile services up -d
+  # Each service keeps its own database in a volume of its own. Set
+  # JANUS_JWT_SECRET (at least 32 random bytes) before starting them; a
+  # service refuses to start without it.
+  audit:
+    &janus
+    profiles: ["services"]
+    build: .
+    command: ["serve", "audit"]
+    restart: unless-stopped
+    depends_on:
+      - nats
+    environment: &janus-environment
+      JANUS_NATS_URL: nats://nats:4222
+      JANUS_JWT_SECRET: ${JANUS_JWT_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      PYROSCOPE_SERVER_ADDRESS: http://pyroscope:4040
+
+  identity:
+    <<: *janus
+    command: ["serve", "identity"]
+    environment:
+      <<: *janus-environment
+      JANUS_IDENTITY_DATABASE_PATH: /data/identity.db
+    volumes:
+      - identity-data:/data
+
+  projects:
+    <<: *janus
+    command: ["serve", "projects"]
+    environment:
+      <<: *janus-environment
+      JANUS_PROJECTS_DATABASE_PATH: /data/projects.db
+    volumes:
+      - projects-data:/data
+
+  builds:
+    <<: *janus
+    build:
+      context: .
+      target: builds
+    command: ["serve", "builds"]
+    environment:
+      <<: *janus-environment
+      JANUS_BUILDS_DATABASE_PATH: /data/builds.db
+    volumes:
+      - builds-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  runs:
+    <<: *janus
+    command: ["serve", "runs"]
+
+  fleet:
+    <<: *janus
+    command: ["serve", "fleet"]
+    environment:
+      <<: *janus-environment
+      JANUS_FLEET_DATABASE_PATH: /data/fleet.db
+      HEADSCALE_URL: ${HEADSCALE_URL:-}
+      HEADSCALE_API_KEY: ${HEADSCALE_API_KEY:-}
+    volumes:
+      - fleet-data:/data
+
+  gateway:
+    <<: *janus
+    command: ["serve", "gateway"]
+    environment:
+      <<: *janus-environment
+      JANUS_HTTP_ADDRESS: ":9090"
+      JANUS_COOKIE_SECURE: ${JANUS_COOKIE_SECURE:-false}
+      HEADSCALE_URL: ${HEADSCALE_URL:-}
+    ports:
+      - "127.0.0.1:9090:9090"
+
   jaeger:
     image: jaegertracing/jaeger:2.22.0
     container_name: janus-jaeger
@@ -117,6 +193,10 @@ services:
 
 volumes:
   nats-data:
+  identity-data:
+  projects-data:
+  builds-data:
+  fleet-data:
   grafana-data:
   loki-data:
   prometheus-data:

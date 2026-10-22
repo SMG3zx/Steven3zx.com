@@ -7,6 +7,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
+	"slices"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -47,6 +48,9 @@ type auditRecorder interface {
 // the use cases, and starts and stops them in order through a lifecycle table.
 type application struct {
 	logger *zap.Logger
+	// services are the services this process runs; all of them unless `janus
+	// serve` named some.
+	services []string
 	// processErrors receives a failure of the HTTP server after startup.
 	processErrors chan error
 	lifecycle     *lifecycle
@@ -104,12 +108,25 @@ type application struct {
 	stopErr      error
 }
 
+// newApplication returns an application that runs every service.
 func newApplication(logger *zap.Logger, processErrors chan error) *application {
+	return newServing(logger, processErrors, serviceNames)
+}
+
+// newServing returns an application that runs services.
+func newServing(logger *zap.Logger, processErrors chan error, services []string) *application {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &application{logger: logger, processErrors: processErrors}
+	return &application{logger: logger, processErrors: processErrors, services: services}
 }
+
+// serves reports whether this process runs the named service.
+func (a *application) serves(name string) bool { return slices.Contains(a.services, name) }
+
+// embedsNATS reports whether this process may start its own NATS server: only
+// when it runs every service, since the others would have no server to find.
+func (a *application) embedsNATS() bool { return len(a.services) == len(serviceNames) }
 
 // Start loads the environment and settings, then starts every component. A
 // failure part-way stops what was started and returns the cause.
@@ -135,6 +152,9 @@ func (a *application) load() error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	if loaded.NATSURL == "" && !a.embedsNATS() {
+		return errors.New("JANUS_NATS_URL is required: only `janus serve all` embeds a NATS server for the services to share")
+	}
 	a.settings = loaded
 	return nil
 }
@@ -153,21 +173,47 @@ func (a *application) Stop(ctx context.Context) error {
 	return err
 }
 
-// groups is the table of components, in start order: foundation, identity,
-// projects and builds, runtime, web. Stop runs it in reverse.
+// groups is the table of components for the services this process runs, in
+// start order: foundation, identity, projects and builds, runtime, web. Stop runs
+// it in reverse. A group none of whose services run here is left out.
 func (a *application) groups() []group {
 	cfg := &a.settings
-	return []group{
-		{name: "foundation", components: []component{
-			{name: "audit", start: a.startAudit, stop: a.tracked(a.stopAudit)},
-			{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
-			{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
-			{name: "audit service", start: a.startAuditService, stop: a.tracked(a.stopAuditService)},
-		}},
-		{name: "identity", components: []component{
-			{name: "identity service", start: a.startIdentityService, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("stop the identity service", a.identityService.Stop(ctx))
-			})},
+	foundation := []component{
+		{name: "audit", start: a.startAudit, stop: a.tracked(a.stopAudit)},
+		{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
+		{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
+	}
+	if a.serves("audit") {
+		foundation = append(foundation, component{name: "audit service", start: a.startAuditService, stop: a.tracked(a.stopAuditService)})
+	} else {
+		foundation = append(foundation, component{name: "audit stream", start: a.connectAudit, stop: a.tracked(a.disconnectAudit)})
+	}
+	var identity, records, runtime, web []component
+	if a.serves("identity") {
+		identity = append(identity, component{name: "identity service", start: a.startIdentityService, stop: a.tracked(func(ctx context.Context) error {
+			return wrap("stop the identity service", a.identityService.Stop(ctx))
+		})})
+	}
+	if a.serves("projects") {
+		records = append(records, component{name: "projects service", start: a.startProjectsService, stop: a.tracked(func(ctx context.Context) error {
+			return wrap("stop the projects service", a.projectsService.Stop(ctx))
+		})})
+	}
+	if a.serves("builds") {
+		records = append(records, component{name: "builds service", start: a.startBuildsService, stop: a.tracked(func(ctx context.Context) error {
+			return wrap("stop the builds service", a.buildsService.Stop(ctx))
+		})})
+	}
+	if a.serves("runs") {
+		records = append(records, component{name: "runs service", start: a.startRunsService, stop: a.tracked(func(ctx context.Context) error {
+			return wrap("stop the runs service", a.runsService.Stop(ctx))
+		})})
+	}
+	if a.serves("fleet") {
+		runtime = append(runtime, component{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)})
+	}
+	if a.serves("gateway") {
+		web = []component{
 			{name: "authentication", start: func(context.Context) error {
 				a.authentication = authn.New([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
 				return nil
@@ -177,29 +223,25 @@ func (a *application) groups() []group {
 				a.authorization, err = authz.New(a.startCtx)
 				return err
 			}},
-		}},
-		{name: "projects and builds", components: []component{
-			{name: "projects service", start: a.startProjectsService, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("stop the projects service", a.projectsService.Stop(ctx))
-			})},
-			{name: "builds service", start: a.startBuildsService, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("stop the builds service", a.buildsService.Stop(ctx))
-			})},
-			{name: "builds", start: a.startBuilds},
-			{name: "runs service", start: a.startRunsService, stop: a.tracked(func(ctx context.Context) error {
-				return wrap("stop the runs service", a.runsService.Stop(ctx))
-			})},
-		}},
-		{name: "runtime", components: []component{
-			{name: "runs", start: a.startRuns},
-			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)},
-		}},
-		{name: "web", components: []component{
+			{name: "service clients", start: a.startClients},
 			{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {
 				return a.httpServer.Shutdown(ctx)
 			})},
-		}},
+		}
 	}
+	var groups []group
+	for _, g := range []group{
+		{name: "foundation", components: foundation},
+		{name: "identity", components: identity},
+		{name: "projects and builds", components: records},
+		{name: "runtime", components: runtime},
+		{name: "web", components: web},
+	} {
+		if len(g.components) > 0 {
+			groups = append(groups, g)
+		}
+	}
+	return groups
 }
 
 // wrap prefixes a non-nil err with what was being done.
@@ -250,6 +292,23 @@ func (a *application) startAuditService(ctx context.Context) error {
 func (a *application) stopAuditService(ctx context.Context) error {
 	a.auditLog.Disconnect()
 	return wrap("stop the audit service", a.auditService.Stop(ctx))
+}
+
+// connectAudit sends Audit Events to the AUDIT stream, which the audit service
+// in another process declares and writes. Until the stream exists an event is
+// written through the logger.
+func (a *application) connectAudit(context.Context) error {
+	js, err := a.nats.JetStream()
+	if err != nil {
+		return fmt.Errorf("open JetStream: %w", err)
+	}
+	a.auditLog.Connect(js)
+	return nil
+}
+
+func (a *application) disconnectAudit(context.Context) error {
+	a.auditLog.Disconnect()
+	return nil
 }
 
 func (a *application) stopAudit(context.Context) error { return a.auditLog.Flush() }
@@ -348,7 +407,6 @@ func (a *application) startIdentityService(ctx context.Context) error {
 		return fmt.Errorf("start the identity service: %w", err)
 	}
 	a.identityService = service
-	a.identity = identityclient.NewGateway(a.nats.Conn())
 	return nil
 }
 
@@ -377,14 +435,24 @@ func (a *application) startBuildsService(ctx context.Context) error {
 	return nil
 }
 
-// startBuilds makes the gateway's WASM Builds, which asks the builds service over
-// NATS and reads the Artifacts from the artifacts store.
-func (a *application) startBuilds(ctx context.Context) error {
-	client, err := buildsclient.NewGateway(ctx, a.nats.Conn())
+// startClients makes the gateway's clients of the services, which it calls over
+// NATS: identity, the builds service with the artifacts store its Artifacts are
+// read from, the runs service, and the fleet service when Agent enrollment is on.
+// The services may run in this process or in others.
+func (a *application) startClients(ctx context.Context) error {
+	conn := a.nats.Conn()
+	a.identity = identityclient.NewGateway(conn)
+	builds, err := buildsclient.NewGateway(ctx, conn)
 	if err != nil {
 		return fmt.Errorf("open the artifacts store: %w", err)
 	}
-	a.builds = client
+	a.builds = builds
+	a.runs = runsclient.New(conn)
+	// Without the fleet service in this process, Agent enrollment is on when
+	// Headscale is configured; with it, when the service started.
+	if a.serves("fleet") && a.fleetService != nil || !a.serves("fleet") && a.settings.HeadscaleURL != "" {
+		a.fleet = fleetclient.New(conn)
+	}
 	return nil
 }
 
@@ -396,12 +464,6 @@ func (a *application) startRunsService(ctx context.Context) error {
 		return fmt.Errorf("start the runs service: %w", err)
 	}
 	a.runsService = service
-	return nil
-}
-
-// startRuns makes the WASM Runs use case, which asks the runs service over NATS.
-func (a *application) startRuns(context.Context) error {
-	a.runs = runsclient.New(a.nats.Conn())
 	return nil
 }
 
@@ -510,7 +572,6 @@ func (a *application) startFleet(ctx context.Context) error {
 		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
 	}
 	a.fleetService = service
-	a.fleet = fleetclient.New(a.nats.Conn())
 	return nil
 }
 

@@ -5,15 +5,15 @@
   "steps": [
     {
       "file": "janus-go/cmd/janus/main.go",
-      "line": 18,
+      "line": 20,
       "title": "The server starts",
-      "description": "`func main` loads the settings and runs the application until it is told to stop."
+      "description": "`func main` reads the services to run from the command line (`janus serve <service>...`, or all of them), then runs the application until it is told to stop."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 158,
+      "line": 179,
       "title": "The ordered table",
-      "description": "`func (a *application) groups` lists the groups in order: foundation, identity, projects and builds, runtime, web. Adding a component is one entry here."
+      "description": "`func (a *application) groups` lists the groups in order: foundation, identity, projects and builds, runtime, web. A group, and each component in it, is there only if this process runs its service. Adding a component is one entry here."
     },
     {
       "file": "janus-go/cmd/janus/lifecycle.go",
@@ -29,9 +29,9 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 116,
+      "line": 133,
       "title": "The application's start",
-      "description": "`func (a *application) Start` opens the telemetry and the store, then starts the groups through the lifecycle."
+      "description": "`func (a *application) Start` loads the settings, then starts the groups through the lifecycle: telemetry and NATS first, then the services this process runs, then the gateway."
     },
     {
       "file": "janus-go/cmd/janus/lifecycle.go",
@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 144,
+      "line": 164,
       "title": "The application's stop",
       "description": "`func (a *application) Stop` records the shutdown in a span and calls the lifecycle's stop."
     }

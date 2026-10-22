@@ -2,7 +2,7 @@
 
 This is the structure janus-go is being moved to, and the rules new code is reviewed against. The decision is recorded in [ADR 0005](adr/0005-nats-jetstream-microservices.md), which supersedes ports and adapters ([ADR 0003](adr/0003-ports-and-adapters.md)).
 
-**Status:** migrating. Until the last step of section 12, the old single process (`internal/app` and `internal/adapters`) runs next to the new services, and the HTTP end-to-end tests stay green after every step.
+**Status:** current. The single process is gone: `internal/app` and `internal/adapters` are deleted, the gateway reaches every service only over NATS, and each service can run as a process of its own with `janus serve <service>`. Section 12 records how it got here.
 
 ## 1. The idea in five lines
 
@@ -122,9 +122,9 @@ tsnet gives a `net.Listener` and a dialer, not a socket the NATS server can bind
 ## 8. Layout
 
 ```
-cmd/janus/                  one binary. `janus serve <service>...` starts the named services;
-                            `janus serve all` also embeds a NATS server, for development and tests.
-                            `janus migrate split` copies janus.db into the per-service databases
+cmd/janus/                  one binary. `janus serve <service>...` starts the named services against
+                            the NATS server in JANUS_NATS_URL; `janus serve all`, which plain `janus`
+                            also means, runs every service and embeds a NATS server
 cmd/janus-agent/            the Agent
 internal/
   domain/                   pure types and rules, unchanged: jobs, artifact, cgi, templates, scan,
@@ -134,12 +134,17 @@ internal/
     natsx/                  connect, the embedded server, micro helpers, trace headers, stream setup
     natstest/               starts an embedded JetStream server for a test
     tursodb/                open a service's database, run its migrations, the outbox
-    telemetry/              OpenTelemetry and Pyroscope setup
+    tracing/                spans on Janus's shared instrumentation scope
+    tailnode/               a Janus process as a node of its own on the tailnet
     wasmrun/                Wasmtime runs of WASI modules (cgo)
-    lifecycle/              ordered start and reverse stop
   services/
     gateway/  identity/  projects/  builds/  runs/  fleet/  audit/
-  agent/                    the Agent's runtime, local state and edge endpoint
+    gateway/<name>client/   the gateway's NATS clients of the other services, and the
+                            in-memory fakes (<name>test) its tests use
+  agent/                    what runs on an Agent: disk (local state), edge (the HTTP
+                            endpoint), link (the NATS link, both ends), wasmtime (the Runner),
+                            and the test doubles linktest, statetest and runnertest
+                            (the Agent's runtime itself is internal/domain/agent)
 ```
 
 Rules for the tree:
@@ -155,8 +160,9 @@ Rules for the tree:
 3. `platform` imports no service and no contract.
 4. A service imports `contract`, `domain` and `platform`. **A service never imports another service.** It may import another service's contract.
 5. `cmd/janus` is the only package that imports services. `cmd/janus-agent` imports `agent`, `platform`, `domain` and `contract/fleet`.
+6. `agent` packages import `domain`, `contract`, `platform` and each other, never a service or `cmd`. Only `cmd` imports them (and a test may import a test double).
 
-`internal/archtest` enforces these over the `go list` import graph. During the migration it also keeps enforcing ADR 0003's rules on `internal/app` and `internal/adapters`, until those packages are gone.
+`internal/archtest` enforces these over the `go list` import graph, and the guardrails count the remaining debt: SQL clocks, error text compared by string, and exported interfaces in a service. The gateway declares the interfaces it calls (`fleetService`, `runsService` and the rest) unexported, in the contract's and the domain's types, and its clients in `services/gateway/*client` implement them.
 
 ## 10. Concurrency inside a service
 
@@ -174,13 +180,15 @@ Across services there is no lock. A rule that spans services is a sequence of ev
 
 **Service tests** start an embedded JetStream server (`natstest.Start(t)`), a temp Turso file and the service, then drive it through its contract: requests, published events and job messages. They are the main tests. Outside systems are replaced at the wire: `httptest` servers for GitHub and Headscale, a temporary Git repository for sources, and the real Wasmtime. Nothing polls with `time.Sleep`; wait on the reply, a published event or the job's final status.
 
-**Flow tests** start every service in one process with `janus serve all` against an embedded server and drive them through the gateway's HTTP API, as the end-to-end tests do now.
+**Flow tests** start every service in one process with `janus serve all` against an embedded server and drive them through the gateway's HTTP API, as the end-to-end tests do now. `TestEachServiceRunsInItsOwnProcess` (`cmd/janus`) builds the binary and starts the audit, identity, projects and runs services and the gateway as five processes on one server, so each answer the gateway gives crosses processes. The gateway's own tests run it against the real identity service (`cmd/janus/identityfixture`), the real fleet service (`cmd/janus/fleetfixture`) and fakes of projects and builds that answer in the contract's types.
 
 **Live tests** are tagged `live` and use the real outside systems: Docker builders, GitHub with a test Account, a real Headscale, the real Agent binary as a leaf on a real tailnet. They clean up what they create.
 
 Each contract package has a test that encodes and decodes every message, so a field rename is caught before two services disagree.
 
 ## 12. Migration
+
+Done: all ten steps. The notes below say what each step did when it shipped, in the words of the time, so they still mention `janus.db`, the Owner registry and `janus migrate split`. Step 10 removed those with the monolith. An install that still has its data in `janus.db` must run `janus migrate split` once from a build before step 10 (the last such commit is `d023ea2`), then start the current build.
 
 Each step ships on its own and keeps the HTTP end-to-end tests green. A step moves a part of `internal/app` into a service and points the old code, or the gateway's handlers, at it over NATS. The tickets are under ENG-114, one per step (ENG-115 to ENG-124).
 
@@ -201,6 +209,7 @@ Each step ships on its own and keeps the HTTP end-to-end tests green. A step mov
  Done: the Agent runs an embedded NATS server as a leaf of the hub, in its own JetStream domain, and joins through a bridge over its tailnet node (`platform/leafbridge`). Its leaf credentials, and the credentials its own clients use, come from enrollment, which also hands it the public trust. `adapters/agentnats` carries the commands (a request on `janus.agent.<id>.command`), the state (the key of its ID in `agent_state`) and the Usage (its USAGE stream, read by the fleet from the Agent's domain). Modules are objects in `modules-<owner>`, staged by the fleet and read by the Agent. The fleet reaches the Agents as a user of AGENTS, since their streams and buckets live there. `agentgrpc` and `agentpb` are gone. The Agent listens on no host port beyond the loopback leaf bridge.
 9. **Account deletion (ENG-123).** `identity` publishes `account_deleting`, each service tears down and confirms with its own event, and `identity` deletes the Account when all have confirmed. Refusal while jobs are active is a question `identity` asks `projects` and `builds` first.
 10. **Retire the monolith (ENG-124).** The gateway is the last caller of `internal/app`; once it calls only NATS, `internal/app`, `internal/adapters` and the ADR 0003 archtest rules are deleted, and each service can run as its own process.
+ Done: the gateway (`services/gateway`) declares the interfaces it calls, in the contract's types, and its clients (`services/gateway/*client`) implement them over NATS. Deleting an Account is a request to identity, which the gateway repeats until the User is gone. The Store, the Owner registry (`identityowners`), `buildevents`, `projectevents`, `sqlstore`, `janus migrate split`, each service's `Split` and `NeedsSplit`, and `JANUS_DATABASE_PATH` are gone, so nothing reads `janus.db`. The use cases in `internal/app` went, with the clients and fakes typed to its ports; `catalogtest` and `buildstest` now answer in the contract's types, and the identity tests run the real service. The Agent's packages moved under `internal/agent`, the tailnet node under `platform`, and spans to `platform/tracing`. The archtest keeps section 9 (rules 9.1 to 9.6) and drops ADR 0003's rules. `janus serve <service>...` runs any set of services on the server in `JANUS_NATS_URL`; `janus serve all` embeds NATS. `docker compose --profile services up -d` starts one container per service (`Dockerfile`). Not yet run with every service in its own process: the Playwright browser tests (they skip without Chromium) and the Agent live test (`-tags live`, needs Docker and Headscale); the flow test above runs the five services that need neither.
 
 ## 13. Open points
 
