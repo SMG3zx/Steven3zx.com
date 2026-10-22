@@ -22,7 +22,7 @@ import (
 type fleetApp struct {
 	*agentApp
 	link  *agentlinktest.Loopback
-	fleet app.Fleet
+	fleet Fleet
 }
 
 func newFleetApp(t *testing.T) *fleetApp {

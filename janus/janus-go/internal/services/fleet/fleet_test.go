@@ -15,9 +15,9 @@ import (
 	"janus/cmd/janus/fleetfixture"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/platform/natsauth"
 	"janus/internal/services/fleet"
 )
@@ -52,8 +52,8 @@ func (c *clock) Advance(d time.Duration) {
 // agentRuntime is an Agent that serves pageModule and nothing else.
 func agentRuntime() *agent.Runtime {
 	runner := runnertest.NewFake()
-	runner.Handle(pageModule, func(app.RunInput) (app.RunResult, error) {
-		return app.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
+	runner.Handle(pageModule, func(agent.RunInput) (agent.RunResult, error) {
+		return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
 	return agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
 }
@@ -64,7 +64,7 @@ type setup struct {
 	*fleetfixture.Fixture
 	t       testing.TB
 	owner   string
-	agent   app.Enrollment
+	agent   domainfleet.Enrollment
 	runtime *agent.Runtime
 }
 
@@ -101,7 +101,7 @@ func (s *setup) deploy(build string) string {
 
 func (s *setup) request(build string, anyway bool) string {
 	s.t.Helper()
-	id, err := s.Fleet.CreateDeployment(context.Background(), app.NewDeployment{OwnerID: s.owner, ProjectID: "project",
+	id, err := s.Fleet.CreateDeployment(context.Background(), domainfleet.NewDeployment{OwnerID: s.owner, ProjectID: "project",
 		BuildID: build, AgentID: s.agent.AgentID, DeployAnyway: anyway})
 	if err != nil {
 		s.t.Fatalf("deploy %s: %v", build, err)
@@ -117,7 +117,7 @@ func (s *setup) waitState(id, state string) {
 	})
 }
 
-func (s *setup) deployment(id string) app.Deployment {
+func (s *setup) deployment(id string) domainfleet.Deployment {
 	s.t.Helper()
 	d, found, err := s.Fleet.FindDeployment(context.Background(), s.owner, id)
 	if err != nil || !found {
@@ -212,7 +212,7 @@ func TestAgentsAreOnlyTheOwnersAndListTheirTailnetStatus(t *testing.T) {
 	if removed, err := s.Fleet.RemoveAgent(ctx, "stranger", s.agent.AgentID); err != nil || removed {
 		t.Fatalf("a stranger removed the owner's Agent: %v, %v", removed, err)
 	}
-	if _, err := s.Fleet.Usage(ctx, app.RunUsageQuery{OwnerID: "stranger", AgentID: s.agent.AgentID}); !errors.Is(err, app.ErrAgentNotFound) {
+	if _, err := s.Fleet.Usage(ctx, domainfleet.RunUsageQuery{OwnerID: "stranger", AgentID: s.agent.AgentID}); !errors.Is(err, domainfleet.ErrAgentNotFound) {
 		t.Fatalf("a stranger's usage of the owner's Agent = %v, want ErrAgentNotFound", err)
 	}
 }
@@ -277,11 +277,11 @@ func TestAHealthyDeploymentIsRecordedAndItsProbeIsUsage(t *testing.T) {
 	s := newSetup(t)
 	id := s.deploy(s.build("b1", "passed", pageModule))
 
-	records, err := s.Fleet.Usage(context.Background(), app.RunUsageQuery{OwnerID: s.owner, AgentID: s.agent.AgentID})
+	records, err := s.Fleet.Usage(context.Background(), domainfleet.RunUsageQuery{OwnerID: s.owner, AgentID: s.agent.AgentID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var probe *app.RunUsageRecord
+	var probe *domainfleet.RunUsageRecord
 	for i := range records {
 		if records[i].DeploymentID == id && records[i].Probe {
 			probe = &records[i]
@@ -307,7 +307,7 @@ func TestDeployRefusesABuildWhoseChecksAreNotReady(t *testing.T) {
 		{"checks failed", s.build("failed", "failed", pageModule), "", "deploy anyway", false},
 	}
 	for _, tc := range cases {
-		_, err := s.Fleet.CreateDeployment(ctx, app.NewDeployment{OwnerID: s.owner, ProjectID: "project", BuildID: tc.build, AgentID: s.agent.AgentID, DeployAnyway: tc.anyway})
+		_, err := s.Fleet.CreateDeployment(ctx, domainfleet.NewDeployment{OwnerID: s.owner, ProjectID: "project", BuildID: tc.build, AgentID: s.agent.AgentID, DeployAnyway: tc.anyway})
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s: deploy = %v, want a refusal mentioning %q", tc.name, err, tc.want)
 		}
@@ -324,7 +324,7 @@ func TestDeployNeedsAConnectedUnpausedAgent(t *testing.T) {
 	ctx := context.Background()
 	build := s.build("b1", "passed", pageModule)
 	offline := s.Enroll(s.owner, "offline")
-	if _, err := s.Fleet.CreateDeployment(ctx, app.NewDeployment{OwnerID: s.owner, ProjectID: "project", BuildID: build, AgentID: offline.AgentID}); err == nil || !strings.Contains(err.Error(), "offline") {
+	if _, err := s.Fleet.CreateDeployment(ctx, domainfleet.NewDeployment{OwnerID: s.owner, ProjectID: "project", BuildID: build, AgentID: offline.AgentID}); err == nil || !strings.Contains(err.Error(), "offline") {
 		t.Fatalf("deploy to an offline Agent = %v", err)
 	}
 	if err := s.Fleet.PauseAgent(ctx, s.owner, s.agent.AgentID); err != nil {
@@ -334,7 +334,7 @@ func TestDeployNeedsAConnectedUnpausedAgent(t *testing.T) {
 		reports, err := s.Fleet.AgentStatuses(ctx, s.owner)
 		return err == nil && reports[s.agent.AgentID].Paused
 	})
-	if _, err := s.Fleet.CreateDeployment(ctx, app.NewDeployment{OwnerID: s.owner, ProjectID: "project", BuildID: build, AgentID: s.agent.AgentID}); err == nil || !strings.Contains(err.Error(), "paused") {
+	if _, err := s.Fleet.CreateDeployment(ctx, domainfleet.NewDeployment{OwnerID: s.owner, ProjectID: "project", BuildID: build, AgentID: s.agent.AgentID}); err == nil || !strings.Contains(err.Error(), "paused") {
 		t.Fatalf("deploy to a paused Agent = %v", err)
 	}
 	if err := s.Fleet.ResumeAgent(ctx, s.owner, s.agent.AgentID); err != nil {

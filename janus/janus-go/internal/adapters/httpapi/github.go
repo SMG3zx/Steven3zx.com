@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"janus/internal/app"
 	"janus/internal/contract"
 	contractid "janus/internal/contract/identity"
+	"janus/internal/platform/tracing"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,7 +58,7 @@ func (a *Server) githubConnect(c *call) any {
 }
 
 func (a *Server) beginGitHubOAuth(c *call, flow, owner string) any {
-	ctx, span := app.StartSpan(c.Request.Context(), "auth.github.begin", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := tracing.StartSpan(c.Request.Context(), "auth.github.begin", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	span.SetAttributes(
 		attribute.String("auth.provider", "github"),
@@ -70,10 +70,10 @@ func (a *Server) beginGitHubOAuth(c *call, flow, owner string) any {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "GitHub OAuth is not configured"})
 	}
 	if flow == "login" {
-		_, authSpan := app.StartSpan(ctx, "auth.github.authorize", trace.WithSpanKind(trace.SpanKindInternal))
+		_, authSpan := tracing.StartSpan(ctx, "auth.github.authorize", trace.WithSpanKind(trace.SpanKindInternal))
 		allowed, err := a.allowed(ctx, "", "account.github.login", nil)
 		if err != nil {
-			app.RecordError(authSpan, err)
+			tracing.RecordError(authSpan, err)
 			a.logGitHubOAuthFailure(ctx, "authorization", err)
 			span.SetAttributes(attribute.String("auth.github.failure_stage", "authorization"))
 		}
@@ -89,7 +89,7 @@ func (a *Server) beginGitHubOAuth(c *call, flow, owner string) any {
 	store := a.githubOAuthStore()
 	session, err := store.Get(c.Request, githubOAuthCookie)
 	if err != nil {
-		app.RecordError(span, err)
+		tracing.RecordError(span, err)
 		a.logGitHubOAuthFailure(ctx, "session_read", err)
 		span.SetAttributes(attribute.String("auth.github.failure_stage", "session_read"))
 		return internalError()
@@ -99,7 +99,7 @@ func (a *Server) beginGitHubOAuth(c *call, flow, owner string) any {
 	session.Values["owner"] = owner
 	writer := httptest.NewRecorder()
 	if err = session.Save(c.Request, writer); err != nil {
-		app.RecordError(span, err)
+		tracing.RecordError(span, err)
 		a.logGitHubOAuthFailure(ctx, "session_write", err)
 		span.SetAttributes(attribute.String("auth.github.failure_stage", "session_write"))
 		return internalError()
@@ -129,7 +129,7 @@ func (a *Server) githubCallback(c *call) any {
 	if !a.dependencies.GitHubEnabled {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "GitHub OAuth is not configured"})
 	}
-	ctx, span := app.StartSpan(c.Request.Context(), "auth.github.callback", trace.WithSpanKind(trace.SpanKindInternal))
+	ctx, span := tracing.StartSpan(c.Request.Context(), "auth.github.callback", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 	span.SetAttributes(attribute.String("auth.provider", "github"))
 	store := a.githubOAuthStore()
@@ -157,12 +157,12 @@ func (a *Server) githubCallback(c *call) any {
 	}
 	token, err := a.githubOAuthConfig(scopes...).Exchange(ctx, code)
 	if err != nil {
-		app.RecordError(span, err)
+		tracing.RecordError(span, err)
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": "GitHub authorization could not be completed"})
 	}
 	profile, email, grantedScopes, err := fetchGitHubIdentity(ctx, token.AccessToken)
 	if err != nil {
-		app.RecordError(span, err)
+		tracing.RecordError(span, err)
 		return jsonResponse(http.StatusBadGateway, map[string]string{"error": "GitHub profile could not be verified"})
 	}
 	if flow == "connect" && !hasGitHubScope(token.Extra("scope"), "repo") && !hasGitHubScope(grantedScopes, "repo") {

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"janus/internal/app"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 func (a *Server) registerAgentRoutes(app *mux) {
@@ -74,7 +74,7 @@ func (a *Server) enrollAgent(c *call) any {
 	}
 	enrollment, err := a.dependencies.Fleet.Enroll(ctx, input.Code, input.Name)
 	switch {
-	case errors.Is(err, app.ErrEnrollmentCodeInvalid), errors.Is(err, app.ErrAgentName):
+	case errors.Is(err, domainfleet.ErrEnrollmentCodeInvalid), errors.Is(err, domainfleet.ErrAgentName):
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	case err != nil:
 		a.log(ctx, "error", "agent.enroll.failed", nil)
@@ -152,11 +152,11 @@ func (a *Server) controlAgent(c *call, done string, command func(ctx context.Con
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "the control plane is not on the tailnet, so it cannot reach Agents"})
 	}
 	err := command(c.Request.Context(), owner, c.Param("id"))
-	var refused *app.AgentError
+	var refused *domainfleet.AgentError
 	switch {
-	case errors.Is(err, app.ErrAgentNotFound):
+	case errors.Is(err, domainfleet.ErrAgentNotFound):
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "Agent not found"})
-	case errors.Is(err, app.ErrAgentUnreachable):
+	case errors.Is(err, domainfleet.ErrAgentUnreachable):
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "the Agent is offline; start it and try again"})
 	case errors.As(err, &refused):
 		return jsonResponse(http.StatusConflict, map[string]string{"error": refused.Message})
@@ -191,9 +191,9 @@ func (a *Server) listAgentRuns(c *call) any {
 	if a.dependencies.Fleet == nil {
 		return jsonResponse(http.StatusServiceUnavailable, map[string]string{"error": "the control plane is not on the tailnet, so it has no Agent runs"})
 	}
-	records, err := a.dependencies.Fleet.Usage(c.Request.Context(), app.RunUsageQuery{OwnerID: owner, AgentID: c.Param("id")})
+	records, err := a.dependencies.Fleet.Usage(c.Request.Context(), domainfleet.RunUsageQuery{OwnerID: owner, AgentID: c.Param("id")})
 	switch {
-	case errors.Is(err, app.ErrAgentNotFound):
+	case errors.Is(err, domainfleet.ErrAgentNotFound):
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "Agent not found"})
 	case err != nil:
 		return internalError()

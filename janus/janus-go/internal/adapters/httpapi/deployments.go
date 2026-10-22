@@ -4,7 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"janus/internal/app"
+	contractbuilds "janus/internal/contract/builds"
+	domainfleet "janus/internal/domain/fleet"
 )
 
 // deploymentInput is the body of a Deploy request.
@@ -29,13 +30,20 @@ func (a *Server) startDeployment(c *call) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "choose a WASM build and an Agent to deploy"})
 	}
-	id, err := a.dependencies.Fleet.CreateDeployment(c.Request.Context(), app.NewDeployment{OwnerID: owner, ProjectID: c.Param("id"),
+	id, err := a.dependencies.Fleet.CreateDeployment(c.Request.Context(), domainfleet.NewDeployment{OwnerID: owner, ProjectID: c.Param("id"),
 		BuildID: input.BuildID, AgentID: input.AgentID, DeployAnyway: input.DeployAnyway})
 	if err != nil {
 		return jsonResponse(deploymentErrorStatus(err), map[string]string{"error": err.Error()})
 	}
 	a.log(c.Request.Context(), "info", "project.deployment.requested", map[string]string{"user_id": owner, "project_id": c.Param("id"), "deployment_id": id})
 	return reply{StatusCode: http.StatusAccepted, Body: map[string]string{"id": id, "state": "queued"}}
+}
+
+// deploymentView is a Deployment with the Check of its WASM Build, when it has
+// one. The Check's error is the checks' own stage error.
+type deploymentView struct {
+	domainfleet.Deployment
+	Check *contractbuilds.Check `json:"check,omitempty"`
 }
 
 // getDeployment returns one of the Account's Deployments, with its Check.
@@ -54,16 +62,17 @@ func (a *Server) getDeployment(c *call) any {
 	if !found {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "deployment not found"})
 	}
+	view := deploymentView{Deployment: deployment}
 	if a.dependencies.Builds != nil {
 		check, ok, err := a.dependencies.Builds.Check(c.Request.Context(), owner, deployment.BuildID)
 		if err != nil {
 			return internalError()
 		}
 		if ok {
-			deployment.Check = &app.Check{BuildID: check.BuildID, Status: check.Status, Error: check.Error, Log: check.Log, NoTests: check.NoTests}
+			view.Check = &check
 		}
 	}
-	return jsonResponse(http.StatusOK, deployment)
+	return jsonResponse(http.StatusOK, view)
 }
 
 // rollbackDeployment redeploys the WASM Build of one of the Account's recent

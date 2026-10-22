@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nats-io/nats.go"
-	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"time"
@@ -22,13 +21,13 @@ import (
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/projectsnats"
 	"janus/internal/adapters/runsnats"
-	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/tailnode"
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/leafbridge"
 	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natsx"
+	"janus/internal/platform/tracing"
 	auditservice "janus/internal/services/audit"
 	buildsservice "janus/internal/services/builds"
 	"janus/internal/services/builds/docker"
@@ -49,7 +48,7 @@ type application struct {
 
 	settings  settings
 	auditLog  *auditnats.Publisher
-	audit     app.Audit
+	audit     httpapi.Audit
 	telemetry *telemetry
 	nats      *natsx.Hub
 	// agents is the AGENTS account fleet signs Agents' leaf credentials with.
@@ -62,22 +61,17 @@ type application struct {
 	agentsOpts []nats.Option
 	// auditService writes the Audit Events published to the AUDIT stream.
 	auditService *auditservice.Service
-	database     *sqlstore.Store
-	store        app.Store
-	// identityService owns identity.db; identities reaches it over NATS.
+	// identityService owns identity.db; identity reaches it over NATS.
 	identityService *identityservice.Service
-	identities      app.Identities
-	// projectsService owns projects.db and runs Imports; catalog reaches it
-	// over NATS.
+	identity        httpapi.Identity
+	// projectsService owns projects.db and runs Imports.
 	projectsService *projectsservice.Service
-	catalog         app.Catalog
-	// buildsService owns builds.db and runs WASM Builds, and builds is the single
-	// process's use of it.
+	// buildsService owns builds.db and runs WASM Builds; builds is the gateway's
+	// client of it.
 	buildsService *buildsservice.Service
 	// runsService answers the runs subjects and runs WASM Runs; runs is the
-	// single process's use of it.
+	// gateway's client of it.
 	runsService *runsservice.Service
-	identity    httpapi.Identity
 	tailnet     *headscale.Client
 	tailnode    *tailnode.Node
 	agentLink   *agentnats.Link
@@ -86,14 +80,13 @@ type application struct {
 	agentsConn   *nats.Conn
 	leafBridge   *leafbridge.Bridge
 	fleetService *fleetservice.Service
-	// fleet is the fleet service as the single process uses it; nil when Agent
+	// fleet is the gateway's client of the fleet service; nil when Agent
 	// enrollment is off.
-	fleet          app.Fleet
+	fleet          httpapi.Fleet
 	authentication *authn.Authentication
 	authorization  *authz.Policy
 	builds         *buildsnats.Gateway
-	accounts       *app.Accounts
-	runs           app.WASMRuns
+	runs           httpapi.Runs
 	httpServer     *httpapi.Server
 
 	// startCtx carries the application.start span once telemetry is running.
@@ -148,7 +141,7 @@ func (a *application) Stop(ctx context.Context) error {
 	if a.lifecycle == nil {
 		return nil
 	}
-	a.shutdownCtx, a.shutdownSpan = app.StartSpan(ctx, "application.shutdown", trace.WithSpanKind(trace.SpanKindInternal))
+	a.shutdownCtx, a.shutdownSpan = tracing.StartSpan(ctx, "application.shutdown", trace.WithSpanKind(trace.SpanKindInternal))
 	a.shutdownSpan.SetAttributes(attribute.String("application.name", "janus-go"))
 	err := a.lifecycle.Stop(a.shutdownCtx)
 	a.endShutdownSpan()
@@ -165,16 +158,11 @@ func (a *application) groups() []group {
 			{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
 			{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
 			{name: "audit service", start: a.startAuditService, stop: a.tracked(a.stopAuditService)},
-			{name: "store", start: a.openStore, stop: a.tracked(a.closeStore)},
 		}},
 		{name: "identity", components: []component{
 			{name: "identity service", start: a.startIdentityService, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("stop the identity service", a.identityService.Stop(ctx))
 			})},
-			{name: "identity use cases", start: func(context.Context) error {
-				a.identity = identityowners.New(a.store, identitynats.NewGateway(a.nats.Conn()))
-				return nil
-			}},
 			{name: "authentication", start: func(context.Context) error {
 				a.authentication = authn.New([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
 				return nil
@@ -200,11 +188,6 @@ func (a *application) groups() []group {
 		{name: "runtime", components: []component{
 			{name: "runs", start: a.startRuns},
 			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)},
-			// Accounts come last in runtime, after the services they ask to delete an Account.
-			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog)
-				return nil
-			}},
 		}},
 		{name: "web", components: []component{
 			{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {
@@ -269,13 +252,13 @@ func (a *application) stopAudit(context.Context) error { return a.auditLog.Flush
 func (a *application) startTelemetry(ctx context.Context) error {
 	var err error
 	a.telemetry, err = startTelemetry(ctx, a.settings.PyroscopeServerAddress, func(level, message string) {
-		a.audit.Record(context.Background(), app.AuditEvent{Level: level, Name: "pyroscope.sdk", Fields: map[string]string{"message": message}})
+		a.audit.Record(context.Background(), contractaudit.Event{Level: level, Name: "pyroscope.sdk", Fields: map[string]string{"message": message}})
 	})
 	if err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}
 	a.record(ctx, "info", "pyroscope.profiling.started", map[string]string{"application": "janus-go"})
-	a.startCtx, a.startSpan = app.StartSpan(ctx, "application.start", trace.WithSpanKind(trace.SpanKindInternal))
+	a.startCtx, a.startSpan = tracing.StartSpan(ctx, "application.start", trace.WithSpanKind(trace.SpanKindInternal))
 	a.startSpan.SetAttributes(attribute.String("application.name", "janus-go"))
 	return nil
 }
@@ -300,7 +283,7 @@ func (a *application) endStartSpan(err error) {
 	if a.startSpan == nil {
 		return
 	}
-	app.RecordError(a.startSpan, err)
+	tracing.RecordError(a.startSpan, err)
 	a.startSpan.End()
 	a.startSpan = nil
 }
@@ -309,7 +292,7 @@ func (a *application) endShutdownSpan() {
 	if a.shutdownSpan == nil {
 		return
 	}
-	app.RecordError(a.shutdownSpan, a.stopErr)
+	tracing.RecordError(a.shutdownSpan, a.stopErr)
 	a.shutdownSpan.End()
 	a.shutdownSpan = nil
 }
@@ -352,52 +335,22 @@ func (a *application) stopNATS(ctx context.Context) error {
 	return wrap("stop NATS", a.nats.Close(ctx))
 }
 
-func (a *application) openStore(context.Context) error {
-	var err error
-	a.database, err = sqlstore.Open(a.settings.DatabasePath)
-	if err != nil {
-		return fmt.Errorf("open database: %w", err)
-	}
-	a.store = a.database
-	return nil
-}
-
-func (a *application) closeStore(context.Context) error { return a.database.Close() }
-
-// startIdentityService starts the identity service on identity.db. It refuses
-// to start while janus.db still holds Users that were never copied out,
-// because they could not sign in; `janus migrate split` copies them.
+// startIdentityService starts the identity service on identity.db.
 func (a *application) startIdentityService(ctx context.Context) error {
 	cfg := a.settings
-	needed, err := identityservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.IdentityDatabasePath)
-	if err != nil {
-		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
-	}
-	if needed {
-		return fmt.Errorf("%s holds Users that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.IdentityDatabasePath)
-	}
 	service := identityservice.New(identityservice.Config{DatabasePath: cfg.IdentityDatabasePath, TokenSecret: cfg.JWTSecret})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
 		return fmt.Errorf("start the identity service: %w", err)
 	}
 	a.identityService = service
-	a.identities = identitynats.New(a.nats.Conn())
+	a.identity = identitynats.NewGateway(a.nats.Conn())
 	return nil
 }
 
-// startBuildsService starts the builds service on builds.db. It refuses to start
-// while janus.db still holds WASM Builds that were never copied out, because they
-// would not run; `janus migrate split` copies them. Before it starts, the Docker
-// builder images are made ready, as the builds compile in them.
+// startBuildsService starts the builds service on builds.db. Before it starts,
+// the Docker builder images are made ready, as the builds compile in them.
 func (a *application) startBuildsService(ctx context.Context) error {
 	cfg := a.settings
-	needed, err := buildsservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.BuildsDatabasePath)
-	if err != nil {
-		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
-	}
-	if needed {
-		return fmt.Errorf("%s holds WASM Builds that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.BuildsDatabasePath)
-	}
 	if err := docker.EnsureRunning(a.startCtx); err != nil {
 		return fmt.Errorf("ensure Docker Engine is running: %w", err)
 	}
@@ -447,24 +400,14 @@ func (a *application) startRuns(context.Context) error {
 	return nil
 }
 
-// startProjectsService starts the projects service on projects.db. It refuses
-// to start while janus.db still holds Projects that were never copied out;
-// `janus migrate split` copies them.
+// startProjectsService starts the projects service on projects.db.
 func (a *application) startProjectsService(ctx context.Context) error {
 	cfg := a.settings
-	needed, err := projectsservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.ProjectsDatabasePath)
-	if err != nil {
-		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
-	}
-	if needed {
-		return fmt.Errorf("%s holds Projects that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.ProjectsDatabasePath)
-	}
 	service := projectsservice.New(projectsservice.Config{DatabasePath: cfg.ProjectsDatabasePath})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
 		return fmt.Errorf("start the projects service: %w", err)
 	}
 	a.projectsService = service
-	a.catalog = projectsnats.New(a.nats.Conn())
 	return nil
 }
 
@@ -472,7 +415,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Catalog: projectsnats.NewGateway(a.nats.Conn()), Builds: a.builds, Accounts: a.accounts, Fleet: a.fleet, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Catalog: projectsnats.NewGateway(a.nats.Conn()), Builds: a.builds, Fleet: a.fleet, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,
@@ -480,10 +423,10 @@ func (a *application) startHTTP(context.Context) error {
 		GitHubEnabled: cfg.GitHubEnabled, GitHubClientID: cfg.GitHubClientID,
 		GitHubSecret: cfg.GitHubSecret, GitHubCallback: cfg.GitHubCallback,
 	})
-	_, span := app.StartSpan(a.startCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := tracing.StartSpan(a.startCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(attribute.String("server.address", cfg.HTTPAddress))
 	err := server.Start()
-	app.RecordError(span, err)
+	tracing.RecordError(span, err)
 	span.End()
 	if err != nil {
 		return fmt.Errorf("start HTTP server: %w", err)
@@ -497,8 +440,8 @@ func (a *application) startHTTP(context.Context) error {
 func (a *application) watchHTTPServer(failed <-chan error) {
 	for err := range failed {
 		ctx := context.Background()
-		_, span := app.StartSpan(ctx, "http.server.failure", trace.WithSpanKind(trace.SpanKindInternal))
-		app.RecordError(span, err)
+		_, span := tracing.StartSpan(ctx, "http.server.failure", trace.WithSpanKind(trace.SpanKindInternal))
+		tracing.RecordError(span, err)
 		span.End()
 		a.record(ctx, "error", "http.server.failed", map[string]string{"error": err.Error()})
 		if a.processErrors != nil {
@@ -514,7 +457,7 @@ func (a *application) record(ctx context.Context, level, name string, fields map
 	if a.audit == nil {
 		return
 	}
-	a.audit.Record(ctx, app.AuditEvent{Level: level, Name: name, Fields: fields})
+	a.audit.Record(ctx, contractaudit.Event{Level: level, Name: name, Fields: fields})
 }
 
 // startFleet starts the fleet service: Agent enrollment, the Agents on the
@@ -533,15 +476,9 @@ func (a *application) startFleet(ctx context.Context) error {
 		a.logger.Error("Agent enrollment is off: Headscale could not be prepared", zap.Error(err))
 		return nil
 	}
-	needed, err := fleetservice.NeedsSplit(ctx, cfg.DatabasePath, cfg.FleetDatabasePath)
-	if err != nil {
-		return fmt.Errorf("check whether %s needs splitting: %w", cfg.DatabasePath, err)
-	}
-	if needed {
-		return fmt.Errorf("%s holds Agents or Deployments that %s does not have yet; run `janus migrate split` once, then start again", cfg.DatabasePath, cfg.FleetDatabasePath)
-	}
 	agentsConn := a.nats.Conn()
 	if a.agentsOpts != nil {
+		var err error
 		if agentsConn, err = nats.Connect(a.nats.URL(), a.agentsOpts...); err != nil {
 			return fmt.Errorf("connect the fleet service to the Agents' account: %w", err)
 		}

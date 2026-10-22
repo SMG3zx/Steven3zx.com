@@ -2,7 +2,7 @@
 // server, the fleet service on a temporary fleet.db, a tailnet fake, an Agent
 // link that serves Agents in the process, the audit service writing into an
 // observer, and an in-memory answer for the builds requests the service makes.
-// Tests drive the service through app.Fleet, the port the single process uses,
+// Tests drive the service through the Fleet client the gateway uses,
 // so they cover the NATS path end to end.
 package fleetfixture
 
@@ -24,10 +24,10 @@ import (
 
 	"janus/internal/adapters/agentlinktest"
 	"janus/internal/adapters/fleetnats"
-	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
 	contractfleet "janus/internal/contract/fleet"
 	contractprojects "janus/internal/contract/projects"
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natstest"
 	"janus/internal/platform/natsx"
@@ -74,8 +74,8 @@ type Fixture struct {
 	ownersMu sync.Mutex
 	owners   map[string]string
 	logs     *observer.ObservedLogs
-	// Fleet is the app.Fleet the single process uses, over NATS.
-	Fleet app.Fleet
+	// Fleet is the fleet service as the gateway reaches it, over NATS.
+	Fleet *fleetnats.Client
 	// Tailnet is the control server the Agents join.
 	Tailnet *tailnettest.Fake
 	// Link is the Agent link; Attach serves an Agent on it.
@@ -152,7 +152,7 @@ func Start(t testing.TB, opts Options) *Fixture {
 
 // Enroll issues an Enrollment Code for owner and trades it for an Agent named
 // name, the way `janus-agent enroll` does.
-func (f *Fixture) Enroll(owner, name string) app.Enrollment {
+func (f *Fixture) Enroll(owner, name string) domainfleet.Enrollment {
 	f.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -170,7 +170,7 @@ func (f *Fixture) Enroll(owner, name string) app.Enrollment {
 // Attach joins the Agent of enrollment to the tailnet as a node named name, and
 // serves runtime as that Agent, where the service's link reaches it. It waits
 // until the service has the Agent's first state report.
-func (f *Fixture) Attach(owner string, enrollment app.Enrollment, name string, runtime *agent.Runtime) {
+func (f *Fixture) Attach(owner string, enrollment domainfleet.Enrollment, name string, runtime *agent.Runtime) {
 	f.t.Helper()
 	if _, err := f.Tailnet.Join(enrollment.AuthKey, name); err != nil {
 		f.t.Fatalf("join the tailnet as %s: %v", name, err)

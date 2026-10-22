@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/internal/app"
+	"janus/internal/platform/tracing"
 )
 
 // telemetry is the running OpenTelemetry providers and Pyroscope profiler.
@@ -28,13 +28,13 @@ type profilerLog func(level, message string)
 func startTelemetry(ctx context.Context, pyroscopeAddress string, log profilerLog) (*telemetry, error) {
 	shutdown, err := initTelemetry(ctx, "janus-go")
 	if err != nil {
-		_, span := app.StartSpan(ctx, "telemetry.initialize", trace.WithSpanKind(trace.SpanKindInternal))
-		app.RecordError(span, err)
+		_, span := tracing.StartSpan(ctx, "telemetry.initialize", trace.WithSpanKind(trace.SpanKindInternal))
+		tracing.RecordError(span, err)
 		span.End()
 		return nil, err
 	}
 
-	_, span := app.StartSpan(ctx, "pyroscope.start", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := tracing.StartSpan(ctx, "pyroscope.start", trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(
 		attribute.String("pyroscope.application.name", "janus-go"),
 		attribute.Bool("pyroscope.enabled", pyroscopeAddress != ""),
@@ -51,13 +51,13 @@ func startTelemetry(ctx context.Context, pyroscopeAddress string, log profilerLo
 			pyroscope.ProfileInuseSpace,
 		},
 	})
-	app.RecordError(span, err)
+	tracing.RecordError(span, err)
 	span.End()
 	if err != nil {
 		_ = shutdown(ctx)
 		return nil, err
 	}
-	_, readySpan := app.StartSpan(ctx, "telemetry.ready")
+	_, readySpan := tracing.StartSpan(ctx, "telemetry.ready")
 	readySpan.SetAttributes(attribute.String("service.name", "janus-go"))
 	readySpan.End()
 	return &telemetry{shutdown: shutdown, profiler: profiler}, nil
@@ -65,13 +65,13 @@ func startTelemetry(ctx context.Context, pyroscopeAddress string, log profilerLo
 
 // Stop stops the profiler and flushes and shuts down the providers.
 func (t *telemetry) Stop(ctx context.Context) error {
-	_, span := app.StartSpan(ctx, "pyroscope.stop", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := tracing.StartSpan(ctx, "pyroscope.stop", trace.WithSpanKind(trace.SpanKindInternal))
 	var profileErr error
 	if t.profiler != nil {
 		profileErr = t.profiler.Stop()
 		t.profiler = nil
 	}
-	app.RecordError(span, profileErr)
+	tracing.RecordError(span, profileErr)
 	span.End()
 
 	err := profileErr

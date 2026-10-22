@@ -50,12 +50,6 @@
       "line": 286,
       "title": "The Snapshot becomes active",
       "description": "`func (s *Service) completeImport` makes the Snapshot active, completes the Import and keeps the newest five, adding a snapshot_deleted event for each one dropped."
-    },
-    {
-      "file": "janus-go/internal/adapters/projectevents/projectevents.go",
-      "line": 70,
-      "title": "The single process follows",
-      "description": "`func (e *Events) handle` applies project_deleted and snapshot_deleted to janus.db, so WASM Builds of a deleted Project or Snapshot go too."
     }
   ]
 }

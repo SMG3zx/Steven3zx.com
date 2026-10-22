@@ -5,31 +5,25 @@
   "steps": [
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 78,
+      "line": 35,
       "title": "WASMBuilds",
       "description": "`type WASMBuilds interface`. Real: buildsnats.Client, which asks the builds service over NATS. Test: buildstest.Fake. The builds service's own tests cover the service behind it."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 15,
-      "title": "Store",
-      "description": "`type Store interface`. Real: sqlstore.Store. Test: storetest.Memory. Contract: storetest.Run."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 56,
+      "line": 13,
       "title": "Identities",
       "description": "`type Identities interface`. Real: identitynats.Client, which asks the identity service over NATS. Test: identitytest.Memory. Contract: identitytest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 144,
+      "line": 67,
       "title": "Catalog",
       "description": "`type Catalog interface`. Real: projectsnats.Client, which asks the projects service over NATS. Test: catalogtest.Memory. Contract: catalogtest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 97,
+      "line": 54,
       "title": "BuildArtifacts",
       "description": "`type BuildArtifacts interface`. Real: buildsnats.Client, which reads the Artifact from the artifacts store. Test: the Builds use case over buildstest.Fake."
     },
@@ -38,18 +32,6 @@
       "line": 36,
       "title": "Runner",
       "description": "`type Runner interface`. Real: wasmtime.Wasmtime. Test: runnertest.Fake."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 177,
-      "title": "Audit",
-      "description": "`type Audit interface`. Real: auditnats.Publisher, which publishes to the AUDIT stream for the audit service. Test: audittest.Recorder. Contract: audittest.Run."
-    },
-    {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 106,
-      "title": "Fleet",
-      "description": "`type Fleet interface`. Real: fleetnats.Client, which asks the fleet service over NATS. Test: the fleettest fixture, which runs the real service on an embedded server."
     },
     {
       "file": "janus-go/internal/domain/agent/ports.go",

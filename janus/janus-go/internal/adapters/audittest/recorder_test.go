@@ -3,11 +3,11 @@ package audittest
 import (
 	"testing"
 
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 )
 
 func TestRecorderPassesTheAuditContract(t *testing.T) {
-	Run(t, func(*testing.T) (app.Audit, func() []app.AuditEvent) {
+	Run(t, func(*testing.T) (Audit, func() []contractaudit.Event) {
 		r := NewRecorder()
 		return r, r.Events
 	})

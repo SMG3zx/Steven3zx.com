@@ -10,9 +10,8 @@ import (
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
-	"janus/internal/adapters/identityowners"
-	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
+	contractid "janus/internal/contract/identity"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"janus/internal/platform/natstest"
@@ -309,7 +308,7 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 }
 
-func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, http.Handler) {
+func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identitynats.Gateway, http.Handler) {
 	t.Helper()
 	catalog, identities, _, handler := startJanusWith(t, ctx)
 	return catalog, identities, handler
@@ -320,20 +319,15 @@ func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Ide
 // in-memory Catalog, so a test can seed the Snapshot an Import would make;
 // the real projects service is tested through its adapter. It returns the
 // Catalog, the Identities, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app.Identities, *buildstest.Gateway, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identitynats.Gateway, *buildstest.Gateway, http.Handler) {
 	t.Helper()
-	store, err := sqlstore.Open(path.Join(t.TempDir(), "e2e.sqlite"))
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
 	hub := natstest.Start(t)
 	identityService := identity.New(identity.Config{DatabasePath: path.Join(t.TempDir(), "identity.db"), TokenSecret: jwtSecret})
 	if err := identityService.Start(ctx, hub.Conn()); err != nil {
 		t.Fatalf("start the identity service: %v", err)
 	}
 	t.Cleanup(func() { _ = identityService.Stop(context.Background()) })
-	identities := identitynats.New(hub.Conn())
+	identities := identitynats.NewGateway(hub.Conn())
 	authentication := authn.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
 	authorization, err := authz.New(ctx)
 	if err != nil {
@@ -345,7 +339,7 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 	wasm.Produce([]byte("playwright-wasm-archive"))
 	builds := buildstest.NewGateway(wasm)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Catalog: catalogtest.NewGateway(catalog), Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identities, Catalog: catalogtest.NewGateway(catalog), Builds: builds,
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
@@ -378,9 +372,9 @@ func registerUser(t *testing.T, baseURL string) (string, string) {
 	return "", ""
 }
 
-func connectGitHub(t *testing.T, ctx context.Context, identities app.Identities, userID string) {
+func connectGitHub(t *testing.T, ctx context.Context, identities *identitynats.Gateway, userID string) {
 	t.Helper()
-	if err := identities.ConnectGitHub(ctx, app.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
+	if err := identities.ConnectGitHub(ctx, contractid.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
 		t.Fatalf("connect GitHub fixture: %v", err)
 	}
 }

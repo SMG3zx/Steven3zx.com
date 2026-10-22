@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/agent"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
@@ -31,16 +30,14 @@ import (
 	"janus/cmd/janus/fleetfixture"
 	"janus/internal/adapters/agentnats"
 	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
-	"janus/internal/adapters/sqlstore"
 	"janus/internal/adapters/tailnode"
-	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/domain/artifact"
+	domainfleet "janus/internal/domain/fleet"
 	"janus/internal/platform/leafbridge"
 	"janus/internal/platform/natstrust"
 	"janus/internal/platform/natsx"
@@ -62,12 +59,9 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	agentBinary := build(t, work)
 	module := buildModule(t, work)
 
-	// The control plane: real Store, real Headscale, its own tag:ctrl node, and
+	// The control plane: real Headscale, its own tag:ctrl node, and
 	// the gRPC link, behind the real HTTP adapter.
 	ctx := context.Background()
-	store, err := sqlstore.Open(filepath.Join(work, "janus.db"))
-	must(t, err)
-	t.Cleanup(func() { store.Close() })
 	// The hub trusts its own keys and takes its Agents' leaf connections on a
 	// loopback port, which the control plane's tailnet node carries from the
 	// tailnet. It is the hub cmd/janus runs.
@@ -84,7 +78,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	identityService := identity.New(identity.Config{DatabasePath: filepath.Join(work, "identity.db"), TokenSecret: strings.Repeat("k", 32)})
 	must(t, identityService.Start(ctx, hub.Conn()))
 	t.Cleanup(func() { identityService.Stop(context.Background()) })
-	identities := identitynats.New(hub.Conn())
+	identities := identitynats.NewGateway(hub.Conn())
 	// Projects are not what this test is about; the Build it deploys is seeded.
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
@@ -106,12 +100,10 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	// NATS link; the builds it deploys are seeded through its fixture.
 	fx := fleetfixture.Start(t, fleetfixture.Options{Hub: hub, AgentsConn: agentsConn, Agents: trust.Agents, Trust: publicTrust(trust),
 		Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
-	wasm := buildstest.NewFake()
-	builds := buildstest.NewGateway(wasm)
 	policy, err := authz.New(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
-		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Catalog: catalogtest.NewGateway(catalog), Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identities, Catalog: catalogtest.NewGateway(catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Fleet: fx.Fleet,
 	}).Handler())
@@ -134,14 +126,14 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	var issued struct{ Code string }
 	api.do(http.MethodPost, "/api/agents/enrollment-codes", nil, http.StatusCreated, &issued)
 	runCommand(t, agentBinary, "enroll", "-state", state, "-server", server.URL, "-folder", folder, "-name", "laptop", issued.Code)
-	agent := startAgent(t, agentBinary, state, work)
+	agentProcess := startAgent(t, agentBinary, state, work)
 	agentID := waitConnected(t, api)
-	assertNoTCPListener(t, agent.Process.Pid)
+	assertNoTCPListener(t, agentProcess.Process.Pid)
 
 	// Deploy a completed build of the CGI app.
 	buildID := seedBuild(t, fx.Builds, alice, module)
 	deployCtx, cancelDeploy := context.WithTimeout(ctx, 90*time.Second)
-	deployed, err := fx.Fleet.CreateDeployment(deployCtx, app.NewDeployment{OwnerID: alice, ProjectID: "live-project", BuildID: buildID, AgentID: agentID})
+	deployed, err := fx.Fleet.CreateDeployment(deployCtx, domainfleet.NewDeployment{OwnerID: alice, ProjectID: "live-project", BuildID: buildID, AgentID: agentID})
 	must(t, err)
 	eventually(t, "the deployment to be healthy", 120*time.Second, func() bool {
 		d, found, err := fx.Fleet.FindDeployment(deployCtx, alice, deployed)
@@ -209,7 +201,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	edge.eventually(http.MethodGet, "/", 200)
 
 	// A restart resumes serving the Deployment with no new Deploy.
-	stopAgent(t, agent)
+	stopAgent(t, agentProcess)
 	startAgent(t, agentBinary, state, work)
 	edge.eventually(http.MethodGet, "/?after=restart", 200)
 	waitConnected(t, api)
@@ -406,7 +398,7 @@ func assertNoTCPListener(t *testing.T, pid int) {
 	}
 }
 
-func aliceID(t *testing.T, identities app.Identities) string {
+func aliceID(t *testing.T, identities *identitynats.Gateway) string {
 	t.Helper()
 	found, err := identities.FindLocalUser(context.Background(), "alice@example.com")
 	must(t, err)
@@ -435,7 +427,7 @@ func seedBuild(t *testing.T, builds *fleetfixture.Builds, owner string, module [
 }
 
 // agentAddress is the IPv4 tailnet address of the Agent's node.
-func agentAddress(t *testing.T, tailnet *headscale.Client, fleet app.Fleet, owner, agentID string) string {
+func agentAddress(t *testing.T, tailnet *headscale.Client, fleet httpapi.Fleet, owner, agentID string) string {
 	t.Helper()
 	agents, err := fleet.ListAgents(context.Background(), owner)
 	must(t, err)

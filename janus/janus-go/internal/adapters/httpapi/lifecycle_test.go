@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"janus/internal/adapters/buildstest"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"net/http"
@@ -15,16 +14,30 @@ import (
 
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/identitytest"
-	"janus/internal/adapters/storetest"
 	"janus/internal/app"
+	contractid "janus/internal/contract/identity"
 )
 
-func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
+// unfinishedJobs is the identity service as a test needs it when the Account has
+// unfinished jobs: it refuses to delete the Account unless the request cancels
+// them, as identity does after asking projects and builds.
+type unfinishedJobs struct {
+	*identitytest.Directory
+	jobs []contractid.ActiveJob
+}
+
+func (u *unfinishedJobs) DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (contractid.AccountDeletion, error) {
+	if len(u.jobs) > 0 && !cancelActiveJobs {
+		return contractid.AccountDeletion{Status: contractid.AccountRefused, ActiveJobs: u.jobs}, nil
+	}
+	return u.Directory.DeleteAccount(ctx, userID, cancelActiveJobs)
+}
+
+func newLifecycleApp(t *testing.T) (http.Handler, *unfinishedJobs) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	store := storetest.NewMemory()
-	identities := identitytest.NewMemory()
+	identities := &unfinishedJobs{Directory: identitytest.NewDirectory(identitytest.NewMemory())}
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
 	builds := buildstest.NewGateway(buildstest.NewFake())
@@ -33,13 +46,13 @@ func newLifecycleApp(t *testing.T) (http.Handler, *catalogtest.Memory) {
 		t.Fatal(err)
 	}
 	return New(Config{
-		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identities, Catalog: catalogtest.NewGateway(catalog), Builds: builds,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
-	}).Handler(), catalog
+	}).Handler(), identities
 }
 
 func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testing.T) {
-	handler, catalog := newLifecycleApp(t)
+	handler, identities := newLifecycleApp(t)
 
 	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"dana@example.com","password":"correct horse battery staple"}`, nil)
 	if register.Code != http.StatusCreated {
@@ -51,7 +64,7 @@ func TestAccountDeletionListsActiveJobsCancelsOnRequestAndEndsSessions(t *testin
 	if err := json.Unmarshal(projectResponse.Body.Bytes(), &project); err != nil || project.ID == "" {
 		t.Fatalf("project create = %d %s", projectResponse.Code, projectResponse.Body.String())
 	}
-	catalog.SeedImport(project.OwnerID, project.ID, "running-import", "cloning")
+	identities.jobs = []contractid.ActiveJob{{Kind: "import", ID: "running-import", ProjectID: project.ID, Status: "cloning"}}
 
 	blocked := perform(handler, http.MethodDelete, "/api/account", "", session)
 	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "running-import") {

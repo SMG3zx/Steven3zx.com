@@ -34,16 +34,16 @@
       "description": "`func (s *Authentication) ValidateToken` returns the subject a valid token belongs to, and nothing for an invalid one."
     },
     {
-      "file": "janus-go/internal/adapters/identityowners/owners.go",
-      "line": 36,
-      "title": "The identity use cases",
-      "description": "`func New` builds the use cases for Accounts and sign-in methods, over the Identities port (the identity service). Every User it creates or signs in is also added to the Store as an Owner."
+      "file": "janus-go/internal/adapters/identitynats/gateway.go",
+      "line": 19,
+      "title": "The gateway reaches identity",
+      "description": "`func NewGateway` is the gateway's client of the identity service. Sign-in methods and Accounts are kept in identity; the gateway only calls it over NATS."
     },
     {
-      "file": "janus-go/internal/adapters/identityowners/owners.go",
-      "line": 65,
+      "file": "janus-go/internal/adapters/identitynats/gateway.go",
+      "line": 52,
       "title": "Google and GitHub sign-ins",
-      "description": "`func (r *Registry) ResolveGoogleIdentity` finds the Account for a Google sign-in through its Provider Identity, or creates one. GitHub works the same way."
+      "description": "`func (g *Gateway) ResolveGoogleIdentity` finds the Account for a Google sign-in through its Provider Identity, or creates one. GitHub works the same way."
     }
   ]
 }

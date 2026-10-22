@@ -5,13 +5,13 @@
   "steps": [
     {
       "file": "janus-go/cmd/janus/main.go",
-      "line": 20,
+      "line": 18,
       "title": "The server starts",
       "description": "`func main` loads the settings and runs the application until it is told to stop."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 160,
+      "line": 153,
       "title": "The ordered table",
       "description": "`func (a *application) groups` lists the groups in order: foundation, identity, projects and builds, runtime, web. Adding a component is one entry here."
     },
@@ -29,7 +29,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 118,
+      "line": 111,
       "title": "The application's start",
       "description": "`func (a *application) Start` opens the telemetry and the store, then starts the groups through the lifecycle."
     },
@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 146,
+      "line": 139,
       "title": "The application's stop",
       "description": "`func (a *application) Stop` records the shutdown in a span and calls the lifecycle's stop."
     }

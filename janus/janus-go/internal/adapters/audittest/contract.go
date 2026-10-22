@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 )
 
 // Run runs the Audit contract against adapters made by newAudit. The factory
@@ -15,11 +15,11 @@ import (
 // oldest first. An adapter that writes asynchronously may return fewer events
 // than were recorded for a short while; the suite waits up to two seconds for
 // the rest. Each case gets a fresh Audit.
-func Run(t *testing.T, newAudit func(t *testing.T) (audit app.Audit, events func() []app.AuditEvent)) {
+func Run(t *testing.T, newAudit func(t *testing.T) (audit Audit, events func() []contractaudit.Event)) {
 	t.Helper()
 	for _, c := range []struct {
 		name string
-		test func(t *testing.T, audit app.Audit, events func(want int) []app.AuditEvent)
+		test func(t *testing.T, audit Audit, events func(want int) []contractaudit.Event)
 	}{
 		{"RecordsLevelNameAndFields", testRecordsAnEvent},
 		{"RecordsEventsInOrder", testRecordsInOrder},
@@ -29,14 +29,14 @@ func Run(t *testing.T, newAudit func(t *testing.T) (audit app.Audit, events func
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			audit, read := newAudit(t)
-			c.test(t, audit, func(want int) []app.AuditEvent { return waitFor(t, read, want) })
+			c.test(t, audit, func(want int) []contractaudit.Event { return waitFor(t, read, want) })
 		})
 	}
 }
 
 // waitFor returns the events once there are want of them, or whatever there is
 // when two seconds have passed.
-func waitFor(t *testing.T, read func() []app.AuditEvent, want int) []app.AuditEvent {
+func waitFor(t *testing.T, read func() []contractaudit.Event, want int) []contractaudit.Event {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for {
@@ -48,9 +48,9 @@ func waitFor(t *testing.T, read func() []app.AuditEvent, want int) []app.AuditEv
 	}
 }
 
-func testRecordsAnEvent(t *testing.T, audit app.Audit, events func(int) []app.AuditEvent) {
+func testRecordsAnEvent(t *testing.T, audit Audit, events func(int) []contractaudit.Event) {
 	for _, level := range []string{"debug", "info", "warn", "error"} {
-		audit.Record(context.Background(), app.AuditEvent{Level: level, Name: "event." + level, Fields: map[string]string{"user": "alice", "repository": "alice/repo"}})
+		audit.Record(context.Background(), contractaudit.Event{Level: level, Name: "event." + level, Fields: map[string]string{"user": "alice", "repository": "alice/repo"}})
 	}
 	got := events(4)
 	if len(got) != 4 {
@@ -63,9 +63,9 @@ func testRecordsAnEvent(t *testing.T, audit app.Audit, events func(int) []app.Au
 	}
 }
 
-func testRecordsInOrder(t *testing.T, audit app.Audit, events func(int) []app.AuditEvent) {
+func testRecordsInOrder(t *testing.T, audit Audit, events func(int) []contractaudit.Event) {
 	for i := range 20 {
-		audit.Record(context.Background(), app.AuditEvent{Level: "info", Name: fmt.Sprintf("event.%02d", i)})
+		audit.Record(context.Background(), contractaudit.Event{Level: "info", Name: fmt.Sprintf("event.%02d", i)})
 	}
 	got := events(20)
 	if len(got) != 20 {
@@ -78,17 +78,17 @@ func testRecordsInOrder(t *testing.T, audit app.Audit, events func(int) []app.Au
 	}
 }
 
-func testNoFields(t *testing.T, audit app.Audit, events func(int) []app.AuditEvent) {
-	audit.Record(context.Background(), app.AuditEvent{Level: "info", Name: "bare"})
+func testNoFields(t *testing.T, audit Audit, events func(int) []contractaudit.Event) {
+	audit.Record(context.Background(), contractaudit.Event{Level: "info", Name: "bare"})
 	if got := events(1); len(got) != 1 || got[0].Name != "bare" || len(got[0].Fields) != 0 {
 		t.Fatalf("events = %+v", got)
 	}
 }
 
-func testFallbacks(t *testing.T, audit app.Audit, events func(int) []app.AuditEvent) {
-	audit.Record(context.Background(), app.AuditEvent{Name: "no level"})
-	audit.Record(context.Background(), app.AuditEvent{Level: "shout", Name: "odd level"})
-	audit.Record(context.Background(), app.AuditEvent{})
+func testFallbacks(t *testing.T, audit Audit, events func(int) []contractaudit.Event) {
+	audit.Record(context.Background(), contractaudit.Event{Name: "no level"})
+	audit.Record(context.Background(), contractaudit.Event{Level: "shout", Name: "odd level"})
+	audit.Record(context.Background(), contractaudit.Event{})
 	got := events(3)
 	if len(got) != 3 {
 		t.Fatalf("recorded %d events, want 3", len(got))
@@ -101,13 +101,13 @@ func testFallbacks(t *testing.T, audit app.Audit, events func(int) []app.AuditEv
 	}
 }
 
-func testConcurrent(t *testing.T, audit app.Audit, events func(int) []app.AuditEvent) {
+func testConcurrent(t *testing.T, audit Audit, events func(int) []contractaudit.Event) {
 	const writers, each = 8, 25
 	var wg sync.WaitGroup
 	for w := range writers {
 		wg.Go(func() {
 			for i := range each {
-				audit.Record(context.Background(), app.AuditEvent{Level: "info", Name: "concurrent", Fields: map[string]string{"writer": fmt.Sprint(w), "n": fmt.Sprint(i)}})
+				audit.Record(context.Background(), contractaudit.Event{Level: "info", Name: "concurrent", Fields: map[string]string{"writer": fmt.Sprint(w), "n": fmt.Sprint(i)}})
 			}
 		})
 	}

@@ -1,7 +1,12 @@
 package httpapi
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"time"
+
+	contractid "janus/internal/contract/identity"
 )
 
 // registerLifecycleRoutes adds the routes for retrying failed jobs and deleting
@@ -46,7 +51,7 @@ func (a *Server) deleteAccountAPI(c *call) any {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
 	cancel := c.Request.URL.Query().Get("cancel_active_jobs") == "true"
-	result, err := a.dependencies.Accounts.Delete(c.Request.Context(), owner, cancel)
+	result, err := a.deleteAccount(c.Request.Context(), owner, cancel)
 	if err != nil {
 		return internalError()
 	}
@@ -77,4 +82,48 @@ func retryBuildErrorStatus(err error) int {
 		return http.StatusNotFound
 	}
 	return wasmBuildErrorStatus(err)
+}
+
+// accountPoll is how often deleteAccount asks identity whether a deletion has
+// finished.
+const accountPoll = 50 * time.Millisecond
+
+// accountDeleted is the outcome of deleting an Account. Deleted is false when
+// there was no such Account or when the deletion was refused, in which case
+// ActiveJobs lists the unfinished Imports and Builds.
+type accountDeleted struct {
+	Deleted    bool
+	ActiveJobs []contractid.ActiveJob
+}
+
+// deleteAccount deletes the Account through identity, which announces the
+// deletion, has each service clear what it keeps and deletes the User once all
+// have confirmed. It is refused while the Account has unfinished jobs, unless
+// cancelActiveJobs is set. It returns once the User is gone. A deletion that
+// fails part way is left for identity to resume, and deleting again finishes it.
+func (a *Server) deleteAccount(ctx context.Context, owner string, cancelActiveJobs bool) (accountDeleted, error) {
+	deletion, err := a.dependencies.Identity.DeleteAccount(ctx, owner, cancelActiveJobs)
+	if err != nil {
+		return accountDeleted{}, fmt.Errorf("start deleting the Account: %w", err)
+	}
+	switch deletion.Status {
+	case contractid.AccountMissing:
+		return accountDeleted{}, nil
+	case contractid.AccountRefused:
+		return accountDeleted{ActiveJobs: deletion.ActiveJobs}, nil
+	}
+	for {
+		deletion, err = a.dependencies.Identity.DeleteAccount(ctx, owner, cancelActiveJobs)
+		if err != nil {
+			return accountDeleted{}, fmt.Errorf("wait for the Account's deletion: %w", err)
+		}
+		if deletion.Status == contractid.AccountMissing {
+			return accountDeleted{Deleted: true}, nil
+		}
+		select {
+		case <-ctx.Done():
+			return accountDeleted{}, fmt.Errorf("the Account is still being deleted: %w", ctx.Err())
+		case <-time.After(accountPoll):
+		}
+	}
 }

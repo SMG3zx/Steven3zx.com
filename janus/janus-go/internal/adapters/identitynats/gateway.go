@@ -81,3 +81,12 @@ func (g *Gateway) FindGitHubToken(ctx context.Context, userID string) (contracti
 func (g *Gateway) DisconnectGitHub(ctx context.Context, userID string) error {
 	return g.call(ctx, contractid.SubjectDisconnectGitHub, contractid.DisconnectGitHub{UserID: userID}, nil)
 }
+
+// DeleteAccount starts deleting a User's Account, or reports how far a deletion
+// has got. Without cancelActiveJobs an Account with unfinished jobs is refused and
+// the answer lists them. Asking again resumes a deletion that has stalled.
+func (g *Gateway) DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (contractid.AccountDeletion, error) {
+	var deletion contractid.AccountDeletion
+	err := g.call(ctx, contractid.SubjectDeleteAccount, contractid.DeleteAccount{UserID: userID, CancelActiveJobs: cancelActiveJobs}, &deletion)
+	return deletion, err
+}

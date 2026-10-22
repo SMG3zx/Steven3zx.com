@@ -1,4 +1,4 @@
-// Package auditnats is the app.Audit adapter that publishes Audit Events to
+// Package auditnats is the Audit adapter that publishes Audit Events to
 // the AUDIT stream, for the audit service to write. Until it is connected, and
 // whenever a publish fails, it writes the event through its own logger instead,
 // so recording never fails the caller and no event is lost.
@@ -14,7 +14,6 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"go.uber.org/zap"
 
-	"janus/internal/app"
 	contract "janus/internal/contract/audit"
 	"janus/internal/platform/auditlog"
 	"janus/internal/platform/natsx"
@@ -23,15 +22,13 @@ import (
 // publishTimeout bounds waiting for JetStream to store one event.
 const publishTimeout = 2 * time.Second
 
-// Publisher is an app.Audit. It is safe for concurrent use, including Connect
+// Publisher is an audittest.Audit. It is safe for concurrent use, including Connect
 // and Disconnect while events are being recorded.
 type Publisher struct {
 	logger  *zap.Logger
 	subject string
 	js      atomic.Pointer[jetstream.JetStream]
 }
-
-var _ app.Audit = (*Publisher)(nil)
 
 // New returns a Publisher for the named service that writes through logger
 // until it is connected.
@@ -48,7 +45,7 @@ func (p *Publisher) Disconnect() { p.js.Store(nil) }
 // Record publishes event and waits until AUDIT has stored it. The caller's
 // cancellation does not stop the publish. If the publish fails, the event is
 // written locally, followed by a warning that says why.
-func (p *Publisher) Record(ctx context.Context, event app.AuditEvent) {
+func (p *Publisher) Record(ctx context.Context, event contract.Event) {
 	js := p.js.Load()
 	if js == nil {
 		p.writeLocally(event)
@@ -68,7 +65,7 @@ func (p *Publisher) Record(ctx context.Context, event app.AuditEvent) {
 	}
 }
 
-func (p *Publisher) writeLocally(event app.AuditEvent) {
+func (p *Publisher) writeLocally(event contract.Event) {
 	auditlog.Write(p.logger, event.Level, event.Name, event.Fields)
 }
 

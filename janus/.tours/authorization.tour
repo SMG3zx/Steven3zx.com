@@ -11,7 +11,7 @@
     },
     {
       "file": "janus-go/internal/adapters/httpapi/deployments.go",
-      "line": 21,
+      "line": 22,
       "title": "A route names its action",
       "description": "`authorizedSubject` is called with the action project.deploy and the resource owner. Each route picks its own action."
     },

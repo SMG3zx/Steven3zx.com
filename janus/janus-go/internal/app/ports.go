@@ -5,49 +5,6 @@ import (
 	"context"
 )
 
-// Store is what callers use to read and write Janus data. It returns typed
-// values and plain errors, so no caller sends a message, matches the reply type
-// or checks an error field. Adapters implement it over a database or, for tests, over maps. The
-// storetest package holds the contract suite every adapter must pass.
-//
-// Every method that reports an absent record returns found=false with a nil
-// error, and reserves the error for failures.
-type Store interface {
-	// AddOwner records that the User id may own records here, so Projects,
-	// Enrollment Codes and the rest can refer to it and go with it when the
-	// Account is deleted. Adding an Owner that exists changes nothing. Users
-	// themselves live behind Identities.
-	AddOwner(ctx context.Context, id string) error
-
-	// The Projects and Snapshots WASM Builds and Deployments belong to. They
-	// live in the projects service; the Store keeps a reference to each one it
-	// has records for, so those records can refer to it and go with it.
-	// AddProject and AddSnapshot change nothing when the reference exists.
-	// RemoveProject and RemoveSnapshot delete the reference and everything that
-	// refers to it, and change nothing when there is none.
-	AddProject(ctx context.Context, project ProjectRef) error
-	AddSnapshot(ctx context.Context, snapshot SnapshotRef) error
-	FindSnapshot(ctx context.Context, id, ownerID string) (snapshot SnapshotRef, found bool, err error)
-	// ListOwnedProjects returns the IDs of the Owner's referenced Projects.
-	ListOwnedProjects(ctx context.Context, ownerID string) ([]string, error)
-	RemoveProject(ctx context.Context, id string) error
-	RemoveSnapshot(ctx context.Context, id string) error
-
-	// WASM Builds, as the references Deployments need. The builds service owns
-	// them: it publishes each Build's and Check's state on EVENTS, and ApplyWASMBuild
-	// and ApplyCheck store what it says. Applying a state again changes nothing, and
-	// a Build whose Project or Snapshot is not referenced here is not kept.
-	ApplyWASMBuild(ctx context.Context, build WASMBuildChange) error
-	ApplyCheck(ctx context.Context, check CheckChange) error
-	FindWASMBuild(ctx context.Context, id, ownerID string) (build WASMBuild, found bool, err error)
-	FindCheck(ctx context.Context, buildID, ownerID string) (check Check, found bool, err error)
-
-	// DeleteAccount deletes the records the Store keeps for an Account and the
-	// Account's User. Whether the Account may be deleted is decided by identity,
-	// which asks the services for their unfinished jobs first.
-	DeleteAccount(ctx context.Context, userID string) (AccountDeleted, error)
-}
-
 // Identities is where Users, their sign-in methods and their GitHub
 // Connection live: the identity service. A request refused because it clashes
 // with what is stored, such as an email that already has a local account or a
@@ -98,40 +55,6 @@ type BuildArtifacts interface {
 	Artifact(ctx context.Context, owner, buildID string) (WASMBuildArtifact, error)
 }
 
-// Fleet is the fleet service as the single process uses it: enrollment of
-// Agents, the Agents on the tailnet, their Deployments and the Usage they report.
-// A request the service refuses fails with an error whose text is meant for the
-// Account, or with ErrAgentNotFound, ErrAgentUnreachable or an *AgentError. An
-// Agent or Deployment that is not the Owner's is absent.
-type Fleet interface {
-	IssueCode(ctx context.Context, owner string) (IssuedCode, error)
-	Enroll(ctx context.Context, code, name string) (Enrollment, error)
-	ListAgents(ctx context.Context, owner string) ([]AgentStatus, error)
-	// RemoveAgent deletes the Owner's Agent and takes its node off the tailnet.
-	// removed is false for an Agent the Owner does not have.
-	RemoveAgent(ctx context.Context, owner, agentID string) (removed bool, err error)
-	// AgentStatuses returns the last state each of the Owner's Agents reported,
-	// by Agent ID.
-	AgentStatuses(ctx context.Context, owner string) (map[string]AgentStatusReport, error)
-	PauseAgent(ctx context.Context, owner, agentID string) error
-	ResumeAgent(ctx context.Context, owner, agentID string) error
-	// Usage returns the Owner's recorded runs that match query, newest first.
-	Usage(ctx context.Context, query RunUsageQuery) ([]RunUsageRecord, error)
-	// CreateDeployment queues a Deployment and returns its ID.
-	CreateDeployment(ctx context.Context, deployment NewDeployment) (id string, err error)
-	// RollbackDeployment queues a Deployment of a stopped one's WASM Build.
-	RollbackDeployment(ctx context.Context, owner, id string) (string, error)
-	StopDeployment(ctx context.Context, owner, id string) error
-	FindDeployment(ctx context.Context, owner, id string) (deployment Deployment, found bool, err error)
-	// RevokeAgents takes the Owner's Agents off the tailnet and keeps their
-	// records. TeardownDeployments stops the Owner's running Deployments.
-	// DeleteOwner removes everything the Owner has in the service. Accounts calls
-	// them in that order when it deletes an Account, and each can be repeated.
-	RevokeAgents(ctx context.Context, owner string) error
-	TeardownDeployments(ctx context.Context, owner string) error
-	DeleteOwner(ctx context.Context, owner string) error
-}
-
 // Catalog is where Projects, their Snapshots and files, and their Imports
 // live: the projects service. It also lists the GitHub repositories, branches
 // and commits an Account can import, with the Account's GitHub Connection.
@@ -168,12 +91,4 @@ type Catalog interface {
 	Repositories(ctx context.Context, ownerID string) (RepositoryList, error)
 	Branches(ctx context.Context, ownerID, repository string) ([]Branch, error)
 	Commits(ctx context.Context, ownerID, repository, branch string) ([]Commit, error)
-}
-
-// Audit records Audit Events. Recording never fails the caller and never
-// blocks it for long; an adapter that cannot write an event drops it. An event
-// with no Level and no Name is recorded as info under a generic name, and every
-// Field is recorded.
-type Audit interface {
-	Record(ctx context.Context, event AuditEvent)
 }

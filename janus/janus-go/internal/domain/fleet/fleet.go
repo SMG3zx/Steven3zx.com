@@ -16,13 +16,24 @@ import (
 // the Agent is up.
 var ErrAgentUnreachable = errors.New("the Agent cannot be reached")
 
+// ErrAgentNotFound is what the fleet's error matches for an Agent the Owner does
+// not have.
+var ErrAgentNotFound = errors.New("Agent not found")
+
+// ErrEnrollmentCodeInvalid is what enrollment refuses a code with: unknown, used
+// or expired, which are not told apart.
+var ErrEnrollmentCodeInvalid = errors.New(MessageEnrollmentCodeInvalid)
+
+// ErrAgentName is what enrollment refuses a blank or too long name with.
+var ErrAgentName = errors.New(MessageAgentName)
+
 // AgentError is an Agent's refusal of a command. Message is the Agent's reason.
 type AgentError struct{ Message string }
 
 func (e *AgentError) Error() string { return e.Message }
 
 // The sentences of the refusals an Enrollment Code and an Agent name get. The
-// single process matches them to report the refusal to the Account.
+// gateway matches them to report the refusal to the Account.
 const (
 	MessageEnrollmentCodeInvalid = "the enrollment code is invalid or has expired"
 	MessageAgentName             = "give the Agent a name of 1 to 64 characters"

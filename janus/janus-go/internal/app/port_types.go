@@ -76,12 +76,17 @@ var ErrAgentUnreachable = domainfleet.ErrAgentUnreachable
 
 // ErrAgentNotFound is what the Fleet's error matches for an Agent the Owner does
 // not have.
-var ErrAgentNotFound = errors.New("Agent not found")
+var ErrAgentNotFound = domainfleet.ErrAgentNotFound
 
 // ErrEnrollmentCodeInvalid is what the Fleet's enrollment refuses a code with:
 // unknown, used or expired, which are not told apart.
-var ErrEnrollmentCodeInvalid = errors.New(domainfleet.MessageEnrollmentCodeInvalid)
+var ErrEnrollmentCodeInvalid = domainfleet.ErrEnrollmentCodeInvalid
 
 // ErrAgentName is what the Fleet's enrollment refuses a blank or too long name
 // with.
-var ErrAgentName = errors.New(domainfleet.MessageAgentName)
+var ErrAgentName = domainfleet.ErrAgentName
+
+// ImportRequest asks for a commit of a repository to be imported into a Project.
+type ImportRequest struct {
+	OwnerID, ProjectID, Repository, Branch, Commit string
+}

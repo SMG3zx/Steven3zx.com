@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"net/http"
@@ -16,14 +15,12 @@ import (
 
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/identitytest"
-	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 )
 
 func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
 	authorization, err := authz.New(ctx)
@@ -31,7 +28,7 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audittest.NewRecorder(), Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audittest.NewRecorder(), Identity: identitytest.NewDirectory(identities), Catalog: catalogtest.NewGateway(catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 

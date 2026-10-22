@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"net/http"
@@ -16,8 +15,7 @@ import (
 	"janus/internal/adapters/audittest"
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/identitytest"
-	"janus/internal/adapters/storetest"
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 	"janus/internal/services/fleet/tailnettest"
 )
 
@@ -34,7 +32,7 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	t.Cleanup(cancel)
-	store, audit := storetest.NewMemory(), audittest.NewRecorder()
+	audit := audittest.NewRecorder()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
 	authorization, err := authz.New(ctx)
@@ -42,7 +40,7 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 		t.Fatal(err)
 	}
 	config := Config{
-		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identitytest.NewDirectory(identities), Catalog: catalogtest.NewGateway(catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
 	a := &agentApp{tailnet: tailnettest.NewFake(), audit: audit}
@@ -56,11 +54,11 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 }
 
 // auditEvents returns the Audit Events the HTTP adapter and the fleet service wrote.
-func (a *agentApp) auditEvents() []app.AuditEvent {
+func (a *agentApp) auditEvents() []contractaudit.Event {
 	events := a.audit.Events()
 	if a.fixture != nil {
 		for _, event := range a.fixture.AuditEvents() {
-			events = append(events, app.AuditEvent{Level: event.Level, Name: event.Name, Fields: event.Fields})
+			events = append(events, contractaudit.Event{Level: event.Level, Name: event.Name, Fields: event.Fields})
 		}
 	}
 	return events

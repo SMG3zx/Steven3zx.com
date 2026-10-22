@@ -10,28 +10,28 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"janus/internal/adapters/audittest"
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 	"janus/internal/platform/natstest"
 	"janus/internal/services/audit"
 )
 
 // eventsOf reads the events a logger observed back as AuditEvents.
-func eventsOf(logs *observer.ObservedLogs) func() []app.AuditEvent {
-	return func() []app.AuditEvent {
-		var events []app.AuditEvent
+func eventsOf(logs *observer.ObservedLogs) func() []contractaudit.Event {
+	return func() []contractaudit.Event {
+		var events []contractaudit.Event
 		for _, entry := range logs.All() {
 			fields := map[string]string{}
 			for key, value := range entry.ContextMap() {
 				fields[key] = value.(string)
 			}
-			events = append(events, app.AuditEvent{Level: entry.Level.String(), Name: entry.Message, Fields: fields})
+			events = append(events, contractaudit.Event{Level: entry.Level.String(), Name: entry.Message, Fields: fields})
 		}
 		return events
 	}
 }
 
 func TestPublisherThroughTheAuditServicePassesTheAuditContract(t *testing.T) {
-	audittest.Run(t, func(t *testing.T) (app.Audit, func() []app.AuditEvent) {
+	audittest.Run(t, func(t *testing.T) (audittest.Audit, func() []contractaudit.Event) {
 		hub := natstest.Start(t)
 		core, logs := observer.New(zapcore.DebugLevel)
 		service := audit.New(audit.Config{Logger: zap.New(core)})
@@ -62,7 +62,7 @@ func TestPublisherThroughTheAuditServicePassesTheAuditContract(t *testing.T) {
 func TestAPublisherWritesLocallyUntilConnected(t *testing.T) {
 	core, logs := observer.New(zapcore.DebugLevel)
 	publisher := New(zap.New(core), "test")
-	publisher.Record(context.Background(), app.AuditEvent{Level: "info", Name: "early", Fields: map[string]string{"k": "v"}})
+	publisher.Record(context.Background(), contractaudit.Event{Level: "info", Name: "early", Fields: map[string]string{"k": "v"}})
 	got := eventsOf(logs)()
 	if len(got) != 1 || got[0].Name != "early" || got[0].Fields["k"] != "v" {
 		t.Fatalf("written %+v", got)
@@ -81,7 +81,7 @@ func TestAFailedPublishIsWrittenLocallyWithAWarning(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // A cancelled caller does not lose the event either.
-	publisher.Record(ctx, app.AuditEvent{Level: "error", Name: "lost?"})
+	publisher.Record(ctx, contractaudit.Event{Level: "error", Name: "lost?"})
 
 	got := eventsOf(logs)()
 	if len(got) != 2 || got[0].Name != "lost?" || got[0].Level != "error" || got[1].Name != "audit.publish.failed" || got[1].Fields["event"] != "lost?" {
@@ -99,7 +99,7 @@ func TestDisconnectGoesBackToTheLogger(t *testing.T) {
 	publisher := New(zap.New(core), "test")
 	publisher.Connect(js)
 	publisher.Disconnect()
-	publisher.Record(context.Background(), app.AuditEvent{Level: "info", Name: "after"})
+	publisher.Record(context.Background(), contractaudit.Event{Level: "info", Name: "after"})
 	if got := eventsOf(logs)(); len(got) != 1 || got[0].Name != "after" {
 		t.Fatalf("written %+v", got)
 	}

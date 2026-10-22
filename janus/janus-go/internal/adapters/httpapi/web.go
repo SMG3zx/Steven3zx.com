@@ -3,7 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"io"
-	"janus/internal/app"
+	"janus/internal/platform/tracing"
 	"net/http"
 	"net/url"
 	"strings"
@@ -90,7 +90,7 @@ func (a *mux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(req.Header))
 	}
 
-	ctx, span := app.StartSpanWithScope(ctx, tracer, req.Method,
+	ctx, span := tracing.StartSpanWithScope(ctx, tracer, req.Method,
 		trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
 
@@ -124,7 +124,7 @@ func (a *mux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	handlerCtx, handlerSpan := app.StartSpanWithScope(ctx, tracer, "http.route.handler",
+	handlerCtx, handlerSpan := tracing.StartSpanWithScope(ctx, tracer, "http.route.handler",
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attribute.String("http.route", route)),
 	)

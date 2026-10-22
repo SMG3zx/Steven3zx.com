@@ -69,3 +69,14 @@ func (d *Directory) FindGitHubToken(ctx context.Context, userID string) (contrac
 func (d *Directory) DisconnectGitHub(ctx context.Context, userID string) error {
 	return d.memory.DisconnectGitHub(ctx, userID)
 }
+
+// DeleteAccount deletes the User at once: the first request reports the deletion
+// as started and the next finds nothing. It does not ask other services about
+// unfinished jobs; a test that needs a refusal wraps the Directory.
+func (d *Directory) DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (contractid.AccountDeletion, error) {
+	deletion, err := d.memory.DeleteAccount(ctx, userID, cancelActiveJobs)
+	if err != nil {
+		return contractid.AccountDeletion{}, err
+	}
+	return contractid.AccountDeletion{Status: deletion.Status}, nil
+}

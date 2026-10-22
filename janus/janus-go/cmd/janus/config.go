@@ -13,13 +13,12 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"janus/internal/app"
+	"janus/internal/platform/tracing"
 )
 
 // settings contains validated runtime settings loaded from the environment.
 type settings struct {
 	HTTPAddress            string
-	DatabasePath           string
 	IdentityDatabasePath   string
 	ProjectsDatabasePath   string
 	BuildsDatabasePath     string
@@ -64,7 +63,7 @@ func loadEnvironment() error {
 
 // loadSettings validates the process environment and returns the settings it describes.
 func loadSettings(ctx context.Context) (settings, error) {
-	_, span := app.StartSpan(ctx, "config.load", trace.WithSpanKind(trace.SpanKindInternal))
+	_, span := tracing.StartSpan(ctx, "config.load", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 
 	addr := strings.TrimSpace(os.Getenv("JANUS_HTTP_ADDRESS"))
@@ -72,10 +71,6 @@ func loadSettings(ctx context.Context) (settings, error) {
 	if addr == "" {
 		addr = ":9090"
 		source = "default"
-	}
-	databasePath := strings.TrimSpace(os.Getenv("JANUS_DATABASE_PATH"))
-	if databasePath == "" {
-		databasePath = "data/janus.db"
 	}
 	identityDatabasePath := strings.TrimSpace(os.Getenv("JANUS_IDENTITY_DATABASE_PATH"))
 	if identityDatabasePath == "" {
@@ -183,7 +178,6 @@ func loadSettings(ctx context.Context) (settings, error) {
 	span.SetAttributes(
 		attribute.String("config.http.address", addr),
 		attribute.String("config.http.address.source", source),
-		attribute.String("config.database.path", databasePath),
 		attribute.String("config.identity.database.path", identityDatabasePath),
 		attribute.String("config.projects.database.path", projectsDatabasePath),
 		attribute.String("config.builds.database.path", buildsDatabasePath),
@@ -195,7 +189,7 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.Bool("config.nats.embedded", natsURL == ""),
 	)
 	return settings{
-		HTTPAddress: addr, DatabasePath: databasePath, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, FleetDatabasePath: fleetDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
+		HTTPAddress: addr, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, FleetDatabasePath: fleetDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
 		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,

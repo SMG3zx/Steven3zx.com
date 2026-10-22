@@ -1,5 +1,5 @@
-// Package audittest holds an in-memory app.Audit and the contract suite every
-// app.Audit adapter, real or test, must pass.
+// Package audittest holds an in-memory Audit and the contract suite every
+// Audit, real or test, must pass.
 package audittest
 
 import (
@@ -8,24 +8,24 @@ import (
 	"slices"
 	"sync"
 
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 )
 
-// Recorder is an app.Audit that keeps the events it is given, in order, for a
+// Recorder is an Audit that keeps the events it is given, in order, for a
 // test to inspect. It is safe for concurrent use.
 type Recorder struct {
 	mu     sync.Mutex
-	events []app.AuditEvent
+	events []contractaudit.Event
 }
 
-var _ app.Audit = (*Recorder)(nil)
+var _ Audit = (*Recorder)(nil)
 
 // NewRecorder returns a Recorder with no events.
 func NewRecorder() *Recorder { return &Recorder{} }
 
 // Record keeps a copy of event. A Level other than debug, info, warn or error
 // is kept as "info", and an empty Name as "audit.event".
-func (r *Recorder) Record(_ context.Context, event app.AuditEvent) {
+func (r *Recorder) Record(_ context.Context, event contractaudit.Event) {
 	switch event.Level {
 	case "debug", "info", "warn", "error":
 	default:
@@ -41,8 +41,17 @@ func (r *Recorder) Record(_ context.Context, event app.AuditEvent) {
 }
 
 // Events returns the events recorded so far, oldest first.
-func (r *Recorder) Events() []app.AuditEvent {
+func (r *Recorder) Events() []contractaudit.Event {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Clone(r.events)
+}
+
+// Audit is where Audit Events are recorded: what the Recorder is, and what the
+// contract suite runs against. Recording never fails the caller and never
+// blocks it for long; an adapter that cannot write an event drops it. An event
+// with no Level and no Name is recorded as info under a generic name, and every
+// Field is recorded.
+type Audit interface {
+	Record(ctx context.Context, event contractaudit.Event)
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"janus/internal/app"
+	"janus/internal/platform/tracing"
 	"net"
 	"net/http"
 	"sync"
@@ -92,7 +92,7 @@ type serverHandler struct {
 
 func (h serverHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	ctx, span := app.StartSpan(r.Context(), "http.edge", trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span := tracing.StartSpan(r.Context(), "http.edge", trace.WithSpanKind(trace.SpanKindServer))
 	writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 	defer func() {
 		if h.record != nil {

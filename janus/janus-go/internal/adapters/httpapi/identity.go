@@ -18,4 +18,8 @@ type Identity interface {
 	ConnectGitHub(ctx context.Context, connection contractid.ConnectGitHub) error
 	FindGitHubToken(ctx context.Context, userID string) (contractid.GitHubTokenFound, error)
 	DisconnectGitHub(ctx context.Context, userID string) error
+	// DeleteAccount starts deleting the User's Account, or reports how far a
+	// deletion has got. Without cancelActiveJobs an Account with unfinished jobs
+	// is refused and the answer lists them.
+	DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (contractid.AccountDeletion, error)
 }

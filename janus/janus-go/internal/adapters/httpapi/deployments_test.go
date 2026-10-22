@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/agent"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
@@ -20,7 +19,6 @@ import (
 	"janus/internal/adapters/identitytest"
 	"janus/internal/adapters/localstatetest"
 	"janus/internal/adapters/runnertest"
-	"janus/internal/adapters/storetest"
 	"janus/internal/app"
 	contractbuilds "janus/internal/contract/builds"
 )
@@ -48,7 +46,6 @@ func newDeployApp(t *testing.T) *deployApp {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	fixture := fleetfixture.Start(t, fleetfixture.Options{})
-	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
@@ -61,8 +58,8 @@ func newDeployApp(t *testing.T) *deployApp {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Builds: builds,
-		Accounts: app.NewAccounts(store, identities, catalog), Fleet: fixture.Fleet,
+		Audit: audit, Identity: identitytest.NewDirectory(identities), Catalog: catalogtest.NewGateway(catalog), Builds: builds,
+		Fleet:          fixture.Fleet,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 

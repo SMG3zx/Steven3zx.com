@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"janus/internal/app"
+	contractaudit "janus/internal/contract/audit"
 )
 
 func TestTheComponentTableHasTheDocumentedGroupsInStartOrder(t *testing.T) {
@@ -27,12 +27,12 @@ func TestTheComponentTableHasTheDocumentedGroupsInStartOrder(t *testing.T) {
 	}
 }
 
-func TestNATSAndTheAuditServiceStartAfterTelemetryAndBeforeTheStore(t *testing.T) {
+func TestNATSAndTheAuditServiceStartAfterTelemetry(t *testing.T) {
 	var names []string
 	for _, c := range newApplication(nil, nil).groups()[0].components {
 		names = append(names, c.name)
 	}
-	want := []string{"audit", "telemetry", "nats", "audit service", "store"}
+	want := []string{"audit", "telemetry", "nats", "audit service"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("foundation = %v, want %v", names, want)
 	}
@@ -77,7 +77,7 @@ func TestAuditEventsGoThroughTheAuditServiceWhileItRuns(t *testing.T) {
 		t.Fatalf("first log line %q", got)
 	}
 
-	a.audit.Record(ctx, app.AuditEvent{Level: "info", Name: "through.nats"})
+	a.audit.Record(ctx, contractaudit.Event{Level: "info", Name: "through.nats"})
 	select {
 	case got := <-written:
 		if got != "through.nats" {

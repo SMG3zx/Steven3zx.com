@@ -1,7 +1,7 @@
 {
   "$schema": "https://aka.ms/codetour-schema",
-  "title": "Request flow: HTTP to a use case and its ports",
-  "description": "Follows POST /api/projects/:id/deployments from the router, through the use case, to the adapters behind its ports.",
+  "title": "Request flow: HTTP to a service over NATS",
+  "description": "Follows POST /api/projects/:id/deployments from the router, through the gateway's handler and its client, to the fleet service.",
   "steps": [
     {
       "file": "janus-go/internal/adapters/httpapi/projects.go",
@@ -11,15 +11,15 @@
     },
     {
       "file": "janus-go/internal/adapters/httpapi/deployments.go",
-      "line": 20,
+      "line": 21,
       "title": "The driving adapter",
-      "description": "`func (a *Server) startDeployment` reads the body, checks the project.deploy policy, and calls the use case. It never touches the Store."
+      "description": "`func (a *Server) startDeployment` reads the body, checks the project.deploy policy, and calls the fleet service through the gateway's Fleet interface."
     },
     {
       "file": "janus-go/internal/adapters/fleetnats/fleetnats.go",
-      "line": 119,
-      "title": "The Fleet port's adapter",
-      "description": "`func (c *Client) CreateDeployment`. The single process asks the fleet service over NATS and turns its refusals back into the errors the port documents."
+      "line": 117,
+      "title": "The gateway's fleet client",
+      "description": "`func (c *Client) CreateDeployment`. The gateway asks the fleet service over NATS and turns its refusals back into the errors the handlers match."
     },
     {
       "file": "janus-go/internal/services/fleet/deployments.go",
@@ -34,12 +34,6 @@
       "description": "`type AgentLink interface`. The fleet service sends commands to Agents through it. Real: agentnats.Link, over the hub's NATS server. Test: agentlinktest.Loopback."
     },
     {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 15,
-      "title": "The Store port",
-      "description": "`type Store interface` is what the core reads and writes. It returns typed values and plain errors, and every adapter must pass the contract suite."
-    },
-    {
       "file": "janus-go/internal/services/fleet/store.go",
       "line": 251,
       "title": "The SQLite store",
@@ -52,16 +46,16 @@
       "description": "`func CanMove` is the legal-moves rule. Adapters call it rather than reimplementing it."
     },
     {
-      "file": "janus-go/internal/app/ports.go",
-      "line": 177,
-      "title": "The Audit port",
-      "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the use case does not handle its errors."
+      "file": "janus-go/internal/adapters/httpapi/audit.go",
+      "line": 11,
+      "title": "The Audit interface",
+      "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the handler does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 525,
+      "line": 468,
       "title": "The composition root starts the fleet",
-      "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the single process its client."
+      "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the gateway its client."
     }
   ]
 }
