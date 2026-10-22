@@ -59,13 +59,13 @@
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 270,
+      "line": 269,
       "title": "Compare and swap in SQLite",
       "description": "`func (s *Service) moveDeployment`. The move happens only while the Deployment is still in the state the caller saw."
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 70,
+      "line": 69,
       "title": "The one-in-flight rule in the schema",
       "description": "`CREATE UNIQUE INDEX one_inflight_deployment_per_project`. Two Deployments of one Project cannot be queued or starting at once."
     }

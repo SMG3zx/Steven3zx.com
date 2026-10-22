@@ -29,7 +29,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 184,
+      "line": 183,
       "title": "Recorded once",
       "description": "`func (s *Service) insertRunUsage`. The run ID is the key, so reporting it again changes nothing."
     },

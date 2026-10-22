@@ -77,7 +77,7 @@
     },
     {
       "file": "janus-go/internal/services/builds/store.go",
-      "line": 128,
+      "line": 127,
       "title": "The Store keeps the Artifact",
       "description": "`func completeBuild` writes the Artifact and its log to builds.db, and only for a build that is still running. The artifacts store gets a copy afterwards."
     }

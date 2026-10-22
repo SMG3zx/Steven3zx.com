@@ -35,7 +35,7 @@
     },
     {
       "file": "janus-go/internal/services/fleet/store.go",
-      "line": 251,
+      "line": 250,
       "title": "The SQLite store",
       "description": "`func (s *Service) insertDeployment`. Stores the queued Deployment in fleet.db, refusing a second one in flight for the Project in the same transaction."
     },
