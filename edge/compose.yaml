@@ -83,8 +83,23 @@ services:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik_data:/letsencrypt
 
+  # Tailnet control server and embedded DERP relay. Traefik serves its HTTPS side at
+  # ts.steven3zx.com; STUN for DERP is published directly on UDP 3478.
+  headscale:
+    image: headscale/headscale:v0.29.5
+    restart: unless-stopped
+    command: ["serve"]
+    expose:
+      - "8080"
+    ports:
+      - "3478:3478/udp"
+    volumes:
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - headscale_data:/var/lib/headscale
+
 volumes:
   admin_data:
   caddy_data:
   caddy_config:
   traefik_data:
+  headscale_data:

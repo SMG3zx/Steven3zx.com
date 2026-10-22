@@ -1,0 +1,73 @@
+# Headscale v0.29.5 for the Janus tailnet. Traefik terminates TLS on 443 and forwards
+# to listen_addr, so Headscale serves plain HTTP inside the compose network.
+# The embedded DERP relay answers on /derp over that same HTTPS hostname, and its
+# STUN listener is published directly on UDP 3478.
+#
+# The hostname below must be a DNS-only record (grey cloud). Cloudflare's proxy
+# does not carry the control protocol or DERP.
+
+server_url: https://ts.steven3zx.com
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 127.0.0.1:9090
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+
+# Traefik is the only proxy in front of this listener.
+trusted_proxies:
+  - 172.16.0.0/12
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+derp:
+  server:
+    enabled: true
+    region_id: 999
+    region_code: "janus"
+    region_name: "Janus DERP"
+    verify_clients: true
+    stun_listen_addr: "0.0.0.0:3478"
+    private_key_path: /var/lib/headscale/derp_server_private.key
+    automatically_add_embedded_derp_region: true
+    # The home machine's public IPv4. A changed address needs this updated.
+    ipv4: 69.137.93.114
+  # Keep Tailscale's default DERP map as a fallback. Removing it leaves one relay.
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  paths: []
+  auto_update_enabled: true
+  update_frequency: 3h
+
+disable_check_updates: false
+
+# Janus installs its ACL policy through the API on startup, which needs database mode.
+policy:
+  mode: database
+  path: ""
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+
+dns:
+  magic_dns: true
+  base_domain: tailnet.steven3zx.com
+  override_local_dns: true
+  nameservers:
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
+
+log:
+  level: info
+  format: text
+
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"

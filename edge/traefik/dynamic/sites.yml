@@ -79,7 +79,20 @@ http:
         domains:
           - main: "steven3zx.com"
 
+    headscale:
+      rule: "Host(`ts.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: headscale
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
   services:
+    headscale:
+      loadBalancer:
+        servers:
+          - url: "http://headscale:8080"
     grafana:
       loadBalancer:
         servers:
