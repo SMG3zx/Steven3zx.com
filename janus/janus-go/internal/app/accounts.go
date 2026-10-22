@@ -3,44 +3,27 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
-// BuildOwners deletes the WASM Builds an Account owns, and cancels the ones
-// running.
-type BuildOwners interface {
-	DeleteOwner(ctx context.Context, owner string) error
-}
+// accountPoll is how often Delete asks identity whether a deletion has finished.
+const accountPoll = 50 * time.Millisecond
 
 // Accounts deletes Accounts. Deleting an Account removes everything it owns:
-// its Projects, Snapshots, WASM Builds and Artifacts, its Provider Identities
-// and its GitHub Connection, and, when Agents are set, its Agents' tailnet nodes.
+// its Projects, Snapshots, WASM Builds and Artifacts, its Provider Identities,
+// its GitHub Connection and its Agents' tailnet nodes. The identity service
+// runs that deletion: it announces it, each service removes what it keeps and
+// confirms, and identity deletes the User once all have confirmed.
 type Accounts struct {
 	store      Store
 	identities Identities
 	catalog    Catalog
-	builds     BuildOwners
-	fleet      Fleet
 }
 
-// NewAccounts returns an Accounts that deletes what an Account owns through
-// store and catalog and the User itself through identities.
+// NewAccounts returns an Accounts that deletes an Account's records in store and
+// catalog and its User through identities.
 func NewAccounts(store Store, identities Identities, catalog Catalog) *Accounts {
 	return &Accounts{store: store, identities: identities, catalog: catalog}
-}
-
-// WithBuilds makes a deleted Account's WASM Builds go with it, and their running
-// Builds stop. It returns a, so it chains onto NewAccounts.
-func (a *Accounts) WithBuilds(builds BuildOwners) *Accounts {
-	a.builds = builds
-	return a
-}
-
-// WithFleet makes a deleted Account's Deployments stop, its Agents leave the
-// tailnet, and its records in the fleet service go. It returns a, so it chains
-// onto NewAccounts.
-func (a *Accounts) WithFleet(fleet Fleet) *Accounts {
-	a.fleet = fleet
-	return a
 }
 
 // Delete deletes an Account. It is refused, and the result lists the active
@@ -48,17 +31,9 @@ func (a *Accounts) WithFleet(fleet Fleet) *Accounts {
 // cancelActiveJobs is set: then those jobs end as cancelled, never resume, and
 // the ones running are stopped. Deleted is false when there was no such Account.
 //
-// The steps run in an order that can be repeated after any of them fails: the
-// Deployments stop and the Agents leave the tailnet, the projects service
-// deletes the Projects, the builds service deletes the Builds, the Store deletes
-// the rest, and the User and its sign-in methods go last. A failure keeps the Account, which can
-// still sign in, and the error comes back, so deleting again finishes the job
-// and no node is left behind without a record.
+// Delete returns once the User is gone. A deletion that fails part way is left
+// for identity to resume, and deleting again finishes it.
 func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bool) (AccountDeleted, error) {
-	user, err := a.identities.FindUser(ctx, owner)
-	if err != nil || !user.Found {
-		return AccountDeleted{}, err
-	}
 	imports, err := a.catalog.ActiveImports(ctx, owner)
 	if err != nil {
 		return AccountDeleted{}, err
@@ -70,37 +45,42 @@ func (a *Accounts) Delete(ctx context.Context, owner string, cancelActiveJobs bo
 	if active := append(imports, builds...); len(active) > 0 && !cancelActiveJobs {
 		return AccountDeleted{ActiveJobs: active}, nil
 	}
-	// Deployments stop while their Agents can still be reached, so before the
-	// Agents leave the tailnet.
-	if a.fleet != nil {
-		if err = a.fleet.TeardownDeployments(ctx, owner); err != nil {
-			return AccountDeleted{}, fmt.Errorf("stop the Account's Deployments: %w", err)
-		}
-		if err = a.fleet.RevokeAgents(ctx, owner); err != nil {
-			return AccountDeleted{}, fmt.Errorf("remove the Account's Agents from the tailnet: %w", err)
-		}
+	deletion, err := a.identities.DeleteAccount(ctx, owner, cancelActiveJobs)
+	if err != nil {
+		return AccountDeleted{}, fmt.Errorf("start deleting the Account: %w", err)
 	}
-	if err = a.catalog.DeleteOwner(ctx, owner); err != nil {
-		return AccountDeleted{}, fmt.Errorf("delete the Account's Projects: %w", err)
-	}
-	if a.builds != nil {
-		if err = a.builds.DeleteOwner(ctx, owner); err != nil {
-			return AccountDeleted{}, fmt.Errorf("delete the Account's WASM builds: %w", err)
-		}
-	}
-	if a.fleet != nil {
-		if err = a.fleet.DeleteOwner(ctx, owner); err != nil {
-			return AccountDeleted{}, fmt.Errorf("delete the Account's fleet records: %w", err)
-		}
+	switch deletion.Status {
+	case DeletionMissing:
+		return AccountDeleted{}, nil
+	case DeletionRefused:
+		return AccountDeleted{ActiveJobs: deletion.ActiveJobs}, nil
 	}
 	result, err := a.store.DeleteAccount(ctx, owner, cancelActiveJobs)
 	if err != nil || len(result.ActiveJobs) > 0 {
 		return result, err
 	}
-	// An Owner that never had records here has nothing in the Store to delete.
-	result.Deleted, err = a.identities.DeleteUser(ctx, owner)
-	if err != nil {
-		return AccountDeleted{}, fmt.Errorf("delete the Account's sign-in methods: %w", err)
+	if err := a.awaitDeletion(ctx, owner, cancelActiveJobs); err != nil {
+		return AccountDeleted{}, err
 	}
+	result.Deleted = true
 	return result, nil
+}
+
+// awaitDeletion waits until identity has deleted the User. Asking again resumes a
+// deletion that has stalled, so each poll is a request.
+func (a *Accounts) awaitDeletion(ctx context.Context, owner string, cancelActiveJobs bool) error {
+	for {
+		deletion, err := a.identities.DeleteAccount(ctx, owner, cancelActiveJobs)
+		if err != nil {
+			return fmt.Errorf("wait for the Account's deletion: %w", err)
+		}
+		if deletion.Status == DeletionMissing {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("the Account is still being deleted: %w", ctx.Err())
+		case <-time.After(accountPoll):
+		}
+	}
 }

@@ -41,7 +41,7 @@
     },
     {
       "file": "janus-go/internal/services/builds/service.go",
-      "line": 168,
+      "line": 174,
       "title": "Shutdown waits for jobs",
       "description": "`func (s *Service) Stop` stops taking jobs and cancels the running ones, which JetStream hands out again. It waits for them to stop, or for the context to end."
     }

@@ -172,3 +172,17 @@ func (m *Memory) DisconnectGitHub(_ context.Context, userID string) error {
 	delete(m.github, userID)
 	return nil
 }
+
+// DeleteAccount deletes the User at once, so the first request reports the
+// deletion as started and the next finds nothing. The identity service takes a
+// round of events for the same result.
+func (m *Memory) DeleteAccount(ctx context.Context, id string, _ bool) (app.AccountDeletion, error) {
+	deleted, err := m.DeleteUser(ctx, id)
+	if err != nil {
+		return app.AccountDeletion{}, err
+	}
+	if !deleted {
+		return app.AccountDeletion{Status: app.DeletionMissing}, nil
+	}
+	return app.AccountDeletion{Status: app.DeletionDeleting}, nil
+}

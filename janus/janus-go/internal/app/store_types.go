@@ -227,6 +227,24 @@ type AccountDeleted struct {
 	Err        error
 }
 
+// Statuses of an Account deletion, as identity reports them.
+const (
+	// DeletionMissing means there is no such User, which is also what a finished
+	// deletion reads as.
+	DeletionMissing = "missing"
+	// DeletionRefused means the Account has unfinished jobs and they were not
+	// cancelled. The jobs are in AccountDeletion.ActiveJobs.
+	DeletionRefused = "refused"
+	// DeletionDeleting means the deletion has started and is not finished.
+	DeletionDeleting = "deleting"
+)
+
+// AccountDeletion is identity's answer to a request about an Account deletion.
+type AccountDeletion struct {
+	Status     string
+	ActiveJobs []ActiveJob
+}
+
 // ActiveJob describes an import or WASM build that has not finished yet.
 type ActiveJob struct {
 	Kind      string `json:"kind"`

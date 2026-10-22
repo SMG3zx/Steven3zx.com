@@ -216,9 +216,9 @@ func (a *application) groups() []group {
 		{name: "runtime", components: []component{
 			{name: "runs", start: a.startRuns},
 			{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)},
-			// Accounts come last in runtime: deleting one stops its Deployments first.
+			// Accounts come last in runtime, after the services they ask to delete an Account.
 			{name: "accounts", start: func(context.Context) error {
-				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog).WithBuilds(a.builds).WithFleet(a.fleet)
+				a.accounts = app.NewAccounts(a.store, a.identities, a.catalog)
 				return nil
 			}},
 		}},

@@ -92,3 +92,18 @@ func (c *Client) FindGitHubToken(ctx context.Context, userID string) (string, bo
 func (c *Client) DisconnectGitHub(ctx context.Context, userID string) error {
 	return c.call(ctx, contractid.SubjectDisconnectGitHub, contractid.DisconnectGitHub{UserID: userID}, nil)
 }
+
+// DeleteAccount starts the deletion of the User's Account, or asks how far it has
+// got, through the identity service.
+func (c *Client) DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (app.AccountDeletion, error) {
+	var deletion contractid.AccountDeletion
+	err := c.call(ctx, contractid.SubjectDeleteAccount, contractid.DeleteAccount{UserID: userID, CancelActiveJobs: cancelActiveJobs}, &deletion)
+	if err != nil {
+		return app.AccountDeletion{}, err
+	}
+	jobs := make([]app.ActiveJob, 0, len(deletion.ActiveJobs))
+	for _, job := range deletion.ActiveJobs {
+		jobs = append(jobs, app.ActiveJob{Kind: job.Kind, ID: job.ID, ProjectID: job.ProjectID, Status: job.Status})
+	}
+	return app.AccountDeletion{Status: deletion.Status, ActiveJobs: jobs}, nil
+}

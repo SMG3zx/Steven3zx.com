@@ -5,7 +5,7 @@
   "steps": [
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 75,
+      "line": 79,
       "title": "WASMBuilds",
       "description": "`type WASMBuilds interface`. Real: buildsnats.Client, which asks the builds service over NATS. Test: buildstest.Fake. The builds service's own tests cover the service behind it."
     },
@@ -23,37 +23,37 @@
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 159,
+      "line": 163,
       "title": "Catalog",
       "description": "`type Catalog interface`. Real: projectsnats.Client, which asks the projects service over NATS. Test: catalogtest.Memory. Contract: catalogtest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 94,
+      "line": 98,
       "title": "BuildArtifacts",
       "description": "`type BuildArtifacts interface`. Real: buildsnats.Client, which reads the Artifact from the artifacts store. Test: the Builds use case over buildstest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 146,
+      "line": 150,
       "title": "Runner",
       "description": "`type Runner interface`. Real: wasmtime.Wasmtime. Test: runnertest.Fake."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 192,
+      "line": 196,
       "title": "Audit",
       "description": "`type Audit interface`. Real: auditnats.Publisher, which publishes to the AUDIT stream for the audit service. Test: audittest.Recorder. Contract: audittest.Run."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 103,
+      "line": 107,
       "title": "Fleet",
       "description": "`type Fleet interface`. Real: fleetnats.Client, which asks the fleet service over NATS. Test: the fleettest fixture, which runs the real service on an embedded server."
     },
     {
       "file": "janus-go/internal/app/ports.go",
-      "line": 200,
+      "line": 204,
       "title": "LocalState",
       "description": "`type LocalState interface`. Real: agentdisk. Test: localstatetest.Memory."
     },

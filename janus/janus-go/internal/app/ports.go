@@ -61,6 +61,10 @@ type Identities interface {
 	// DeleteUser removes a User and its sign-in methods and GitHub Connection.
 	// Deleted is false when there was no such User.
 	DeleteUser(ctx context.Context, id string) (deleted bool, err error)
+	// DeleteAccount starts deleting the User's Account, or reports how far a
+	// deletion has got. Without cancelActiveJobs an Account with unfinished jobs
+	// is refused and the status lists them.
+	DeleteAccount(ctx context.Context, userID string, cancelActiveJobs bool) (AccountDeletion, error)
 	ResolveGoogleIdentity(ctx context.Context, identity ResolveGoogleIdentity) (GoogleIdentityResolved, error)
 	ResolveGitHubLogin(ctx context.Context, login ResolveGitHubLogin) (GitHubLoginResolved, error)
 	ConnectGitHub(ctx context.Context, connection ConnectGitHub) error
