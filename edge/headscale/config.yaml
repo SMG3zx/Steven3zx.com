@@ -25,21 +25,15 @@ prefixes:
   allocation: sequential
 
 derp:
+  # The relay runs in its own container (the derper service in compose.yaml), because
+  # Headscale 0.29.5's embedded STUN listener did not answer probes.
   server:
-    enabled: true
-    region_id: 999
-    region_code: "janus"
-    region_name: "Janus DERP"
-    verify_clients: true
-    stun_listen_addr: "0.0.0.0:3478"
-    private_key_path: /var/lib/headscale/derp_server_private.key
-    automatically_add_embedded_derp_region: true
-    # The home machine's public IPv4. A changed address needs this updated.
-    ipv4: 69.137.93.114
-  # Keep Tailscale's default DERP map as a fallback. Removing it leaves one relay.
+    enabled: false
+  # Janus's region, plus Tailscale's default map kept as a fallback.
   urls:
     - https://controlplane.tailscale.com/derpmap/default
-  paths: []
+  paths:
+    - /etc/headscale/derp.yaml
   auto_update_enabled: true
   update_frequency: 3h
 

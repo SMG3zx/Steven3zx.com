@@ -1,0 +1,14 @@
+# The Janus DERP region, served by the derper container. Headscale loads this file
+# through derp.paths and keeps Tailscale's default regions alongside it.
+regions:
+  999:
+    regionid: 999
+    regioncode: "janus"
+    regionname: "Janus DERP"
+    nodes:
+      - name: "999a"
+        regionid: 999
+        hostname: "derp.steven3zx.com"
+        derpport: 443
+        stunport: 3478
+        ipv4: "69.137.93.114"

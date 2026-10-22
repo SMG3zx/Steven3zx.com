@@ -91,11 +91,33 @@ services:
     command: ["serve"]
     expose:
       - "8080"
+    volumes:
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - ./headscale/derp.yaml:/etc/headscale/derp.yaml:ro
+      - headscale_data:/var/lib/headscale
+
+  # Tailscale's DERP and STUN relay. Traefik passes derp.steven3zx.com through by TLS
+  # SNI, so derper terminates TLS with the wildcard certificate in derper_certs. STUN
+  # is published directly on UDP 3478. The image is built from the pinned Tailscale module:
+  #   docker build -t janus-derper:v1.104.2 build/derper
+  derper:
+    image: janus-derper:v1.104.2
+    restart: unless-stopped
+    command:
+      - "--hostname=derp.steven3zx.com"
+      - "--certmode=manual"
+      - "--certdir=/certs"
+      - "--a=:8443"
+      - "--http-port=-1"
+      - "--stun"
+      - "--stun-port=3478"
+    expose:
+      - "8443"
     ports:
       - "3478:3478/udp"
     volumes:
-      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
-      - headscale_data:/var/lib/headscale
+      - derper_certs:/certs:ro
+      - derper_data:/var/lib/derper
 
 volumes:
   admin_data:
@@ -103,3 +125,6 @@ volumes:
   caddy_config:
   traefik_data:
   headscale_data:
+  derper_certs:
+    external: true
+  derper_data:

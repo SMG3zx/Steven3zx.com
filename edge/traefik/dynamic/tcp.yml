@@ -1,0 +1,16 @@
+# derp.steven3zx.com is not terminated by Traefik. The TLS handshake is passed through to
+# derper, which holds the certificate itself, so DERP's own TLS works end to end.
+tcp:
+  routers:
+    derp:
+      rule: "HostSNI(`derp.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: derp
+      tls:
+        passthrough: true
+
+  services:
+    derp:
+      loadBalancer:
+        servers:
+          - address: "derper:8443"
