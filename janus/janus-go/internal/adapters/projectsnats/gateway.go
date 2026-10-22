@@ -70,3 +70,60 @@ func (g *Gateway) Commits(ctx context.Context, ownerID, repository, branch strin
 	err := g.call(ctx, contractprojects.SubjectCommits, contractprojects.RepositoryKey{OwnerID: ownerID, Repository: repository, Branch: branch}, &list)
 	return list.Commits, err
 }
+
+// CreateProject creates a Project for the Owner. The caller chooses its ID.
+func (g *Gateway) CreateProject(ctx context.Context, request contractprojects.CreateProject) (contractprojects.Project, error) {
+	var created contractprojects.Project
+	err := g.call(ctx, contractprojects.SubjectCreateProject, request, &created)
+	return created, err
+}
+
+// UpdateProject renames a Project of the Owner and changes its description.
+func (g *Gateway) UpdateProject(ctx context.Context, request contractprojects.UpdateProject) (contractprojects.Project, error) {
+	var updated contractprojects.Project
+	err := g.call(ctx, contractprojects.SubjectUpdateProject, request, &updated)
+	return updated, err
+}
+
+// DeleteProject removes a Project of the Owner and everything it holds. Deleted is
+// false when the Owner has no such Project.
+func (g *Gateway) DeleteProject(ctx context.Context, id, ownerID string) (bool, error) {
+	var deleted contractprojects.ProjectDeleted
+	err := g.call(ctx, contractprojects.SubjectDeleteProject, contractprojects.ProjectKey{OwnerID: ownerID, ProjectID: id}, &deleted)
+	return deleted.Deleted, err
+}
+
+// ActivateSnapshot makes a Snapshot the active one of its Project. Activated is
+// false when the Owner has no such Snapshot.
+func (g *Gateway) ActivateSnapshot(ctx context.Context, ownerID, projectID, snapshotID string) (bool, error) {
+	var activated contractprojects.Activated
+	err := g.call(ctx, contractprojects.SubjectActivateSnapshot, contractprojects.SnapshotKey{OwnerID: ownerID, ProjectID: projectID, SnapshotID: snapshotID}, &activated)
+	return activated.Activated, err
+}
+
+// SetEntryPoint records the Entrypoint the Owner confirmed for the Project's active
+// Snapshot.
+func (g *Gateway) SetEntryPoint(ctx context.Context, request contractprojects.SetEntryPoint) error {
+	return g.call(ctx, contractprojects.SubjectSetEntryPoint, request, nil)
+}
+
+// RequestImport queues an Import of a commit into the Project and returns its job ID.
+func (g *Gateway) RequestImport(ctx context.Context, request contractprojects.RequestImport) (string, error) {
+	var queued contractprojects.ImportQueued
+	err := g.call(ctx, contractprojects.SubjectRequestImport, request, &queued)
+	return queued.JobID, err
+}
+
+// RetryImport queues a new Import like the failed one, and returns its job ID.
+func (g *Gateway) RetryImport(ctx context.Context, ownerID, jobID string) (string, error) {
+	var queued contractprojects.ImportQueued
+	err := g.call(ctx, contractprojects.SubjectRetryImport, contractprojects.ImportKey{OwnerID: ownerID, JobID: jobID}, &queued)
+	return queued.JobID, err
+}
+
+// FindImportJob returns one Import of the Owner. Found is false when there is none.
+func (g *Gateway) FindImportJob(ctx context.Context, id, ownerID string) (contractprojects.ImportJob, bool, error) {
+	var found contractprojects.ImportFound
+	err := g.call(ctx, contractprojects.SubjectFindImport, contractprojects.ImportKey{OwnerID: ownerID, JobID: id}, &found)
+	return found.Job, found.Found, err
+}

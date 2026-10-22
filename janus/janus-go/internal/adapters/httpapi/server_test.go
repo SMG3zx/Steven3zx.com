@@ -26,13 +26,12 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	store := storetest.NewMemory()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
-	imports := app.NewImports(catalog)
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audittest.NewRecorder(), Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Projects: app.NewProjects(catalog), Catalog: catalogtest.NewReads(catalog), Imports: imports, Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audittest.NewRecorder(), Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 

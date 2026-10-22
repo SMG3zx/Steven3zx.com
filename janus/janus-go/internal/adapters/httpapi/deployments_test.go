@@ -62,7 +62,7 @@ func newDeployApp(t *testing.T) *deployApp {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Projects: app.NewProjects(catalog), Builds: builds,
+		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Builds: builds,
 		Accounts: app.NewAccounts(store, identities, catalog), Fleet: fixture.Fleet,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()

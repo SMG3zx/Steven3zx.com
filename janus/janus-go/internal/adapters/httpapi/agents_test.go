@@ -42,7 +42,7 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 		t.Fatal(err)
 	}
 	config := Config{
-		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Catalog: catalogtest.NewGateway(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
 	a := &agentApp{tailnet: tailnettest.NewFake(), audit: audit}

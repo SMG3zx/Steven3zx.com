@@ -45,7 +45,7 @@ var clockAllowance = map[string]int{
 var errorTextAllowance = map[string]int{
 	"../adapters/fleetnats/fleetnats.go": 4,
 	"../adapters/httpapi/lifecycle.go":   2,
-	"../adapters/httpapi/projects.go":    1,
+	"../adapters/httpapi/projects.go":    0,
 }
 
 // portAllowance: exported interfaces a service still declares, each file's

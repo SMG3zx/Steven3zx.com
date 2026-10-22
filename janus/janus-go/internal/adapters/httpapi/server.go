@@ -40,9 +40,7 @@ type Config struct {
 	Authorization  *authz.Policy
 	Audit          app.Audit
 	Identity       Identity
-	Projects       *app.Projects
 	Catalog        Catalog
-	Imports        *app.Imports
 	Builds         *app.Builds
 	Accounts       *app.Accounts
 	// Fleet is the fleet service: Agents, their Deployments and their Usage. It is

@@ -3,9 +3,11 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"janus/internal/app"
+	"janus/internal/contract"
 	contractprojects "janus/internal/contract/projects"
 	"net/http"
 	"strings"
@@ -113,7 +115,7 @@ func (a *Server) createProjectPage(c *call) any {
 	if response, ok := created.(reply); ok && response.StatusCode >= 400 {
 		return response
 	}
-	if project, ok := created.(app.Project); ok {
+	if project, ok := created.(contractprojects.Project); ok {
 		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects/" + project.ID}}}
 	}
 	return internalError()
@@ -152,7 +154,7 @@ func (a *Server) createProjectAPI(c *call) any {
 	if failure, ok := created.(reply); ok {
 		return failure
 	}
-	project, ok := created.(app.Project)
+	project, ok := created.(contractprojects.Project)
 	if !ok {
 		return internalError()
 	}
@@ -163,9 +165,9 @@ func (a *Server) createProject(c *call, owner, name, description string) any {
 	if strings.TrimSpace(name) == "" || len(name) > 120 || len(description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	project, err := a.dependencies.Projects.Create(c.Request.Context(), app.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
+	project, err := a.dependencies.Catalog.CreateProject(c.Request.Context(), contractprojects.CreateProject{ID: uuid.NewString(), OwnerID: owner, Name: strings.TrimSpace(name), Description: strings.TrimSpace(description)})
 	if err != nil {
-		if app.IsReply(err) {
+		if errors.Is(err, contract.ErrConflict) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "project could not be created"})
 		}
 		return internalError()
@@ -195,7 +197,7 @@ func (a *Server) listProjectSnapshots(c *call) any {
 	}
 	snapshots, err := a.dependencies.Catalog.ListSnapshots(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
-		if app.IsReply(err) {
+		if errors.Is(err, contract.ErrNotFound) {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 		}
 		return internalError()
@@ -208,7 +210,7 @@ func (a *Server) activateProjectSnapshot(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	activated, err := a.dependencies.Projects.ActivateSnapshot(c.Request.Context(), owner, c.Param("id"), c.Param("snapshot"))
+	activated, err := a.dependencies.Catalog.ActivateSnapshot(c.Request.Context(), owner, c.Param("id"), c.Param("snapshot"))
 	if err != nil {
 		return internalError()
 	}
@@ -231,9 +233,9 @@ func (a *Server) updateProjectAPI(c *call) any {
 	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 120 || len(input.Description) > 2000 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "project name (1-120 characters) and description (up to 2000 characters) are required"})
 	}
-	project, err := a.dependencies.Projects.Update(c.Request.Context(), app.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
+	project, err := a.dependencies.Catalog.UpdateProject(c.Request.Context(), contractprojects.UpdateProject{ID: c.Param("id"), OwnerID: owner, Name: input.Name, Description: input.Description})
 	if err != nil {
-		if err.Error() == "project not found" {
+		if errors.Is(err, contract.ErrNotFound) {
 			return jsonResponse(http.StatusNotFound, map[string]string{"error": "project not found"})
 		}
 		return internalError()
@@ -246,9 +248,9 @@ func (a *Server) deleteProjectAPI(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	deleted, err := a.dependencies.Projects.Delete(c.Request.Context(), c.Param("id"), owner)
+	deleted, err := a.dependencies.Catalog.DeleteProject(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
-		if app.IsReply(err) {
+		if errors.Is(err, contract.ErrConflict) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": err.Error()})
 		}
 		return internalError()
@@ -308,7 +310,7 @@ func (a *Server) startProjectImport(c *call) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid import request"})
 	}
-	jobID, err := a.dependencies.Imports.Request(c.Request.Context(), app.ImportRequest{OwnerID: owner, ProjectID: c.Param("id"), Repository: input.Repository, Branch: input.Branch, Commit: input.Commit})
+	jobID, err := a.dependencies.Catalog.RequestImport(c.Request.Context(), contractprojects.RequestImport{OwnerID: owner, ProjectID: c.Param("id"), Repository: input.Repository, Branch: input.Branch, Commit: input.Commit})
 	if err != nil {
 		a.log(c.Request.Context(), "warn", "project.import.request.rejected", map[string]string{
 			"user_id": owner, "project_id": c.Param("id"), "reason": err.Error(),
@@ -323,7 +325,7 @@ func (a *Server) getImportStatus(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	job, found, err := a.dependencies.Projects.ImportJob(c.Request.Context(), c.Param("id"), owner)
+	job, found, err := a.dependencies.Catalog.FindImportJob(c.Request.Context(), c.Param("id"), owner)
 	if err != nil {
 		return internalError()
 	}
@@ -475,7 +477,7 @@ func (a *Server) setProjectEntrypoint(c *call) any {
 	if err := decodeJSON(c.Request, &input); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid entrypoint selection"})
 	}
-	if err := a.dependencies.Imports.SetEntryPoint(c.Request.Context(), owner, c.Param("id"), input.SnapshotID, input.EntryPoint); err != nil {
+	if err := a.dependencies.Catalog.SetEntryPoint(c.Request.Context(), contractprojects.SetEntryPoint{OwnerID: owner, ProjectID: c.Param("id"), SnapshotID: input.SnapshotID, EntryPoint: input.EntryPoint}); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	return map[string]string{"entry_point": input.EntryPoint}

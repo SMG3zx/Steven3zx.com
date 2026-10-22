@@ -17,7 +17,7 @@ func (a *Server) retryImportAPI(c *call) any {
 	if !ok {
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 	}
-	jobID, err := a.dependencies.Imports.Retry(c.Request.Context(), owner, c.Param("id"))
+	jobID, err := a.dependencies.Catalog.RetryImport(c.Request.Context(), owner, c.Param("id"))
 	if err != nil {
 		return jsonResponse(importErrorStatus(err), map[string]string{"error": err.Error()})
 	}

@@ -111,7 +111,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	policy, err := authz.New(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
-		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Catalog: catalogtest.NewGateway(catalog), Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Fleet: fx.Fleet,
 	}).Handler())

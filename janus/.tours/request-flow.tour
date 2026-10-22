@@ -5,7 +5,7 @@
   "steps": [
     {
       "file": "janus-go/internal/adapters/httpapi/projects.go",
-      "line": 41,
+      "line": 43,
       "title": "The router",
       "description": "`app.Post(\"/api/projects/:id/deployments\"` maps the route to startDeployment. The HTTP layer is a driving adapter."
     },
@@ -59,7 +59,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 564,
+      "line": 557,
       "title": "The composition root starts the fleet",
       "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the single process its client."
     }

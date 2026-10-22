@@ -341,12 +341,11 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 	}
 	catalog := catalogtest.NewMemory()
 	audit := audittest.NewRecorder()
-	imports := app.NewImports(catalog)
 	wasm := buildstest.NewFake(store)
 	wasm.Produce([]byte("playwright-wasm-archive"))
 	builds := app.NewBuilds(store, catalog, wasm)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Projects: app.NewProjects(catalog), Catalog: catalogtest.NewReads(catalog), Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Catalog: catalogtest.NewGateway(catalog), Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,

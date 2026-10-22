@@ -82,7 +82,6 @@ type application struct {
 	// single process's use of it.
 	runsService *runsservice.Service
 	identity    httpapi.Identity
-	projects    *app.Projects
 	tailnet     *headscale.Client
 	tailnode    *tailnode.Node
 	agentLink   *agentnats.Link
@@ -96,7 +95,6 @@ type application struct {
 	fleet          app.Fleet
 	authentication *authn.Authentication
 	authorization  *authz.Policy
-	imports        *app.Imports
 	builds         *app.Builds
 	accounts       *app.Accounts
 	runs           app.WASMRuns
@@ -195,11 +193,6 @@ func (a *application) groups() []group {
 			{name: "projects service", start: a.startProjectsService, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("stop the projects service", a.projectsService.Stop(ctx))
 			})},
-			{name: "projects", start: func(context.Context) error {
-				a.projects = app.NewProjects(a.catalog)
-				a.imports = app.NewImports(a.catalog)
-				return nil
-			}},
 			{name: "builds service", start: a.startBuildsService, stop: a.tracked(func(ctx context.Context) error {
 				return wrap("stop the builds service", a.buildsService.Stop(ctx))
 			})},
@@ -511,7 +504,7 @@ func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
 	server := httpapi.New(httpapi.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Projects: a.projects, Catalog: projectsnats.NewGateway(a.nats.Conn()), Imports: a.imports, Builds: a.builds, Accounts: a.accounts, Fleet: a.fleet, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Catalog: projectsnats.NewGateway(a.nats.Conn()), Builds: a.builds, Accounts: a.accounts, Fleet: a.fleet, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,

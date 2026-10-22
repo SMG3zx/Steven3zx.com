@@ -7,7 +7,36 @@ import (
 
 	"janus/internal/app"
 	"janus/internal/contract"
+	contractprojects "janus/internal/contract/projects"
 )
+
+// TestTheGatewayWritesWhatItReads changes Projects through the Gateway's contract
+// types and checks the service answers each write with the contract's errors.
+func TestTheGatewayWritesWhatItReads(t *testing.T) {
+	f := startProjects(t)
+	ctx := context.Background()
+	f.Connect("alice")
+	gateway := NewGateway(f.Catalog.(*Client).conn)
+	if _, err := gateway.CreateProject(ctx, contractprojects.CreateProject{ID: "p2", OwnerID: "alice", Name: "Blank"}); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := gateway.UpdateProject(ctx, contractprojects.UpdateProject{ID: "p2", OwnerID: "alice", Name: "Renamed", Description: "Kept"})
+	if err != nil || renamed.Name != "Renamed" || renamed.Description != "Kept" {
+		t.Fatalf("UpdateProject = %+v, %v", renamed, err)
+	}
+	if _, err := gateway.UpdateProject(ctx, contractprojects.UpdateProject{ID: "p2", OwnerID: "bob", Name: "Stolen"}); !errors.Is(err, contract.ErrNotFound) {
+		t.Fatalf("UpdateProject of another Owner's Project = %v, want not found", err)
+	}
+	if deleted, err := gateway.DeleteProject(ctx, "p2", "bob"); err != nil || deleted {
+		t.Fatalf("DeleteProject of another Owner's Project = %v, %v, want false", deleted, err)
+	}
+	if deleted, err := gateway.DeleteProject(ctx, "p2", "alice"); err != nil || !deleted {
+		t.Fatalf("DeleteProject = %v, %v, want true", deleted, err)
+	}
+	if _, found, err := gateway.FindImportJob(ctx, "missing", "alice"); err != nil || found {
+		t.Fatalf("FindImportJob of a missing Import = %v, %v, want absent", found, err)
+	}
+}
 
 // TestTheGatewayReadsWhatTheClientWrites creates a Project through the Client and
 // reads it back through the Gateway, which speaks the contract's types.
