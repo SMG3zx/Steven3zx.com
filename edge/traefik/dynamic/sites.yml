@@ -1,0 +1,106 @@
+# Routes for the public hostnames. Same behaviour as edge/Caddyfile: each hostname
+# goes to the same backend, with the /admin and /grafana exceptions called out below.
+#
+# The wildcard covers one-level names such as git.steven3zx.com. It does not cover the
+# apex, so the apex router requests its own certificate.
+
+http:
+  middlewares:
+    apex-to-www:
+      redirectRegex:
+        regex: "^https://steven3zx\\.com/(.*)"
+        replacement: "https://www.steven3zx.com/${1}"
+        permanent: true
+
+  routers:
+    janus-grafana:
+      rule: "Host(`janus.steven3zx.com`) && PathPrefix(`/grafana`)"
+      priority: 100
+      entryPoints: [websecure]
+      service: grafana
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    janus:
+      rule: "Host(`janus.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: janus
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    git:
+      rule: "Host(`git.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: git
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    plane:
+      rule: "Host(`plane.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: plane
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    www-admin:
+      rule: "Host(`www.steven3zx.com`) && (Path(`/admin`) || PathPrefix(`/admin/`))"
+      priority: 100
+      entryPoints: [websecure]
+      service: admin
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    www:
+      rule: "Host(`www.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: portfolio
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    apex:
+      rule: "Host(`steven3zx.com`)"
+      entryPoints: [websecure]
+      middlewares: [apex-to-www]
+      service: portfolio
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "steven3zx.com"
+
+  services:
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3000"
+    janus:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:9095"
+    git:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:30001"
+    plane:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8080"
+    admin:
+      loadBalancer:
+        servers:
+          - url: "http://admin:8091"
+    portfolio:
+      loadBalancer:
+        servers:
+          - url: "http://portfolio:8090"

@@ -1,0 +1,43 @@
+# Static configuration for the edge. Routes live in ./dynamic.
+# Let's Encrypt staging while testing: uncomment caServer below, and re-enable production
+# (delete it) before cutover. Staging certificates are not trusted, so use it only for checks.
+
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http3: {}
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  cloudflare:
+    acme:
+      # Placeholder: replace with a mailbox you read. Let's Encrypt sends expiry notices here.
+      email: "acme-placeholder@steven3zx.com"
+      storage: /letsencrypt/acme.json
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+        propagation:
+          delayBeforeChecks: 15s
+
+log:
+  level: INFO
+
+accessLog: {}
