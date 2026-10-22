@@ -7,3 +7,7 @@ config.json
 # Build output
 *.exe
 /indexd
+
+/ui/build/
+/ui/spotlight-ui*
+/ui/ui.json

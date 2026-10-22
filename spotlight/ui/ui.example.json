@@ -1,0 +1,6 @@
+{
+  "hotkey": "win+space",
+  "daemon_url": "http://127.0.0.1:7788",
+  "max_results": 12,
+  "hide_on_blur": true
+}

@@ -77,6 +77,14 @@ Files are capped at `max_chunks_per_file` chunks. Excalidraw drawings are indexe
 
 Identical chunk text is embedded once and its vector reused across files and edits. Existing indexes upgrade in place; changing `embed_model` clears the index so vectors from two models never mix. Each scan prunes entries that are now ignored and compacts the database when it holds a lot of free space.
 
+## Launcher UI
+
+`ui/` holds a hotkey launcher window (default Win+Space) built with Wails. See `ui/README.md`.
+
+## Console output
+
+The daemon logs to stderr: scan start and finish (with counts and elapsed time), a progress line every 5 seconds during a scan (files indexed/unchanged/skipped, chunks embedded/reused, chunks per second, current file), watcher events, and throttle pauses. Add `-v` to also log every file as it is indexed, skipped or removed.
+
 ## Resource limits
 
 Indexing is throttled so it can't pin the machine. These keys in `config.json`
