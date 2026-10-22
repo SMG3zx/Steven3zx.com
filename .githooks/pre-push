@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs the janus-go test suite before a push, so nothing reaches origin untested.
+# Enabled per clone with: git config core.hooksPath .githooks
+set -e
+
+root=$(git rev-parse --show-toplevel)
+cd "$root/janus/janus-go"
+go test ./...
