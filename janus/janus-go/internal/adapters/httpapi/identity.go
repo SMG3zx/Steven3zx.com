@@ -1,0 +1,18 @@
+package httpapi
+
+import (
+	"context"
+
+	contractid "janus/internal/contract/identity"
+)
+
+// Identity is the identity service as the gateway reaches it: the sign-ins that
+// start a session, and the User a session belongs to. A duplicate registration
+// is a contract.ErrConflict.
+type Identity interface {
+	CreateLocalUser(ctx context.Context, user contractid.CreateLocalUser) error
+	FindLocalUser(ctx context.Context, email string) (contractid.LocalUser, error)
+	FindUser(ctx context.Context, id string) (contractid.User, error)
+	ResolveGoogleIdentity(ctx context.Context, identity contractid.ResolveIdentity) (contractid.Resolved, error)
+	ResolveGitHubLogin(ctx context.Context, login contractid.ResolveIdentity) (contractid.Resolved, error)
+}

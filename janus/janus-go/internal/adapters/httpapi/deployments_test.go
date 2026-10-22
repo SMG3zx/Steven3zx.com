@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/agent"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
@@ -61,7 +62,7 @@ func newDeployApp(t *testing.T) *deployApp {
 		t.Fatal(err)
 	}
 	handler := New(Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Builds: builds,
+		Audit: audit, Identity: identityowners.New(store, identitytest.NewDirectory(identities)), Projects: app.NewProjects(catalog), Builds: builds,
 		Accounts: app.NewAccounts(store, identities, catalog), Fleet: fixture.Fleet,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()

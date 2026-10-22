@@ -5,13 +5,13 @@
   "steps": [
     {
       "file": "janus-go/internal/adapters/httpapi/server.go",
-      "line": 178,
+      "line": 180,
       "title": "Registration",
       "description": "`func (a *Server) register` creates a local Account and issues a session cookie."
     },
     {
       "file": "janus-go/internal/adapters/httpapi/server.go",
-      "line": 230,
+      "line": 232,
       "title": "Sign-in",
       "description": "`func (a *Server) login` checks the password, then issues a session. A wrong password and an unknown email get the same answer."
     },
@@ -34,16 +34,16 @@
       "description": "`func (s *Authentication) ValidateToken` returns the subject a valid token belongs to, and nothing for an invalid one."
     },
     {
-      "file": "janus-go/internal/app/identity.go",
-      "line": 17,
+      "file": "janus-go/internal/adapters/identityowners/owners.go",
+      "line": 33,
       "title": "The identity use cases",
-      "description": "`func NewIdentity` builds the use cases for Accounts and sign-in methods, over the Identities port (the identity service). Every User it creates or signs in is also added to the Store as an Owner."
+      "description": "`func New` builds the use cases for Accounts and sign-in methods, over the Identities port (the identity service). Every User it creates or signs in is also added to the Store as an Owner."
     },
     {
-      "file": "janus-go/internal/app/identity.go",
-      "line": 47,
+      "file": "janus-go/internal/adapters/identityowners/owners.go",
+      "line": 62,
       "title": "Google and GitHub sign-ins",
-      "description": "`func (i *Identity) ResolveGoogleIdentity` finds the Account for a Google sign-in through its Provider Identity, or creates one. GitHub works the same way."
+      "description": "`func (r *Registry) ResolveGoogleIdentity` finds the Account for a Google sign-in through its Provider Identity, or creates one. GitHub works the same way."
     }
   ]
 }

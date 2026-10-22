@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"janus/internal/contract"
+	contractid "janus/internal/contract/identity"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"net/http"
@@ -37,7 +39,7 @@ type Config struct {
 	Authentication *authn.Authentication
 	Authorization  *authz.Policy
 	Audit          app.Audit
-	Identity       *app.Identity
+	Identity       Identity
 	Projects       *app.Projects
 	GitHub         *app.GitHub
 	Imports        *app.Imports
@@ -216,9 +218,9 @@ func (a *Server) register(c *call) any {
 		return internalError()
 	}
 	userID := newUserID()
-	err = a.dependencies.Identity.CreateLocalUser(ctx, app.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
+	err = a.dependencies.Identity.CreateLocalUser(ctx, contractid.CreateLocalUser{ID: userID, Email: strings.TrimSpace(input.Email), PasswordHash: encoded})
 	if err != nil {
-		if app.IsConflict(err) {
+		if errors.Is(err, contract.ErrConflict) {
 			return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
 		}
 		return internalError()
@@ -343,7 +345,7 @@ func (a *Server) googleCallback(c *call) any {
 		a.log(ctx, "warn", "auth.google.callback.denied", map[string]string{"reason": "provider_authentication_failed"})
 		return jsonResponse(http.StatusUnauthorized, map[string]string{"error": "Google sign-in failed"})
 	}
-	identity, err := a.dependencies.Identity.ResolveGoogleIdentity(ctx, app.ResolveGoogleIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
+	identity, err := a.dependencies.Identity.ResolveGoogleIdentity(ctx, contractid.ResolveIdentity{Subject: user.UserID, Email: user.Email, DisplayName: user.Name})
 	if err != nil {
 		return internalError()
 	}

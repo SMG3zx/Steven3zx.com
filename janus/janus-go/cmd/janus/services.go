@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nats-io/nats.go"
+	"janus/internal/adapters/identityowners"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"time"
@@ -80,7 +81,7 @@ type application struct {
 	// runsService answers the runs subjects and runs WASM Runs; runs is the
 	// single process's use of it.
 	runsService *runsservice.Service
-	identity    *app.Identity
+	identity    httpapi.Identity
 	projects    *app.Projects
 	github      *app.GitHub
 	tailnet     *headscale.Client
@@ -178,7 +179,7 @@ func (a *application) groups() []group {
 				return wrap("stop the identity service", a.identityService.Stop(ctx))
 			})},
 			{name: "identity use cases", start: func(context.Context) error {
-				a.identity = app.NewIdentity(a.store, a.identities)
+				a.identity = identityowners.New(a.store, identitynats.NewGateway(a.nats.Conn()))
 				return nil
 			}},
 			{name: "authentication", start: func(context.Context) error {

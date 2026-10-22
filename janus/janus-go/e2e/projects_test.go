@@ -10,6 +10,7 @@ import (
 	"janus/internal/adapters/catalogtest"
 	"janus/internal/adapters/httpapi"
 	"janus/internal/adapters/identitynats"
+	"janus/internal/adapters/identityowners"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
 	"janus/internal/domain/authn"
@@ -346,7 +347,7 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 	wasm.Produce([]byte("playwright-wasm-archive"))
 	builds := app.NewBuilds(store, catalog, wasm)
 	server := httpapi.New(httpapi.Config{
-		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
+		Audit: audit, Identity: identityowners.New(store, identitynats.NewGateway(hub.Conn())), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Builds: builds, Accounts: app.NewAccounts(store, identities, catalog),
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,

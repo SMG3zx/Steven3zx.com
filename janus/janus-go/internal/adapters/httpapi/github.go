@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"janus/internal/app"
+	contractid "janus/internal/contract/identity"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -180,7 +181,7 @@ func (a *Server) githubCallback(c *call) any {
 		a.log(ctx, "info", "github.connected", map[string]string{"user_id": owner})
 		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/projects?github=connected"}, "Set-Cookie": {a.clearOAuthCookie(c.Request, session).String()}}}
 	}
-	identity, resolveErr := a.dependencies.Identity.ResolveGitHubLogin(ctx, app.ResolveGitHubLogin{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
+	identity, resolveErr := a.dependencies.Identity.ResolveGitHubLogin(ctx, contractid.ResolveIdentity{Subject: fmt.Sprint(profile.ID), Email: email, DisplayName: githubName(profile)})
 	if resolveErr != nil {
 		return internalError()
 	}
