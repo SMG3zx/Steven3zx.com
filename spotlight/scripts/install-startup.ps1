@@ -64,7 +64,9 @@ $settings  = New-ScheduledTaskSettingsSet `
 function Register-Spotlight($name, $exe, $arguments, $workDir, $delaySeconds) {
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
   if ($delaySeconds -gt 0) { $trigger.Delay = "PT${delaySeconds}S" }
-  $action = New-ScheduledTaskAction -Execute $exe -Argument $arguments -WorkingDirectory $workDir
+  $actionArgs = @{ Execute = $exe; WorkingDirectory = $workDir }
+  if ($arguments) { $actionArgs.Argument = $arguments }
+  $action = New-ScheduledTaskAction @actionArgs
   Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger `
     -Principal $principal -Settings $settings -Force | Out-Null
   Write-Host "Registered '$name'."
