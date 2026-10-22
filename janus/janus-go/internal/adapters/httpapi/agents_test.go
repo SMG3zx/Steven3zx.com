@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,13 +36,13 @@ func newAgentApp(t *testing.T, withAgents bool) *agentApp {
 	store, audit := storetest.NewMemory(), audittest.NewRecorder()
 	identities := identitytest.NewMemory()
 	catalog := catalogtest.NewMemory()
-	authorization, err := app.NewPolicy(ctx)
+	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	config := Config{
 		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
-		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
+		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization,
 	}
 	a := &agentApp{tailnet: tailnettest.NewFake(), audit: audit}
 	if withAgents {

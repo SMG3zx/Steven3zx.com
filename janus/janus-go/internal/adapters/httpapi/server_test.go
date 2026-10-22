@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"janus/internal/adapters/catalogtest"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -25,13 +27,13 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	catalog := catalogtest.NewMemory()
 	gh := app.NewGitHub(identities, catalog)
 	imports := app.NewImports(catalog)
-	authorization, err := app.NewPolicy(ctx)
+	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
 		Audit: audittest.NewRecorder(), Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), GitHub: gh, Imports: imports, Accounts: app.NewAccounts(store, identities, catalog),
-		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
+		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
 	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"alice@example.com","password":"correct horse battery staple"}`, nil)

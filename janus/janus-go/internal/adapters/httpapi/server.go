@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"net/http"
 	"net/http/httptest"
 	"net/mail"
@@ -32,8 +34,8 @@ import (
 type Config struct {
 	// Addr is the listen address; "127.0.0.1:0" picks a free port.
 	Addr           string
-	Authentication *app.Authentication
-	Authorization  *app.Policy
+	Authentication *authn.Authentication
+	Authorization  *authz.Policy
 	Audit          app.Audit
 	Identity       *app.Identity
 	Projects       *app.Projects

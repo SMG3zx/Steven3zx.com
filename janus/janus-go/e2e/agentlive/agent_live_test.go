@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"janus/internal/domain/agent"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -105,11 +107,11 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 		Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
 	wasm := buildstest.NewFake(store)
 	builds := app.NewBuilds(store, catalog, wasm)
-	policy, err := app.NewPolicy(ctx)
+	policy, err := authz.New(ctx)
 	must(t, err)
 	server := httptest.NewServer(httpapi.New(httpapi.Config{
 		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Accounts: app.NewAccounts(store, identities, catalog),
-		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
+		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Fleet: fx.Fleet,
 	}).Handler())
 	t.Cleanup(server.Close)

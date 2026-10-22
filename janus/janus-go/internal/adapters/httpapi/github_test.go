@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"janus/internal/app"
+	"janus/internal/domain/authz"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -13,7 +13,7 @@ import (
 func TestGitHubOAuthUsesSeparateIdentityAndRepositoryScopesAndChecksState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	authorization, err := app.NewPolicy(ctx)
+	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

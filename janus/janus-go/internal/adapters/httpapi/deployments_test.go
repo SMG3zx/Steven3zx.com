@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"janus/internal/domain/agent"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"net/http"
 	"strings"
 	"testing"
@@ -54,14 +56,14 @@ func newDeployApp(t *testing.T) *deployApp {
 		t.Fatal(err)
 	}
 	builds := app.NewBuilds(store, catalog, service)
-	authorization, err := app.NewPolicy(ctx)
+	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := New(Config{
 		Audit: audit, Identity: app.NewIdentity(store, identities), Projects: app.NewProjects(catalog), Builds: builds,
 		Accounts: app.NewAccounts(store, identities, catalog), Fleet: fixture.Fleet,
-		Authentication: app.NewAuthentication([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
+		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-test", 30*time.Minute), Authorization: authorization, CookieSecure: true,
 	}).Handler()
 
 	register := perform(handler, http.MethodPost, "/auth/register", `{"email":"owen@example.com","password":"correct horse battery staple"}`, nil)

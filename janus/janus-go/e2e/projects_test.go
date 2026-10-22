@@ -12,6 +12,8 @@ import (
 	"janus/internal/adapters/identitynats"
 	"janus/internal/adapters/sqlstore"
 	"janus/internal/app"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"janus/internal/platform/natstest"
 	"janus/internal/services/identity"
 	"net/http"
@@ -331,8 +333,8 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, app
 	}
 	t.Cleanup(func() { _ = identityService.Stop(context.Background()) })
 	identities := identitynats.New(hub.Conn())
-	authentication := app.NewAuthentication([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
-	authorization, err := app.NewPolicy(ctx)
+	authentication := authn.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
+	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}

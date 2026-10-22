@@ -5,31 +5,31 @@
   "steps": [
     {
       "file": "janus-go/internal/adapters/httpapi/server.go",
-      "line": 176,
+      "line": 178,
       "title": "Registration",
       "description": "`func (a *Server) register` creates a local Account and issues a session cookie."
     },
     {
       "file": "janus-go/internal/adapters/httpapi/server.go",
-      "line": 228,
+      "line": 230,
       "title": "Sign-in",
       "description": "`func (a *Server) login` checks the password, then issues a session. A wrong password and an unknown email get the same answer."
     },
     {
-      "file": "janus-go/internal/app/authentication.go",
-      "line": 59,
+      "file": "janus-go/internal/domain/authn/authn.go",
+      "line": 54,
       "title": "Passwords are compared, not read",
       "description": "`func (s *Authentication) VerifyPassword` checks the password against a stored hash. The password itself is never stored."
     },
     {
-      "file": "janus-go/internal/app/authentication.go",
-      "line": 68,
+      "file": "janus-go/internal/domain/authn/authn.go",
+      "line": 60,
       "title": "Issuing a session token",
       "description": "`func (s *Authentication) IssueToken` signs a token for the Account, with an expiry, using the server secret."
     },
     {
-      "file": "janus-go/internal/app/authentication.go",
-      "line": 78,
+      "file": "janus-go/internal/domain/authn/authn.go",
+      "line": 67,
       "title": "Every request checks its token",
       "description": "`func (s *Authentication) ValidateToken` returns the subject a valid token belongs to, and nothing for an invalid one."
     },

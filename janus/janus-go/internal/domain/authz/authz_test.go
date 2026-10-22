@@ -1,4 +1,4 @@
-package app
+package authz
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestOwnerScopedPolicies(t *testing.T) {
-	policy, err := NewPolicy(context.Background())
+	policy, err := New(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestOwnerScopedPolicies(t *testing.T) {
 // Enrollment Code is the credential, so the action is open to a caller with no
 // subject. A signed-in user is not what it expects.
 func TestEnrollingAnAgentIsAnonymous(t *testing.T) {
-	policy, err := NewPolicy(context.Background())
+	policy, err := New(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestEnrollingAnAgentIsAnonymous(t *testing.T) {
 // The prepared query is shared by every request, so concurrent checks must
 // agree with sequential ones.
 func TestPolicyIsSafeForConcurrentChecks(t *testing.T) {
-	policy, err := NewPolicy(context.Background())
+	policy, err := New(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

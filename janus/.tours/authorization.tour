@@ -16,25 +16,25 @@
       "description": "`authorizedSubject` is called with the action project.deploy and the resource owner. Each route picks its own action."
     },
     {
-      "file": "janus-go/internal/app/authorization.go",
-      "line": 18,
+      "file": "janus-go/internal/domain/authz/authz.go",
+      "line": 16,
       "title": "The policy, compiled once",
       "description": "`type Policy struct` holds a prepared query over the embedded policy, and is safe for concurrent use."
     },
     {
-      "file": "janus-go/internal/app/authorization.go",
-      "line": 21,
+      "file": "janus-go/internal/domain/authz/authz.go",
+      "line": 19,
       "title": "Compiling at startup",
-      "description": "`func NewPolicy` compiles the policy when the server starts. A policy that does not compile stops the server before it accepts requests."
+      "description": "`func New` compiles the policy when the server starts. A policy that does not compile stops the server before it accepts requests."
     },
     {
-      "file": "janus-go/internal/app/authorization.go",
-      "line": 35,
+      "file": "janus-go/internal/domain/authz/authz.go",
+      "line": 33,
       "title": "Asking the policy",
       "description": "`func (p *Policy) Allowed` evaluates the subject, action and resource against the policy."
     },
     {
-      "file": "janus-go/internal/app/policy.rego",
+      "file": "janus-go/internal/domain/authz/policy.rego",
       "line": 55,
       "title": "The rule for Deploy",
       "description": "The rule for `project.deploy` allows it only when the subject is the resource owner. That owner check is what keeps another Account out."

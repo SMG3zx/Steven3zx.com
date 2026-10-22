@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nats-io/nats.go"
+	"janus/internal/domain/authn"
+	"janus/internal/domain/authz"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -92,8 +94,8 @@ type application struct {
 	// fleet is the fleet service as the single process uses it; nil when Agent
 	// enrollment is off.
 	fleet          app.Fleet
-	authentication *app.Authentication
-	authorization  *app.Policy
+	authentication *authn.Authentication
+	authorization  *authz.Policy
 	imports        *app.Imports
 	builds         *app.Builds
 	accounts       *app.Accounts
@@ -180,12 +182,12 @@ func (a *application) groups() []group {
 				return nil
 			}},
 			{name: "authentication", start: func(context.Context) error {
-				a.authentication = app.NewAuthentication([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
+				a.authentication = authn.New([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
 				return nil
 			}},
 			{name: "authorization", start: func(context.Context) error {
 				var err error
-				a.authorization, err = app.NewPolicy(a.startCtx)
+				a.authorization, err = authz.New(a.startCtx)
 				return err
 			}},
 		}},
