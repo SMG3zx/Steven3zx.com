@@ -66,6 +66,8 @@ type Service struct {
 
 	workers []jetstream.ConsumeContext
 	events  jetstream.ConsumeContext
+	// accountEvents consumes identity's account deletions.
+	accountEvents jetstream.ConsumeContext
 	// running holds the Builds this process is running, so an Owner's can be
 	// cancelled and Stop can wait for them.
 	mu      sync.Mutex
@@ -138,6 +140,9 @@ func (s *Service) Start(ctx context.Context, conn *nats.Conn) (err error) {
 	if err = s.startProjectEvents(ctx); err != nil {
 		return err
 	}
+	if err = s.startAccountEvents(); err != nil {
+		return err
+	}
 	return s.startWorkers(ctx, jobs)
 }
 
@@ -150,6 +155,7 @@ func (s *Service) addEndpoints() error {
 		natsx.AddEndpoint(s.service, "find-artifact", contractbuilds.SubjectFindArtifact, timed(s.findArtifact)),
 		natsx.AddEndpoint(s.service, "restore-artifact", contractbuilds.SubjectRestoreArtifact, timed(s.restoreArtifact)),
 		natsx.AddEndpoint(s.service, "delete-owner", contractbuilds.SubjectDeleteOwner, timed(s.deleteOwner)),
+		natsx.AddEndpoint(s.service, "active-builds", contractbuilds.SubjectActiveBuilds, timed(s.activeBuilds)),
 	)
 }
 
@@ -176,6 +182,9 @@ func (s *Service) Stop(ctx context.Context) error {
 	}
 	if s.events != nil {
 		s.events.Drain()
+	}
+	if s.accountEvents != nil {
+		s.accountEvents.Drain()
 	}
 	if s.stopRuns != nil {
 		s.stopRuns()

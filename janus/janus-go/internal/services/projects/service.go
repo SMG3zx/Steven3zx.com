@@ -60,6 +60,8 @@ type Service struct {
 	source  *gitSource
 
 	workers []jetstream.ConsumeContext
+	// accountEvents consumes identity's account deletions.
+	accountEvents jetstream.ConsumeContext
 	// running holds the Imports this process is running, so an Owner's can be
 	// cancelled and Stop can wait for them.
 	mu      sync.Mutex
@@ -134,6 +136,9 @@ func (s *Service) Start(ctx context.Context, conn *nats.Conn) (err error) {
 	if err = s.addEndpoints(); err != nil {
 		return err
 	}
+	if err = s.startAccountEvents(); err != nil {
+		return err
+	}
 	return s.startWorkers(ctx, jobs)
 }
 
@@ -179,6 +184,9 @@ func (s *Service) Stop(ctx context.Context) error {
 	}
 	for _, worker := range s.workers {
 		worker.Stop()
+	}
+	if s.accountEvents != nil {
+		s.accountEvents.Drain()
 	}
 	if s.stopRuns != nil {
 		s.stopRuns()

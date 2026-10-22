@@ -99,6 +99,8 @@ type Service struct {
 	service   micro.Service
 	artifacts jetstream.ObjectStore
 	events    jetstream.ConsumeContext
+	// accountEvents consumes identity's account deletions.
+	accountEvents jetstream.ConsumeContext
 
 	// mu guards the links the reconcile loop keeps, and the last state each
 	// Agent wrote.
@@ -171,6 +173,9 @@ func (s *Service) Start(ctx context.Context, conn *nats.Conn) (err error) {
 	if err = s.startProjectEvents(ctx); err != nil {
 		return err
 	}
+	if err = s.startAccountEvents(); err != nil {
+		return err
+	}
 	s.startReconcile()
 	return nil
 }
@@ -217,6 +222,9 @@ func (s *Service) Stop(ctx context.Context) error {
 	}
 	if s.events != nil {
 		s.events.Drain()
+	}
+	if s.accountEvents != nil {
+		s.accountEvents.Drain()
 	}
 	if s.stopReconcile != nil {
 		s.stopReconcile()
