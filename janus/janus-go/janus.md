@@ -358,7 +358,6 @@ At startup, Janus loads `.env` from the process working directory, then reads th
 | Variable | Required | Default | Purpose and validation |
 | --- | --- | --- | --- |
 | `JANUS_HTTP_ADDRESS` | No | `:9090` | TCP listen address. |
-| `JANUS_DATABASE_PATH` | No | `data/janus.db` | SQLite database path; the parent directory is created with owner-only permissions where supported. |
 | `JANUS_JWT_SECRET` | Yes | None | Signing secret; at least 32 bytes. Also derives the encryption key used for stored GitHub tokens and signs OAuth state cookies, so rotating it makes existing sessions and stored GitHub tokens unusable. |
 | `JANUS_JWT_ISSUER` | No | `janus-go` | JWT issuer claim. |
 | `JANUS_JWT_EXPIRY` | No | `30m` | JWT lifetime; Go duration between `1m` and `24h`. |

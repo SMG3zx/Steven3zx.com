@@ -2,7 +2,7 @@
 
 // generate assembles the .wat fixtures in testdata into the .wasm files the
 // contract suite embeds, so running the suite needs no WebAssembly toolchain.
-// Run it with `go generate ./internal/adapters/runnertest` (needs cgo).
+// Run it with `go generate ./internal/agent/runnertest` (needs cgo).
 package main
 
 import (

@@ -14,7 +14,7 @@ import (
 )
 
 // migrations is identity.db's schema. Its first entry matches the identity
-// tables janus.db had, so `janus migrate split` copies rows as they are.
+// tables janus.db had,.
 var migrations = []string{`
 CREATE TABLE users (
 	id TEXT PRIMARY KEY,

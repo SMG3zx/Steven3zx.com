@@ -17,7 +17,7 @@ import (
 )
 
 // migrations is builds.db's schema. Its tables have the columns janus.db's had,
-// so `janus migrate split` copies rows as they are. An Owner, Project and
+// . An Owner, Project and
 // Snapshot are plain IDs here: they live in the other services.
 var migrations = []string{`
 CREATE TABLE project_wasm_builds (

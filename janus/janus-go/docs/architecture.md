@@ -2,7 +2,7 @@
 
 This is the structure janus-go is being moved to, and the rules new code is reviewed against. The decision is recorded in [ADR 0005](adr/0005-nats-jetstream-microservices.md), which supersedes ports and adapters ([ADR 0003](adr/0003-ports-and-adapters.md)).
 
-**Status:** current. The single process is gone: `internal/app` and `internal/adapters` are deleted, the gateway reaches every service only over NATS, and each service can run as a process of its own with `janus serve <service>`. Section 12 records how it got here.
+**Status:** current, except that the Playwright and Agent live tests have not yet been run with every service in its own process (section 12, step 10). The single process is gone: `internal/app` and `internal/adapters` are deleted, the gateway reaches every service only over NATS, and each service can run as a process of its own with `janus serve <service>`. Section 12 records how it got here.
 
 ## 1. The idea in five lines
 

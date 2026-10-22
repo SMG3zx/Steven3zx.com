@@ -16,7 +16,7 @@ import (
 )
 
 // migrations is projects.db's schema. Its tables have the columns janus.db's
-// had, so `janus migrate split` copies rows as they are; an Owner is a plain
+// had; an Owner is a plain
 // ID here, as Users live in the identity service.
 var migrations = []string{`
 CREATE TABLE projects (
