@@ -20,9 +20,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"janus/internal/adapters/tailnode"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/leafbridge"
+	"janus/internal/platform/tailnode"
 	"janus/internal/services/fleet/headscale"
 )
 

@@ -12,9 +12,8 @@ import (
 	"github.com/nats-io/nats.go/micro"
 
 	"janus/cmd/janus/fleetfixture"
-	"janus/internal/adapters/identitynats"
-	"janus/internal/adapters/localstatetest"
-	"janus/internal/adapters/runnertest"
+	"janus/internal/agent/runnertest"
+	"janus/internal/agent/statetest"
 	"janus/internal/contract/account"
 	contractbuilds "janus/internal/contract/builds"
 	contractid "janus/internal/contract/identity"
@@ -22,6 +21,7 @@ import (
 	"janus/internal/platform/accountevents"
 	"janus/internal/platform/natstest"
 	"janus/internal/platform/natsx"
+	"janus/internal/services/gateway/identityclient"
 	"janus/internal/services/identity"
 )
 
@@ -106,14 +106,14 @@ func TestDeletingAnAccountRemovesItsRecordsAcrossServicesAfterARestart(t *testin
 
 	service := startIdentity(t, conn, path)
 	t.Cleanup(func() { _ = service.Stop(context.Background()) })
-	ids := identitynats.NewGateway(conn)
+	ids := identityclient.NewGateway(conn)
 	if err := ids.CreateLocalUser(ctx, contractid.CreateLocalUser{ID: "alice", Email: "alice@example.com", PasswordHash: "hash"}); err != nil {
 		t.Fatal(err)
 	}
 
 	fixture := fleetfixture.Start(t, fleetfixture.Options{Hub: hub})
 	enrollment := fixture.Enroll("alice", "laptop")
-	fixture.Attach("alice", enrollment, "laptop", agent.NewRuntime(runnertest.NewFake(), localstatetest.NewMemory(), "", time.Now))
+	fixture.Attach("alice", enrollment, "laptop", agent.NewRuntime(runnertest.NewFake(), statetest.NewMemory(), "", time.Now))
 	if agents, err := fixture.Fleet.ListAgents(ctx, "alice"); err != nil || len(agents) != 1 {
 		t.Fatalf("agents before the deletion = %+v, %v", agents, err)
 	}

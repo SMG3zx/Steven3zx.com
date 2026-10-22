@@ -4,19 +4,19 @@
   "description": "Follows POST /api/projects/:id/deployments from the router, through the gateway's handler and its client, to the fleet service.",
   "steps": [
     {
-      "file": "janus-go/internal/adapters/httpapi/projects.go",
+      "file": "janus-go/internal/services/gateway/projects.go",
       "line": 43,
       "title": "The router",
       "description": "`app.Post(\"/api/projects/:id/deployments\"` maps the route to startDeployment. The HTTP layer is a driving adapter."
     },
     {
-      "file": "janus-go/internal/adapters/httpapi/deployments.go",
+      "file": "janus-go/internal/services/gateway/deployments.go",
       "line": 21,
       "title": "The driving adapter",
       "description": "`func (a *Server) startDeployment` reads the body, checks the project.deploy policy, and calls the fleet service through the gateway's Fleet interface."
     },
     {
-      "file": "janus-go/internal/adapters/fleetnats/fleetnats.go",
+      "file": "janus-go/internal/services/gateway/fleetclient/client.go",
       "line": 117,
       "title": "The gateway's fleet client",
       "description": "`func (c *Client) CreateDeployment`. The gateway asks the fleet service over NATS and turns its refusals back into the errors the handlers match."
@@ -46,14 +46,14 @@
       "description": "`func CanMove` is the legal-moves rule. Adapters call it rather than reimplementing it."
     },
     {
-      "file": "janus-go/internal/adapters/httpapi/audit.go",
+      "file": "janus-go/internal/services/gateway/audit.go",
       "line": 11,
       "title": "The Audit interface",
-      "description": "`type Audit interface` records Audit Events. Recording never fails the caller, so the handler does not handle its errors."
+      "description": "`type auditRecorder interface` records Audit Events. Recording never fails the caller, so the handler does not handle its errors."
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 468,
+      "line": 477,
       "title": "The composition root starts the fleet",
       "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the gateway its client."
     }

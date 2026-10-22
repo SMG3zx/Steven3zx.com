@@ -4,7 +4,7 @@
   "description": "Follows a WASM build from its request, through the compile and the Check that gates Deploy, to the stored Artifact.",
   "steps": [
     {
-      "file": "janus-go/internal/adapters/buildsnats/gateway.go",
+      "file": "janus-go/internal/services/gateway/buildsclient/gateway.go",
       "line": 51,
       "title": "A build is requested",
       "description": "`func (g *Gateway) Request` asks the builds service to queue a Build of a Snapshot. The build runs in the builds service, not here."

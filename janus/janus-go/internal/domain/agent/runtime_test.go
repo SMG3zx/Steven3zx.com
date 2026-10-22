@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"janus/internal/adapters/localstatetest"
-	"janus/internal/adapters/runnertest"
+	"janus/internal/agent/runnertest"
+	"janus/internal/agent/statetest"
 	"janus/internal/domain/agent"
 	"janus/internal/domain/cgi"
 	"janus/internal/domain/usage"
@@ -73,7 +73,7 @@ func nextReport(t *testing.T, runtime *agent.Runtime) agent.RunReport {
 }
 
 func TestRuntimeDeploysAndServesThroughCGI(t *testing.T) {
-	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
+	runtime := newRuntime(t, cgiRunner(), statetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestRuntimeDeploysAndServesThroughCGI(t *testing.T) {
 }
 
 func TestRuntimeRefusesAModuleThatDoesNotMatchItsHash(t *testing.T) {
-	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
+	runtime := newRuntime(t, cgiRunner(), statetest.NewMemory())
 	deployment := hosted("dep-1", cgiModule)
 	deployment.SHA256 = strings.Repeat("0", 64)
 	if err := runtime.Deploy(ctx, deployment); !errors.Is(err, agent.ErrModuleHash) {
@@ -118,7 +118,7 @@ func TestRuntimeRefusesAModuleThatDoesNotMatchItsHash(t *testing.T) {
 }
 
 func TestRuntimeFailsADeployWhoseProbeTraps(t *testing.T) {
-	state := localstatetest.NewMemory()
+	state := statetest.NewMemory()
 	runtime := newRuntime(t, runnertest.NewFake(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", runnertest.Spins)); !errors.Is(err, agent.ErrOutOfFuel) {
 		t.Fatalf("err = %v", err)
@@ -138,7 +138,7 @@ func TestRuntimeDoesNotJudgeTheProbesStatus(t *testing.T) {
 	runner.Handle(module, func(agent.RunInput) (agent.RunResult, error) {
 		return agent.RunResult{Stdout: []byte("Status: 404 Not Found\n\nnothing here")}, nil
 	})
-	runtime := newRuntime(t, runner, localstatetest.NewMemory())
+	runtime := newRuntime(t, runner, statetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", module)); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestRuntimeDoesNotJudgeTheProbesStatus(t *testing.T) {
 }
 
 func TestRuntimePauseStopsServingAndResumeRestoresIt(t *testing.T) {
-	state := localstatetest.NewMemory()
+	state := statetest.NewMemory()
 	runtime := newRuntime(t, cgiRunner(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func TestRuntimePauseStopsServingAndResumeRestoresIt(t *testing.T) {
 }
 
 func TestRuntimeTakesAPauseWrittenByItsCommandLine(t *testing.T) {
-	state := localstatetest.NewMemory()
+	state := statetest.NewMemory()
 	runtime := newRuntime(t, cgiRunner(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
@@ -209,7 +209,7 @@ func TestRuntimeTakesAPauseWrittenByItsCommandLine(t *testing.T) {
 }
 
 func TestRuntimeResumesItsDeploymentsAfterARestart(t *testing.T) {
-	state := localstatetest.NewMemory()
+	state := statetest.NewMemory()
 	first := newRuntime(t, cgiRunner(), state)
 	if err := first.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestRuntimeResumesItsDeploymentsAfterARestart(t *testing.T) {
 }
 
 func TestRuntimeSkipsAKeptModuleThatChanged(t *testing.T) {
-	state := localstatetest.NewMemory()
+	state := statetest.NewMemory()
 	good, bad := hosted("good", cgiModule), hosted("bad", cgiModule)
 	bad.Module = []byte("\x00asm\x01\x00\x00\x00tampered")
 	for _, deployment := range []agent.HostedDeployment{good, bad} {
@@ -254,7 +254,7 @@ func TestRuntimeSkipsAKeptModuleThatChanged(t *testing.T) {
 }
 
 func TestRuntimeStopForgetsADeployment(t *testing.T) {
-	state := localstatetest.NewMemory()
+	state := statetest.NewMemory()
 	runtime := newRuntime(t, cgiRunner(), state)
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
@@ -302,7 +302,7 @@ func TestRuntimeAnswersALimitWithA5xxAndReportsIt(t *testing.T) {
 	runner.Handle(garbled, failing("garbled", func(agent.RunInput) (agent.RunResult, error) {
 		return agent.RunResult{Stdout: []byte("no headers at all")}, nil
 	}))
-	runtime := newRuntime(t, runner, localstatetest.NewMemory())
+	runtime := newRuntime(t, runner, statetest.NewMemory())
 	for _, c := range []struct {
 		module []byte
 		code   int
@@ -330,7 +330,7 @@ func TestRuntimeAnswersALimitWithA5xxAndReportsIt(t *testing.T) {
 }
 
 func TestRuntimeRefusesABodyOver10MiB(t *testing.T) {
-	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
+	runtime := newRuntime(t, cgiRunner(), statetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func TestRuntimeServesAtMost16RequestsAtOnce(t *testing.T) {
 		}
 		return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
-	runtime := newRuntime(t, runner, localstatetest.NewMemory())
+	runtime := newRuntime(t, runner, statetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", module)); err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +388,7 @@ func TestRuntimeServesAtMost16RequestsAtOnce(t *testing.T) {
 }
 
 func TestRuntimeKeepsTheNewestReports(t *testing.T) {
-	runtime := newRuntime(t, cgiRunner(), localstatetest.NewMemory())
+	runtime := newRuntime(t, cgiRunner(), statetest.NewMemory())
 	if err := runtime.Deploy(ctx, hosted("dep-1", cgiModule)); err != nil {
 		t.Fatal(err)
 	}

@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/buildstest"
-	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/httpapi"
-	"janus/internal/adapters/identitynats"
 	contractid "janus/internal/contract/identity"
 	"janus/internal/domain/authn"
 	"janus/internal/domain/authz"
 	"janus/internal/platform/natstest"
+	"janus/internal/services/gateway"
+	"janus/internal/services/gateway/audittest"
+	"janus/internal/services/gateway/buildstest"
+	"janus/internal/services/gateway/identityclient"
+	"janus/internal/services/gateway/projectstest"
 	"janus/internal/services/identity"
 	"net/http"
 	"net/http/httptest"
@@ -307,7 +307,7 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 }
 
-func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identitynats.Gateway, http.Handler) {
+func startJanus(t *testing.T, ctx context.Context) (*projectstest.Memory, *identityclient.Gateway, http.Handler) {
 	t.Helper()
 	catalog, identities, _, handler := startJanusWith(t, ctx)
 	return catalog, identities, handler
@@ -318,7 +318,7 @@ func startJanus(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identi
 // in-memory Catalog, so a test can seed the Snapshot an Import would make;
 // the real projects service is tested through its adapter. It returns the
 // Catalog, the Identities, the Builds use case and the HTTP handler.
-func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, *identitynats.Gateway, *buildstest.Fake, http.Handler) {
+func startJanusWith(t *testing.T, ctx context.Context) (*projectstest.Memory, *identityclient.Gateway, *buildstest.Fake, http.Handler) {
 	t.Helper()
 	hub := natstest.Start(t)
 	identityService := identity.New(identity.Config{DatabasePath: path.Join(t.TempDir(), "identity.db"), TokenSecret: jwtSecret})
@@ -326,17 +326,17 @@ func startJanusWith(t *testing.T, ctx context.Context) (*catalogtest.Memory, *id
 		t.Fatalf("start the identity service: %v", err)
 	}
 	t.Cleanup(func() { _ = identityService.Stop(context.Background()) })
-	identities := identitynats.NewGateway(hub.Conn())
+	identities := identityclient.NewGateway(hub.Conn())
 	authentication := authn.New([]byte(jwtSecret), "janus-e2e", 30*time.Minute)
 	authorization, err := authz.New(ctx)
 	if err != nil {
 		t.Fatalf("prepare authorization: %v", err)
 	}
-	catalog := catalogtest.NewMemory()
+	catalog := projectstest.NewMemory()
 	audit := audittest.NewRecorder()
 	builds := buildstest.NewFake()
 	builds.Produce([]byte("playwright-wasm-archive"))
-	server := httpapi.New(httpapi.Config{
+	server := gateway.New(gateway.Config{
 		Audit: audit, Identity: identities, Catalog: catalog, Builds: builds,
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
@@ -370,23 +370,23 @@ func registerUser(t *testing.T, baseURL string) (string, string) {
 	return "", ""
 }
 
-func connectGitHub(t *testing.T, ctx context.Context, identities *identitynats.Gateway, userID string) {
+func connectGitHub(t *testing.T, ctx context.Context, identities *identityclient.Gateway, userID string) {
 	t.Helper()
 	if err := identities.ConnectGitHub(ctx, contractid.ConnectGitHub{UserID: userID, Subject: "github-user-1", Email: "playwright@example.com", DisplayName: "Playwright", Token: "fake-oauth-token"}); err != nil {
 		t.Fatalf("connect GitHub fixture: %v", err)
 	}
 }
 
-func seedSnapshot(catalog *catalogtest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
+func seedSnapshot(catalog *projectstest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata string) error {
 	return seedLanguageSnapshot(catalog, ownerID, projectID, jobID, snapshotID, commit, metadata, "Rust", "Cargo.toml", "[package]\nname='fixture'\nversion='0.1.0'\nedition='2021'\n")
 }
 
 // seedLanguageSnapshot records a finished Import and the Snapshot it made, of
 // language, whose manifest file is manifest with the given content.
-func seedLanguageSnapshot(catalog *catalogtest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
+func seedLanguageSnapshot(catalog *projectstest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
 	catalog.SeedImport(ownerID, projectID, jobID, "complete")
-	catalog.SeedSnapshot(ownerID, projectID, catalogtest.Seed{ID: snapshotID, Repository: "SMG3zx/demo", Commit: commit, Language: language, MetadataJSON: metadata, TotalBytes: 1_234_567,
-		Files: []catalogtest.File{
+	catalog.SeedSnapshot(ownerID, projectID, projectstest.Seed{ID: snapshotID, Repository: "SMG3zx/demo", Commit: commit, Language: language, MetadataJSON: metadata, TotalBytes: 1_234_567,
+		Files: []projectstest.File{
 			{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
 			{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
 		}})

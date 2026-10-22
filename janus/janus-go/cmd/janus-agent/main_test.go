@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"janus/internal/adapters/agentdisk"
+	"janus/internal/agent/disk"
 )
 
 func TestPauseAndResumeFromTheCommandLineWriteTheKeptState(t *testing.T) {
@@ -15,7 +15,7 @@ func TestPauseAndResumeFromTheCommandLineWriteTheKeptState(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	disk, err := agentdisk.Open(deploymentsDir(state))
+	disk, err := disk.Open(deploymentsDir(state))
 	if err != nil {
 		t.Fatal(err)
 	}

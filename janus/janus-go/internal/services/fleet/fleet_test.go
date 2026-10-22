@@ -13,8 +13,8 @@ import (
 	"github.com/nats-io/jwt/v2"
 
 	"janus/cmd/janus/fleetfixture"
-	"janus/internal/adapters/localstatetest"
-	"janus/internal/adapters/runnertest"
+	"janus/internal/agent/runnertest"
+	"janus/internal/agent/statetest"
 	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"
 	domainfleet "janus/internal/domain/fleet"
@@ -55,7 +55,7 @@ func agentRuntime() *agent.Runtime {
 	runner.Handle(pageModule, func(agent.RunInput) (agent.RunResult, error) {
 		return agent.RunResult{Stdout: []byte("Content-Type: text/plain\n\nok")}, nil
 	})
-	return agent.NewRuntime(runner, localstatetest.NewMemory(), "", time.Now)
+	return agent.NewRuntime(runner, statetest.NewMemory(), "", time.Now)
 }
 
 // setup starts the fleet service with one Agent of owner, named laptop, joined

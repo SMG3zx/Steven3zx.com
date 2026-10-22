@@ -14,7 +14,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nats.go/micro"
 
-	"janus/internal/adapters/runnertest"
+	"janus/internal/agent/runnertest"
 	"janus/internal/contract"
 	contractbuilds "janus/internal/contract/builds"
 	contractprojects "janus/internal/contract/projects"

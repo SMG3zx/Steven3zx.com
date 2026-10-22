@@ -35,7 +35,7 @@ func TestEveryPortHasAnAdapterThatSaysSo(t *testing.T) {
 	}
 
 	asserted := map[string]bool{}
-	err := filepath.WalkDir(filepath.Join("..", "adapters"), func(path string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(filepath.Join("..", "agent"), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return err
 		}

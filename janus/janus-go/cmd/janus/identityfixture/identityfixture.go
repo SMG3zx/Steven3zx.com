@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"janus/internal/adapters/identitynats"
 	"janus/internal/platform/natstest"
+	"janus/internal/services/gateway/identityclient"
 	"janus/internal/services/identity"
 )
 
@@ -19,7 +19,7 @@ const Secret = "identity-fixture-secret-that-is-long-enough"
 
 // Start runs the identity service on a new embedded NATS server and returns the
 // gateway's client of it. The service stops when the test ends.
-func Start(t testing.TB) *identitynats.Gateway {
+func Start(t testing.TB) *identityclient.Gateway {
 	t.Helper()
 	hub := natstest.Start(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -29,5 +29,5 @@ func Start(t testing.TB) *identitynats.Gateway {
 		t.Fatalf("start the identity service: %v", err)
 	}
 	t.Cleanup(func() { _ = service.Stop(context.Background()) })
-	return identitynats.NewGateway(hub.Conn())
+	return identityclient.NewGateway(hub.Conn())
 }

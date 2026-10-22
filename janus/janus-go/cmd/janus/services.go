@@ -13,30 +13,35 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	"janus/internal/adapters/agentnats"
-	"janus/internal/adapters/auditnats"
-	"janus/internal/adapters/buildsnats"
-	"janus/internal/adapters/fleetnats"
-	"janus/internal/adapters/httpapi"
-	"janus/internal/adapters/identitynats"
-	"janus/internal/adapters/projectsnats"
-	"janus/internal/adapters/runsnats"
-	"janus/internal/adapters/tailnode"
+	"janus/internal/agent/link"
 	contractaudit "janus/internal/contract/audit"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/leafbridge"
 	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natsx"
+	"janus/internal/platform/tailnode"
 	"janus/internal/platform/tracing"
 	auditservice "janus/internal/services/audit"
 	buildsservice "janus/internal/services/builds"
 	"janus/internal/services/builds/docker"
 	fleetservice "janus/internal/services/fleet"
 	"janus/internal/services/fleet/headscale"
+	"janus/internal/services/gateway"
+	"janus/internal/services/gateway/auditclient"
+	"janus/internal/services/gateway/buildsclient"
+	"janus/internal/services/gateway/fleetclient"
+	"janus/internal/services/gateway/identityclient"
+	"janus/internal/services/gateway/projectsclient"
+	"janus/internal/services/gateway/runsclient"
 	identityservice "janus/internal/services/identity"
 	projectsservice "janus/internal/services/projects"
 	runsservice "janus/internal/services/runs"
 )
+
+// auditRecorder is where the process records its own Audit Events.
+type auditRecorder interface {
+	Record(ctx context.Context, event contractaudit.Event)
+}
 
 // application is the composition root: it builds the adapters, hands them to
 // the use cases, and starts and stops them in order through a lifecycle table.
@@ -47,8 +52,8 @@ type application struct {
 	lifecycle     *lifecycle
 
 	settings  settings
-	auditLog  *auditnats.Publisher
-	audit     httpapi.Audit
+	auditLog  *auditclient.Publisher
+	audit     auditRecorder
 	telemetry *telemetry
 	nats      *natsx.Hub
 	// agents is the AGENTS account fleet signs Agents' leaf credentials with.
@@ -63,7 +68,7 @@ type application struct {
 	auditService *auditservice.Service
 	// identityService owns identity.db; identity reaches it over NATS.
 	identityService *identityservice.Service
-	identity        httpapi.Identity
+	identity        *identityclient.Gateway
 	// projectsService owns projects.db and runs Imports.
 	projectsService *projectsservice.Service
 	// buildsService owns builds.db and runs WASM Builds; builds is the gateway's
@@ -74,7 +79,7 @@ type application struct {
 	runsService *runsservice.Service
 	tailnet     *headscale.Client
 	tailnode    *tailnode.Node
-	agentLink   *agentnats.Link
+	agentLink   *link.Link
 	// agentsConn is the fleet service's connection as a user of AGENTS, which
 	// reaches the Agents' state, modules and Usage. It is nil without NATS trust.
 	agentsConn   *nats.Conn
@@ -82,12 +87,12 @@ type application struct {
 	fleetService *fleetservice.Service
 	// fleet is the gateway's client of the fleet service; nil when Agent
 	// enrollment is off.
-	fleet          httpapi.Fleet
+	fleet          *fleetclient.Client
 	authentication *authn.Authentication
 	authorization  *authz.Policy
-	builds         *buildsnats.Gateway
-	runs           httpapi.Runs
-	httpServer     *httpapi.Server
+	builds         *buildsclient.Gateway
+	runs           *runsclient.Client
+	httpServer     *gateway.Server
 
 	// startCtx carries the application.start span once telemetry is running.
 	startCtx  context.Context
@@ -219,7 +224,7 @@ func (a *application) tracked(stop func(context.Context) error) func(context.Con
 // startAudit makes the Audit every component records through. It writes
 // through the logger until the audit service starts.
 func (a *application) startAudit(context.Context) error {
-	a.auditLog = auditnats.New(a.logger, "janus")
+	a.auditLog = auditclient.New(a.logger, "janus")
 	a.audit = a.auditLog
 	return nil
 }
@@ -343,7 +348,7 @@ func (a *application) startIdentityService(ctx context.Context) error {
 		return fmt.Errorf("start the identity service: %w", err)
 	}
 	a.identityService = service
-	a.identity = identitynats.NewGateway(a.nats.Conn())
+	a.identity = identityclient.NewGateway(a.nats.Conn())
 	return nil
 }
 
@@ -375,11 +380,11 @@ func (a *application) startBuildsService(ctx context.Context) error {
 // startBuilds makes the gateway's WASM Builds, which asks the builds service over
 // NATS and reads the Artifacts from the artifacts store.
 func (a *application) startBuilds(ctx context.Context) error {
-	gateway, err := buildsnats.NewGateway(ctx, a.nats.Conn())
+	client, err := buildsclient.NewGateway(ctx, a.nats.Conn())
 	if err != nil {
 		return fmt.Errorf("open the artifacts store: %w", err)
 	}
-	a.builds = gateway
+	a.builds = client
 	return nil
 }
 
@@ -396,7 +401,7 @@ func (a *application) startRunsService(ctx context.Context) error {
 
 // startRuns makes the WASM Runs use case, which asks the runs service over NATS.
 func (a *application) startRuns(context.Context) error {
-	a.runs = runsnats.New(a.nats.Conn())
+	a.runs = runsclient.New(a.nats.Conn())
 	return nil
 }
 
@@ -413,16 +418,20 @@ func (a *application) startProjectsService(ctx context.Context) error {
 
 func (a *application) startHTTP(context.Context) error {
 	cfg := a.settings
-	server := httpapi.New(httpapi.Config{
+	config := gateway.Config{
 		Addr: cfg.HTTPAddress, Authentication: a.authentication, Authorization: a.authorization,
-		Audit: a.audit, Identity: a.identity, Catalog: projectsnats.NewGateway(a.nats.Conn()), Builds: a.builds, Fleet: a.fleet, Runs: a.runs,
+		Audit: a.audit, Identity: a.identity, Catalog: projectsclient.NewGateway(a.nats.Conn()), Builds: a.builds, Runs: a.runs,
 		JWTExpiry: cfg.JWTExpiry, RecordRequest: recordHTTPRequest,
 		CookieSecure: cfg.CookieSecure, GoogleEnabled: cfg.GoogleEnabled,
 		GoogleClientID: cfg.GoogleClientID, GoogleSecret: cfg.GoogleSecret,
 		GoogleCallback: cfg.GoogleCallback, JWTSecret: cfg.JWTSecret,
 		GitHubEnabled: cfg.GitHubEnabled, GitHubClientID: cfg.GitHubClientID,
 		GitHubSecret: cfg.GitHubSecret, GitHubCallback: cfg.GitHubCallback,
-	})
+	}
+	if a.fleet != nil {
+		config.Fleet = a.fleet
+	}
+	server := gateway.New(config)
 	_, span := tracing.StartSpan(a.startCtx, "http.server.start", trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(attribute.String("server.address", cfg.HTTPAddress))
 	err := server.Start()
@@ -484,7 +493,7 @@ func (a *application) startFleet(ctx context.Context) error {
 		}
 		a.agentsConn = agentsConn
 	}
-	link, err := agentnats.NewLink(agentsConn)
+	link, err := link.NewLink(agentsConn)
 	if err != nil {
 		return errors.Join(fmt.Errorf("open the Agent link: %w", err), a.stopAgentLink())
 	}
@@ -501,7 +510,7 @@ func (a *application) startFleet(ctx context.Context) error {
 		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
 	}
 	a.fleetService = service
-	a.fleet = fleetnats.New(a.nats.Conn())
+	a.fleet = fleetclient.New(a.nats.Conn())
 	return nil
 }
 

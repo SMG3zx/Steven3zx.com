@@ -17,12 +17,12 @@ import (
 
 	"tailscale.com/feature/buildfeatures"
 
-	"janus/internal/adapters/agentdisk"
-	"janus/internal/adapters/agenthttp"
-	"janus/internal/adapters/agentnats"
-	"janus/internal/adapters/tailnode"
-	"janus/internal/adapters/wasmtime"
+	"janus/internal/agent/disk"
+	"janus/internal/agent/edge"
+	"janus/internal/agent/link"
+	"janus/internal/agent/wasmtime"
 	contractfleet "janus/internal/contract/fleet"
+	"janus/internal/platform/tailnode"
 )
 
 // errHostListener is why an Agent built without the ts_omit_peerapiserver tag
@@ -144,7 +144,7 @@ func serve(ctx context.Context, state string) error {
 	if _, err = hostFolder(s.Folder); err != nil {
 		return err
 	}
-	disk, err := agentdisk.Open(deploymentsDir(state))
+	disk, err := disk.Open(deploymentsDir(state))
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func serve(ctx context.Context, state string) error {
 		return err
 	}
 	defer hub.Close()
-	web := &http.Server{Handler: agenthttp.Handler(runtime, authorize), ReadHeaderTimeout: 10 * time.Second}
+	web := &http.Server{Handler: edge.Handler(runtime, authorize), ReadHeaderTimeout: 10 * time.Second}
 	failed := make(chan error, 2)
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -179,7 +179,7 @@ func serve(ctx context.Context, state string) error {
 	})
 	serveCtx, stopServe := context.WithCancel(ctx)
 	wg.Go(func() {
-		if err := agentnats.Serve(serveCtx, agentnats.Config{Conn: hub.conn, AgentID: s.AgentID, OwnerID: s.OwnerID, Runtime: runtime}); err != nil {
+		if err := link.Serve(serveCtx, link.Config{Conn: hub.conn, AgentID: s.AgentID, OwnerID: s.OwnerID, Runtime: runtime}); err != nil {
 			failed <- err
 		}
 	})
@@ -213,7 +213,7 @@ func setPaused(ctx context.Context, out io.Writer, state string, paused bool) er
 	if _, err := loadSettings(state); err != nil {
 		return err
 	}
-	disk, err := agentdisk.Open(deploymentsDir(state))
+	disk, err := disk.Open(deploymentsDir(state))
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func status(ctx context.Context, out io.Writer, state string) error {
 	if err != nil {
 		return err
 	}
-	disk, err := agentdisk.Open(deploymentsDir(state))
+	disk, err := disk.Open(deploymentsDir(state))
 	if err != nil {
 		return err
 	}

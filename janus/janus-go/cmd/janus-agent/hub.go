@@ -15,9 +15,9 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 
-	"janus/internal/adapters/tailnode"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/leafbridge"
+	"janus/internal/platform/tailnode"
 )
 
 // hubNodeName is the hostname of the control plane's tailnet node.

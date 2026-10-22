@@ -4,13 +4,13 @@
   "description": "How a person registers, signs in, and gets a session, and how a Google or GitHub sign-in finds its Account.",
   "steps": [
     {
-      "file": "janus-go/internal/adapters/httpapi/server.go",
+      "file": "janus-go/internal/services/gateway/server.go",
       "line": 199,
       "title": "Registration",
       "description": "`func (a *Server) register` creates a local Account and issues a session cookie."
     },
     {
-      "file": "janus-go/internal/adapters/httpapi/server.go",
+      "file": "janus-go/internal/services/gateway/server.go",
       "line": 230,
       "title": "Sign-in",
       "description": "`func (a *Server) login` checks the password, then issues a session. A wrong password and an unknown email get the same answer."
@@ -34,13 +34,13 @@
       "description": "`func (s *Authentication) ValidateToken` returns the subject a valid token belongs to, and nothing for an invalid one."
     },
     {
-      "file": "janus-go/internal/adapters/identitynats/gateway.go",
+      "file": "janus-go/internal/services/gateway/identityclient/gateway.go",
       "line": 19,
       "title": "The gateway reaches identity",
       "description": "`func NewGateway` is the gateway's client of the identity service. Sign-in methods and Accounts are kept in identity; the gateway only calls it over NATS."
     },
     {
-      "file": "janus-go/internal/adapters/identitynats/gateway.go",
+      "file": "janus-go/internal/services/gateway/identityclient/gateway.go",
       "line": 52,
       "title": "Google and GitHub sign-ins",
       "description": "`func (g *Gateway) ResolveGoogleIdentity` finds the Account for a Google sign-in through its Provider Identity, or creates one. GitHub works the same way."

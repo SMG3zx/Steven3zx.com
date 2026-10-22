@@ -43,9 +43,8 @@ var clockAllowance = map[string]int{
 // errorTextAllowance: comparisons of an error's text, each file's count.
 // Callers should match typed contract errors with errors.Is.
 var errorTextAllowance = map[string]int{
-	"../adapters/fleetnats/fleetnats.go": 4,
-	"../adapters/httpapi/lifecycle.go":   2,
-	"../adapters/httpapi/projects.go":    0,
+	"../services/gateway/fleetclient/client.go": 4,
+	"../services/gateway/lifecycle.go":          2,
 }
 
 // portAllowance: exported interfaces a service still declares, each file's

@@ -2,9 +2,8 @@
 // docs/architecture.md. It reads the import graph with `go list` and fails
 // when a package under internal/ or cmd/ imports something its layer forbids.
 //
-// Rules "1" to "4" are ADR 0003's rules for domain, app and adapters, kept
-// until the migration deletes app and adapters. Rules "9.2" to "9.5" are the
-// rules for contract, platform and services.
+// Rules "9.1" to "9.6" are the rules for domain, contract, platform, services,
+// cmd/janus and the Agent.
 package archtest
 
 import (
@@ -17,10 +16,10 @@ import (
 
 const modulePath = "janus"
 
-// purePackages is the allow-list of third-party packages that domain and app
-// may import. An entry ending in "/..." allows that package and everything
-// below it; any other entry allows exactly that package. Adding a line here
-// is a visible review decision.
+// purePackages is the allow-list of third-party packages that domain may
+// import. An entry ending in "/..." allows that package and everything below
+// it; any other entry allows exactly that package. Adding a line here is a
+// visible review decision.
 var purePackages = []string{
 	"github.com/google/uuid",
 	"golang.org/x/crypto/argon2",
@@ -34,10 +33,6 @@ var purePackages = []string{
 	"go.opentelemetry.io/otel/metric",
 	"go.opentelemetry.io/otel/trace",
 }
-
-// appForbiddenStdlib are standard-library packages (and their subpackages)
-// that app must not import: they are adapter technology.
-var appForbiddenStdlib = []string{"net/http", "database/sql", "os/exec"}
 
 type listedPackage struct {
 	ImportPath string
@@ -58,19 +53,19 @@ type layer int
 const (
 	layerOther layer = iota
 	layerDomain
-	layerApp
-	layerAdapter
 	layerComposition
 	layerContract
 	layerPlatform
 	layerService
+	layerAgent
 )
 
 // Only non-test imports are checked: `go list` reports test imports
-// separately, so a *test adapter imported from a _test.go file is allowed.
+// separately, so a test fixture or a fake imported from a _test.go file is
+// allowed.
 
-// check applies the four dependency rules to pkgs, whose import paths are
-// below root (the module path, or a fixture root under testdata).
+// check applies the dependency rules to pkgs, whose import paths are below root
+// (the module path, or a fixture root under testdata).
 func check(root string, pkgs []listedPackage) []violation {
 	c := checker{root: root}
 	var out []violation
@@ -104,15 +99,12 @@ func (c checker) layerOf(path string) (layer, string) {
 	switch {
 	case within(rel, "internal/domain"):
 		return layerDomain, ""
-	case within(rel, "internal/app"):
-		return layerApp, ""
-	case strings.HasPrefix(rel, "internal/adapters/"):
-		name, _, _ := strings.Cut(strings.TrimPrefix(rel, "internal/adapters/"), "/")
-		return layerAdapter, name
 	case within(rel, "internal/contract"):
 		return layerContract, ""
 	case within(rel, "internal/platform"):
 		return layerPlatform, ""
+	case within(rel, "internal/agent"):
+		return layerAgent, ""
 	case strings.HasPrefix(rel, "internal/services/"):
 		name, _, _ := strings.Cut(strings.TrimPrefix(rel, "internal/services/"), "/")
 		return layerService, name
@@ -147,7 +139,6 @@ func (c checker) checkImport(pkg, imp string) []violation {
 	bad := func(rule, reason string) []violation {
 		return []violation{{pkg, imp, rule, reason}}
 	}
-	old := to == layerApp || to == layerAdapter
 
 	switch {
 	case to == layerService && from != layerComposition:
@@ -158,6 +149,17 @@ func (c checker) checkImport(pkg, imp string) []violation {
 			return bad("9.4", "a service never imports another service; use its contract")
 		}
 		return bad("9.5", "only cmd/janus imports services")
+	case to == layerAgent && from != layerComposition && from != layerAgent:
+		return bad("9.6", "only cmd and the Agent's own packages import the Agent")
+	case to == layerComposition:
+		return bad("9.5", "nothing imports cmd")
+	case from == layerDomain:
+		if local && to != layerDomain {
+			return bad("9.1", "domain imports nothing else from this repository")
+		}
+		if !local && !isStdlib(imp) && !isPure(imp) {
+			return bad("9.1", "domain imports only the standard library and allow-listed pure libraries")
+		}
 	case from == layerContract:
 		if local && to != layerDomain && to != layerContract {
 			return bad("9.2", "contract imports only domain")
@@ -165,52 +167,16 @@ func (c checker) checkImport(pkg, imp string) []violation {
 		if !local && !isStdlib(imp) {
 			return bad("9.2", "contract imports only the standard library")
 		}
-		return nil
 	case from == layerPlatform:
-		if to == layerContract || to == layerComposition || old {
-			return bad("9.3", "platform imports no contract, service, app, adapter or cmd")
+		if to == layerContract || to == layerAgent {
+			return bad("9.3", "platform imports no service, contract or Agent package")
 		}
-		return nil
 	case from == layerService:
-		if to == layerComposition || old {
-			return bad("9.4", "a service imports only contract, domain and platform from this repository")
-		}
-		return nil
-	}
-
-	fromAdapter, toAdapter := fromName, toName
-	switch from {
-	case layerDomain:
-		if local && to != layerDomain {
-			return bad("1", "domain imports nothing else from this repository")
-		}
-		if !local && !isStdlib(imp) && !isPure(imp) {
-			return bad("1", "domain imports only the standard library and allow-listed pure libraries")
-		}
-	case layerApp:
-		if local && to != layerDomain && to != layerApp {
-			return bad("2", "app imports only domain")
-		}
-		if !local && !isStdlib(imp) && !isPure(imp) {
-			return bad("2", "app imports only allow-listed pure libraries")
-		}
-		if isStdlib(imp) {
-			for _, f := range appForbiddenStdlib {
-				if within(imp, f) {
-					return bad("2", "app must not import "+f)
-				}
-			}
-		}
-	case layerAdapter:
-		switch {
-		case to == layerAdapter && toAdapter != fromAdapter:
-			return bad("3", "an adapter never imports another adapter")
-		case to == layerComposition:
-			return bad("3", "an adapter never imports cmd")
-		}
-	default:
-		if to == layerAdapter && from != layerComposition {
-			return bad("4", "only cmd/janus and cmd/janus-agent import concrete adapters")
+		// Rule 9.4: a service imports contract, domain and platform from this
+		// repository. The other layers were refused above.
+	case from == layerAgent:
+		if to == layerComposition {
+			return bad("9.6", "the Agent never imports cmd")
 		}
 	}
 	return nil
@@ -261,23 +227,12 @@ func TestFixtures(t *testing.T) {
 		want []string // each must appear in exactly one violation message
 	}{
 		{"clean", nil},
-		{"rule1", []string{"package " + fixtures + "rule1/internal/domain imports " + fixtures + "rule1/internal/adapters/sqlstore: rule 1"}},
-		{"rule2", []string{
-			"package " + fixtures + "rule2/internal/app imports net/http: rule 2",
-			"package " + fixtures + "rule2/internal/app imports go.uber.org/zap: rule 2",
-			"package " + fixtures + "rule2/internal/app imports database/sql: rule 2",
-			"package " + fixtures + "rule2/internal/app imports os/exec: rule 2",
-			"package " + fixtures + "rule2/internal/app imports github.com/bytecodealliance/wasmtime-go/v49: rule 2",
-		}},
-		{"rule3", []string{
-			"package " + fixtures + "rule3/internal/adapters/httpapi imports " + fixtures + "rule3/internal/adapters/sqlstore: rule 3",
-			"package " + fixtures + "rule3/internal/adapters/httpapi imports " + fixtures + "rule3/internal/adapters/storetest: rule 3",
-		}},
-		{"rule4", []string{"package " + fixtures + "rule4/cmd/other imports " + fixtures + "rule4/internal/adapters/sqlstore: rule 4"}},
+		{"domain", []string{"package " + fixtures + "domain/internal/domain imports " + fixtures + "domain/internal/platform/natsx: rule 9.1"}},
 		{"services", []string{
 			"package " + fixtures + "services/internal/contract/projects imports " + fixtures + "services/internal/platform/natsx: rule 9.2",
-			"package " + fixtures + "services/internal/platform/natsx imports " + fixtures + "services/internal/app: rule 9.3",
+			"package " + fixtures + "services/internal/platform/natsx imports " + fixtures + "services/internal/contract/shared: rule 9.3",
 			"package " + fixtures + "services/internal/services/builds imports " + fixtures + "services/internal/services/projects: rule 9.4",
+			"package " + fixtures + "services/internal/services/projects imports " + fixtures + "services/internal/agent/link: rule 9.6",
 			"package " + fixtures + "services/cmd/other imports " + fixtures + "services/internal/services/projects: rule 9.5",
 		}},
 	}

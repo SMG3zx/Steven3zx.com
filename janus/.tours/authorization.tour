@@ -4,13 +4,13 @@
   "description": "How a route decides whether the signed-in person may act on a resource, using the embedded Rego policy. Explains the owner-scoping rule behind ENG-108.",
   "steps": [
     {
-      "file": "janus-go/internal/adapters/httpapi/projects.go",
+      "file": "janus-go/internal/services/gateway/projects.go",
       "line": 581,
       "title": "The check every route makes",
       "description": "`func (a *Server) authorizedSubject` names the action and the resource, asks the policy, and answers 401 when the person is not allowed."
     },
     {
-      "file": "janus-go/internal/adapters/httpapi/deployments.go",
+      "file": "janus-go/internal/services/gateway/deployments.go",
       "line": 22,
       "title": "A route names its action",
       "description": "`authorizedSubject` is called with the action project.deploy and the resource owner. Each route picks its own action."

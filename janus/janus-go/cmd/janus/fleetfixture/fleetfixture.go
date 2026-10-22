@@ -22,8 +22,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
-	"janus/internal/adapters/agentlinktest"
-	"janus/internal/adapters/fleetnats"
+	"janus/internal/agent/linktest"
 	contractbuilds "janus/internal/contract/builds"
 	contractfleet "janus/internal/contract/fleet"
 	contractprojects "janus/internal/contract/projects"
@@ -35,6 +34,7 @@ import (
 	"janus/internal/services/fleet"
 	"janus/internal/services/fleet/headscale"
 	"janus/internal/services/fleet/tailnettest"
+	"janus/internal/services/gateway/fleetclient"
 )
 
 // Options configures a fixture.
@@ -75,11 +75,11 @@ type Fixture struct {
 	owners   map[string]string
 	logs     *observer.ObservedLogs
 	// Fleet is the fleet service as the gateway reaches it, over NATS.
-	Fleet *fleetnats.Client
+	Fleet *fleetclient.Client
 	// Tailnet is the control server the Agents join.
 	Tailnet *tailnettest.Fake
 	// Link is the Agent link; Attach serves an Agent on it.
-	Link *agentlinktest.Loopback
+	Link *linktest.Loopback
 	// Builds answers the builds requests the service makes.
 	Builds *Builds
 	conn   *nats.Conn
@@ -114,7 +114,7 @@ func Start(t testing.TB, opts Options) *Fixture {
 		tailnet = f.Tailnet
 	}
 	if link == nil {
-		f.Link = agentlinktest.NewLoopback()
+		f.Link = linktest.NewLoopback()
 		f.Link.ModuleSource = f.moduleOf
 		link = f.Link
 	}
@@ -146,7 +146,7 @@ func Start(t testing.TB, opts Options) *Fixture {
 			}
 		}
 	})
-	f.Fleet = fleetnats.New(conn)
+	f.Fleet = fleetclient.New(conn)
 	return f
 }
 

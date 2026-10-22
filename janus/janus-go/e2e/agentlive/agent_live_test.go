@@ -28,12 +28,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"janus/cmd/janus/fleetfixture"
-	"janus/internal/adapters/agentnats"
-	"janus/internal/adapters/audittest"
-	"janus/internal/adapters/catalogtest"
-	"janus/internal/adapters/httpapi"
-	"janus/internal/adapters/identitynats"
-	"janus/internal/adapters/tailnode"
+	"janus/internal/agent/link"
 	contractbuilds "janus/internal/contract/builds"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/domain/artifact"
@@ -41,7 +36,13 @@ import (
 	"janus/internal/platform/leafbridge"
 	"janus/internal/platform/natstrust"
 	"janus/internal/platform/natsx"
+	"janus/internal/platform/tailnode"
 	"janus/internal/services/fleet/headscale"
+	"janus/internal/services/gateway"
+	"janus/internal/services/gateway/audittest"
+	"janus/internal/services/gateway/fleetclient"
+	"janus/internal/services/gateway/identityclient"
+	"janus/internal/services/gateway/projectstest"
 	"janus/internal/services/identity"
 )
 
@@ -78,9 +79,9 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	identityService := identity.New(identity.Config{DatabasePath: filepath.Join(work, "identity.db"), TokenSecret: strings.Repeat("k", 32)})
 	must(t, identityService.Start(ctx, hub.Conn()))
 	t.Cleanup(func() { identityService.Stop(context.Background()) })
-	identities := identitynats.NewGateway(hub.Conn())
+	identities := identityclient.NewGateway(hub.Conn())
 	// Projects are not what this test is about; the Build it deploys is seeded.
-	catalog := catalogtest.NewMemory()
+	catalog := projectstest.NewMemory()
 	audit := audittest.NewRecorder()
 	key, err := tailnet.CreatePreAuthKey(ctx, contractfleet.ControlTag, time.Now().Add(time.Hour))
 	must(t, err)
@@ -93,7 +94,7 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 	must(t, err)
 	bridge := leafbridge.ServeHub(listener, leafAddress)
 	t.Cleanup(bridge.Close)
-	link, err := agentnats.NewLink(agentsConn)
+	link, err := link.NewLink(agentsConn)
 	must(t, err)
 	t.Cleanup(func() { link.Close() })
 	// The fleet service runs on the hub, with the real tailnet and the Agents'
@@ -102,8 +103,8 @@ func TestTheRealAgentServesPausesResumesAndSurvivesARestart(t *testing.T) {
 		Tailnet: tailnet, Link: link, ControlURL: controlURL, ReconcileInterval: time.Second})
 	policy, err := authz.New(ctx)
 	must(t, err)
-	server := httptest.NewServer(httpapi.New(httpapi.Config{
-		Audit: audit, Identity: identities, Catalog: catalogtest.NewGateway(catalog),
+	server := httptest.NewServer(gateway.New(gateway.Config{
+		Audit: audit, Identity: identities, Catalog: catalog,
 		Authentication: authn.New([]byte(strings.Repeat("k", 32)), "janus-live", 30*time.Minute), Authorization: policy,
 		Fleet: fx.Fleet,
 	}).Handler())
@@ -398,7 +399,7 @@ func assertNoTCPListener(t *testing.T, pid int) {
 	}
 }
 
-func aliceID(t *testing.T, identities *identitynats.Gateway) string {
+func aliceID(t *testing.T, identities *identityclient.Gateway) string {
 	t.Helper()
 	found, err := identities.FindLocalUser(context.Background(), "alice@example.com")
 	must(t, err)
@@ -427,7 +428,7 @@ func seedBuild(t *testing.T, builds *fleetfixture.Builds, owner string, module [
 }
 
 // agentAddress is the IPv4 tailnet address of the Agent's node.
-func agentAddress(t *testing.T, tailnet *headscale.Client, fleet httpapi.Fleet, owner, agentID string) string {
+func agentAddress(t *testing.T, tailnet *headscale.Client, fleet *fleetclient.Client, owner, agentID string) string {
 	t.Helper()
 	agents, err := fleet.ListAgents(context.Background(), owner)
 	must(t, err)
