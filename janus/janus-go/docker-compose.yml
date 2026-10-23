@@ -87,6 +87,13 @@ services:
       JANUS_COOKIE_SECURE: ${JANUS_COOKIE_SECURE:-false}
       JANUS_WEB_UPSTREAM: http://web:3000
       HEADSCALE_URL: ${HEADSCALE_URL:-}
+      # Sign-in with Google and GitHub; each needs all three of its values (see .env.example).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-}
     ports:
       # Traefik at the edge forwards janus.steven3zx.com here (edge/traefik/dynamic/sites.yml).
       - "127.0.0.1:9095:9090"
