@@ -12,7 +12,7 @@ const build: Build = {
 
 describe("buildLabel", () => {
   test("reports a running build with its progress", () => {
-    expect(buildLabel(build)).toEqual({ label: "Building, 40% done", done: false, failed: false });
+    expect(buildLabel(build)).toEqual({ label: "Building, 40% done", done: false, failed: false, canRetry: false });
   });
 
   test("reports a finished build as done and downloadable", () => {
@@ -20,15 +20,23 @@ describe("buildLabel", () => {
       label: "Built",
       done: true,
       failed: false,
+      canRetry: false,
     });
   });
 
-  test("reports a failed build with the reason", () => {
+  test("reports a failed build with the reason, and offers a retry", () => {
     expect(buildLabel({ ...build, status: "failed", error: "compile error" })).toEqual({
       label: "Failed: compile error",
       done: true,
       failed: true,
+      canRetry: true,
     });
+  });
+
+  test("offers a retry only for a failed build", () => {
+    expect(buildLabel({ ...build, status: "queued" }).canRetry).toBe(false);
+    expect(buildLabel({ ...build, status: "running" }).canRetry).toBe(false);
+    expect(buildLabel({ ...build, status: "complete" }).canRetry).toBe(false);
   });
 });
 

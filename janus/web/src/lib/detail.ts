@@ -22,14 +22,15 @@ export type Deployment = {
   deploy_anyway: boolean;
 };
 
-export function buildLabel(build: Build): { label: string; done: boolean; failed: boolean } {
+/** What to show for a Build. Only a failed Build can be retried. */
+export function buildLabel(build: Build): { label: string; done: boolean; failed: boolean; canRetry: boolean } {
   if (build.status === "failed") {
-    return { label: `Failed: ${build.error ?? "unknown error"}`, done: true, failed: true };
+    return { label: `Failed: ${build.error ?? "unknown error"}`, done: true, failed: true, canRetry: true };
   }
   if (build.status === "complete") {
-    return { label: "Built", done: true, failed: false };
+    return { label: "Built", done: true, failed: false, canRetry: false };
   }
-  return { label: `Building, ${build.progress}% done`, done: false, failed: false };
+  return { label: `Building, ${build.progress}% done`, done: false, failed: false, canRetry: false };
 }
 
 export function deploymentLabel(deployment: Deployment): { label: string; canStop: boolean; canRollback: boolean } {

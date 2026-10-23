@@ -209,6 +209,21 @@ export const useProjectAction = routeAction$(async (form, event) => {
     );
   }
 
+  if (intent === "retry") {
+    const response = await gateway.send(
+      "POST",
+      `/api/wasm-builds/${encodeURIComponent(String(form.build ?? ""))}/retry`,
+      { cookie },
+    );
+    if (!response.ok)
+      return failed(event, response.status, "The build could not be retried.");
+    const started = (await response.json()) as { job_id: string };
+    throw event.redirect(
+      303,
+      `${pageUrl}?build=${encodeURIComponent(started.job_id)}`,
+    );
+  }
+
   if (intent === "run") {
     const build = encodeURIComponent(String(form.build ?? ""));
     const response = await gateway.send(
@@ -439,6 +454,15 @@ export default component$(() => {
                   </span>{" "}
                   <span class="muted">{build.target}</span>
                 </p>
+                {buildState.canRetry ? (
+                  <Form action={action}>
+                    <input type="hidden" name="intent" value="retry" />
+                    <input type="hidden" name="build" value={build.id} />
+                    <button type="submit" class="button">
+                      Retry build
+                    </button>
+                  </Form>
+                ) : null}
                 {build.status === "complete" ? (
                   <div class="row">
                     <a
