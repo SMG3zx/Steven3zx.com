@@ -130,15 +130,31 @@ func TestGatewayRoutesNeverReachTheWebContainer(t *testing.T) {
 	}
 }
 
-func TestWriteRequestsStayWithTheGateway(t *testing.T) {
+func TestFormSubmissionsToPagesReachTheWebContainer(t *testing.T) {
 	upstream := newUpstream(t)
 	handler := serverWithUpstream(t, upstream.server.URL)
 
 	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader("name=x")))
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/projects/new?qaction=abc", strings.NewReader("name=x")))
 
-	if upstream.hits() != 0 {
-		t.Fatal("a POST to a page path reached the web container")
+	if upstream.hits() != 1 || upstream.last(t).Method != http.MethodPost {
+		t.Fatalf("a form POST to a page path did not reach the web container (hits=%d)", upstream.hits())
+	}
+}
+
+func TestWritesToTheGatewayAreNeverForwarded(t *testing.T) {
+	for _, path := range []string{"/api/projects", "/api/agents/a1/pause", "/auth/login", "/auth/github/disconnect"} {
+		t.Run(path, func(t *testing.T) {
+			upstream := newUpstream(t)
+			handler := serverWithUpstream(t, upstream.server.URL)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}")))
+
+			if upstream.hits() != 0 {
+				t.Fatalf("POST %s reached the web container", path)
+			}
+		})
 	}
 }
 

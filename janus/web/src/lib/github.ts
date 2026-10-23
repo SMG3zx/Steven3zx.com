@@ -48,11 +48,11 @@ export async function loadRepositoryChoices(
   if (!repos.connected || !repository) {
     return empty;
   }
-  const branches = await gateway.get<{ branches: { name: string }[] }>(
+  const branches = await gateway.get<{ name: string }[]>(
     `/api/github/branches?repository=${encodeURIComponent(repository)}`,
     { cookie },
   );
-  const names = branches.branches.map((branch) => branch.name);
+  const names = branches.map((branch) => branch.name);
   const branch = chooseBranch(names, requestedBranch);
   const commits = branch
     ? await gateway.get<Commit[]>(

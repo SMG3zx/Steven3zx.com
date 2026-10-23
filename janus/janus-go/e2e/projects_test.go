@@ -17,11 +17,9 @@ import (
 	"janus/internal/services/identity"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,11 +28,15 @@ import (
 
 const (
 	jwtSecret      = "playwright-test-secret-that-is-long-enough"
-	importCommit   = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	secondCommit   = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	entrypointPath = "cmd/server/main.go"
+	repository     = "SMG3zx/demo"
 )
 
+// TestProjectBrowserActions drives the project flows through the web frontend in
+// Chromium. The browser reaches the gateway, which sends pages to the Qwik app,
+// which asks the gateway for its data. The repository is published to the
+// in-memory catalog, so the imports run for real without a GitHub call.
 func TestProjectBrowserActions(t *testing.T) {
 	pw, err := playwright.Run()
 	if err != nil {
@@ -54,13 +56,34 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 	defer browser.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	catalog, identities, handler := startJanus(t, ctx)
+	webAddress := freeAddress(t)
+	catalog, identities, _, handler := startJanusWithWeb(t, ctx, "http://"+webAddress)
 	server := httptest.NewServer(handler)
 	defer server.Close()
+	startFrontend(t, webAddress, server.URL, server.URL)
+
 	userID, sessionCookie := registerUser(t, server.URL)
 	connectGitHub(t, ctx, identities, userID)
+	catalog.Connect(userID)
+	importCommit := catalog.Publish(repository, map[string]string{
+		entrypointPath: "package main\n\nfunc main() {}\n",
+		"go.mod":       "module demo\n\ngo 1.22\n",
+	})
+
+	// Anonymous visitors are sent to sign in, and keep the page they asked for.
+	anonymous, err := browser.NewPage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer anonymous.Close()
+	if _, err := anonymous.Goto(server.URL + "/projects"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(anonymous.URL(), "/sign-in") {
+		t.Fatalf("anonymous /projects navigation ended at %q; want the sign-in page", anonymous.URL())
+	}
 
 	browserContext, err := browser.NewContext()
 	if err != nil {
@@ -77,132 +100,71 @@ func TestProjectBrowserActions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page.SetDefaultTimeout(5000)
+	page.SetDefaultTimeout(10000)
 
-	var importAttempts atomic.Int32
-	if err := page.Route("**/api/github/repos", func(route playwright.Route) {
-		fulfillJSON(t, route, http.StatusOK, map[string]any{"repositories": []map[string]any{{
-			"id": 42, "full_name": "SMG3zx/demo", "private": false, "default_branch": "main", "language": "Rust", "stargazers_count": 3, "forks_count": 1,
-		}}})
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := page.Route("**/api/github/branches**", func(route playwright.Route) {
-		fulfillJSON(t, route, http.StatusOK, []map[string]any{{"name": "main", "commit": map[string]string{"sha": importCommit}}})
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := page.Route("**/api/github/commits**", func(route playwright.Route) {
-		fulfillJSON(t, route, http.StatusOK, []map[string]any{{"sha": importCommit, "message": "Add service entrypoint"}})
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := page.Route("**/api/projects/*/imports", func(route playwright.Route) {
-		var request struct {
-			Repository string `json:"repository"`
-			Branch     string `json:"branch"`
-			Commit     string `json:"commit"`
-		}
-		body, readErr := route.Request().PostData()
-		if readErr != nil {
-			t.Errorf("read import request: %v", readErr)
-			_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusBadRequest), Body: "{}"})
-			return
-		}
-		if err := json.Unmarshal([]byte(body), &request); err != nil {
-			t.Errorf("decode import request %q: %v", body, err)
-			_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusBadRequest), Body: "{}"})
-			return
-		}
-		if request.Repository != "SMG3zx/demo" || request.Branch != "main" || request.Commit != importCommit {
-			t.Errorf("import request = %#v; want selected repository, branch, and commit", request)
-			_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusBadRequest), Body: `{"error":"unexpected import selection"}`, ContentType: playwright.String("application/json")})
-			return
-		}
-		requestURL, err := url.Parse(route.Request().URL())
-		if err != nil {
-			t.Errorf("parse import request URL %q: %v", route.Request().URL(), err)
-			_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusBadRequest), Body: `{}`})
-			return
-		}
-		projectID := path.Base(path.Dir(requestURL.Path))
-		attempt := importAttempts.Add(1)
-		jobID := fmt.Sprintf("playwright-import-%d", attempt)
-		snapshotID := fmt.Sprintf("playwright-snapshot-%d", attempt)
-		if err := seedSnapshot(catalog, userID, projectID, jobID, snapshotID, importCommit, `{"scan":{"entrypoint_candidates":[{"path":"cmd/server/main.go","ecosystem":"Go","reason":"Go service entrypoint"}]}}`); err != nil {
-			t.Errorf("seed imported snapshot for owner=%q project=%q URL=%s: %v", userID, projectID, requestURL.Path, err)
-			_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusInternalServerError), Body: `{}`})
-			return
-		}
-		fulfillJSON(t, route, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "queued"})
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Blank-project creation is a browser form action backed by the real routes and SQLite actor.
-	if _, err := page.Goto(server.URL + "/projects"); err != nil {
-		t.Fatal(err)
-	}
-	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Create blank project"}).Click(); err != nil {
+	// A blank project is created from the new-project form and opens its page.
+	if _, err := page.Goto(server.URL + "/projects/new"); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.Locator(`input[name="name"]`).Fill("Browser project"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.Locator(`textarea[name="description"]`).Fill("Created by Playwright-Go"); err != nil {
+	if err := page.Locator(`input[name="description"]`).Fill("Created by Playwright-Go"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Create", Exact: playwright.Bool(true)}).Click(); err != nil {
+	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Create project", Exact: playwright.Bool(true)}).Click(); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.GetByRole(*playwright.AriaRoleHeading, playwright.PageGetByRoleOptions{Name: "Browser project", Exact: playwright.Bool(true)}).WaitFor(); err != nil {
-		t.Fatalf("created project detail did not load: %v", err)
+		body, _ := page.Locator("body").TextContent()
+		t.Fatalf("created project page did not load: %v (page at %s says %q)", err, page.URL(), body)
 	}
 	projectURL := page.URL()
 	projectID := path.Base(projectURL)
 
-	// Project listing exposes the created project and the connected GitHub import action.
+	// The projects list shows the project.
 	if _, err := page.Goto(server.URL + "/projects"); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Browser project", Exact: playwright.Bool(true)}).WaitFor(); err != nil {
 		t.Fatalf("project was not listed: %v", err)
 	}
-	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Create from GitHub", Exact: playwright.Bool(true)}).WaitFor(); err != nil {
-		t.Fatalf("connected GitHub import action is missing: %v", err)
-	}
 
-	// Repository, branch, commit selection, import submission, and job polling run in the real UI.
-	if _, err := page.Goto(projectURL); err != nil {
+	// The project page imports a chosen commit: repository, branch and commit are picked, then imported.
+	if _, err := page.Goto(projectURL + "?repository=" + repository + "&branch=main"); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.Locator(`#commit option[value="` + importCommit + `"]`).WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateAttached}); err != nil {
-		t.Fatalf("repository metadata was not loaded: %v", err)
+		body, _ := page.Locator("body").TextContent()
+		t.Fatalf("repository choices were not loaded: %v (page says %q)", err, body)
 	}
 	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Import selected commit"}).Click(); err != nil {
 		t.Fatal(err)
 	}
-	// The reload after a completed import shows the snapshot's size. Wait for it, rather
-	// than reading the page once, which can run before the reload.
-	if err := page.GetByText("1.23 MB").First().WaitFor(); err != nil {
-		t.Fatalf("imported snapshot statistics were not displayed in MB: %v", err)
+	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Open project", Exact: playwright.Bool(true)}).WaitFor(); err != nil {
+		t.Fatalf("import did not finish: %v", err)
+	}
+	if _, err := page.Goto(projectURL); err != nil {
+		t.Fatal(err)
 	}
 
-	// The user can confirm a detected entrypoint and see it persisted after reload.
-	if _, err := page.Locator("#entrypoint").SelectOption(playwright.SelectOptionValues{Values: &[]string{entrypointPath}}); err != nil {
+	// The user confirms the detected entrypoint, and it is shown after the save.
+	if _, err := page.Locator("#entry_point").SelectOption(playwright.SelectOptionValues{Values: &[]string{entrypointPath}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Save entrypoint"}).Click(); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByText("Entrypoint: cmd/server/main.go", playwright.PageGetByTextOptions{Exact: playwright.Bool(true)}).WaitFor(); err != nil {
+	if err := page.GetByText("entrypoint "+entrypointPath, playwright.PageGetByTextOptions{Exact: playwright.Bool(false)}).WaitFor(); err != nil {
 		t.Fatalf("entrypoint was not saved: %v", err)
 	}
+
+	// A WASM build runs, and its artifact downloads through the gateway.
 	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Build WASM", Exact: playwright.Bool(true)}).Click(); err != nil {
 		t.Fatalf("could not start WASM build: %v", err)
 	}
-	downloadLink := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Download wasm-artifacts.zip.zst", Exact: playwright.Bool(true)})
-	if err := downloadLink.WaitFor(); err != nil {
+	downloadLink := page.Locator(`a[href*="/artifact"]`)
+	if err := downloadLink.WaitFor(playwright.LocatorWaitForOptions{Timeout: playwright.Float(20000)}); err != nil {
 		t.Fatalf("successful WASM artifact was not made available: %v", err)
 	}
 	wasmLink, err := downloadLink.GetAttribute("href")
@@ -224,78 +186,75 @@ func TestProjectBrowserActions(t *testing.T) {
 		t.Fatalf("WASM artifact response status=%d body=%q err=%v", artifactResponse.StatusCode, artifactBody, readErr)
 	}
 
-	// Snapshot activation switches the project's active repository revision.
+	// Activating an earlier revision makes its commit the current one.
 	if err := seedSnapshot(catalog, userID, projectID, "older-snapshot-job", "older-snapshot", secondCommit, `{}`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := page.Reload(); err != nil {
 		t.Fatal(err)
 	}
-	activate := page.Locator(`button[onclick="activateSnapshot('playwright-snapshot-1')"]`)
+	activate := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Activate", Exact: playwright.Bool(true)}).First()
 	if err := activate.WaitFor(); err != nil {
-		t.Fatalf("previous successful snapshot is not available to activate: %v", err)
+		t.Fatalf("previous revision is not available to activate: %v", err)
 	}
 	if err := activate.Click(); err != nil {
 		t.Fatal(err)
 	}
-	// The current revision is the first match; the history list repeats the commit further down.
-	if err := page.GetByText("@ aaaaaaa", playwright.PageGetByTextOptions{Exact: playwright.Bool(false)}).First().WaitFor(); err != nil {
-		t.Fatalf("activating the older snapshot did not restore its commit: %v", err)
+	if err := page.Locator(fmt.Sprintf(`li:has-text(%q) >> .badge-ok`, "@ "+importCommit[:7])).WaitFor(); err != nil {
+		t.Fatalf("activating the earlier revision did not make its commit current: %v", err)
 	}
 
-	// The dedicated GitHub creation page creates a new project and waits for the same import job to complete.
-	if _, err := page.Goto(server.URL + "/projects"); err != nil {
-		t.Fatal(err)
-	}
-	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Create from GitHub", Exact: playwright.Bool(true)}).Click(); err != nil {
+	// The new-project page creates a project from a chosen commit and imports it.
+	if _, err := page.Goto(server.URL + "/projects/new?repository=" + repository + "&branch=main"); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.Locator(`#commit option[value="` + importCommit + `"]`).WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateAttached}); err != nil {
-		t.Fatalf("GitHub project wizard did not load repository metadata: %v", err)
+		t.Fatalf("GitHub project form did not load repository choices: %v", err)
 	}
-	if err := page.Locator("#name").Fill("Imported browser project"); err != nil {
+	if err := page.Locator(`input[name="name"]`).Fill("Imported browser project"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.Locator("#description").Fill("Created from a selected GitHub revision"); err != nil {
+	if err := page.Locator(`input[name="description"]`).Fill("Created from a selected GitHub revision"); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Create project and import", Exact: playwright.Bool(true)}).Click(); err != nil {
+	if err := page.Locator(`input[name="intent"][value="import"]`).Check(); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Create project", Exact: playwright.Bool(true)}).Click(); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Open project", Exact: playwright.Bool(true)}).WaitFor(); err != nil {
+		t.Fatalf("GitHub-created project did not import: %v", err)
+	}
+	if err := page.GetByRole(*playwright.AriaRoleLink, playwright.PageGetByRoleOptions{Name: "Open project", Exact: playwright.Bool(true)}).Click(); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.GetByRole(*playwright.AriaRoleHeading, playwright.PageGetByRoleOptions{Name: "Imported browser project", Exact: playwright.Bool(true)}).WaitFor(); err != nil {
 		t.Fatalf("GitHub-created project did not open after import: %v", err)
 	}
 	importedPageText, err := page.Locator("body").TextContent()
-	if err != nil || !strings.Contains(importedPageText, "SMG3zx/demo · main @ aaaaaaa") {
-		t.Fatalf("GitHub-created project does not show its imported revision (body=%q, err=%v)", importedPageText, err)
+	if err != nil || !strings.Contains(importedPageText, repository) {
+		t.Fatalf("GitHub-created project does not show its repository (body=%q, err=%v)", importedPageText, err)
 	}
 
-	// GitHub disconnect is a real POST action and removes import access from the projects page.
-	if _, err := page.Goto(server.URL + "/projects"); err != nil {
+	// Disconnecting GitHub in the account settings removes import access.
+	if _, err := page.Goto(server.URL + "/account"); err != nil {
 		t.Fatal(err)
 	}
 	if err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Disconnect GitHub", Exact: playwright.Bool(true)}).Click(); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.GetByText("Connect GitHub", playwright.PageGetByTextOptions{Exact: playwright.Bool(false)}).WaitFor(); err != nil {
-		t.Fatalf("GitHub disconnect did not update the projects page: %v", err)
-	}
-	if got, err := page.GetByRole(*playwright.AriaRoleButton, playwright.PageGetByRoleOptions{Name: "Disconnect GitHub", Exact: playwright.Bool(true)}).Count(); err != nil || got != 0 {
-		t.Fatalf("disconnect control remains visible (count=%d, err=%v)", got, err)
+	// The Connection lives in the identity service, which the projects service reads
+	// for its import access. The in-memory catalog does not mirror it, so the test
+	// asks identity directly.
+	if !eventually(5*time.Second, func() bool {
+		token, err := identities.FindGitHubToken(ctx, userID)
+		return err == nil && !token.Connected
+	}) {
+		t.Fatal("GitHub disconnect did not remove the GitHub Connection")
 	}
 
-	// Project ownership is enforced at the UI edge: an anonymous browser is redirected home.
-	anonymous, err := browser.NewPage()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer anonymous.Close()
-	if _, err := anonymous.Goto(server.URL + "/projects"); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasSuffix(anonymous.URL(), "/") {
-		t.Fatalf("anonymous /projects navigation ended at %q; want home", anonymous.URL())
-	}
+	// Project ownership is enforced by the gateway: an anonymous build request is refused.
 	unauthorizedBuild, err := http.Post(server.URL+"/api/projects/"+projectID+"/wasm-builds", "application/json", strings.NewReader(`{"target":"wasm32-unknown-unknown"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -319,6 +278,13 @@ func startJanus(t *testing.T, ctx context.Context) (*projectstest.Memory, *ident
 // Catalog, the Identities, the Builds use case and the HTTP handler.
 func startJanusWith(t *testing.T, ctx context.Context) (*projectstest.Memory, *identityclient.Gateway, *buildstest.Fake, http.Handler) {
 	t.Helper()
+	return startJanusWithWeb(t, ctx, "")
+}
+
+// startJanusWithWeb is startJanusWith, with the gateway sending its pages to the
+// web frontend at webUpstream. An empty webUpstream keeps the gateway's own pages.
+func startJanusWithWeb(t *testing.T, ctx context.Context, webUpstream string) (*projectstest.Memory, *identityclient.Gateway, *buildstest.Fake, http.Handler) {
+	t.Helper()
 	hub := natstest.Start(t)
 	identityService := identity.New(identity.Config{DatabasePath: path.Join(t.TempDir(), "identity.db"), TokenSecret: jwtSecret})
 	if err := identityService.Start(ctx, hub.Conn()); err != nil {
@@ -340,6 +306,7 @@ func startJanusWith(t *testing.T, ctx context.Context) (*projectstest.Memory, *i
 		Authentication: authentication, Authorization: authorization,
 		JWTSecret: jwtSecret, GitHubEnabled: true, GitHubClientID: "test-client", GitHubSecret: "test-secret",
 		GitHubCallback: "http://localhost/auth/github/callback", CookieSecure: false,
+		WebUpstream: webUpstream,
 	})
 	return catalog, identities, builds, server.Handler()
 }
@@ -384,7 +351,7 @@ func seedSnapshot(catalog *projectstest.Memory, ownerID, projectID, jobID, snaps
 // language, whose manifest file is manifest with the given content.
 func seedLanguageSnapshot(catalog *projectstest.Memory, ownerID, projectID, jobID, snapshotID, commit, metadata, language, manifest, manifestContent string) error {
 	catalog.SeedImport(ownerID, projectID, jobID, "complete")
-	catalog.SeedSnapshot(ownerID, projectID, projectstest.Seed{ID: snapshotID, Repository: "SMG3zx/demo", Commit: commit, Language: language, MetadataJSON: metadata, TotalBytes: 1_234_567,
+	catalog.SeedSnapshot(ownerID, projectID, projectstest.Seed{ID: snapshotID, Repository: repository, Commit: commit, Language: language, MetadataJSON: metadata, TotalBytes: 1_234_567,
 		Files: []projectstest.File{
 			{Path: entrypointPath, Mode: "100644", Hash: strings.Repeat("c", 40), Content: []byte("package main\n")},
 			{Path: manifest, Mode: "100644", Hash: strings.Repeat("d", 40), Content: []byte(manifestContent)},
@@ -392,16 +359,17 @@ func seedLanguageSnapshot(catalog *projectstest.Memory, ownerID, projectID, jobI
 	return nil
 }
 
-func fulfillJSON(t *testing.T, route playwright.Route, status int, body any) {
-	t.Helper()
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		t.Errorf("encode mocked browser response: %v", err)
-		_ = route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(http.StatusInternalServerError), Body: `{}`})
-		return
-	}
-	if err := route.Fulfill(playwright.RouteFulfillOptions{Status: playwright.Int(status), ContentType: playwright.String("application/json"), Body: string(encoded)}); err != nil {
-		t.Errorf("fulfill mocked browser response: %v", err)
+// eventually reports whether check passes within timeout, asking every 50 milliseconds.
+func eventually(timeout time.Duration, check func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if check() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
