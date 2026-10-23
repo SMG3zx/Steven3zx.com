@@ -89,6 +89,18 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
 
+  web:
+    build: ../web
+    profiles: ["services"]
+    environment:
+      JANUS_API_URL: http://gateway:9090
+      JANUS_WEB_URL: ${JANUS_WEB_URL:-https://janus.steven3zx.com}
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - gateway
+
   jaeger:
     image: jaegertracing/jaeger:2.22.0
     container_name: janus-jaeger
