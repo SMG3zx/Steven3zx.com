@@ -76,8 +76,9 @@ services:
     expose:
       - "3000"
     ports:
-      # Git over SSH. The host port matches the native instance, so clone URLs keep working.
-      - "30000:2222"
+      # Git over SSH, on the tailnet address only (TAILNET_IP in edge/.env), so the internet
+      # cannot reach it. Clone with ssh://git@<TAILNET_IP>:30000/<owner>/<repo>.git
+      - "${TAILNET_IP:-127.0.0.1}:30000:2222"
     volumes:
       - gitea_data:/data
     networks:
