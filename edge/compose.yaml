@@ -137,6 +137,8 @@ services:
     volumes:
       - runner_deploy_data:/data
       - ./gitea/runner-deploy.yaml:/config/config.yaml:ro
+      # The runner starts job containers through the socket, and it needs it itself.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - default
       - ci

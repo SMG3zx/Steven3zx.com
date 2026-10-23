@@ -20,7 +20,8 @@ container:
   network: steven3zx-edge_ci
   valid_volumes:
     - steven3zx-ci-cache
-  # The Docker socket lets the job rebuild and restart containers on the host.
-  # That is root-equivalent on this host, so only the deploy job may use this runner.
-  options: "-v steven3zx-ci-cache:/ci-cache -v /var/run/docker.sock:/var/run/docker.sock"
+  # act mounts the Docker socket into job containers itself, so it must not appear
+  # here too: Docker rejects the duplicate mount. That mount is root-equivalent on
+  # this host, so only the deploy job should run on this runner.
+  options: "-v steven3zx-ci-cache:/ci-cache"
   force_pull: false

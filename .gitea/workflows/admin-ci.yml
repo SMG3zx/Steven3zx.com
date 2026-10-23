@@ -46,6 +46,10 @@ jobs:
     needs: [server, web]
     if: github.ref == 'refs/heads/master'
     runs-on: deploy
+    # The deploy image is Alpine and has no bash, so run the steps with sh.
+    defaults:
+      run:
+        shell: sh
     env:
       HOST_AGENT_TOKEN: ${{ secrets.HOST_AGENT_TOKEN }}
       ADMIN_DB_KEY: ${{ secrets.ADMIN_DB_KEY }}
