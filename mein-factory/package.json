@@ -2,7 +2,7 @@
   "name": "meinfactory",
   "description": "Local-first software factory with Qwik and Mastra",
   "engines": {
-    "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
+    "bun": ">=1.4.0"
   },
   "engines-annotation": "Mostly required by sharp which needs a Node-API v9 compatible runtime",
   "private": true,
@@ -20,7 +20,7 @@
     "dev": "bun run scripts/dev.ts",
     "dev:ui": "vite --mode ssr",
     "dev:mastra": "cd mastra && bun run dev",
-    "dev.debug": "node --inspect-brk ./node_modules/vite/bin/vite.js --mode ssr --force",
+    "dev.debug": "bun --inspect-brk ./node_modules/vite/bin/vite.js --mode ssr --force",
     "fmt": "prettier --write .",
     "fmt.check": "prettier --check .",
     "lint": "eslint \"src/**/*.ts*\"",
