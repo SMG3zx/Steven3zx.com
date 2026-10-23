@@ -29,7 +29,10 @@ type server struct {
 	agentToken   string
 	webDir       string
 	cookieSecure bool
-	agent        *http.Client
+	// agent has a timeout for one-shot requests; agentStream has none, because
+	// a log stream stays open as long as the browser is looking at it.
+	agent       *http.Client
+	agentStream *http.Client
 }
 
 func (s *server) routes() http.Handler {
@@ -37,7 +40,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /admin/api/login", s.login)
 	mux.HandleFunc("POST /admin/api/logout", s.logout)
 	mux.HandleFunc("GET /admin/api/me", s.requireUser(s.me))
-	mux.HandleFunc("GET /admin/api/snapshot", s.requireUser(s.snapshot))
+	mux.HandleFunc("GET /admin/api/live", s.requireUser(s.live))
 	mux.HandleFunc("GET /admin/api/jobs", s.requireUser(s.listJobs))
 	mux.HandleFunc("POST /admin/api/jobs", s.requireUser(s.createJob))
 	mux.HandleFunc("POST /admin/api/jobs/scrape", s.requireUser(s.scrapeJobPosting))
@@ -188,28 +191,6 @@ func (s *server) me(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value(ctxKey{}).(user)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]string{"username": u.Username})
-}
-
-func (s *server) snapshot(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, s.agentURL+"/snapshot", nil)
-	req.Header.Set("Authorization", "Bearer "+s.agentToken)
-	resp, err := s.agent.Do(req)
-	if err != nil {
-		log.Printf("host agent: %v", err)
-		writeError(w, http.StatusBadGateway, "host agent unreachable")
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("host agent: %s", resp.Status)
-		writeError(w, http.StatusBadGateway, "host agent returned "+resp.Status)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	io.Copy(w, resp.Body)
 }
 
 // jobInput is the JSON body for creating or replacing a job.

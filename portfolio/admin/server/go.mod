@@ -3,6 +3,7 @@ module adminserver
 go 1.27.1
 
 require (
+	github.com/coder/websocket v1.8.15
 	golang.org/x/crypto v0.58.0
 	golang.org/x/term v0.47.0
 	turso.tech/database/tursogo v0.8.3

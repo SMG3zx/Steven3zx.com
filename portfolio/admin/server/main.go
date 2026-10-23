@@ -67,6 +67,7 @@ func main() {
 		webDir:       env("ADMIN_WEB_DIR", "web"),
 		cookieSecure: env("ADMIN_COOKIE_SECURE", "true") == "true",
 		agent:        &http.Client{Timeout: 5 * time.Second},
+		agentStream:  &http.Client{},
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
