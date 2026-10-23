@@ -22,6 +22,11 @@ export const api = {
   agent: {
     restart: () => request<{ status: string }>("/agent/restart", { method: "POST", body: "{}" }),
   },
+  layout: {
+    get: () => request<{ positions: Record<string, { x: number; y: number }> }>("/layout"),
+    save: (positions: Record<string, { x: number; y: number }>) =>
+      request<void>("/layout", { method: "PUT", body: JSON.stringify({ positions }) }),
+  },
   login: (username: string, password: string) =>
     request<{ username: string }>("/login", {
       method: "POST",

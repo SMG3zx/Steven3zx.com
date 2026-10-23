@@ -44,6 +44,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /admin/api/me", s.requireUser(s.me))
 	mux.HandleFunc("GET /admin/api/live", s.requireUser(s.live))
 	mux.HandleFunc("POST /admin/api/agent/restart", s.requireUser(s.restartAgent))
+	mux.HandleFunc("GET /admin/api/layout", s.requireUser(s.getLayout))
+	mux.HandleFunc("PUT /admin/api/layout", s.requireUser(s.putLayout))
 	mux.HandleFunc("GET /admin/api/jobs", s.requireUser(s.listJobs))
 	mux.HandleFunc("POST /admin/api/jobs", s.requireUser(s.createJob))
 	mux.HandleFunc("POST /admin/api/jobs/scrape", s.requireUser(s.scrapeJobPosting))

@@ -1,10 +1,15 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { bytes, duration, level, pct, rate } from "./format";
+import { HISTORY_LIMIT, last, SERIES } from "./history";
 import type { Container, LiveSnapshot } from "./types";
 
 export const SnapshotContext = createContext<LiveSnapshot | null>(null);
 const useSnap = () => useContext(SnapshotContext)!;
+
+/** Recent samples by series key, see history.ts. */
+export const HistoryContext = createContext<Record<string, number[]>>({});
+const useSeries = () => useContext(HistoryContext);
 
 /** Lets a card ask the dashboard to open a view. */
 export const ActionsContext = createContext<{ openLogs: (containerId: string) => void }>({ openLogs: () => {} });
@@ -83,6 +88,47 @@ export function Meter({ value, label }: { value: number; label?: ReactNode }) {
   );
 }
 
+const SPARK_W = 100;
+const SPARK_H = 32;
+
+/**
+ * A line chart of recent samples, newest on the right. The y-axis runs from 0
+ * to max when given, otherwise to the largest sample, but never below floor.
+ * Small values stay visibly low instead of filling the box.
+ */
+export function Spark({ values, max, floor = 1, label }: { values: number[]; max?: number; floor?: number; label: string }) {
+  const top = max ?? Math.max(floor, ...values);
+  const step = SPARK_W / (HISTORY_LIMIT - 1);
+  const points = values.map((v, i) => {
+    const x = SPARK_W - (values.length - 1 - i) * step;
+    const y = SPARK_H - 1 - (Math.min(v, top) / top) * (SPARK_H - 2);
+    return [x, y] as const;
+  });
+  const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+  const area = points.length
+    ? `M${points[0][0].toFixed(2)},${SPARK_H} L${line.replaceAll(" ", " L")} L${points[points.length - 1][0].toFixed(2)},${SPARK_H} Z`
+    : "";
+  return (
+    <svg className="spark" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" role="img" aria-label={label}>
+      <line x1="0" x2={SPARK_W} y1={SPARK_H - 0.5} y2={SPARK_H - 0.5} className="spark-base" />
+      {points.length > 1 && <path d={area} className="spark-area" />}
+      {points.length > 1 && <polyline points={line} className="spark-line" vectorEffect="non-scaling-stroke" />}
+    </svg>
+  );
+}
+
+/** A label, the newest value, and its history as a line chart. */
+function CpuLine({ label, value, series, max, floor }: { label: ReactNode; value: number; series: number[]; max?: number; floor?: number }) {
+  return (
+    <div className="spark-row">
+      <div className="meter-label">
+        {label} <b>{pct(value, 1)}</b>
+      </div>
+      <Spark values={series} max={max} floor={floor} label={`${typeof label === "string" ? label : "CPU"} history`} />
+    </div>
+  );
+}
+
 function Stat({ k, v }: { k: string; v: ReactNode }) {
   return (
     <div className="stat">
@@ -94,6 +140,7 @@ function Stat({ k, v }: { k: string; v: ReactNode }) {
 
 function HostNode() {
   const { host, cpu, memory, errors } = useSnap();
+  const series = useSeries();
   return (
     <Card
       icon="◆"
@@ -106,7 +153,7 @@ function HostNode() {
       </div>
       <Stat k="Uptime" v={duration(host.uptimeSeconds)} />
       <Stat k="Processes" v={host.processCount} />
-      <Meter value={cpu.totalPercent} label={<>CPU <b>{pct(cpu.totalPercent)}</b></>} />
+      <CpuLine label="CPU" value={cpu.totalPercent} series={series[SERIES.cpu] ?? []} max={100} />
       <Meter value={memory.usedPercent} label={<>Memory <b>{pct(memory.usedPercent)}</b></>} />
     </Card>
   );
@@ -114,21 +161,29 @@ function HostNode() {
 
 function CPUNode() {
   const { cpu } = useSnap();
+  const series = useSeries();
   return (
     <Card icon="▣" title="CPU" badge={<span className={`badge ${level(cpu.totalPercent)}`}>{pct(cpu.totalPercent)}</span>}>
       <div className="muted small">{cpu.model}</div>
       <div className="muted small">
         {cpu.physicalCores} cores · {cpu.logicalCores} threads · {Math.round(cpu.mhz)} MHz
       </div>
+      <CpuLine label="Total" value={cpu.totalPercent} series={series[SERIES.cpu] ?? []} max={100} />
       <div className="cores">
-        {(cpu.cores ?? []).map((c) => (
-          <div key={c.id} className="core" title={`CPU ${c.id}: ${pct(c.percent, 1)} (user ${pct(c.userPercent)}, system ${pct(c.systemPercent)})`}>
-            <div className={`core-bar ${level(c.percent)}`}>
-              <span style={{ height: `${c.percent}%` }} />
+        {(cpu.cores ?? []).map((c) => {
+          const tone = level(c.percent) === "crit" ? "var(--crit)" : level(c.percent) === "warn" ? "var(--warn)" : "var(--ok)";
+          return (
+            <div
+              key={c.id}
+              className="core-tile"
+              style={{ background: `color-mix(in srgb, ${tone} ${Math.round(c.percent)}%, var(--panel-2))` }}
+              title={`Thread ${c.id}: ${pct(c.percent, 1)} (user ${pct(c.userPercent)}, system ${pct(c.systemPercent)})`}
+            >
+              <b>{Math.round(c.percent)}</b>
+              <small>{c.id}</small>
             </div>
-            <small>{c.id}</small>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
@@ -148,9 +203,24 @@ function MemoryNode() {
 function NetworkNode() {
   const { network } = useSnap();
   const ifaces = network.interfaces ?? [];
+  const series = useSeries();
   const publicPorts = (network.publicPorts ?? []).slice(0, 14);
+  const down = series[SERIES.netDown] ?? [];
+  const up = series[SERIES.netUp] ?? [];
   return (
     <Card icon="⇄" title="Network" badge={<span className="badge">{network.inboundCount} inbound</span>}>
+      <div className="spark-row">
+        <div className="meter-label">
+          Inbound ↓ <b>{rate(last(down))}</b>
+        </div>
+        <Spark values={down} floor={1024} label="Inbound rate history" />
+      </div>
+      <div className="spark-row">
+        <div className="meter-label">
+          Outbound ↑ <b>{rate(last(up))}</b>
+        </div>
+        <Spark values={up} floor={1024} label="Outbound rate history" />
+      </div>
       {ifaces.slice(0, 3).map((i) => (
         <div key={i.name} className="iface">
           <span className="ellipsis">{i.name}</span>
@@ -159,8 +229,9 @@ function NetworkNode() {
           </span>
         </div>
       ))}
+      <Stat k="Inbound connections" v={network.inboundCount} />
+      <Stat k="Outbound connections" v={Math.max(0, network.connectionCount - network.inboundCount)} />
       <Stat k="Listening sockets" v={network.listeningCount} />
-      <Stat k="Open connections" v={network.connectionCount} />
       <div className="chips">
         {publicPorts.map((p) => (
           <span key={p} className="chip mono">
@@ -260,6 +331,7 @@ function ContainerNode({ data }: NodeProps<MapNode>) {
     );
   }
   const running = c.state === "running";
+  const series = useSeries();
   return (
     <Card
       icon="▢"
@@ -270,8 +342,16 @@ function ContainerNode({ data }: NodeProps<MapNode>) {
       <div className="mono small muted ellipsis">{c.image}</div>
       {running ? (
         <>
-          <Meter value={c.cpuPercent} label={<>CPU <b>{pct(c.cpuPercent, 1)}</b></>} />
+          <CpuLine label="CPU" value={c.cpuPercent} series={series[SERIES.container(c.id)] ?? []} floor={10} />
           <Stat k="Memory" v={bytes(c.memUsage)} />
+          <Stat
+            k="Network ↓ / ↑"
+            v={
+              <span className="mono small">
+                {rate(last(series[SERIES.containerDown(c.id)]))} / {rate(last(series[SERIES.containerUp(c.id)]))}
+              </span>
+            }
+          />
         </>
       ) : (
         <div className="small muted">{c.status}</div>

@@ -40,6 +40,11 @@ CREATE TABLE IF NOT EXISTS jobs (
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS layouts (
+	user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	positions TEXT NOT NULL,
+	updated_at INTEGER NOT NULL
+);
 PRAGMA temp_store = MEMORY;
 `
 

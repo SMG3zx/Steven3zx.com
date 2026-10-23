@@ -12,7 +12,8 @@ import { Detail, type DetailTab } from "./Detail";
 import { rate } from "./format";
 import { JobTracker } from "./JobTracker";
 import { LiveConnection, type Subscription } from "./live";
-import { ActionsContext, nodeTypes, SnapshotContext, type Kind, type MapNode } from "./nodes";
+import { recordFrame, newHistory } from "./history";
+import { ActionsContext, HistoryContext, nodeTypes, SnapshotContext, type Kind, type MapNode } from "./nodes";
 import { CODE_AGENT_UNREACHABLE, type LiveSnapshot, type LogLine } from "./types";
 
 // Fixed positions for the singleton nodes; containers are laid out in a grid
@@ -57,11 +58,14 @@ function containerPosition(i: number) {
   };
 }
 
-function layout(snap: LiveSnapshot, prev: MapNode[]): MapNode[] {
+type Positions = Record<string, { x: number; y: number }>;
+
+function layout(snap: LiveSnapshot, prev: MapNode[], saved: Positions): MapNode[] {
   const byId = new Map(prev.map((n) => [n.id, n]));
+  // A node keeps where it is now, else where the admin last left it, else its default.
   const keep = (id: string, data: MapNode["data"], type: Kind, pos: { x: number; y: number }): MapNode => {
     const old = byId.get(id);
-    return old ? { ...old, data } : { id, type, data, position: pos };
+    return old ? { ...old, data } : { id, type, data, position: saved[id] ?? pos };
   };
   const nodes: MapNode[] = (Object.keys(fixed) as (keyof typeof fixed)[]).map((k) =>
     keep(k, { kind: k }, k, fixed[k]),
@@ -128,6 +132,10 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
   const [logs, setLogs] = useState<{ container: string; lines: LogLine[] }>({ container: "", lines: [] });
   const [logNotice, setLogNotice] = useState("");
   const conn = useRef<LiveConnection | null>(null);
+  const history = useRef(newHistory());
+  const savedLayout = useRef<Positions>({});
+  const nodesRef = useRef<MapNode[]>([]);
+  const [layoutError, setLayoutError] = useState("");
   const signedOut = useRef(false);
 
   const handleSignedOut = useCallback(() => {
@@ -141,6 +149,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
     const c = new LiveConnection(
       (msg) => {
         if (msg.type === "frame") {
+          recordFrame(history.current, msg.data);
           setSnap((prev) => ({ ...prev, ...msg.data }) as LiveSnapshot);
           setError("");
           setAgentDown(false);
@@ -184,9 +193,39 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
     conn.current?.subscribe(sub);
   }, [view, paused, visible, detailKey, logContainer]);
 
+  // Load the admin's saved node positions once. Nodes already on screen move to them;
+  // nodes created later pick them up in layout().
   useEffect(() => {
-    if (snap) setNodes((prev) => layout(snap, prev));
+    api.layout
+      .get()
+      .then(({ positions }) => {
+        savedLayout.current = positions;
+        setNodes((prev) => prev.map((n) => (positions[n.id] ? { ...n, position: positions[n.id] } : n)));
+      })
+      .catch(() => setLayoutError("Could not load the saved layout"));
+  }, [setNodes]);
+
+  useEffect(() => {
+    if (snap) setNodes((prev) => layout(snap, prev, savedLayout.current));
   }, [snap, setNodes]);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  // Called when a drag ends. Saves every node position, not just the moved one,
+  // so the stored layout is always complete. The drag callback's node list holds
+  // only the dragged nodes, so this reads the latest full list instead.
+  function saveLayout() {
+    const positions: Positions = Object.fromEntries(
+      nodesRef.current.map((n) => [n.id, { x: n.position.x, y: n.position.y }]),
+    );
+    savedLayout.current = positions;
+    api.layout
+      .save(positions)
+      .then(() => setLayoutError(""))
+      .catch(() => setLayoutError("Could not save the layout"));
+  }
 
   const edgeList = useMemo(() => (snap ? edges(snap) : []), [snap]);
   const actions = useMemo(
@@ -241,6 +280,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
           </nav>
           {view === "map" && !connected && !paused && <span className="badge warn">reconnecting</span>}
           {error && view === "map" && <span className="error small">{error}</span>}
+          {layoutError && view === "map" && <span className="error small">{layoutError}</span>}
           {view === "map" && agentDown && snap && restartButton("ghost")}
           {view === "map" && (
             <button className="ghost" onClick={() => setPaused((p) => !p)}>
@@ -267,25 +307,28 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
             </div>
           ) : (
             <SnapshotContext.Provider value={snap}>
-              <ActionsContext.Provider value={actions}>
-                <ReactFlow
-                  nodes={nodes}
-                  edges={edgeList}
-                  nodeTypes={nodeTypes}
-                  onNodesChange={onNodesChange}
-                  onNodeClick={(_, n) => setSelected({ kind: n.data.kind, containerId: n.data.containerId, tab: "details" })}
-                  onPaneClick={() => setSelected(null)}
-                  nodesConnectable={false}
-                  fitView
-                  fitViewOptions={{ padding: 0.12 }}
-                  minZoom={0.2}
-                  colorMode="system"
-                >
-                  <Background gap={24} />
-                  <Controls showInteractive={false} />
-                  <MiniMap pannable zoomable className="minimap" />
-                </ReactFlow>
-              </ActionsContext.Provider>
+              <HistoryContext.Provider value={history.current.series}>
+                <ActionsContext.Provider value={actions}>
+                  <ReactFlow
+                    nodes={nodes}
+                    edges={edgeList}
+                    nodeTypes={nodeTypes}
+                    onNodesChange={onNodesChange}
+                    onNodeDragStop={saveLayout}
+                    onNodeClick={(_, n) => setSelected({ kind: n.data.kind, containerId: n.data.containerId, tab: "details" })}
+                    onPaneClick={() => setSelected(null)}
+                    nodesConnectable={false}
+                    fitView
+                    fitViewOptions={{ padding: 0.12 }}
+                    minZoom={0.2}
+                    colorMode="system"
+                  >
+                    <Background gap={24} />
+                    <Controls showInteractive={false} />
+                    <MiniMap pannable zoomable className="minimap" />
+                  </ReactFlow>
+                </ActionsContext.Provider>
+              </HistoryContext.Provider>
               {selected && (
                 <Detail
                   kind={selected.kind}

@@ -237,10 +237,77 @@ function body(kind: Kind, s: LiveSnapshot, containerId?: string): ReactNode {
           ]}
         />
       );
-    case "network":
+    case "network": {
+      const conns = s.connections ?? [];
+      const inbound = conns.filter((c) => c.inbound);
+      const outbound = conns.filter((c) => !c.inbound);
+      // Outbound grouped by the process making the calls: how many connections,
+      // how many distinct remote hosts, and which remote ports it uses.
+      const groups = new Map<string, { process: string; pid: number; connections: number; hosts: Set<string>; ports: Set<number> }>();
+      for (const c of outbound) {
+        const key = `${c.pid}:${c.process}`;
+        const g = groups.get(key) ?? { process: c.process || "unknown", pid: c.pid, connections: 0, hosts: new Set(), ports: new Set() };
+        g.connections++;
+        g.hosts.add(c.remoteAddr);
+        g.ports.add(c.remotePort);
+        groups.set(key, g);
+      }
+      const byProcess = [...groups.values()].map((g) => ({
+        process: g.process,
+        pid: g.pid,
+        connections: g.connections,
+        hosts: g.hosts.size,
+        ports: [...g.ports].sort((a, b) => a - b).join(", "),
+      }));
       return (
         <Tabs
           tabs={[
+            {
+              label: "Inbound",
+              body: (
+                <Table
+                  rows={inbound}
+                  rowKey={(c) => `${c.protocol}${c.localAddr}${c.localPort}${c.remoteAddr}${c.remotePort}`}
+                  columns={[
+                    { label: "From", value: (c) => c.remoteAddr, render: (c) => <span className="mono">{c.remoteAddr}:{c.remotePort}</span> },
+                    { label: "To port", value: (c) => c.localPort, render: (c) => <span className="mono">{c.localAddr}:{c.localPort}</span>, num: true },
+                    { label: "State", value: (c) => c.status },
+                    { label: "Process", value: (c) => c.process || `pid ${c.pid}` },
+                  ]}
+                />
+              ),
+            },
+            {
+              label: "Outbound",
+              body: (
+                <Table
+                  rows={outbound}
+                  rowKey={(c) => `${c.protocol}${c.localAddr}${c.localPort}${c.remoteAddr}${c.remotePort}`}
+                  columns={[
+                    { label: "Process", value: (c) => c.process || `pid ${c.pid}` },
+                    { label: "To", value: (c) => `${c.remoteAddr}:${c.remotePort}`, render: (c) => <span className="mono">{c.remoteAddr}:{c.remotePort}</span> },
+                    { label: "State", value: (c) => c.status },
+                  ]}
+                />
+              ),
+            },
+            {
+              label: "By process",
+              body: (
+                <Table
+                  rows={byProcess}
+                  rowKey={(g) => `${g.pid}:${g.process}`}
+                  initialSort={1}
+                  initialDesc
+                  columns={[
+                    { label: "Process", value: (g) => g.process },
+                    { label: "Connections", value: (g) => g.connections, num: true },
+                    { label: "Remote hosts", value: (g) => g.hosts, num: true },
+                    { label: "Remote ports", value: (g) => g.ports, render: (g) => <span className="mono small">{g.ports}</span> },
+                  ]}
+                />
+              ),
+            },
             {
               label: "Connections",
               body: (
@@ -294,6 +361,7 @@ function body(kind: Kind, s: LiveSnapshot, containerId?: string): ReactNode {
           ]}
         />
       );
+    }
     case "storage":
       return (
         <Table

@@ -338,34 +338,47 @@ input {
   gap: 4px;
   margin-top: 4px;
 }
-.core {
+.core-tile {
+  border-radius: 6px;
+  padding: 3px 0 2px;
   display: grid;
   justify-items: center;
-  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
-.core small {
+.core-tile b {
+  font-size: 12px;
+}
+.core-tile small {
   font-size: 9px;
   color: var(--muted);
 }
-.core-bar {
+
+.spark-row {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+.spark {
+  display: block;
   width: 100%;
-  height: 44px;
-  background: var(--panel-2);
-  border-radius: 4px;
-  display: flex;
-  align-items: flex-end;
-  overflow: hidden;
+  height: 32px;
+  overflow: visible;
 }
-.core-bar span {
-  width: 100%;
-  background: var(--ok);
-  transition: height 0.4s ease;
+.spark-base {
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
-.core-bar.warn span {
-  background: var(--warn);
+.spark-area {
+  fill: color-mix(in srgb, var(--ok) 18%, transparent);
 }
-.core-bar.crit span {
-  background: var(--crit);
+.spark-line {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .iface {
@@ -841,17 +854,26 @@ button.ghost.danger {
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 .log-line {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.log-line:last-child {
+  border-bottom: 0;
 }
 .log-time {
-  flex: none;
   color: var(--muted);
+  white-space: nowrap;
   user-select: none;
+}
+.log-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .log-line.stderr .log-text {
   color: var(--crit);
