@@ -1,0 +1,27 @@
+{
+  "roots": [
+    "C:\\Users\\YOU\\Documents",
+    "C:\\Users\\YOU\\Obsidian"
+  ],
+  "ignore_dirs": [],
+  "ignore_paths": [],
+  "ignore_files": [],
+  "respect_gitignore": true,
+  "force_include": [],
+  "max_file_bytes": 2097152,
+  "max_data_bytes": 262144,
+  "max_line_bytes": 4000,
+  "max_chunks_per_file": 300,
+  "db_path": "C:\\Users\\YOU\\AppData\\Local\\spotlight\\index.db",
+  "listen_addr": "127.0.0.1:7788",
+  "ollama_url": "http://127.0.0.1:11434",
+  "embed_model": "nomic-embed-text",
+  "chunk_size": 1200,
+  "chunk_overlap": 200,
+  "watch": true,
+  "rescan_minutes": 30,
+  "max_cpu_percent": 80,
+  "max_mem_percent": 80,
+  "max_gpu_percent": 80,
+  "embed_batch": 8
+}

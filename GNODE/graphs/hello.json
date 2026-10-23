@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "name": "hello",
+  "nodes": [
+    {
+      "id": "main",
+      "kind": "main",
+      "x": 60,
+      "y": 120,
+      "params": {}
+    },
+    {
+      "id": "total",
+      "kind": "declare",
+      "x": 320,
+      "y": 120,
+      "params": {
+        "name": "total"
+      }
+    },
+    {
+      "id": "zero",
+      "kind": "literal",
+      "x": 100,
+      "y": 290,
+      "params": {
+        "type": "int",
+        "value": "0"
+      }
+    },
+    {
+      "id": "loop",
+      "kind": "loop",
+      "x": 560,
+      "y": 120,
+      "params": {
+        "variable": "i"
+      }
+    },
+    {
+      "id": "five",
+      "kind": "literal",
+      "x": 320,
+      "y": 300,
+      "params": {
+        "type": "int",
+        "value": "5"
+      }
+    },
+    {
+      "id": "add",
+      "kind": "binary",
+      "x": 560,
+      "y": 300,
+      "params": {
+        "op": "+"
+      }
+    },
+    {
+      "id": "sumRef",
+      "kind": "ref",
+      "x": 360,
+      "y": 400,
+      "params": {
+        "name": "total"
+      }
+    },
+    {
+      "id": "iRef",
+      "kind": "ref",
+      "x": 360,
+      "y": 470,
+      "params": {
+        "name": "i"
+      }
+    },
+    {
+      "id": "set",
+      "kind": "assign",
+      "x": 820,
+      "y": 120,
+      "params": {
+        "name": "total"
+      }
+    },
+    {
+      "id": "print",
+      "kind": "print",
+      "x": 1080,
+      "y": 120,
+      "params": {}
+    },
+    {
+      "id": "sumRef2",
+      "kind": "ref",
+      "x": 900,
+      "y": 300,
+      "params": {
+        "name": "total"
+      }
+    },
+    {
+      "id": "greet",
+      "kind": "callStmt",
+      "x": 1080,
+      "y": 280,
+      "params": {
+        "name": "greet",
+        "args": "\"GNODE\""
+      }
+    },
+    {
+      "id": "greetFn",
+      "kind": "func",
+      "x": 60,
+      "y": 520,
+      "params": {
+        "name": "greet",
+        "signature": "name string",
+        "result": ""
+      }
+    },
+    {
+      "id": "greetPrint",
+      "kind": "print",
+      "x": 360,
+      "y": 560,
+      "params": {}
+    },
+    {
+      "id": "nameRef",
+      "kind": "ref",
+      "x": 120,
+      "y": 660,
+      "params": {
+        "name": "name"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "from": {
+        "node": "main",
+        "port": "body"
+      },
+      "to": {
+        "node": "total",
+        "port": "in"
+      }
+    },
+    {
+      "id": "w2",
+      "from": {
+        "node": "zero",
+        "port": "value"
+      },
+      "to": {
+        "node": "total",
+        "port": "value"
+      }
+    },
+    {
+      "id": "w3",
+      "from": {
+        "node": "total",
+        "port": "next"
+      },
+      "to": {
+        "node": "loop",
+        "port": "in"
+      }
+    },
+    {
+      "id": "w4",
+      "from": {
+        "node": "five",
+        "port": "value"
+      },
+      "to": {
+        "node": "loop",
+        "port": "count"
+      }
+    },
+    {
+      "id": "w5",
+      "from": {
+        "node": "loop",
+        "port": "body"
+      },
+      "to": {
+        "node": "set",
+        "port": "in"
+      }
+    },
+    {
+      "id": "w6",
+      "from": {
+        "node": "sumRef",
+        "port": "value"
+      },
+      "to": {
+        "node": "add",
+        "port": "a"
+      }
+    },
+    {
+      "id": "w7",
+      "from": {
+        "node": "iRef",
+        "port": "value"
+      },
+      "to": {
+        "node": "add",
+        "port": "b"
+      }
+    },
+    {
+      "id": "w8",
+      "from": {
+        "node": "add",
+        "port": "value"
+      },
+      "to": {
+        "node": "set",
+        "port": "value"
+      }
+    },
+    {
+      "id": "w9",
+      "from": {
+        "node": "loop",
+        "port": "next"
+      },
+      "to": {
+        "node": "print",
+        "port": "in"
+      }
+    },
+    {
+      "id": "w10",
+      "from": {
+        "node": "sumRef2",
+        "port": "value"
+      },
+      "to": {
+        "node": "print",
+        "port": "value"
+      }
+    },
+    {
+      "id": "w11",
+      "from": {
+        "node": "print",
+        "port": "next"
+      },
+      "to": {
+        "node": "greet",
+        "port": "in"
+      }
+    },
+    {
+      "id": "w12",
+      "from": {
+        "node": "greetFn",
+        "port": "body"
+      },
+      "to": {
+        "node": "greetPrint",
+        "port": "in"
+      }
+    },
+    {
+      "id": "w13",
+      "from": {
+        "node": "nameRef",
+        "port": "value"
+      },
+      "to": {
+        "node": "greetPrint",
+        "port": "value"
+      }
+    }
+  ]
+}

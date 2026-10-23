@@ -1,0 +1,13 @@
+# Local settings and index data
+config.json
+*.db
+*.db-shm
+*.db-wal
+
+# Build output
+*.exe
+/indexd
+
+/ui/build/
+/ui/spotlight-ui*
+/ui/ui.json

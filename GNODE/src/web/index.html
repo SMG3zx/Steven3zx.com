@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GNODE</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">GNODE</div>
+    <input id="graph-name" class="graph-name" type="text" value="hello" spellcheck="false" aria-label="Program name">
+    <select id="graph-list" aria-label="Saved programs"></select>
+    <button id="btn-open" type="button">Open</button>
+    <button id="btn-save" type="button">Save</button>
+    <button id="btn-new" type="button">New</button>
+    <span class="spacer"></span>
+    <input id="find" class="find" type="search" placeholder="Find block (Ctrl+F)" aria-label="Find block" spellcheck="false">
+    <button id="btn-square" type="button" aria-pressed="false" title="Draw wires with right-angle bends">Square wires</button>
+    <button id="btn-trace" type="button" aria-pressed="false" title="Highlight the blocks and wires that run from func main">Trace flow</button>
+    <button id="btn-problem" type="button" title="Jump to the next problem (F8)" hidden>Next problem <span id="problem-badge"></span></button>
+    <button id="btn-tour" type="button" title="Walk through the editor and the basics of programming">Tour</button>
+    <button id="btn-undo" type="button" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button id="btn-redo" type="button" title="Redo (Ctrl+Shift+Z or Ctrl+Y)" disabled>Redo</button>
+    <span id="status" class="status"></span>
+    <button id="btn-run" type="button" class="primary">Run</button>
+  </header>
+
+  <div class="workspace">
+    <main class="canvas-frame">
+      <div class="canvas-wrap">
+        <div class="canvas" id="canvas">
+          <svg class="wires" id="wires" aria-hidden="true"></svg>
+        </div>
+      </div>
+      <div class="minimap" id="minimap" aria-label="Map of the program">
+        <div class="minimap-view" id="minimap-view"></div>
+      </div>
+    </main>
+
+    <aside class="inspector" id="inspector" aria-label="Selected block"></aside>
+  </div>
+
+  <section class="dock" id="dock" aria-label="Blocks">
+    <div class="dock-tabs">
+      <button id="dock-toggle" class="dock-toggle" type="button" aria-expanded="true"><span class="dt-chev"></span>Blocks</button>
+      <input id="block-find" class="block-find" type="search" placeholder="Find a block" aria-label="Find a block" spellcheck="false">
+    </div>
+    <div class="dock-body" id="dock-body">
+      <div class="palette" id="palette"></div>
+    </div>
+  </section>
+
+  <section class="bottom" id="bottom">
+    <div class="tabs">
+      <button type="button" data-tab="code" class="active">Go code</button>
+      <button type="button" data-tab="output">Output</button>
+      <button type="button" data-tab="problems">Problems <span id="problem-count"></span></button>
+      <button type="button" data-tab="practice">Practice</button>
+      <button type="button" id="btn-toggle-bottom" class="toggle" aria-label="Toggle panel">&#x25BE;</button>
+    </div>
+    <pre id="code-view" class="panel-body" data-panel="code"></pre>
+    <pre id="output-view" class="panel-body hidden" data-panel="output"></pre>
+    <ul id="problem-list" class="panel-body hidden" data-panel="problems"></ul>
+    <div id="practice" class="panel-body lesson hidden" data-panel="practice">
+      <div class="lesson-bar">
+        <select id="lesson-list" aria-label="Practice rooms"></select>
+        <button id="btn-lesson-start" type="button">Start</button>
+        <button id="btn-lesson-hint" type="button">Hint</button>
+        <button id="btn-lesson-check" type="button" class="primary">Check</button>
+      </div>
+      <p id="lesson-goal"></p>
+      <p id="lesson-hint" class="hidden"></p>
+      <p id="lesson-result"></p>
+    </div>
+  </section>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

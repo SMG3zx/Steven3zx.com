@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spotlight</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #18181b; --panel: #202024; --line: #2e2e34; --text: #ececf0; --dim: #8b8b96;
+    --accent: #6ea8fe; --sel: #2a2f3d; --mark: #5b4b00; --err: #ff8a8a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f6f8; --panel:#fff; --line:#dcdce2; --text:#1b1b1f; --dim:#6b6b76;
+            --accent:#1f6feb; --sel:#e6eefc; --mark:#fff0a8; --err:#c62828; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+         display: flex; flex-direction: column; border: 1px solid var(--line); }
+  #bar { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #q { width: 100%; background: transparent; border: 0; outline: 0; color: var(--text);
+       font-size: 22px; font-family: inherit; }
+  #q::placeholder { color: var(--dim); }
+  #list { flex: 1; overflow-y: auto; margin: 0; padding: 6px; list-style: none; }
+  li { padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  li.sel { background: var(--sel); }
+  .row { display: flex; align-items: baseline; gap: 8px; }
+  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dir { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden;
+         text-overflow: ellipsis; direction: rtl; text-align: left; flex: 1; min-width: 0; }
+  .tag { font-size: 10px; color: var(--accent); border: 1px solid var(--line); border-radius: 4px;
+         padding: 0 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .snip { color: var(--dim); font-size: 12px; margin-top: 2px; display: -webkit-box;
+          -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+  mark { background: var(--mark); color: inherit; border-radius: 2px; }
+  #foot { display: flex; justify-content: space-between; gap: 12px; padding: 7px 14px;
+          border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; background: var(--panel); }
+  #foot .err { color: var(--err); }
+  .empty { color: var(--dim); padding: 24px; text-align: center; }
+  kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font: inherit; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div id="bar"><input id="q" type="text" placeholder="Search your files…" autocomplete="off" spellcheck="false"></div>
+  <ul id="list"></ul>
+  <div id="foot"><span id="status">connecting…</span><span><kbd>↑</kbd><kbd>↓</kbd> select · <kbd>Enter</kbd> open · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> show in folder · <kbd>Esc</kbd> close</span></div>
+
+<script>
+  const q = document.getElementById('q');
+  const list = document.getElementById('list');
+  const statusEl = document.getElementById('status');
+  let results = [], sel = 0, seq = 0, timer = null, hideOnBlur = true, notice = '';
+
+  const api = () => window.go && window.go.main && window.go.main.App;
+  const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function split(path) {
+    const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return i < 0 ? ['', path] : [path.slice(0, i), path.slice(i + 1)];
+  }
+  function highlight(text, terms) {
+    let out = esc(text);
+    for (const t of terms) {
+      if (t.length < 2) continue;
+      out = out.replace(new RegExp(esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => '<mark>' + m + '</mark>');
+    }
+    return out;
+  }
+  function render() {
+    if (!results.length) {
+      list.innerHTML = q.value.trim()
+        ? '<li class="empty">No matches</li>'
+        : '<li class="empty">Type to search file names, contents and meaning</li>';
+      return;
+    }
+    const terms = q.value.trim().split(/\s+/);
+    list.innerHTML = results.map((r, i) => {
+      const [dir, name] = split(r.path);
+      const tags = (r.sources || []).map(s => '<span class="tag">' + (s === 'vector' ? 'meaning' : 'text') + '</span>').join('');
+      const snip = r.snippet.replace(/\s+/g, ' ').trim();
+      return '<li data-i="' + i + '" class="' + (i === sel ? 'sel' : '') + '">' +
+        '<div class="row"><span class="name">' + esc(name) + '</span>' + tags +
+        '<span class="dir" title="' + esc(dir) + '">' + esc(dir) + '</span></div>' +
+        '<div class="snip">' + highlight(snip, terms) + '</div></li>';
+    }).join('');
+    const el = list.querySelector('.sel');
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }
+  function setFoot(msg, isErr) {
+    statusEl.textContent = msg; statusEl.className = isErr ? 'err' : '';
+  }
+  async function refreshStatus() {
+    if (!api()) return;
+    try {
+      const s = await api().Status();
+      setFoot(notice || (s.files.toLocaleString() + ' files · ' + s.chunks.toLocaleString() + ' chunks'), !!notice);
+    } catch (e) { setFoot(String(e), true); }
+  }
+  async function run() {
+    const text = q.value.trim(), mine = ++seq;
+    if (!text) { results = []; sel = 0; render(); return; }
+    try {
+      const r = await api().Search(text);
+      if (mine !== seq) return;           // a newer query is already in flight
+      results = r || []; sel = 0; render(); refreshStatus();
+    } catch (e) {
+      if (mine !== seq) return;
+      results = []; render(); setFoot(String(e), true);
+    }
+  }
+  const act = (reveal) => {
+    const r = results[sel];
+    if (!r) return;
+    (reveal ? api().Reveal(r.path) : api().Open(r.path)).catch(e => setFoot(String(e), true));
+  };
+
+  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 120); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (results.length) { sel = (sel + 1) % results.length; render(); } }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (results.length) { sel = (sel - 1 + results.length) % results.length; render(); } }
+    else if (e.key === 'Enter') { e.preventDefault(); act(e.ctrlKey); }
+    else if (e.key === 'Escape') { e.preventDefault(); api().Hide(); }
+  });
+  list.addEventListener('click', e => {
+    const li = e.target.closest('li[data-i]');
+    if (li) { sel = +li.dataset.i; act(e.ctrlKey); }
+  });
+  window.addEventListener('blur', () => { if (hideOnBlur && api()) setTimeout(() => { if (!document.hasFocus()) api().Hide(); }, 150); });
+
+  function onShown() { q.focus(); q.select(); refreshStatus(); if (q.value.trim()) run(); }
+  function boot() {
+    if (!api()) { setTimeout(boot, 50); return; }
+    window.runtime.EventsOn('shown', onShown);
+    api().Config().then(c => { hideOnBlur = c.hideOnBlur; notice = c.notice || ''; render(); onShown(); });
+  }
+  boot();
+</script>
+</body>
+</html>
