@@ -137,6 +137,13 @@ export default component$(() => {
                     </td>
                     <td class="muted">{agent.deployments.length}</td>
                     <td style="text-align: right; white-space: nowrap">
+                      <a
+                        class="button"
+                        href={`/agents/${encodeURIComponent(agent.id)}`}
+                        aria-label={`Runs of ${agent.name}`}
+                      >
+                        Runs
+                      </a>{" "}
                       <Form action={change} style="display: inline">
                         <input type="hidden" name="id" value={agent.id} />
                         <input

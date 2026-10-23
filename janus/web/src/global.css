@@ -393,6 +393,12 @@ input[type="radio"] {
   color: var(--color-ok-text);
 }
 
+.badge-bad {
+  background: transparent;
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+}
+
 .alert {
   margin: 0;
   padding: 0.75rem 1rem;
