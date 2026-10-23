@@ -16,6 +16,10 @@ entryPoints:
   websecure:
     address: ":443"
     http3: {}
+  # Tailnet-only. Published on the Windows host's tailnet address alone (see the traefik
+  # service in compose.yaml), so the internet cannot reach it.
+  private:
+    address: ":8443"
 
 providers:
   file:
