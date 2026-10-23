@@ -58,9 +58,9 @@ services:
       - no-new-privileges:true
     environment:
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
-      IP4_DOMAINS: www.steven3zx.com,steven3zx.com,janus.steven3zx.com,ssh.steven3zx.com
+      IP4_DOMAINS: www.steven3zx.com,steven3zx.com,janus.steven3zx.com,ssh.steven3zx.com,git.steven3zx.com
       IP6_PROVIDER: none
-      PROXIED: is(www.steven3zx.com,steven3zx.com,janus.steven3zx.com)
+      PROXIED: is(www.steven3zx.com,steven3zx.com,janus.steven3zx.com,git.steven3zx.com)
 
   # Self-hosted Git at git.steven3zx.com (Traefik routes it, see traefik/dynamic/sites.yml).
   # Replaces the native Windows service that listened on host port 30001. Its data
