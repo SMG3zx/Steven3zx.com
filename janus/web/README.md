@@ -31,6 +31,10 @@ bun test
 bunx tsc --noEmit
 ```
 
+## CI and deployment
+
+`.gitea/workflows/janus-web-ci.yml` runs on the self-hosted Gitea runner for every push that touches `janus/web`: install, `bun test`, `bun run build.types`, `bun run lint`, `bun run fmt.check`, and the client and server build. On `master` it then builds the image, and restarts the `web` container only if one already exists in the `janus-go` compose project. A push never starts a stack that is not running. Run the same checks locally with the commands above plus `bun run lint` and `bun run fmt.check`.
+
 ## Docker
 
 `docker build -t janus-web:local .` builds the image. The `web` service in `janus/janus-go/docker-compose.yml` runs it under the `services` profile, with a `/healthz` health check.

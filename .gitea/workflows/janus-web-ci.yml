@@ -1,0 +1,61 @@
+# Runs on the self-hosted Gitea runner (edge/gitea). GitHub does not read .gitea/.
+# The web job checks the Janus frontend in janus/web. The deploy job runs on the deploy
+# runner (gitea-runner-deploy in edge/compose.yaml) after the checks pass on master.
+name: janus-web-ci
+
+on:
+  push:
+    paths:
+      - "janus/web/**"
+      - ".gitea/workflows/janus-web-ci.yml"
+  workflow_dispatch:
+
+# Shared cache, mounted from the steven3zx-ci-cache volume by the runner.
+env:
+  BUN_INSTALL_CACHE_DIR: /ci-cache/bun
+
+jobs:
+  web:
+    runs-on: bun
+    defaults:
+      run:
+        working-directory: janus/web
+    steps:
+      - uses: actions/checkout@v4
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run build.types
+      - run: bun run lint
+      - run: bun run fmt.check
+      # The same two commands the image build runs, so a broken bundle fails here first.
+      - run: bun run build.client && bun run build.server
+
+  # Builds the web image on every master push, so a Dockerfile that cannot build is caught.
+  # It restarts the web container only when one already exists in the janus-go project,
+  # which is the project name of the stack started from janus/janus-go. A push never starts
+  # the Janus stack on a host that is not running it. The deploy runner is the only one with
+  # the Docker socket. The web service needs no secrets: its only setting, JANUS_WEB_URL,
+  # has a default in the compose file.
+  deploy:
+    needs: [web]
+    if: github.ref == 'refs/heads/master'
+    runs-on: deploy
+    # The deploy image is Alpine and has no bash, so run the steps with sh.
+    defaults:
+      run:
+        shell: sh
+    env:
+      COMPOSE: docker compose -p janus-go -f janus/janus-go/docker-compose.yml --profile services
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the web image
+        run: $COMPOSE build web
+      - name: Restart the web container if it is deployed
+        run: |
+          existing=$(docker ps -aq --filter label=com.docker.compose.project=janus-go --filter label=com.docker.compose.service=web)
+          if [ -z "$existing" ]; then
+            echo "The web container is not deployed on this host, so there is nothing to restart."
+            exit 0
+          fi
+          $COMPOSE up -d --no-deps web
+          $COMPOSE ps web
