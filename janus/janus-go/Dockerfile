@@ -27,3 +27,7 @@ USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends docker.io \
     && rm -rf /var/lib/apt/lists/*
+# At start the service looks for build/Dockerfile.wasm-* in the working directory
+# and above it, to make any builder image that is missing. The working directory is
+# /data, so the Dockerfiles go in /build, which that search reaches.
+COPY build /build
