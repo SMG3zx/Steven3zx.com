@@ -41,7 +41,7 @@ func (s *Server) Start() error {
 	l.addr = listener.Addr().String()
 	l.failed = make(chan error, 1)
 	l.server = &http.Server{
-		Addr: l.addr, Handler: serverHandler{app: s.mux, record: s.dependencies.RecordRequest},
+		Addr: l.addr, Handler: serverHandler{app: s.handler, record: s.dependencies.RecordRequest},
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -86,7 +86,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 type serverHandler struct {
-	app    *mux
+	app    http.Handler
 	record func(ctx context.Context, method string, status int, duration time.Duration)
 }
 

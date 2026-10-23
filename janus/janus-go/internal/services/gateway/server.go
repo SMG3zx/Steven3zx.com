@@ -62,6 +62,9 @@ type Config struct {
 	// RecordRequest, when set, is told the method, status and duration of each
 	// request the listener serves.
 	RecordRequest func(ctx context.Context, method string, status int, duration time.Duration)
+	// WebUpstream is the address of the web frontend's container. When it is set,
+	// page and static-file requests are forwarded there (see webProxy).
+	WebUpstream string
 }
 
 // Server is the HTTP driving adapter: it turns requests into use-case calls
@@ -69,6 +72,7 @@ type Config struct {
 type Server struct {
 	dependencies Config
 	mux          *mux
+	handler      http.Handler
 	listener     *listenState
 }
 
@@ -78,12 +82,20 @@ var gothSetup sync.Once
 func New(config Config) *Server {
 	s := &Server{dependencies: config, listener: &listenState{}}
 	s.mux = s.routes()
+	s.handler = s.mux
+	if config.WebUpstream != "" {
+		handler, err := webProxy(config.WebUpstream, s.mux)
+		if err != nil {
+			panic("gateway: WebUpstream is not a URL: " + err.Error())
+		}
+		s.handler = handler
+	}
 	return s
 }
 
 // Handler returns the routed application without the listener's edge
 // middleware, for tests that drive it with httptest.
-func (s *Server) Handler() http.Handler { return s.mux }
+func (s *Server) Handler() http.Handler { return s.handler }
 
 func (s *Server) routes() *mux {
 	_, span := tracing.StartSpan(context.Background(), "routes.build", trace.WithSpanKind(trace.SpanKindInternal))

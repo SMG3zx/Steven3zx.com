@@ -489,6 +489,7 @@ func (a *application) startHTTP(context.Context) error {
 		GoogleCallback: cfg.GoogleCallback, JWTSecret: cfg.JWTSecret,
 		GitHubEnabled: cfg.GitHubEnabled, GitHubClientID: cfg.GitHubClientID,
 		GitHubSecret: cfg.GitHubSecret, GitHubCallback: cfg.GitHubCallback,
+		WebUpstream: cfg.WebUpstream,
 	}
 	if a.fleet != nil {
 		config.Fleet = a.fleet

@@ -70,3 +70,23 @@ func TestNATSIsEmbeddedOnLocalhostUnlessAURLIsGiven(t *testing.T) {
 		t.Fatalf("settings = %#v, %v, want the trimmed external URL", got, err)
 	}
 }
+
+func TestTheWebFrontendIsOptionalAndMustBeAnAddress(t *testing.T) {
+	headscaleEnvironment(t, "", "", "")
+	t.Setenv("JANUS_WEB_UPSTREAM", "")
+	got, err := loadSettings(context.Background())
+	if err != nil || got.WebUpstream != "" {
+		t.Fatalf("settings = %#v, %v, want no web upstream when none is set", got, err)
+	}
+
+	t.Setenv("JANUS_WEB_UPSTREAM", " http://web:3000 ")
+	got, err = loadSettings(context.Background())
+	if err != nil || got.WebUpstream != "http://web:3000" {
+		t.Fatalf("settings = %#v, %v, want the trimmed address", got, err)
+	}
+
+	t.Setenv("JANUS_WEB_UPSTREAM", "web:3000")
+	if _, err = loadSettings(context.Background()); err == nil || !strings.Contains(err.Error(), "JANUS_WEB_UPSTREAM") {
+		t.Fatalf("error = %v, want JANUS_WEB_UPSTREAM to be refused without a scheme", err)
+	}
+}

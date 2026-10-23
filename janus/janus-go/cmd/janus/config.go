@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 // settings contains validated runtime settings loaded from the environment.
 type settings struct {
 	HTTPAddress            string
+	WebUpstream            string
 	IdentityDatabasePath   string
 	ProjectsDatabasePath   string
 	BuildsDatabasePath     string
@@ -188,8 +190,14 @@ func loadSettings(ctx context.Context) (settings, error) {
 		attribute.Bool("config.pyroscope.enabled", pyroscopeAddress != ""),
 		attribute.Bool("config.nats.embedded", natsURL == ""),
 	)
+	webUpstream := strings.TrimSpace(os.Getenv("JANUS_WEB_UPSTREAM"))
+	if webUpstream != "" {
+		if parsed, err := url.Parse(webUpstream); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return settings{}, errors.New("JANUS_WEB_UPSTREAM must be an http or https address, for example http://web:3000")
+		}
+	}
 	return settings{
-		HTTPAddress: addr, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, FleetDatabasePath: fleetDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
+		HTTPAddress: addr, WebUpstream: webUpstream, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, FleetDatabasePath: fleetDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
 		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
 		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
 		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
