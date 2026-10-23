@@ -1,0 +1,129 @@
+# Routes for the native Traefik. Same hostnames as edge/traefik/dynamic/sites.yml, but the
+# backends are loopback ports published by edge/compose.yaml (or services on this host)
+# instead of container names.
+#
+# The public names go through the crowdsec middleware. ts.steven3zx.com (the tailnet
+# control server) and private.steven3zx.com (tailnet-only) do not, so a ban can never cut
+# your own way in.
+#
+# private.steven3zx.com is served only on the "private" entrypoint, which is bound to the
+# tailnet address. The /admin and /grafana paths keep their prefix, because the admin app
+# and Grafana are both configured for it.
+
+http:
+  middlewares:
+    apex-to-www:
+      redirectRegex:
+        regex: "^https://steven3zx\\.com/(.*)"
+        replacement: "https://www.steven3zx.com/${1}"
+        permanent: true
+
+  routers:
+    private-grafana:
+      rule: "Host(`private.steven3zx.com`) && PathPrefix(`/grafana`)"
+      priority: 100
+      entryPoints: [private]
+      service: grafana
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    private-admin:
+      rule: "Host(`private.steven3zx.com`) && PathPrefix(`/admin`)"
+      priority: 100
+      entryPoints: [private]
+      service: admin
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    janus:
+      rule: "Host(`janus.steven3zx.com`)"
+      entryPoints: [websecure]
+      middlewares: [crowdsec]
+      service: janus
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    git:
+      rule: "Host(`git.steven3zx.com`)"
+      entryPoints: [websecure]
+      middlewares: [crowdsec]
+      service: git
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    plane:
+      rule: "Host(`plane.steven3zx.com`)"
+      entryPoints: [websecure]
+      middlewares: [crowdsec]
+      service: plane
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    www:
+      rule: "Host(`www.steven3zx.com`)"
+      entryPoints: [websecure]
+      middlewares: [crowdsec]
+      service: portfolio
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    apex:
+      rule: "Host(`steven3zx.com`)"
+      entryPoints: [websecure]
+      middlewares: [crowdsec, apex-to-www]
+      service: portfolio
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "steven3zx.com"
+
+    headscale:
+      rule: "Host(`ts.steven3zx.com`)"
+      entryPoints: [websecure]
+      service: headscale
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+  services:
+    headscale:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8088"
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3000"
+    janus:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:9095"
+    git:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3010"
+    plane:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8080"
+    admin:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8191"
+    portfolio:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8190"

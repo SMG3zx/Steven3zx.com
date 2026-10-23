@@ -6,6 +6,9 @@ services:
     restart: unless-stopped
     expose:
       - "8090"
+    ports:
+      # Loopback only, for the native Traefik (edge/native). 8090 is taken on the host.
+      - "127.0.0.1:8190:8090"
 
   admin:
     build: ../portfolio/admin
@@ -16,6 +19,8 @@ services:
       - no-new-privileges:true
     expose:
       - "8091"
+    ports:
+      - "127.0.0.1:8191:8091"
     environment:
       HOST_AGENT_TOKEN: ${HOST_AGENT_TOKEN}
       # Encrypts admin.db at rest; lives in edge/.env, never in admin_data.
@@ -79,6 +84,8 @@ services:
       # Git over SSH, on the tailnet address only (TAILNET_IP in edge/.env), so the internet
       # cannot reach it. Clone with ssh://git@<TAILNET_IP>:30000/<owner>/<repo>.git
       - "${TAILNET_IP:-127.0.0.1}:30000:2222"
+      # Web UI for the native Traefik, loopback only. 3000 is taken on the host.
+      - "127.0.0.1:3010:3000"
     volumes:
       - gitea_data:/data
     networks:
@@ -144,7 +151,11 @@ services:
       - default
       - ci
 
+  # Rollback only: the edge is the native Windows Traefik in edge/native, which sees real
+  # client addresses (Docker NAT hides them). To fall back, stop the steven3zx-traefik
+  # service and run `docker compose --profile traefik-docker up -d traefik`.
   traefik:
+    profiles: [traefik-docker]
     image: traefik:v3.7.16
     restart: unless-stopped
     depends_on:
@@ -176,6 +187,9 @@ services:
     command: ["serve"]
     expose:
       - "8080"
+    ports:
+      # Loopback only, for the native Traefik. 8080 is the Plane route's port on the host.
+      - "127.0.0.1:8088:8080"
     volumes:
       - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
       - ./headscale/derp.yaml:/etc/headscale/derp.yaml:ro

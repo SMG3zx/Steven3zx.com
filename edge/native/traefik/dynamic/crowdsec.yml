@@ -1,0 +1,57 @@
+# The CrowdSec bouncer for the public routes. It asks the engine's local API (LAPI) for
+# the list of banned addresses and refuses those clients with a 403.
+#
+# It runs in stream mode: the plugin pulls the decision list every minute and keeps it in
+# memory, so a CrowdSec outage leaves the last list in force and does not take the sites
+# down. IP bans only. AppSec (the WAF) is not enabled yet, so no request bodies are sent
+# to CrowdSec.
+#
+# The key file is created by install.ps1 (cscli bouncers add traefik). The data directory
+# is fixed at C:/steven3zx/edge, the same one install.ps1 uses.
+
+http:
+  middlewares:
+    crowdsec:
+      plugin:
+        crowdsec-bouncer:
+          enabled: true
+          logLevel: INFO
+          crowdsecMode: stream
+          crowdsecLapiScheme: http
+          crowdsecLapiHost: "127.0.0.1:8180"
+          crowdsecLapiKeyFile: "C:/steven3zx/edge/crowdsec-traefik.key"
+          updateIntervalSeconds: 60
+          crowdsecAppsecEnabled: false
+          # Cloudflare's ranges, the same list as the entrypoints in traefik.template.yml.
+          forwardedHeadersTrustedIps:
+            - "173.245.48.0/20"
+            - "103.21.244.0/22"
+            - "103.22.200.0/22"
+            - "103.31.4.0/22"
+            - "141.101.64.0/18"
+            - "108.162.192.0/18"
+            - "190.93.240.0/20"
+            - "188.114.96.0/20"
+            - "197.234.240.0/22"
+            - "198.41.128.0/17"
+            - "162.158.0.0/15"
+            - "104.16.0.0/13"
+            - "104.24.0.0/14"
+            - "172.64.0.0/13"
+            - "131.0.72.0/22"
+            - "2400:cb00::/32"
+            - "2606:4700::/32"
+            - "2803:f800::/32"
+            - "2405:b500::/32"
+            - "2405:8100::/32"
+            - "2a06:98c0::/29"
+            - "2c0f:f248::/32"
+          # Never checked against the ban list: your own networks.
+          clientTrustedIps:
+            - "127.0.0.1/32"
+            - "::1/128"
+            - "100.64.0.0/10"
+            - "fd7a:115c:a1e0::/48"
+            - "10.0.0.0/8"
+            - "172.16.0.0/12"
+            - "192.168.0.0/16"

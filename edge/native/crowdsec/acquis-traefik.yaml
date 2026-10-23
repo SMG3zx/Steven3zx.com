@@ -1,0 +1,8 @@
+# One acquisition document that install.ps1 appends to C:\ProgramData\CrowdSec\config\acquis.yaml.
+# It tails the native Traefik's error and probe log. The log only holds 400-599 responses
+# (see accessLog.filters in traefik.template.yml), which is what the Traefik scenarios read.
+---
+filenames:
+  - C:\steven3zx\edge\logs\traefik-access.log
+labels:
+  type: traefik
