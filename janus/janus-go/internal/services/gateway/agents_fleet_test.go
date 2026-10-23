@@ -134,15 +134,3 @@ func TestAnOwnerReadsTheirAgentsRuns(t *testing.T) {
 		t.Fatalf("bob reading alice's runs = %d, want 404", foreign.Code)
 	}
 }
-
-func TestTheAgentsPageNeedsASession(t *testing.T) {
-	f := newFleetApp(t)
-	if anonymous := perform(f.handler, http.MethodGet, "/agents", "", nil); anonymous.Code != http.StatusSeeOther {
-		t.Fatalf("the page without a session = %d, want a redirect", anonymous.Code)
-	}
-	alice := f.register(t, "alice@example.com")
-	page := perform(f.handler, http.MethodGet, "/agents", "", alice)
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Your Agents") || !strings.Contains(page.Body.String(), "Pause") {
-		t.Fatalf("the page = %d", page.Code)
-	}
-}

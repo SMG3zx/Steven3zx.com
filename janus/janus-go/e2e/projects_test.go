@@ -265,12 +265,6 @@ func TestProjectBrowserActions(t *testing.T) {
 	}
 }
 
-func startJanus(t *testing.T, ctx context.Context) (*projectstest.Memory, *identityclient.Gateway, http.Handler) {
-	t.Helper()
-	catalog, identities, _, handler := startJanusWith(t, ctx)
-	return catalog, identities, handler
-}
-
 // startJanusWith starts the application in-process with b as its WASM builder,
 // and the identity service on an embedded NATS server. Projects live in an
 // in-memory Catalog, so a test can seed the Snapshot an Import would make;

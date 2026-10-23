@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"janus/internal/contract"
 	contractaudit "janus/internal/contract/audit"
@@ -102,7 +101,6 @@ func (s *Server) routes() *mux {
 	defer span.End()
 	app := newMux("")
 	setupGoogle(s.dependencies)
-	app.Get("/", s.home)
 	app.Get("/healthz", func(c *call) any {
 		s.log(c.Request.Context(), "info", "http.health.check", map[string]string{"status": "ok"})
 		return map[string]string{"status": "ok"}
@@ -110,81 +108,6 @@ func (s *Server) routes() *mux {
 	s.registerAuthenticationRoutes(app)
 	span.SetAttributes(attribute.Int("routes.count", 24), attribute.Bool("auth.google.enabled", s.dependencies.GoogleEnabled), attribute.Bool("auth.github.enabled", s.dependencies.GitHubEnabled))
 	return app
-}
-
-type homePageData struct {
-	GoogleEnabled bool
-	GitHubEnabled bool
-	Identity      string
-	AccountExists bool
-}
-
-var homeTemplate = template.Must(template.New("home").Parse(`<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Janus</title>
-	<style>
-		:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101827; color: #e6edf7; }
-		body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
-		main { width: min(24rem, calc(100% - 3rem)); padding: 2rem; border: 1px solid #34445e; border-radius: 1rem; background: #182438; }
-		h1 { margin-top: 0; }
-		.google-button, button { display: block; width: 100%; box-sizing: border-box; padding: .85rem 1rem; border: 0; border-radius: .5rem; background: #fff; color: #202124; text-align: center; text-decoration: none; font: inherit; font-weight: 650; cursor: pointer; }
-		.google-button:hover { background: #e9eef6; }
-		button:hover { background: #e9eef6; }
-		.status { padding: .85rem 1rem; border: 1px solid #2c8068; border-radius: .5rem; background: #163a35; }
-		.note { color: #aab8cc; font-size: .9rem; }
-	</style>
-</head>
-<body>
-	<main>
-		<h1>Welcome to Janus</h1>
-		{{if .Identity}}
-		<p class="status" role="status">Signed in as <strong>{{.Identity}}</strong></p>
-		<p><a href="/projects">Open your projects</a> · <a href="/agents">Your Agents</a></p>
-		<form method="post" action="/auth/logout"><button type="submit">Sign out</button></form>
-		{{else}}
-		<p>Sign in to continue.</p>
-		{{if .GoogleEnabled}}<a class="google-button" href="/auth/google">Continue with Google</a>{{end}}
-		{{if .GitHubEnabled}}<a class="google-button" href="/auth/github">Continue with GitHub</a>{{end}}
-		{{if .AccountExists}}<p class="status" role="status">That GitHub email belongs to an existing Janus account. Sign in to that account, then connect GitHub from Projects.</p>{{end}}
-		<p class="note">Google sign-in is available when configured by the administrator.</p>
-		{{end}}
-	</main>
-</body>
-
-</html>`))
-
-func homePage(googleEnabled bool, identity string) reply {
-	return homePageWithProviders(googleEnabled, false, identity, false)
-}
-
-func homePageWithProviders(googleEnabled, githubEnabled bool, identity string, accountExists bool) reply {
-	var body strings.Builder
-	if err := homeTemplate.Execute(&body, homePageData{GoogleEnabled: googleEnabled, GitHubEnabled: githubEnabled, Identity: identity, AccountExists: accountExists}); err != nil {
-		return internalError()
-	}
-	return reply{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": {"text/html; charset=utf-8"}},
-		Body:       body.String(),
-	}
-}
-
-func (a *Server) home(c *call) any {
-	profileResponse := a.me(c)
-	if profile, ok := profileResponse.(map[string]string); ok {
-		identity := strings.TrimSpace(profile["display_name"])
-		if identity == "" {
-			identity = profile["email"]
-		}
-		return homePageWithProviders(a.dependencies.GoogleEnabled, a.dependencies.GitHubEnabled, identity, false)
-	}
-	if response, ok := profileResponse.(reply); ok && response.StatusCode != http.StatusUnauthorized {
-		return response
-	}
-	return homePageWithProviders(a.dependencies.GoogleEnabled, a.dependencies.GitHubEnabled, "", c.Query.Get("github") == "account_exists")
 }
 
 func (a *Server) registerAuthenticationRoutes(app *mux) {

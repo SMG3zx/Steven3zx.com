@@ -17,7 +17,6 @@ func (a *Server) registerAgentRoutes(app *mux) {
 	app.Post("/api/agents/:id/pause", a.whenAgentsConfigured(a.pauseAgent))
 	app.Post("/api/agents/:id/resume", a.whenAgentsConfigured(a.resumeAgent))
 	app.Get("/api/agents/:id/runs", a.whenAgentsConfigured(a.listAgentRuns))
-	app.Get("/agents", a.agentsPage)
 }
 
 // whenAgentsConfigured answers 503 for every Agent route when no Headscale server
@@ -206,35 +205,6 @@ func (a *Server) listAgentRuns(c *call) any {
 	}
 	return views
 }
-
-// agentsPage lists the Owner's Agents with a button to pause or resume each,
-// and issues Enrollment Codes. It draws itself from the JSON API.
-func (a *Server) agentsPage(c *call) any {
-	if _, ok := a.subject(c.Request.Context(), c.Request); !ok {
-		return reply{StatusCode: http.StatusSeeOther, Header: http.Header{"Location": {"/"}}}
-	}
-	return reply{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, Body: agentsPageHTML}
-}
-
-const agentsPageHTML = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Agents · Janus</title><style>body{font:16px system-ui;background:#101827;color:#e6edf7;max-width:900px;margin:3rem auto;padding:0 1rem}a{color:#83b7ff}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:.6rem;border-bottom:1px solid #2a3a52}button{padding:.4rem .9rem;background:#182438;color:inherit;border:1px solid #48607e;border-radius:.4rem;cursor:pointer}code{background:#182438;padding:.2rem .4rem;border-radius:.3rem}small{color:#aab8cc}</style>
-<h1>Your Agents</h1><p><a href="/projects">Projects</a> · <a href="/">Home</a></p>
-<p><button id="code">Get an enrollment code</button> <span id="issued" role="status"></span></p>
-<table><thead><tr><th>Name</th><th>Tailnet</th><th>Serving</th><th>Deployments</th><th></th></tr></thead><tbody id="agents"><tr><td colspan="5">Loading…</td></tr></tbody></table>
-<p id="status" role="status"></p>
-<script>
-const status=document.getElementById('status');
-async function request(url,options){const response=await fetch(url,options);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Request failed');return body}
-function cell(row,text){const td=document.createElement('td');td.textContent=text;row.appendChild(td);return td}
-async function load(){const agents=await request('/api/agents');const body=document.getElementById('agents');body.innerHTML='';
-if(!agents.length){body.innerHTML='<tr><td colspan="5">No Agents yet. Get a code, then run <code>janus-agent enroll</code> on your machine.</td></tr>';return}
-for(const agent of agents){const row=document.createElement('tr');cell(row,agent.name);cell(row,agent.status);
-cell(row,!agent.connected?'not connected':agent.paused?'paused':'serving');cell(row,String(agent.deployments.length));
-const actions=cell(row,'');if(agent.connected){const button=document.createElement('button');const action=agent.paused?'resume':'pause';
-button.textContent=agent.paused?'Resume':'Pause';button.addEventListener('click',async()=>{button.disabled=true;try{await request('/api/agents/'+agent.id+'/'+action,{method:'POST'});status.textContent=agent.name+(agent.paused?' resumed.':' paused.');setTimeout(()=>load().catch(e=>status.textContent=e.message),500)}catch(e){status.textContent=e.message;button.disabled=false}});actions.appendChild(button)}
-body.appendChild(row)}}
-document.getElementById('code').addEventListener('click',async()=>{try{const issued=await request('/api/agents/enrollment-codes',{method:'POST'});document.getElementById('issued').innerHTML='';const code=document.createElement('code');code.textContent='janus-agent enroll '+issued.code;document.getElementById('issued').append(code,' ',Object.assign(document.createElement('small'),{textContent:'valid for 15 minutes, once'}))}catch(e){status.textContent=e.message}});
-load().catch(e=>status.textContent=e.message);setInterval(()=>load().catch(()=>{}),10000);
-</script></html>`
 
 func (a *Server) removeAgent(c *call) any {
 	owner, ok := a.authorizedSubject(c, "agent.remove", nil)

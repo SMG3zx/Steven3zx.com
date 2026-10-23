@@ -5,7 +5,7 @@
   "steps": [
     {
       "file": "janus-go/internal/services/gateway/projects.go",
-      "line": 43,
+      "line": 33,
       "title": "The router",
       "description": "`app.Post(\"/api/projects/:id/deployments\"` maps the route to startDeployment. The HTTP layer is a driving adapter."
     },

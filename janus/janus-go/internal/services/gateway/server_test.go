@@ -66,14 +66,6 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	if listedProjects.Code != http.StatusOK || !bytes.Contains(listedProjects.Body.Bytes(), []byte(createdProject.ID)) {
 		t.Fatalf("project list status = %d body=%s", listedProjects.Code, listedProjects.Body.String())
 	}
-	projectsPage := perform(handler, http.MethodGet, "/projects", "", session[0])
-	if projectsPage.Code != http.StatusOK || !strings.Contains(projectsPage.Header().Get("Content-Type"), "text/html") || !strings.Contains(projectsPage.Body.String(), "Your projects") {
-		t.Fatalf("projects page status = %d body=%s", projectsPage.Code, projectsPage.Body.String())
-	}
-	projectDetail := perform(handler, http.MethodGet, "/projects/"+createdProject.ID, "", session[0])
-	if projectDetail.Code != http.StatusOK || !strings.Contains(projectDetail.Body.String(), "10.59 MB") || strings.Contains(projectDetail.Body.String(), "10591486 bytes") {
-		t.Fatalf("project detail should render repository size in MB: status=%d body=%s", projectDetail.Code, projectDetail.Body.String())
-	}
 	entrypoint := perform(handler, http.MethodPost, "/api/projects/"+createdProject.ID+"/entrypoint", `{"snapshot_id":"`+entrypointSnapshotID+`","entry_point":"cmd/server/main.go"}`, session[0])
 	if entrypoint.Code != http.StatusOK || !strings.Contains(entrypoint.Body.String(), "cmd/server/main.go") {
 		t.Fatalf("save imported entrypoint status=%d body=%s", entrypoint.Code, entrypoint.Body.String())
@@ -93,10 +85,6 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	if deletedProject.Code != http.StatusNoContent {
 		t.Fatalf("project delete status=%d body=%s", deletedProject.Code, deletedProject.Body.String())
 	}
-	authenticatedHome := perform(handler, http.MethodGet, "/", "", session[0])
-	if authenticatedHome.Code != http.StatusOK || !strings.Contains(authenticatedHome.Body.String(), "Signed in as") || !strings.Contains(authenticatedHome.Body.String(), "alice@example.com") || !strings.Contains(authenticatedHome.Body.String(), `action="/auth/logout"`) {
-		t.Fatalf("authenticated homepage status = %d, body = %s", authenticatedHome.Code, authenticatedHome.Body.String())
-	}
 	if allowed, err := authorization.Allowed(ctx, "different-user", "profile.read", map[string]any{"subject": "alice"}); err != nil || allowed {
 		t.Fatalf("OPA permitted a user to read another subject's profile: allowed=%v err=%v", allowed, err)
 	}
@@ -110,10 +98,6 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	}
 	if disabledGoogle := perform(handler, http.MethodGet, "/auth/google", "", nil); disabledGoogle.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unconfigured Google status = %d", disabledGoogle.Code)
-	}
-	home := perform(handler, http.MethodGet, "/", "", nil)
-	if home.Code != http.StatusOK || !strings.Contains(home.Header().Get("Content-Type"), "text/html") || strings.Contains(home.Body.String(), `href="/auth/google"`) {
-		t.Fatalf("unconfigured homepage Google sign-in = status %d, headers %#v, body %s", home.Code, home.Header(), home.Body.String())
 	}
 
 	firstIdentity, err := identities.ResolveGoogleIdentity(ctx, contractid.ResolveIdentity{Subject: "google-subject", Email: "alice@example.com", DisplayName: "Alice"})
@@ -152,25 +136,6 @@ func TestLocalAuthenticationAuthorizationAndLogout(t *testing.T) {
 	cleared := logout.Result().Cookies()
 	if len(cleared) == 0 || cleared[0].MaxAge >= 0 || cleared[0].Value != "" {
 		t.Fatalf("logout did not clear session cookie: %#v", cleared)
-	}
-}
-
-func TestHomePageShowsGoogleSignInWhenConfigured(t *testing.T) {
-	page := homePage(true, "")
-	if page.StatusCode != http.StatusOK || page.Header.Get("Content-Type") != "text/html; charset=utf-8" {
-		t.Fatalf("homepage response = %#v", page)
-	}
-	body, ok := page.Body.(string)
-	if !ok || !strings.Contains(body, `href="/auth/google"`) || !strings.Contains(body, "Continue with Google") || strings.Contains(body, "Sign out") {
-		t.Fatalf("configured homepage is missing Google sign-in link: %v", page.Body)
-	}
-}
-
-func TestHomePageShowsEscapedAuthenticatedIdentityAndSignOut(t *testing.T) {
-	page := homePage(false, `<script>alert("xss")</script>`)
-	body, ok := page.Body.(string)
-	if !ok || !strings.Contains(body, "Signed in as") || !strings.Contains(body, "&lt;script&gt;") || !strings.Contains(body, `action="/auth/logout"`) || strings.Contains(body, "Continue with Google") {
-		t.Fatalf("authenticated homepage did not safely show identity and sign-out: %v", page.Body)
 	}
 }
 

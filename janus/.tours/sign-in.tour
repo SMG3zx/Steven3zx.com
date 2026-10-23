@@ -5,13 +5,13 @@
   "steps": [
     {
       "file": "janus-go/internal/services/gateway/server.go",
-      "line": 190,
+      "line": 113,
       "title": "Registration",
       "description": "`func (a *Server) register` creates a local Account and issues a session cookie."
     },
     {
       "file": "janus-go/internal/services/gateway/server.go",
-      "line": 242,
+      "line": 165,
       "title": "Sign-in",
       "description": "`func (a *Server) login` checks the password, then issues a session. A wrong password and an unknown email get the same answer."
     },

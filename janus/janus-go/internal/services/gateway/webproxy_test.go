@@ -172,13 +172,13 @@ func TestAnUnreachableWebContainerIsABadGateway(t *testing.T) {
 	}
 }
 
-func TestWithoutAnUpstreamTheGatewayServesItsOwnPages(t *testing.T) {
+func TestWithoutAnUpstreamTheGatewayServesNoPages(t *testing.T) {
 	handler := serverWithUpstream(t, "")
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "Welcome to Janus") {
-		t.Fatalf("status = %d, want the gateway's own homepage", recorder.Code)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 now that the gateway has no pages of its own", recorder.Code)
 	}
 }
