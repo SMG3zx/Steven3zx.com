@@ -33,7 +33,7 @@ describe("loadRepositoryChoices", () => {
         }
         return [{ sha: "a".repeat(40), message: "Add entrypoint", date: "2026-10-20T10:00:00Z" }];
       },
-    };
+    } as unknown as Parameters<typeof loadRepositoryChoices>[0];
   }
 
   test("lists the branches of the chosen repository and the commits of the chosen branch", async () => {
