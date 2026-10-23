@@ -1,9 +1,9 @@
-FROM node:26-slim AS web
+FROM oven/bun:1 AS web
 WORKDIR /web
-COPY web/package.json web/package-lock.json ./
-RUN npm ci
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
 COPY web/ ./
-RUN npm run build
+RUN bun run build
 
 FROM golang:1.27 AS server
 WORKDIR /src

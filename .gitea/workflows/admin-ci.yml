@@ -20,11 +20,11 @@ jobs:
       - run: go test -count=1 ./...
 
   web:
-    runs-on: node
+    runs-on: bun
     defaults:
       run:
         working-directory: portfolio/admin/web
     steps:
       - uses: actions/checkout@v4
-      - run: npm ci
-      - run: npm run build
+      - run: bun install --frozen-lockfile
+      - run: bun run build
