@@ -8,6 +8,7 @@ on:
       - ".gitea/workflows/admin-ci.yml"
   workflow_dispatch:
 
+# The server job runs in the steven3zx-ci-go image (Go 1.27 plus Node), see edge/gitea/ci-go.
 jobs:
   server:
     runs-on: golang
