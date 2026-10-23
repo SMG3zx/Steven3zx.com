@@ -113,6 +113,34 @@ services:
       - default
       - ci
 
+  # Deploy runner. It runs only the deploy job in .gitea/workflows/admin-ci.yml, which
+  # rebuilds and restarts containers through the Docker socket. Jobs on it are root-equivalent
+  # on this host, so it has its own runner config and its own label. Build its image first:
+  #   docker build -t steven3zx-ci-docker:1 edge/gitea/ci-docker
+  gitea-runner-deploy:
+    image: gitea/act_runner:0.5
+    restart: unless-stopped
+    depends_on:
+      - gitea
+    working_dir: /data
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ ! -f /data/.runner ]; then
+          act_runner register --no-interactive --instance http://gitea:3000             --token "$$GITEA_RUNNER_REGISTRATION_TOKEN" --name "$$RUNNER_NAME" --labels "$$RUNNER_LABELS"
+        fi
+        exec act_runner daemon --config /config/config.yaml
+    environment:
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_REGISTRATION_TOKEN}
+      RUNNER_NAME: steven3zx-edge-deploy-runner
+      RUNNER_LABELS: "deploy:docker://steven3zx-ci-docker:1"
+    volumes:
+      - runner_deploy_data:/data
+      - ./gitea/runner-deploy.yaml:/config/config.yaml:ro
+    networks:
+      - default
+      - ci
+
   traefik:
     image: traefik:v3.7.16
     restart: unless-stopped
@@ -181,6 +209,7 @@ networks:
 volumes:
   gitea_data:
   runner_data:
+  runner_deploy_data:
   admin_data:
   caddy_data:
   caddy_config:

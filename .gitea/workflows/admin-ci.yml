@@ -1,10 +1,13 @@
 # Runs on the self-hosted Gitea runner (edge/gitea). GitHub does not read .gitea/.
+# The deploy job runs on the deploy runner (gitea-runner-deploy in edge/compose.yaml)
+# after both checks pass on master, and it rebuilds and restarts the admin container.
 name: admin-ci
 
 on:
   push:
     paths:
       - "portfolio/admin/**"
+      - "edge/compose.yaml"
       - ".gitea/workflows/admin-ci.yml"
   workflow_dispatch:
 
@@ -35,3 +38,28 @@ jobs:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
       - run: bun run build
+
+  # Rebuilds the admin image and recreates its container on the origin host. The
+  # deploy runner is the only one with the Docker socket. Secrets come from the repo's
+  # Actions secrets: HOST_AGENT_TOKEN and ADMIN_DB_KEY, the same values as in edge/.env.
+  deploy:
+    needs: [server, web]
+    if: github.ref == 'refs/heads/master'
+    runs-on: deploy
+    env:
+      HOST_AGENT_TOKEN: ${{ secrets.HOST_AGENT_TOKEN }}
+      ADMIN_DB_KEY: ${{ secrets.ADMIN_DB_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      # An unset secret would recreate the admin container without its token or key,
+      # and the server exits at start. Stop before touching the running container.
+      - name: Check deploy secrets
+        run: |
+          if [ -z "$HOST_AGENT_TOKEN" ] || [ -z "$ADMIN_DB_KEY" ]; then
+            echo "Set the HOST_AGENT_TOKEN and ADMIN_DB_KEY Actions secrets first." >&2
+            exit 1
+          fi
+      - name: Rebuild and restart the admin container
+        run: docker compose -f edge/compose.yaml up -d --build admin
+      - name: Show admin status
+        run: docker compose -f edge/compose.yaml ps admin

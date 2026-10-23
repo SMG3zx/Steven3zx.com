@@ -1,0 +1,26 @@
+# act_runner daemon configuration for the deploy runner. It runs only the deploy
+# job, so it alone mounts the Docker socket. The main runner (runner-config.yaml)
+# keeps jobs away from the socket. Full reference:
+#   docker run --rm --entrypoint act_runner gitea/act_runner:0.5 generate-config
+
+log:
+  level: info
+
+runner:
+  # Written by `act_runner register` on first start; lives in the runner_deploy_data volume.
+  file: /data/.runner
+  capacity: 1
+  timeout: 1h
+  fetch_timeout: 5s
+  fetch_interval: 2s
+  fetch_interval_max: 5s
+  labels: []
+
+container:
+  network: steven3zx-edge_ci
+  valid_volumes:
+    - steven3zx-ci-cache
+  # The Docker socket lets the job rebuild and restart containers on the host.
+  # That is root-equivalent on this host, so only the deploy job may use this runner.
+  options: "-v steven3zx-ci-cache:/ci-cache -v /var/run/docker.sock:/var/run/docker.sock"
+  force_pull: false

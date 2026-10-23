@@ -62,6 +62,21 @@ The agent worker logs to the console when run by hand. Under the service, logs g
 
 To restart the agent from the admin map, use the **Restart host agent** button. It asks the supervisor on `127.0.0.1:9181`. To restart by hand, run `Restart-Service steven3zx-host-agent` from an elevated PowerShell.
 
+## Deploy
+
+Pushes to `master` that touch `portfolio/admin/**` or `edge/compose.yaml` run `.gitea/workflows/admin-ci.yml`. The server and web checks run first. Then the `deploy` job runs on the deploy runner (`gitea-runner-deploy`), rebuilds the admin image, and recreates the `admin` container with `docker compose -f edge/compose.yaml up -d --build admin`.
+
+One-time setup on the origin host:
+
+```bash
+docker build -t steven3zx-ci-docker:1 edge/gitea/ci-docker
+cd edge && docker compose up -d gitea-runner-deploy
+```
+
+In the Gitea repo, add two Actions secrets with the same values as `edge/.env`: `HOST_AGENT_TOKEN` and `ADMIN_DB_KEY`. The deploy job stops before touching the container if either is missing.
+
+Only the deploy runner mounts the Docker socket. The job runs with root-equivalent access to the host, so only workflows you own should use the `deploy` label.
+
 ## Local development
 
 ```bash
