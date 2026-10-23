@@ -88,7 +88,8 @@ services:
       JANUS_WEB_UPSTREAM: http://web:3000
       HEADSCALE_URL: ${HEADSCALE_URL:-}
     ports:
-      - "127.0.0.1:9090:9090"
+      # Traefik at the edge forwards janus.steven3zx.com here (edge/traefik/dynamic/sites.yml).
+      - "127.0.0.1:9095:9090"
 
   web:
     build: ../web
@@ -97,8 +98,9 @@ services:
       JANUS_API_URL: http://gateway:9090
       JANUS_WEB_URL: ${JANUS_WEB_URL:-https://janus.steven3zx.com}
       PORT: "3000"
-    ports:
-      - "127.0.0.1:3000:3000"
+    # Reached only through the gateway, so it has no host port.
+    expose:
+      - "3000"
     depends_on:
       - gateway
 
