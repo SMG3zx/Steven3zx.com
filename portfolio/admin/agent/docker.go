@@ -17,17 +17,20 @@ import (
 // dockerClient talks to the Docker Desktop engine over its named pipe.
 type dockerClient struct {
 	http *http.Client
+	// stream has no overall timeout: log followers stay open until their context ends.
+	stream *http.Client
 }
 
 func newDockerClient(pipe string) *dockerClient {
-	return &dockerClient{http: &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return winio.DialPipeContext(ctx, pipe)
-			},
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return winio.DialPipeContext(ctx, pipe)
 		},
-	}}
+	}
+	return &dockerClient{
+		http:   &http.Client{Timeout: 10 * time.Second, Transport: transport},
+		stream: &http.Client{Transport: transport},
+	}
 }
 
 func (d *dockerClient) get(ctx context.Context, path string, out any) error {

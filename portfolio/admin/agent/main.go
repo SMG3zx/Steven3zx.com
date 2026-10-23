@@ -43,19 +43,67 @@ func main() {
 	col := newCollector(newDockerClient(*pipe))
 	go col.Run(ctx)
 
+	authorized := func(r *http.Request) bool {
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte("ok"))
 	})
+	// GET /snapshot returns everything. GET /snapshot?topics=cpu,memory returns
+	// only those parts, which is what the admin server asks for on each frame.
 	mux.HandleFunc("GET /snapshot", func(w http.ResponseWriter, r *http.Request) {
-		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+		if !authorized(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		snap := col.Snapshot()
+		var body any = snap
+		if raw := r.URL.Query().Get("topics"); raw != "" {
+			body = snap.project(strings.Split(raw, ","))
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		json.NewEncoder(w).Encode(col.Snapshot())
+		json.NewEncoder(w).Encode(body)
+	})
+	// GET /logs/{id} streams a container's log as NDJSON, starting with the
+	// last lines and then following new output until the client disconnects.
+	mux.HandleFunc("GET /logs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !authorized(r) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		id := r.PathValue("id")
+		if !containerIDPattern.MatchString(id) {
+			http.Error(w, "invalid container id", http.StatusBadRequest)
+			return
+		}
+		body, err := col.docker.openLogs(r.Context(), id)
+		if errors.Is(err, errNoContainer) {
+			http.Error(w, "no such container", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			log.Printf("container logs %s: %v", id, err)
+			http.Error(w, "docker unavailable", http.StatusBadGateway)
+			return
+		}
+		defer body.Close()
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Cache-Control", "no-store")
+		rc := http.NewResponseController(w)
+		enc := json.NewEncoder(w)
+		err = readDockerLogs(body, func(l logLine) error {
+			if err := enc.Encode(l); err != nil {
+				return err
+			}
+			return rc.Flush()
+		})
+		if err != nil && r.Context().Err() == nil {
+			log.Printf("container logs %s: %v", id, err)
+		}
 	})
 
 	srv := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
