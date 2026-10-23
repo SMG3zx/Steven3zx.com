@@ -31,10 +31,14 @@ func fakeAgent(t *testing.T) *httptest.Server {
 		if !auth(w, r) {
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{
+		out := map[string]any{
 			"collectedAt": "2026-10-22T10:00:00Z",
 			"topics":      r.URL.Query().Get("topics"),
-		})
+		}
+		for t := range strings.SplitSeq(r.URL.Query().Get("topics"), ",") {
+			out[t] = map[string]string{"topic": t}
+		}
+		json.NewEncoder(w).Encode(out)
 	})
 	mux.HandleFunc("GET /logs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !auth(w, r) {
@@ -93,8 +97,11 @@ func TestLiveSendsOnlyRequestedTopicsAndLogs(t *testing.T) {
 		t.Fatalf("expected frame, got %v", frame)
 	}
 	data := frame["data"].(map[string]any)
-	if data["topics"] != "cpu,network" {
-		t.Fatalf("agent got topics %v, want cpu,network", data["topics"])
+	if data["cpu"] == nil || data["network"] == nil {
+		t.Fatalf("frame lacks requested topics: %v", data)
+	}
+	if _, ok := data["topics"]; ok {
+		t.Fatalf("frame carried an unrequested key: %v", data)
 	}
 
 	// Log lines arrive batched, then the agent ends the stream.
@@ -114,6 +121,46 @@ func TestLiveSendsOnlyRequestedTopicsAndLogs(t *testing.T) {
 	}
 	if ended != "log stream ended" {
 		t.Fatalf("stream end message = %q", ended)
+	}
+
+	// The fake agent's topic values never change, so the next ticks must send no frame.
+	quiet, stop := context.WithTimeout(ctx, frameInterval+time.Second)
+	defer stop()
+	for {
+		var msg map[string]any
+		if err := wsjson.Read(quiet, conn, &msg); err != nil {
+			break // the window passed with nothing new
+		}
+		if msg["type"] == "frame" {
+			t.Fatalf("unchanged topics were sent again: %v", msg)
+		}
+	}
+}
+
+func TestChangedTopicsSendsOnlyDifferences(t *testing.T) {
+	sent := map[string]json.RawMessage{}
+	first := map[string]json.RawMessage{
+		"collectedAt": json.RawMessage(`"t1"`),
+		"cpu":         json.RawMessage(`{"totalPercent":10}`),
+		"memory":      json.RawMessage(`{"used":1}`),
+	}
+	if got := changedTopics(sent, first, []string{"cpu", "memory"}); len(got) != 2 {
+		t.Fatalf("first frame sent %d topics, want 2", len(got))
+	}
+
+	second := map[string]json.RawMessage{
+		"collectedAt": json.RawMessage(`"t2"`),
+		"cpu":         json.RawMessage(`{"totalPercent":12}`),
+		"memory":      json.RawMessage(`{"used":1}`),
+	}
+	got := changedTopics(sent, second, []string{"cpu", "memory"})
+	if len(got) != 1 || string(got["cpu"]) != `{"totalPercent":12}` {
+		t.Fatalf("second frame = %v, want only cpu", got)
+	}
+
+	// Topics the browser already has are not sent again, and absent topics are skipped.
+	if got := changedTopics(sent, second, []string{"memory", "connections"}); len(got) != 0 {
+		t.Fatalf("unchanged memory and absent connections were sent: %v", got)
 	}
 }
 

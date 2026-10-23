@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -49,8 +50,27 @@ type logEvent struct {
 }
 
 type frameMessage struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
+	Type string                     `json:"type"`
+	Data map[string]json.RawMessage `json:"data"`
+}
+
+// changedTopics returns the subscribed topics whose value differs from sent,
+// and records them there. Values are compared as the agent wrote them, so an
+// unchanged topic compares equal byte for byte.
+func changedTopics(sent map[string]json.RawMessage, snap map[string]json.RawMessage, topics []string) map[string]json.RawMessage {
+	out := map[string]json.RawMessage{}
+	for _, t := range topics {
+		v, ok := snap[t]
+		if !ok {
+			continue
+		}
+		if prev, seen := sent[t]; seen && bytes.Equal(prev, v) {
+			continue
+		}
+		sent[t] = v
+		out[t] = v
+	}
+	return out
 }
 
 type logMessage struct {
@@ -127,15 +147,25 @@ func (s *server) live(w http.ResponseWriter, r *http.Request) {
 	flush := time.NewTicker(logFlushInterval)
 	defer flush.Stop()
 
+	// sent holds the last value of each topic this browser has been sent. The
+	// browser keeps every topic it has received, so a topic that matches sent
+	// is already up to date there and is left out of the frame.
+	sent := map[string]json.RawMessage{}
 	sendFrame := func() error {
 		if len(sub.Topics) == 0 {
 			return nil
 		}
-		data, err := s.agentSnapshot(ctx, sub.Topics)
+		snap, err := s.agentSnapshot(ctx, sub.Topics)
 		if err != nil {
 			log.Printf("live frame: %v", err)
 			return sendJSON(errorMessage{Type: "error", Scope: "frame", Message: "host agent unreachable"})
 		}
+		data := changedTopics(sent, snap, sub.Topics)
+		if len(data) == 0 {
+			return nil
+		}
+		// collectedAt rides along with any frame so the browser's clock stays current.
+		data["collectedAt"] = snap["collectedAt"]
 		return sendJSON(frameMessage{Type: "frame", Data: data})
 	}
 	sendLogs := func() error {
@@ -209,9 +239,9 @@ func (s *server) live(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// agentSnapshot fetches only the requested topics from the host agent and
-// returns the JSON object unchanged, so the browser gets the agent's shape.
-func (s *server) agentSnapshot(ctx context.Context, topics []string) (json.RawMessage, error) {
+// agentSnapshot fetches only the requested topics from the host agent. It
+// returns each topic's raw JSON, so values are forwarded without re-encoding.
+func (s *server) agentSnapshot(ctx context.Context, topics []string) (map[string]json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	q := url.Values{"topics": {strings.Join(topics, ",")}}
@@ -228,7 +258,11 @@ func (s *server) agentSnapshot(ctx context.Context, topics []string) (json.RawMe
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var snap map[string]json.RawMessage
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&snap); err != nil {
+		return nil, err
+	}
+	return snap, nil
 }
 
 // startLogs runs streamLogs in the background. The returned func stops it.
