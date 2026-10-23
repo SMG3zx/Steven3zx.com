@@ -9,6 +9,12 @@ on:
   workflow_dispatch:
 
 # The server job runs in the steven3zx-ci-go image (Go 1.27 plus Bun, with Bun as node), see edge/gitea/ci-go.
+# Shared caches, mounted from the steven3zx-ci-cache volume by the runner.
+env:
+  GOMODCACHE: /ci-cache/go/mod
+  GOCACHE: /ci-cache/go/build
+  BUN_INSTALL_CACHE_DIR: /ci-cache/bun
+
 jobs:
   server:
     runs-on: golang

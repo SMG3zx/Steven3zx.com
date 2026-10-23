@@ -1,22 +1,28 @@
 # act_runner daemon configuration for the edge stack. Full reference:
-#   docker run --rm --entrypoint act_runner gitea/act_runner:0.5 generate-config
+# Mounts the shared CI cache volume into every job container (see runner.envs). docker run --rm --entrypoint act_runner gitea/act_runner:0.5 generate-config
 
 log:
-  level: info
+ Mounts the shared CI cache volume into every job container (see runner.envs).level: info
 
 runner:
-  # Written by `act_runner register` on first start; lives in the runner_data volume.
-  file: /data/.runner
-  capacity: 2
-  timeout: 3h
-  # Jobs fetch actions from github.com by default, which is what actions/checkout needs.
-  fetch_timeout: 5s
-  labels: []
+ Mounts the shared CI cache volume into every job container (see runner.envs).# Written by `act_runner register` on first start; lives in the runner_data volume.
+ Mounts the shared CI cache volume into every job container (see runner.envs).file: /data/.runner
+ Mounts the shared CI cache volume into every job container (see runner.envs).capacity: 2
+ Mounts the shared CI cache volume into every job container (see runner.envs).timeout: 3h
+ Mounts the shared CI cache volume into every job container (see runner.envs).# Jobs fetch actions from github.com by default, which is what actions/checkout needs.
+ Mounts the shared CI cache volume into every job container (see runner.envs).fetch_timeout: 5s
+ Mounts the shared CI cache volume into every job container (see runner.envs).# Idle polling backs off to fetch_interval_max, so a push could wait a minute for a
+ Mounts the shared CI cache volume into every job container (see runner.envs).# job. Cap it at 5s so a pushed run starts within seconds.
+ Mounts the shared CI cache volume into every job container (see runner.envs).fetch_interval: 2s
+ Mounts the shared CI cache volume into every job container (see runner.envs).fetch_interval_max: 5s
+ Mounts the shared CI cache volume into every job container (see runner.envs).labels: []
 
 container:
-  # Job containers join this network only. It holds gitea and the runner, and nothing
-  # else, so a job can reach the Git server and nothing on the rest of the edge.
-  network: steven3zx-edge_ci
-  # No bind mounts from job containers. Jobs get a workspace volume, not host paths.
-  valid_volumes: []
-  force_pull: false
+ Mounts the shared CI cache volume into every job container (see runner.envs).# Job containers join this network only. It holds gitea and the runner, and nothing
+ Mounts the shared CI cache volume into every job container (see runner.envs).# else, so a job can reach the Git server and nothing on the rest of the edge.
+ Mounts the shared CI cache volume into every job container (see runner.envs).network: steven3zx-edge_ci
+ Mounts the shared CI cache volume into every job container (see runner.envs).# No bind mounts from job containers. Jobs get a workspace volume, not host paths.
+ Mounts the shared CI cache volume into every job container (see runner.envs).valid_volumes: []
+ Mounts the shared CI cache volume into every job container (see runner.envs).# Mounts the shared CI cache volume into every job container (see runner.envs).
+ Mounts the shared CI cache volume into every job container (see runner.envs).options: "-v steven3zx-ci-cache:/ci-cache"
+ Mounts the shared CI cache volume into every job container (see runner.envs).force_pull: false
