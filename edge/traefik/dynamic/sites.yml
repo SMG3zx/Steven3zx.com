@@ -1,5 +1,10 @@
 # Routes for the public hostnames. Same behaviour as edge/Caddyfile: each hostname
-# goes to the same backend, with the /admin and /grafana exceptions called out below.
+# goes to the same backend.
+#
+# private.steven3zx.com is the tailnet-only host. Its DNS record is DNS-only and points
+# at this machine's tailnet (100.x) address, and the tailnet-only middleware rejects any
+# client outside the tailnet ranges. The /admin and /grafana paths keep their prefix,
+# because the admin app and Grafana are both configured for it.
 #
 # The wildcard covers one-level names such as git.steven3zx.com. It does not cover the
 # apex, so the apex router requests its own certificate.
@@ -12,12 +17,30 @@ http:
         replacement: "https://www.steven3zx.com/${1}"
         permanent: true
 
+    tailnet-only:
+      ipAllowList:
+        sourceRange:
+          - "100.64.0.0/10"
+          - "fd7a:115c:a1e0::/48"
+
   routers:
-    janus-grafana:
-      rule: "Host(`janus.steven3zx.com`) && PathPrefix(`/grafana`)"
+    private-grafana:
+      rule: "Host(`private.steven3zx.com`) && PathPrefix(`/grafana`)"
       priority: 100
       entryPoints: [websecure]
+      middlewares: [tailnet-only]
       service: grafana
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "*.steven3zx.com"
+
+    private-admin:
+      rule: "Host(`private.steven3zx.com`) && PathPrefix(`/admin`)"
+      priority: 100
+      entryPoints: [websecure]
+      middlewares: [tailnet-only]
+      service: admin
       tls:
         certResolver: cloudflare
         domains:
@@ -45,16 +68,6 @@ http:
       rule: "Host(`plane.steven3zx.com`)"
       entryPoints: [websecure]
       service: plane
-      tls:
-        certResolver: cloudflare
-        domains:
-          - main: "*.steven3zx.com"
-
-    www-admin:
-      rule: "Host(`www.steven3zx.com`) && (Path(`/admin`) || PathPrefix(`/admin/`))"
-      priority: 100
-      entryPoints: [websecure]
-      service: admin
       tls:
         certResolver: cloudflare
         domains:
