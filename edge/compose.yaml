@@ -102,7 +102,7 @@ services:
     environment:
       GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_REGISTRATION_TOKEN}
       RUNNER_NAME: steven3zx-edge-runner
-      RUNNER_LABELS: "ubuntu-latest:docker://oven/bun:1,bun:docker://oven/bun:1,golang:docker://golang:1.27-bookworm"
+      RUNNER_LABELS: "ubuntu-latest:docker://oven/bun:1,bun:docker://oven/bun:1,golang:docker://steven3zx-ci-go:1.27"
     volumes:
       - runner_data:/data
       - ./gitea/runner-config.yaml:/config/config.yaml:ro
