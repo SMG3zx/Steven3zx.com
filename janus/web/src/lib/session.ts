@@ -17,7 +17,7 @@ export function safeTarget(target: string, fallback: string): string {
 
 export function signInPath(target: string): string {
   const safe = safeTarget(target, "");
-  return safe ? `/?next=${encodeURIComponent(safe)}` : "/";
+  return safe ? `/sign-in?next=${encodeURIComponent(safe)}` : "/sign-in";
 }
 
 export async function loadSignedInUser(

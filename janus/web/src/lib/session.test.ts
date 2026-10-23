@@ -17,7 +17,7 @@ describe("loadSignedInUser", () => {
 
   test("sends a signed-out visitor to the homepage, keeping the page they asked for", async () => {
     const result = await loadSignedInUser(signedOut, "", "/projects/new");
-    expect(result).toEqual({ redirectTo: "/?next=%2Fprojects%2Fnew" });
+    expect(result).toEqual({ redirectTo: "/sign-in?next=%2Fprojects%2Fnew" });
   });
 
   test("rethrows failures other than 401", async () => {
@@ -32,9 +32,9 @@ describe("loadSignedInUser", () => {
 
 describe("signInPath", () => {
   test("keeps only same-site paths as the return target", () => {
-    expect(signInPath("/agents")).toBe("/?next=%2Fagents");
-    expect(signInPath("https://evil.example/")).toBe("/");
-    expect(signInPath("//evil.example/")).toBe("/");
+    expect(signInPath("/agents")).toBe("/sign-in?next=%2Fagents");
+    expect(signInPath("https://evil.example/")).toBe("/sign-in");
+    expect(signInPath("//evil.example/")).toBe("/sign-in");
   });
 });
 

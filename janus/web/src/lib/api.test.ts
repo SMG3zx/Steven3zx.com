@@ -43,3 +43,39 @@ describe("createApi", () => {
     expect(new Headers(calls[0].init.headers).has("cookie")).toBe(false);
   });
 });
+
+describe("createApi.send", () => {
+  test("posts a JSON body with the visitor's cookie and returns the raw response", async () => {
+    const { fetchImpl, calls } = recordingFetch(
+      new Response(JSON.stringify({ id: "u1" }), {
+        status: 201,
+        headers: { "set-cookie": "janus_session=new; HttpOnly" },
+      }),
+    );
+    const api = createApi({ baseUrl: "http://gateway:9090", fetch: fetchImpl });
+
+    const response = await api.send("POST", "/auth/register", {
+      cookie: "janus_session=old",
+      body: { email: "a@example.com", password: "correct horse battery" },
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("set-cookie")).toBe("janus_session=new; HttpOnly");
+    expect(calls[0].init.method).toBe("POST");
+    expect(new Headers(calls[0].init.headers).get("content-type")).toBe("application/json");
+    expect(new Headers(calls[0].init.headers).get("cookie")).toBe("janus_session=old");
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
+      email: "a@example.com",
+      password: "correct horse battery",
+    });
+  });
+
+  test("does not throw on an error status, so the caller can show the gateway's message", async () => {
+    const { fetchImpl } = recordingFetch(new Response('{"error":"invalid email or password"}', { status: 401 }));
+    const api = createApi({ baseUrl: "http://gateway:9090", fetch: fetchImpl });
+
+    const response = await api.send("POST", "/auth/login", { body: { email: "a@b.co", password: "x" } });
+
+    expect(response.status).toBe(401);
+  });
+});

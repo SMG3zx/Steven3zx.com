@@ -18,6 +18,10 @@ type RequestOptions = {
   cookie?: string;
 };
 
+type SendOptions = RequestOptions & {
+  body?: unknown;
+};
+
 export function createApi({ baseUrl, fetch: fetchImpl = fetch }: ApiOptions) {
   return {
     async get<T>(path: string, { cookie }: RequestOptions): Promise<T> {
@@ -30,6 +34,25 @@ export function createApi({ baseUrl, fetch: fetchImpl = fetch }: ApiOptions) {
         throw new ApiError(response.status, path);
       }
       return (await response.json()) as T;
+    },
+
+    /**
+     * Sends a request and returns the raw response, whatever its status. Callers
+     * that forward the gateway's cookies or show its error messages need that.
+     */
+    async send(method: string, path: string, { cookie, body }: SendOptions): Promise<Response> {
+      const headers = new Headers();
+      if (cookie) {
+        headers.set("cookie", cookie);
+      }
+      if (body !== undefined) {
+        headers.set("content-type", "application/json");
+      }
+      return fetchImpl(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
     },
   };
 }

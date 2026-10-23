@@ -18,14 +18,29 @@ export const useHomeRedirect = routeLoader$(
 export default component$(() => {
   useHomeRedirect();
   return (
-    <main>
-      <h1>Turn a repository into a running WebAssembly service</h1>
-      <p>
-        Import a GitHub project, build it to WASM in isolated containers, and
-        deploy it to a machine you control.
-      </p>
-      <a href="/auth/google">Continue with Google</a>
-      <a href="/auth/github">Continue with GitHub</a>
+    <main class="page split">
+      <section class="main stack">
+        <h1>Turn a repository into a running WebAssembly service</h1>
+        <p class="lead">
+          Import a GitHub project, build it to WASM in isolated containers, and
+          deploy it to a machine you control.
+        </p>
+        <p class="muted">
+          Your repositories are read, never run, during import.
+        </p>
+      </section>
+      <section class="aside card" aria-labelledby="sign-in-title">
+        <h2 id="sign-in-title">Sign in</h2>
+        <a class="button button-block" href="/auth/google">
+          Continue with Google
+        </a>
+        <a class="button button-block" href="/auth/github">
+          Continue with GitHub
+        </a>
+        <div class="divider">or</div>
+        <a href="/sign-in">Sign in with email</a>
+        <a href="/sign-in?mode=register">Create an account</a>
+      </section>
     </main>
   );
 });
