@@ -22,8 +22,8 @@ not hide those costs.
 Run a fresh measurement with:
 
 ```bash
-node Hermes.js 1000000 120
-node Hermes.js --sweep
+bun Hermes.js 1000000 120
+bun Hermes.js --sweep
 ```
 
 ## Regression gates
@@ -44,7 +44,7 @@ warmed.
 Command:
 
 ```bash
-npm run benchmark:hermes:v04 -- <case> 100000 5
+bun run benchmark:hermes:v04 -- <case> 100000 5
 ```
 
 Each case below ran in its own Node process with explicit GC available, so

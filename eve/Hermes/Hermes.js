@@ -5,8 +5,8 @@
  * High-performance single-file ECS/world runtime for Node.js.
  *
  * Run demo + benchmark:
- *   node hermes.js
- *   node hermes.js 1000000 120
+ *   bun hermes.js
+ *   bun hermes.js 1000000 120
  *
  * Import as a module:
  *   const { Hermes } = require('./hermes');
@@ -1688,12 +1688,12 @@ function characterize() {
     'Profile measurements include high-resolution timing at system boundaries and are not throughput results.',
   );
   console.log(
-    'Chunk sweep runs in one process; use `node --expose-gc Hermes.js --characterize` for explicit GC boundaries.',
+    'Chunk sweep runs in one process; use `bun --expose-gc Hermes.js --characterize` for explicit GC boundaries.',
   );
   console.log(
-    'Canonical kernel comparison: `node Hermes.js 1000000 120 32768` (profiling disabled).',
+    'Canonical kernel comparison: `bun Hermes.js 1000000 120 32768` (profiling disabled).',
   );
-  console.log('\nCorrectness: run `npm test` before accepting characterization results.');
+  console.log('\nCorrectness: run `bun test` before accepting characterization results.');
 }
 
 // =============================================================================

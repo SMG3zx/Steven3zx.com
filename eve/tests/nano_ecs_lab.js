@@ -9,11 +9,11 @@ Dependency-free Node.js ECS performance laboratory.
 
 Run:
 
-    node nano_ecs_lab.js
+    bun nano_ecs_lab.js
 
 Optional:
 
-    node nano_ecs_lab.js 1000000 9
+    bun nano_ecs_lab.js 1000000 9
 
 Arguments:
 
@@ -22,7 +22,7 @@ Arguments:
 
 Recommended:
 
-    node nano_ecs_lab.js 1000000 9
+    bun nano_ecs_lab.js 1000000 9
 
 The lab tests:
 

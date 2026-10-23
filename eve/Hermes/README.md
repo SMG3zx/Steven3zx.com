@@ -3,10 +3,10 @@
 Dependency-free Node.js ECS execution kernel.
 
 ```bash
-node Hermes.js
-node Hermes.js 1000000 120
-node Hermes.js --sweep
-node Hermes.js --characterize
+bun Hermes.js
+bun Hermes.js 1000000 120
+bun Hermes.js --sweep
+bun Hermes.js --characterize
 ```
 
 The characterization flag accepts either `--characterize` or `-characterize`.

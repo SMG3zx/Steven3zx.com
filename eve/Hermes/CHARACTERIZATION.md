@@ -2,7 +2,7 @@
 
 ## Canonical kernel
 
-Command: `node Hermes.js 1000000 120 32768` with profiling disabled.
+Command: `bun Hermes.js 1000000 120 32768` with profiling disabled.
 
 Latest run: median **3.954 ms / 3.954 ns per entity**, p95 4.552 ms, p99
 4.665 ms, 252.9M entities/sec, 23.7% of a 60 Hz frame.
@@ -30,7 +30,7 @@ worlds, retains handles only for structural tests, and documents the mode
 boundaries in its output. For explicit collection boundaries run:
 
 ```bash
-node --expose-gc Hermes.js --characterize
+bun --expose-gc Hermes.js --characterize
 ```
 
 ## Structural evidence

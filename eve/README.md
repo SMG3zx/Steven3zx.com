@@ -1,6 +1,6 @@
 # EVE warehouse world
 
-Run `npm install`, then `npm run dev -- --host 127.0.0.1`. `npm run build` creates the production build. Run `npm test` for ADAM adapter and legacy feed contract tests.
+Run `bun install`, then `bun run dev -- --host 127.0.0.1`. `bun run build` creates the production build. Run `bun test` for ADAM adapter and legacy feed contract tests.
 
 The browser starts at a cinematic welcome menu over the same world used inside. Enter the warehouse to search destinations, select assets, and use contextual details. Scroll changes perspective: 3D below 22 m camera distance, 2.5D between 22 and 48 m, and an orthographic 2D floor plan above 48 m. Buttons also select each view. Free cam uses drag to look, WASD to move, Q/E to descend/ascend, Shift to speed up, and Escape to return to orbit.
 

@@ -7,9 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test tests/*.test.mjs",
-    "benchmark:twitter": "node benchmark/qwik-twitter/run.mjs",
-    "benchmark:hermes:v04": "node Hermes/v04_benchmark.js",
+    "test": "bun test tests/*.test.mjs",
+    "benchmark:twitter": "bun benchmark/qwik-twitter/run.mjs",
+    "benchmark:hermes:v04": "bun Hermes/v04_benchmark.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
