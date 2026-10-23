@@ -104,7 +104,7 @@ http:
     git:
       loadBalancer:
         servers:
-          - url: "http://host.docker.internal:30001"
+          - url: "http://gitea:3000"
     plane:
       loadBalancer:
         servers:
