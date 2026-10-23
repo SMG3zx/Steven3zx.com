@@ -1,8 +1,8 @@
 import { component$ } from "@builder.io/qwik";
 import { routeLoader$, type DocumentHead } from "@builder.io/qwik-city";
+import { sourceLabel, type ProjectSummary } from "~/lib/projects";
 import { gatewayFromEnv } from "~/lib/server";
 import { loadSignedInUser } from "~/lib/session";
-import { sourceLabel, type ProjectSummary } from "~/lib/projects";
 
 export const useProjects = routeLoader$(async ({ request, url, redirect }) => {
   const cookie = request.headers.get("cookie") ?? "";
@@ -17,19 +17,47 @@ export const useProjects = routeLoader$(async ({ request, url, redirect }) => {
 export default component$(() => {
   const projects = useProjects();
   return (
-    <main>
-      <h1>Projects</h1>
-      {projects.value.length === 0 ? (
-        <p>No projects yet.</p>
-      ) : (
-        <ul>
-          {projects.value.map((project) => (
-            <li key={project.id}>
-              {project.name} <span>{sourceLabel(project)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+    <main class="page">
+      <div class="row row-between">
+        <h1>Projects</h1>
+        <a class="button button-primary" href="/projects/new">
+          New project
+        </a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption class="visually-hidden">Your projects</caption>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.value.length === 0 ? (
+              <tr>
+                <td colSpan={2} class="muted">
+                  No projects yet.
+                </td>
+              </tr>
+            ) : (
+              projects.value.map((project) => (
+                <tr key={project.id}>
+                  <td>
+                    <a
+                      href={`/projects/${project.id}`}
+                      style="font-weight: 600"
+                    >
+                      {project.name}
+                    </a>
+                  </td>
+                  <td class="muted">{sourceLabel(project)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </main>
   );
 });
