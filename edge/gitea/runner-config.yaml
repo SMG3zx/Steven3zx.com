@@ -1,0 +1,22 @@
+# act_runner daemon configuration for the edge stack. Full reference:
+#   docker run --rm --entrypoint act_runner gitea/act_runner:0.5 generate-config
+
+log:
+  level: info
+
+runner:
+  # Written by `act_runner register` on first start; lives in the runner_data volume.
+  file: /data/.runner
+  capacity: 2
+  timeout: 3h
+  # Jobs fetch actions from github.com by default, which is what actions/checkout needs.
+  fetch_timeout: 5s
+  labels: []
+
+container:
+  # Job containers join this network only. It holds gitea and the runner, and nothing
+  # else, so a job can reach the Git server and nothing on the rest of the edge.
+  network: steven3zx-edge_ci
+  # No bind mounts from job containers. Jobs get a workspace volume, not host paths.
+  valid_volumes: []
+  force_pull: false

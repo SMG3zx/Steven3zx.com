@@ -62,6 +62,55 @@ services:
       IP6_PROVIDER: none
       PROXIED: is(www.steven3zx.com,steven3zx.com,janus.steven3zx.com)
 
+  # Self-hosted Git at git.steven3zx.com (Traefik routes it, see traefik/dynamic/sites.yml).
+  # Replaces the native Windows service that listened on host port 30001. Its data
+  # lives in gitea_data, copied from the old GITEA/ folder.
+  gitea:
+    image: gitea/gitea:1.27.3
+    restart: unless-stopped
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+    expose:
+      - "3000"
+    ports:
+      # Git over SSH. The host port matches the native instance, so clone URLs keep working.
+      - "30000:2222"
+    volumes:
+      - gitea_data:/data
+    networks:
+      - default
+      - ci
+
+  # Gitea Actions runner. It runs CI jobs as containers on this Docker engine, so
+  # it has the Docker socket. That makes it root-equivalent on this host: only
+  # workflows in repos you own should be able to reach it.
+  gitea-runner:
+    image: gitea/act_runner:0.5
+    restart: unless-stopped
+    depends_on:
+      - gitea
+    working_dir: /data
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ ! -f /data/.runner ]; then
+          act_runner register --no-interactive --instance http://gitea:3000 \
+            --token "$$GITEA_RUNNER_REGISTRATION_TOKEN" --name "$$RUNNER_NAME" --labels "$$RUNNER_LABELS"
+        fi
+        exec act_runner daemon --config /config/config.yaml
+    environment:
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_REGISTRATION_TOKEN}
+      RUNNER_NAME: steven3zx-edge-runner
+      RUNNER_LABELS: "ubuntu-latest:docker://node:26-bookworm,node:docker://node:26-bookworm,golang:docker://golang:1.27-bookworm"
+    volumes:
+      - runner_data:/data
+      - ./gitea/runner-config.yaml:/config/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - ci
+
   traefik:
     image: traefik:v3.7.16
     restart: unless-stopped
@@ -123,7 +172,13 @@ services:
       - derper_certs:/certs:ro
       - derper_data:/var/lib/derper
 
+networks:
+  # Jobs run here. See gitea/runner-config.yaml.
+  ci: {}
+
 volumes:
+  gitea_data:
+  runner_data:
   admin_data:
   caddy_data:
   caddy_config:

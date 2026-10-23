@@ -1,0 +1,30 @@
+# Runs on the self-hosted Gitea runner (edge/gitea). GitHub does not read .gitea/.
+name: admin-ci
+
+on:
+  push:
+    paths:
+      - "portfolio/admin/**"
+      - ".gitea/workflows/admin-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  server:
+    runs-on: golang
+    defaults:
+      run:
+        working-directory: portfolio/admin/server
+    steps:
+      - uses: actions/checkout@v4
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+
+  web:
+    runs-on: node
+    defaults:
+      run:
+        working-directory: portfolio/admin/web
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
