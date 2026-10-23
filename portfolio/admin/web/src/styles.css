@@ -107,6 +107,8 @@ input {
 .splash {
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 12px;
   height: 100%;
   color: var(--muted);
 }

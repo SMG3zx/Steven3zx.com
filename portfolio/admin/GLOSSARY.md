@@ -16,6 +16,10 @@ _Avoid_: user, operator, owner
 The process running natively on the origin host that observes it and carries out actions on it.
 _Avoid_: collector, daemon, sidecar
 
+**Host supervisor**:
+The Windows service process that keeps the host agent running and restarts it on request. It stays up when the host agent does not, so it can answer a restart.
+_Avoid_: watchdog, launcher, wrapper
+
 **Snapshot**:
 The point-in-time picture of the origin host that the host agent produces and the map renders.
 _Avoid_: stats, metrics, payload

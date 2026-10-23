@@ -6,7 +6,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -21,9 +20,10 @@ import (
 const tokenKey = "HOST_AGENT_TOKEN"
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:9180", "listen address")
+	addr := flag.String("addr", workerAddr, "listen address")
 	envFile := flag.String("env", "", "optional .env file to read "+tokenKey+" from")
 	pipe := flag.String("docker-pipe", `\\.\pipe\docker_engine`, "Docker engine named pipe")
+	supervise := flag.Bool("supervise", false, "run the supervisor: keep the agent running as a child and serve restart requests on "+controlAddr)
 	flag.Parse()
 
 	token := os.Getenv(tokenKey)
@@ -37,16 +37,33 @@ func main() {
 		log.Fatalf("%s must be set to at least 32 characters", tokenKey)
 	}
 
+	if *supervise {
+		exe, err := os.Executable()
+		if err != nil {
+			log.Fatalf("locating hostagent: %v", err)
+		}
+		run := func(ctx context.Context) error { return runSupervisor(ctx, exe, *envFile, token) }
+		if handled, err := runIfService(run); handled {
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		if err := run(ctx); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	col := newCollector(newDockerClient(*pipe))
 	go col.Run(ctx)
 
-	authorized := func(r *http.Request) bool {
-		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1
-	}
+	authorized := func(r *http.Request) bool { return bearerOK(r, token) }
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

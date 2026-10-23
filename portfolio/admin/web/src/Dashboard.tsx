@@ -13,7 +13,7 @@ import { rate } from "./format";
 import { JobTracker } from "./JobTracker";
 import { LiveConnection, type Subscription } from "./live";
 import { ActionsContext, nodeTypes, SnapshotContext, type Kind, type MapNode } from "./nodes";
-import type { LiveSnapshot, LogLine } from "./types";
+import { CODE_AGENT_UNREACHABLE, type LiveSnapshot, type LogLine } from "./types";
 
 // Fixed positions for the singleton nodes; containers are laid out in a grid
 // to the right of the Docker node. Users can drag anything; positions persist
@@ -117,6 +117,8 @@ function edges(snap: LiveSnapshot): Edge[] {
 export function Dashboard({ username, onSignedOut }: { username: string; onSignedOut: () => void }) {
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [error, setError] = useState("");
+  const [agentDown, setAgentDown] = useState(false);
+  const [restart, setRestart] = useState<{ busy: boolean; notice: string }>({ busy: false, notice: "" });
   const [connected, setConnected] = useState(false);
   const [visible, setVisible] = useState(() => document.visibilityState === "visible");
   const [nodes, setNodes, onNodesChange] = useNodesState<MapNode>([]);
@@ -141,6 +143,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
         if (msg.type === "frame") {
           setSnap((prev) => ({ ...prev, ...msg.data }) as LiveSnapshot);
           setError("");
+          setAgentDown(false);
         } else if (msg.type === "log") {
           setLogs((prev) => {
             const keep = prev.container === msg.container && !msg.reset;
@@ -152,6 +155,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
           setLogNotice(msg.message);
         } else {
           setError(msg.message);
+          setAgentDown(msg.code === CODE_AGENT_UNREACHABLE);
         }
       },
       handleSignedOut,
@@ -192,6 +196,24 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
     [],
   );
 
+  // The supervisor restarts the agent; the live socket picks frames back up on its own.
+  async function restartAgent() {
+    if (!window.confirm("Restart the host agent? The map stays empty until it is back.")) return;
+    setRestart({ busy: true, notice: "" });
+    try {
+      await api.agent.restart();
+      setRestart({ busy: false, notice: "Restart requested. Waiting for the agent to answer…" });
+    } catch (err) {
+      setRestart({ busy: false, notice: err instanceof Error ? err.message : "Restart failed" });
+    }
+  }
+
+  const restartButton = (className?: string) => (
+    <button className={className} onClick={restartAgent} disabled={restart.busy}>
+      {restart.busy ? "Restarting…" : "Restart host agent"}
+    </button>
+  );
+
   async function signOut() {
     signedOut.current = true;
     conn.current?.close();
@@ -219,6 +241,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
           </nav>
           {view === "map" && !connected && !paused && <span className="badge warn">reconnecting</span>}
           {error && view === "map" && <span className="error small">{error}</span>}
+          {view === "map" && agentDown && snap && restartButton("ghost")}
           {view === "map" && (
             <button className="ghost" onClick={() => setPaused((p) => !p)}>
               {paused ? "Resume" : "Pause"}
@@ -237,7 +260,11 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
       ) : (
         <div className="canvas">
           {!snap ? (
-            <div className="splash">{error || "Loading snapshot…"}</div>
+            <div className="splash">
+              <div>{error || "Loading snapshot…"}</div>
+              {agentDown && restartButton()}
+              {restart.notice && <div className="muted small">{restart.notice}</div>}
+            </div>
           ) : (
             <SnapshotContext.Provider value={snap}>
               <ActionsContext.Provider value={actions}>

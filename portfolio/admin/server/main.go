@@ -60,14 +60,15 @@ func main() {
 	s := &server{
 		store: st,
 		// Per-IP is strict; per-user is looser so a stranger can't easily lock you out.
-		ipLimiter:    newLimiter(5, 15*time.Minute),
-		userLimiter:  newLimiter(20, 15*time.Minute),
-		agentURL:     strings.TrimRight(env("HOST_AGENT_URL", "http://host.docker.internal:9180"), "/"),
-		agentToken:   token,
-		webDir:       env("ADMIN_WEB_DIR", "web"),
-		cookieSecure: env("ADMIN_COOKIE_SECURE", "true") == "true",
-		agent:        &http.Client{Timeout: 5 * time.Second},
-		agentStream:  &http.Client{},
+		ipLimiter:       newLimiter(5, 15*time.Minute),
+		userLimiter:     newLimiter(20, 15*time.Minute),
+		agentURL:        strings.TrimRight(env("HOST_AGENT_URL", "http://host.docker.internal:9180"), "/"),
+		agentControlURL: strings.TrimRight(env("HOST_AGENT_CONTROL_URL", "http://host.docker.internal:9181"), "/"),
+		agentToken:      token,
+		webDir:          env("ADMIN_WEB_DIR", "web"),
+		cookieSecure:    env("ADMIN_COOKIE_SECURE", "true") == "true",
+		agent:           &http.Client{Timeout: 5 * time.Second},
+		agentStream:     &http.Client{},
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -19,6 +19,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   me: () => request<{ username: string }>("/me"),
+  agent: {
+    restart: () => request<{ status: string }>("/agent/restart", { method: "POST", body: "{}" }),
+  },
   login: (username: string, password: string) =>
     request<{ username: string }>("/login", {
       method: "POST",

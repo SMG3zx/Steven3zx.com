@@ -188,7 +188,10 @@ export interface LogLine {
 export type LiveMessage =
   | { type: "frame"; data: Partial<LiveSnapshot> & { collectedAt: string } }
   | { type: "log"; container: string; reset?: boolean; lines?: LogLine[] }
-  | { type: "error"; scope: "frame" | "logs"; message: string };
+  | { type: "error"; scope: "frame" | "logs"; message: string; code?: string };
+
+/** Code on a frame error when the host agent did not answer. Matches server/live.go. */
+export const CODE_AGENT_UNREACHABLE = "agent_unreachable";
 
 // Mirrors portfolio/admin/server/jobs.go.
 

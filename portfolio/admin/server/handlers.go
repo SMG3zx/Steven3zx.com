@@ -22,13 +22,15 @@ const (
 )
 
 type server struct {
-	store        *store
-	ipLimiter    *limiter
-	userLimiter  *limiter
-	agentURL     string
-	agentToken   string
-	webDir       string
-	cookieSecure bool
+	store       *store
+	ipLimiter   *limiter
+	userLimiter *limiter
+	agentURL    string
+	// agentControlURL is the host supervisor, which can restart the agent.
+	agentControlURL string
+	agentToken      string
+	webDir          string
+	cookieSecure    bool
 	// agent has a timeout for one-shot requests; agentStream has none, because
 	// a log stream stays open as long as the browser is looking at it.
 	agent       *http.Client
@@ -41,6 +43,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /admin/api/logout", s.logout)
 	mux.HandleFunc("GET /admin/api/me", s.requireUser(s.me))
 	mux.HandleFunc("GET /admin/api/live", s.requireUser(s.live))
+	mux.HandleFunc("POST /admin/api/agent/restart", s.requireUser(s.restartAgent))
 	mux.HandleFunc("GET /admin/api/jobs", s.requireUser(s.listJobs))
 	mux.HandleFunc("POST /admin/api/jobs", s.requireUser(s.createJob))
 	mux.HandleFunc("POST /admin/api/jobs/scrape", s.requireUser(s.scrapeJobPosting))

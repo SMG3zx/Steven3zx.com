@@ -86,7 +86,12 @@ type errorMessage struct {
 	Type    string `json:"type"`
 	Scope   string `json:"scope"`
 	Message string `json:"message"`
+	// Code names a condition the browser acts on, such as offering a restart.
+	Code string `json:"code,omitempty"`
 }
+
+// codeAgentUnreachable marks a frame error where the host agent did not answer.
+const codeAgentUnreachable = "agent_unreachable"
 
 // live upgrades a signed-in browser to a WebSocket. The browser sends a
 // subscription (which topics and which container's logs it needs). The server
@@ -158,7 +163,7 @@ func (s *server) live(w http.ResponseWriter, r *http.Request) {
 		snap, err := s.agentSnapshot(ctx, sub.Topics)
 		if err != nil {
 			log.Printf("live frame: %v", err)
-			return sendJSON(errorMessage{Type: "error", Scope: "frame", Message: "host agent unreachable"})
+			return sendJSON(errorMessage{Type: "error", Scope: "frame", Message: "host agent unreachable", Code: codeAgentUnreachable})
 		}
 		data := changedTopics(sent, snap, sub.Topics)
 		if len(data) == 0 {

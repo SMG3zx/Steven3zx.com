@@ -21,6 +21,8 @@ services:
       # Encrypts admin.db at rest; lives in edge/.env, never in admin_data.
       ADMIN_DB_KEY: ${ADMIN_DB_KEY}
       HOST_AGENT_URL: http://host.docker.internal:9180
+      # The host supervisor, which restarts the agent when it is unreachable.
+      HOST_AGENT_CONTROL_URL: http://host.docker.internal:9181
     extra_hosts:
       - "host.docker.internal:host-gateway"
     tmpfs:

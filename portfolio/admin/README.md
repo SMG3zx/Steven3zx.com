@@ -6,11 +6,11 @@
 
 | Dir | What | Runs |
 |---|---|---|
-| `agent/` | Go collector for the Windows host. It serves `GET /snapshot` and `GET /logs/{id}` with a bearer token on `127.0.0.1:9180`. `/snapshot?topics=…` returns only the named parts. `/logs/{id}` streams a container's output as NDJSON. | Natively on Windows, as the per-user scheduled task `steven3zx-host-agent` |
+| `agent/` | Go collector for the Windows host. It serves `GET /snapshot` and `GET /logs/{id}` with a bearer token on `127.0.0.1:9180`. `/snapshot?topics=…` returns only the named parts. `/logs/{id}` streams a container's output as NDJSON. | Natively on Windows, as the service `steven3zx-host-agent`. The service runs `hostagent.exe -supervise`, which keeps the agent worker running and serves `POST /restart` on `127.0.0.1:9181` |
 | `server/` | Go API: sign-in, sessions, the job tracker, and a WebSocket at `/admin/api/live`. The socket forwards each browser only the topics its open views draw, plus the log stream for the container whose Logs tab is open. Users live in a local Turso file. | `admin` container in `edge/compose.yaml` |
 | `web/` | React + TypeScript + `@xyflow/react` UI, built into the `admin` image. Each container card has a Logs button. | Served by `server/` under `/admin/` |
 
-Caddy routes `/admin` and `/admin/*` on `www.steven3zx.com` to `admin:8091`. The admin container reaches the agent at `host.docker.internal:9180`.
+Caddy routes `/admin` and `/admin/*` on `www.steven3zx.com` to `admin:8091`. The admin container reaches the agent at `host.docker.internal:9180` and the host supervisor at `host.docker.internal:9181`. The supervisor is what the Restart button calls, so it still answers when the agent is down.
 
 ## Security
 
@@ -54,7 +54,13 @@ docker compose start admin
 
 ## Agent
 
-Run `pwsh portfolio/admin/agent/install.ps1` to build `agent/build/hostagent.exe` and register the scheduled task, then start it. Run it again after you change the agent. It reads `HOST_AGENT_TOKEN` from `edge/.env`.
+Run `pwsh portfolio/admin/agent/install.ps1` from an elevated PowerShell to build `agent/build/hostagent.exe` and install the Windows service `steven3zx-host-agent`. The service starts at boot, restarts itself after a crash, and is not tied to a terminal window, so closing a shell does not stop it. Run the script again after you change the agent. It reads `HOST_AGENT_TOKEN` from `edge/.env`. It also removes the scheduled task that earlier versions used.
+
+The service runs as LocalSystem. If the agent's Docker data stops appearing after install, check that LocalSystem can reach `\.\pipe\docker_engine`.
+
+The agent worker logs to the console when run by hand. Under the service, logs go to `agent/build/hostagent.log`.
+
+To restart the agent from the admin map, use the **Restart host agent** button. It asks the supervisor on `127.0.0.1:9181`. To restart by hand, run `Restart-Service steven3zx-host-agent` from an elevated PowerShell.
 
 ## Local development
 
