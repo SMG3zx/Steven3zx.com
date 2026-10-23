@@ -44,9 +44,17 @@ const LOG_LIMIT = 2000;
 
 type Selection = { kind: Kind; containerId?: string; tab?: DetailTab } | null;
 
+// Cards grow with their port chips and the Logs button, so the grid leaves room
+// for the tallest card and keeps neighbours clear of each other.
+const CONTAINER_COL_WIDTH = 340;
+const CONTAINER_ROW_HEIGHT = 260;
+
 function containerPosition(i: number) {
   const perCol = 6;
-  return { x: 800 + Math.floor(i / perCol) * 310, y: -470 + (i % perCol) * 165 };
+  return {
+    x: 800 + Math.floor(i / perCol) * CONTAINER_COL_WIDTH,
+    y: -470 + (i % perCol) * CONTAINER_ROW_HEIGHT,
+  };
 }
 
 function layout(snap: LiveSnapshot, prev: MapNode[]): MapNode[] {
