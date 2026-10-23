@@ -2,8 +2,7 @@ import { component$ } from "@builder.io/qwik";
 import { routeLoader$, type DocumentHead } from "@builder.io/qwik-city";
 import { gatewayFromEnv } from "~/lib/server";
 import { loadSignedInUser } from "~/lib/session";
-
-export type ProjectSummary = { id: string; name: string; source: string };
+import { sourceLabel, type ProjectSummary } from "~/lib/projects";
 
 export const useProjects = routeLoader$(async ({ request, url, redirect }) => {
   const cookie = request.headers.get("cookie") ?? "";
@@ -26,7 +25,7 @@ export default component$(() => {
         <ul>
           {projects.value.map((project) => (
             <li key={project.id}>
-              {project.name} <span>{project.source}</span>
+              {project.name} <span>{sourceLabel(project)}</span>
             </li>
           ))}
         </ul>

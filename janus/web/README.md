@@ -4,11 +4,11 @@ The Janus frontend: Qwik City pages rendered on the server under Bun. It has no 
 
 ## Configuration
 
-| Variable | Meaning |
-| --- | --- |
-| `JANUS_API_URL` | The gateway's internal address, for example `http://gateway:9090` |
+| Variable        | Meaning                                                                               |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `JANUS_API_URL` | The gateway's internal address, for example `http://gateway:9090`                     |
 | `JANUS_WEB_URL` | The public address the site is served from, for example `https://janus.steven3zx.com` |
-| `PORT` | The port to listen on (default `3000`) |
+| `PORT`          | The port to listen on (default `3000`)                                                |
 
 ## Run
 
