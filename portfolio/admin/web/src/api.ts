@@ -1,4 +1,4 @@
-import type { Job, JobInput, ScrapedJob, Snapshot } from "./types";
+import type { Job, JobInput, ScrapedJob } from "./types";
 
 export class Unauthorized extends Error {}
 
@@ -25,7 +25,6 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
   logout: () => request<void>("/logout", { method: "POST", body: "{}" }),
-  snapshot: () => request<Snapshot>("/snapshot"),
   jobs: {
     list: () => request<{ jobs: Job[] }>("/jobs").then((r) => r.jobs),
     create: (job: JobInput) => request<Job>("/jobs", { method: "POST", body: JSON.stringify(job) }),

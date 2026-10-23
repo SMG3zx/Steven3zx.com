@@ -7,18 +7,17 @@ import {
   useNodesState,
   type Edge,
 } from "@xyflow/react";
-import { api, Unauthorized } from "./api";
-import { Detail } from "./Detail";
+import { api } from "./api";
+import { Detail, type DetailTab } from "./Detail";
 import { rate } from "./format";
 import { JobTracker } from "./JobTracker";
-import { nodeTypes, SnapshotContext, type Kind, type MapNode } from "./nodes";
-import type { Snapshot } from "./types";
-
-const POLL_MS = 3000;
+import { LiveConnection, type Subscription } from "./live";
+import { ActionsContext, nodeTypes, SnapshotContext, type Kind, type MapNode } from "./nodes";
+import type { LiveSnapshot, LogLine } from "./types";
 
 // Fixed positions for the singleton nodes; containers are laid out in a grid
 // to the right of the Docker node. Users can drag anything; positions persist
-// across refreshes because only node data changes on each poll.
+// across refreshes because only node data changes on each frame.
 const fixed: Record<Exclude<Kind, "container">, { x: number; y: number }> = {
   network: { x: 0, y: -420 },
   cpu: { x: -480, y: -330 },
@@ -30,12 +29,27 @@ const fixed: Record<Exclude<Kind, "container">, { x: number; y: number }> = {
   docker: { x: 420, y: -120 },
 };
 
+/** Topics the map draws. Summaries only: no connection, process or service lists. */
+const MAP_TOPICS = ["host", "cpu", "memory", "storage", "errors", "network", "applications", "services", "docker"];
+
+/** Extra topics a detail panel needs. Only sent while that panel is open. */
+const DETAIL_TOPICS: Partial<Record<Kind, string[]>> = {
+  network: ["connections", "listening"],
+  applications: ["processes"],
+  services: ["serviceList"],
+};
+
+/** How many log lines the browser keeps for the open container. */
+const LOG_LIMIT = 2000;
+
+type Selection = { kind: Kind; containerId?: string; tab?: DetailTab } | null;
+
 function containerPosition(i: number) {
   const perCol = 6;
   return { x: 800 + Math.floor(i / perCol) * 310, y: -470 + (i % perCol) * 165 };
 }
 
-function layout(snap: Snapshot, prev: MapNode[]): MapNode[] {
+function layout(snap: LiveSnapshot, prev: MapNode[]): MapNode[] {
   const byId = new Map(prev.map((n) => [n.id, n]));
   const keep = (id: string, data: MapNode["data"], type: Kind, pos: { x: number; y: number }): MapNode => {
     const old = byId.get(id);
@@ -50,11 +64,11 @@ function layout(snap: Snapshot, prev: MapNode[]): MapNode[] {
   return nodes;
 }
 
-function edges(snap: Snapshot): Edge[] {
+function edges(snap: LiveSnapshot): Edge[] {
   const net = snap.network.interfaces ?? [];
   const down = net.reduce((a, i) => a + i.recvRate, 0);
   const up = net.reduce((a, i) => a + i.sendRate, 0);
-  const inbound = (snap.network.connections ?? []).filter((c) => c.inbound).length;
+  const inbound = snap.network.inboundCount;
   const link = (target: string, sourceHandle: string, targetHandle: string, extra: Partial<Edge> = {}): Edge => ({
     id: `host-${target}`,
     source: "host",
@@ -93,49 +107,92 @@ function edges(snap: Snapshot): Edge[] {
 }
 
 export function Dashboard({ username, onSignedOut }: { username: string; onSignedOut: () => void }) {
-  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [visible, setVisible] = useState(() => document.visibilityState === "visible");
   const [nodes, setNodes, onNodesChange] = useNodesState<MapNode>([]);
-  const [selected, setSelected] = useState<{ kind: Kind; containerId?: string } | null>(null);
+  const [selected, setSelected] = useState<Selection>(null);
   const [paused, setPaused] = useState(false);
   const [view, setView] = useState<"map" | "jobs">("map");
+  const [logs, setLogs] = useState<{ container: string; lines: LogLine[] }>({ container: "", lines: [] });
+  const [logNotice, setLogNotice] = useState("");
+  const conn = useRef<LiveConnection | null>(null);
   const signedOut = useRef(false);
 
-  const poll = useCallback(async () => {
-    try {
-      const s = await api.snapshot();
-      setSnap(s);
-      setNodes((prev) => layout(s, prev));
-      setError("");
-    } catch (e) {
-      if (e instanceof Unauthorized) {
-        if (!signedOut.current) {
-          signedOut.current = true;
-          onSignedOut();
-        }
-        return;
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [onSignedOut, setNodes]);
+  const handleSignedOut = useCallback(() => {
+    if (signedOut.current) return;
+    signedOut.current = true;
+    onSignedOut();
+  }, [onSignedOut]);
 
-  // Only the map polls the host agent; the job tracker has no live data.
+  // One socket for the life of the dashboard. Views change what it subscribes to.
   useEffect(() => {
-    if (paused || view !== "map") return;
-    poll();
-    const id = window.setInterval(() => {
-      if (document.visibilityState === "visible") poll();
-    }, POLL_MS);
-    return () => window.clearInterval(id);
-  }, [poll, paused, view]);
+    const c = new LiveConnection(
+      (msg) => {
+        if (msg.type === "frame") {
+          setSnap((prev) => ({ ...prev, ...msg.data }) as LiveSnapshot);
+          setError("");
+        } else if (msg.type === "log") {
+          setLogs((prev) => {
+            const keep = prev.container === msg.container && !msg.reset;
+            const base = keep ? prev.lines : [];
+            return { container: msg.container, lines: [...base, ...(msg.lines ?? [])].slice(-LOG_LIMIT) };
+          });
+          if (msg.reset) setLogNotice("");
+        } else if (msg.scope === "logs") {
+          setLogNotice(msg.message);
+        } else {
+          setError(msg.message);
+        }
+      },
+      handleSignedOut,
+      setConnected,
+    );
+    conn.current = c;
+    c.start();
+    return () => c.close();
+  }, [handleSignedOut]);
+
+  useEffect(() => {
+    const onVisibility = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  // Subscribe to exactly what the open views draw; an empty subscription stops all frames.
+  const logContainer = selected?.kind === "container" && selected.tab === "logs" ? (selected.containerId ?? "") : "";
+  const detailTopics = selected ? (DETAIL_TOPICS[selected.kind] ?? []) : [];
+  const detailKey = detailTopics.join(",");
+  useEffect(() => {
+    const live = view === "map" && !paused && visible;
+    const sub: Subscription = live
+      ? { topics: [...MAP_TOPICS, ...(detailKey ? detailKey.split(",") : [])], logs: logContainer }
+      : { topics: [], logs: "" };
+    conn.current?.subscribe(sub);
+  }, [view, paused, visible, detailKey, logContainer]);
+
+  useEffect(() => {
+    if (snap) setNodes((prev) => layout(snap, prev));
+  }, [snap, setNodes]);
 
   const edgeList = useMemo(() => (snap ? edges(snap) : []), [snap]);
+  const actions = useMemo(
+    () => ({
+      openLogs: (containerId: string) => setSelected({ kind: "container", containerId, tab: "logs" }),
+    }),
+    [],
+  );
 
   async function signOut() {
     signedOut.current = true;
+    conn.current?.close();
     await api.logout().catch(() => {});
     onSignedOut();
   }
+
+  const showLogs = selected?.kind === "container" && selected.tab === "logs";
+  const shownLogs = logContainer && logs.container === logContainer ? logs.lines : [];
 
   return (
     <div className="dashboard">
@@ -152,6 +209,7 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
               </button>
             ))}
           </nav>
+          {view === "map" && !connected && !paused && <span className="badge warn">reconnecting</span>}
           {error && view === "map" && <span className="error small">{error}</span>}
           {view === "map" && (
             <button className="ghost" onClick={() => setPaused((p) => !p)}>
@@ -174,28 +232,34 @@ export function Dashboard({ username, onSignedOut }: { username: string; onSigne
             <div className="splash">{error || "Loading snapshot…"}</div>
           ) : (
             <SnapshotContext.Provider value={snap}>
-              <ReactFlow
-                nodes={nodes}
-                edges={edgeList}
-                nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onNodeClick={(_, n) => setSelected({ kind: n.data.kind, containerId: n.data.containerId })}
-                onPaneClick={() => setSelected(null)}
-                nodesConnectable={false}
-                fitView
-                fitViewOptions={{ padding: 0.12 }}
-                minZoom={0.2}
-                colorMode="system"
-              >
-                <Background gap={24} />
-                <Controls showInteractive={false} />
-                <MiniMap pannable zoomable className="minimap" />
-              </ReactFlow>
+              <ActionsContext.Provider value={actions}>
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edgeList}
+                  nodeTypes={nodeTypes}
+                  onNodesChange={onNodesChange}
+                  onNodeClick={(_, n) => setSelected({ kind: n.data.kind, containerId: n.data.containerId, tab: "details" })}
+                  onPaneClick={() => setSelected(null)}
+                  nodesConnectable={false}
+                  fitView
+                  fitViewOptions={{ padding: 0.12 }}
+                  minZoom={0.2}
+                  colorMode="system"
+                >
+                  <Background gap={24} />
+                  <Controls showInteractive={false} />
+                  <MiniMap pannable zoomable className="minimap" />
+                </ReactFlow>
+              </ActionsContext.Provider>
               {selected && (
                 <Detail
                   kind={selected.kind}
                   containerId={selected.containerId}
+                  tab={selected.tab ?? "details"}
+                  onTab={(tab) => setSelected((s) => (s ? { ...s, tab } : s))}
                   snap={snap}
+                  logLines={showLogs ? shownLogs : []}
+                  logNotice={showLogs ? logNotice : ""}
                   onClose={() => setSelected(null)}
                 />
               )}

@@ -6,9 +6,9 @@
 
 | Dir | What | Runs |
 |---|---|---|
-| `agent/` | Go collector for the Windows host. It serves `GET /snapshot` with a bearer token on `127.0.0.1:9180`. | Natively on Windows, as the per-user scheduled task `steven3zx-host-agent` |
-| `server/` | Go API: sign-in, sessions, and an authenticated proxy to the agent. Users live in a local Turso file. | `admin` container in `edge/compose.yaml` |
-| `web/` | React + TypeScript + `@xyflow/react` UI, built into the `admin` image | Served by `server/` under `/admin/` |
+| `agent/` | Go collector for the Windows host. It serves `GET /snapshot` and `GET /logs/{id}` with a bearer token on `127.0.0.1:9180`. `/snapshot?topics=…` returns only the named parts. `/logs/{id}` streams a container's output as NDJSON. | Natively on Windows, as the per-user scheduled task `steven3zx-host-agent` |
+| `server/` | Go API: sign-in, sessions, the job tracker, and a WebSocket at `/admin/api/live`. The socket forwards each browser only the topics its open views draw, plus the log stream for the container whose Logs tab is open. Users live in a local Turso file. | `admin` container in `edge/compose.yaml` |
+| `web/` | React + TypeScript + `@xyflow/react` UI, built into the `admin` image. Each container card has a Logs button. | Served by `server/` under `/admin/` |
 
 Caddy routes `/admin` and `/admin/*` on `www.steven3zx.com` to `admin:8091`. The admin container reaches the agent at `host.docker.internal:9180`.
 

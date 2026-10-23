@@ -1,10 +1,13 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { bytes, duration, level, pct, rate } from "./format";
-import type { Container, Snapshot } from "./types";
+import type { Container, LiveSnapshot } from "./types";
 
-export const SnapshotContext = createContext<Snapshot | null>(null);
+export const SnapshotContext = createContext<LiveSnapshot | null>(null);
 const useSnap = () => useContext(SnapshotContext)!;
+
+/** Lets a card ask the dashboard to open a view. */
+export const ActionsContext = createContext<{ openLogs: (containerId: string) => void }>({ openLogs: () => {} });
 
 export type Kind =
   | "host"
@@ -145,18 +148,9 @@ function MemoryNode() {
 function NetworkNode() {
   const { network } = useSnap();
   const ifaces = network.interfaces ?? [];
-  const conns = network.connections ?? [];
-  const listening = network.listening ?? [];
-  const inbound = conns.filter((c) => c.inbound);
-  const publicPorts = [
-    ...new Set(
-      listening
-        .filter((l) => l.protocol.startsWith("tcp") && ["0.0.0.0", "::"].includes(l.address))
-        .map((l) => l.port),
-    ),
-  ].slice(0, 14);
+  const publicPorts = (network.publicPorts ?? []).slice(0, 14);
   return (
-    <Card icon="⇄" title="Network" badge={<span className="badge">{inbound.length} inbound</span>}>
+    <Card icon="⇄" title="Network" badge={<span className="badge">{network.inboundCount} inbound</span>}>
       {ifaces.slice(0, 3).map((i) => (
         <div key={i.name} className="iface">
           <span className="ellipsis">{i.name}</span>
@@ -165,8 +159,8 @@ function NetworkNode() {
           </span>
         </div>
       ))}
-      <Stat k="Listening sockets" v={listening.length} />
-      <Stat k="Open connections" v={conns.length} />
+      <Stat k="Listening sockets" v={network.listeningCount} />
+      <Stat k="Open connections" v={network.connectionCount} />
       <div className="chips">
         {publicPorts.map((p) => (
           <span key={p} className="chip mono">
@@ -202,13 +196,12 @@ function StorageNode() {
 }
 
 function ApplicationsNode() {
-  const apps = useSnap().applications ?? [];
-  const top = [...apps].sort((a, b) => b.cpuPercent - a.cpuPercent).slice(0, 6);
+  const apps = useSnap().applications;
   return (
-    <Card icon="▦" title="Applications" badge={<span className="badge">{apps.length} processes</span>}>
+    <Card icon="▦" title="Applications" badge={<span className="badge">{apps.count} processes</span>}>
       <table className="mini">
         <tbody>
-          {top.map((p) => (
+          {(apps.top ?? []).map((p) => (
             <tr key={p.pid}>
               <td className="ellipsis">{p.name}</td>
               <td className="num">{pct(p.cpuPercent, 1)}</td>
@@ -222,13 +215,12 @@ function ApplicationsNode() {
 }
 
 function ServicesNode() {
-  const services = useSnap().services ?? [];
-  const running = services.filter((s) => s.state === "running").length;
-  const autoStopped = services.filter((s) => s.startType === "automatic" && s.state === "stopped");
+  const { count, running, autoStopped: stoppedAuto } = useSnap().services;
+  const autoStopped = stoppedAuto ?? [];
   return (
-    <Card icon="⚙" title="Services" badge={<span className="badge">{services.length}</span>}>
+    <Card icon="⚙" title="Services" badge={<span className="badge">{count}</span>}>
       <Stat k="Running" v={running} />
-      <Stat k="Stopped" v={services.length - running} />
+      <Stat k="Stopped" v={count - running} />
       <Stat k="Automatic but stopped" v={<span className={autoStopped.length ? "warn-text" : ""}>{autoStopped.length}</span>} />
       {autoStopped.slice(0, 3).map((s) => (
         <div key={s.name} className="small muted ellipsis">
@@ -293,7 +285,24 @@ function ContainerNode({ data }: NodeProps<MapNode>) {
           ))}
         </div>
       )}
+      <LogsButton containerId={c.id} />
     </Card>
+  );
+}
+
+function LogsButton({ containerId }: { containerId: string }) {
+  const { openLogs } = useContext(ActionsContext);
+  return (
+    <button
+      className="ghost logs-btn nodrag"
+      onClick={(e) => {
+        // The card itself opens the details panel; this button goes straight to logs.
+        e.stopPropagation();
+        openLogs(containerId);
+      }}
+    >
+      Logs
+    </button>
   );
 }
 

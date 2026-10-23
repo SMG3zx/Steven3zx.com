@@ -1,16 +1,26 @@
-// Mirrors portfolio/admin/agent/snapshot.go.
+// Mirrors portfolio/admin/agent/snapshot.go and topics.go.
 
-export interface Snapshot {
+/**
+ * What the map and detail views draw. The agent sends only the topics the open
+ * views ask for, so the map gets summaries and the detail-only lists are
+ * present only while a detail panel that needs them is open.
+ */
+export interface LiveSnapshot {
   collectedAt: string;
   host: HostInfo;
   cpu: CPUInfo;
   memory: MemoryInfo;
-  network: NetworkInfo;
   storage: Disk[] | null;
-  applications: Process[] | null;
-  services: Service[] | null;
   docker: DockerInfo;
-  errors?: string[];
+  errors: string[] | null;
+  network: NetworkSummary;
+  applications: ApplicationSummary;
+  services: ServiceSummary;
+  // Detail topics.
+  connections?: Connection[] | null;
+  listening?: Listener[] | null;
+  processes?: Process[] | null;
+  serviceList?: Service[] | null;
 }
 
 export interface HostInfo {
@@ -51,10 +61,23 @@ export interface MemoryInfo {
   swapPercent: number;
 }
 
-export interface NetworkInfo {
+export interface NetworkSummary {
   interfaces: Interface[] | null;
-  listening: Listener[] | null;
-  connections: Connection[] | null;
+  listeningCount: number;
+  connectionCount: number;
+  inboundCount: number;
+  publicPorts: number[] | null;
+}
+
+export interface ApplicationSummary {
+  count: number;
+  top: Process[] | null;
+}
+
+export interface ServiceSummary {
+  count: number;
+  running: number;
+  autoStopped: Service[] | null;
 }
 
 export interface Interface {
@@ -153,6 +176,19 @@ export interface Container {
   blockWrite: number;
   pids: number;
 }
+
+/** One line of container output, as the admin server forwards it from the agent. */
+export interface LogLine {
+  time?: string;
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
+// Messages the admin server sends on /admin/api/live.
+export type LiveMessage =
+  | { type: "frame"; data: Partial<LiveSnapshot> & { collectedAt: string } }
+  | { type: "log"; container: string; reset?: boolean; lines?: LogLine[] }
+  | { type: "error"; scope: "frame" | "logs"; message: string };
 
 // Mirrors portfolio/admin/server/jobs.go.
 

@@ -1,7 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { bytes, duration, pct, rate } from "./format";
+import { LogView } from "./LogView";
 import type { Kind } from "./nodes";
-import type { Snapshot } from "./types";
+import type { LiveSnapshot, LogLine } from "./types";
+
+export type DetailTab = "details" | "logs";
 
 type Column<T> = {
   label: string;
@@ -114,12 +117,20 @@ function KV({ rows }: { rows: [string, ReactNode][] }) {
 export function Detail({
   kind,
   containerId,
+  tab,
+  onTab,
   snap,
+  logLines,
+  logNotice,
   onClose,
 }: {
   kind: Kind;
   containerId?: string;
-  snap: Snapshot;
+  tab: DetailTab;
+  onTab: (tab: DetailTab) => void;
+  snap: LiveSnapshot;
+  logLines: LogLine[];
+  logNotice: string;
   onClose: () => void;
 }) {
   const titles: Record<Kind, string> = {
@@ -141,12 +152,29 @@ export function Detail({
           ✕
         </button>
       </header>
-      <div className="detail-body">{body(kind, snap, containerId)}</div>
+      {kind === "container" ? (
+        <div className={`detail-body ${tab === "logs" ? "logs-mode" : ""}`}>
+          <div className="tabs" role="tablist">
+            {(["details", "logs"] as const).map((t) => (
+              <button key={t} role="tab" aria-selected={tab === t} onClick={() => onTab(t)}>
+                {t === "details" ? "Details" : "Logs"}
+              </button>
+            ))}
+          </div>
+          {tab === "logs" ? (
+            <LogView lines={logLines} notice={logNotice} />
+          ) : (
+            body(kind, snap, containerId)
+          )}
+        </div>
+      ) : (
+        <div className="detail-body">{body(kind, snap, containerId)}</div>
+      )}
     </aside>
   );
 }
 
-function body(kind: Kind, s: Snapshot, containerId?: string): ReactNode {
+function body(kind: Kind, s: LiveSnapshot, containerId?: string): ReactNode {
   switch (kind) {
     case "host":
       return (
@@ -217,7 +245,7 @@ function body(kind: Kind, s: Snapshot, containerId?: string): ReactNode {
               label: "Connections",
               body: (
                 <Table
-                  rows={s.network.connections ?? []}
+                  rows={s.connections ?? []}
                   rowKey={(c) => `${c.protocol}${c.localAddr}${c.localPort}${c.remoteAddr}${c.remotePort}`}
                   columns={[
                     { label: "Dir", value: (c) => (c.inbound ? "in" : "out") },
@@ -233,7 +261,7 @@ function body(kind: Kind, s: Snapshot, containerId?: string): ReactNode {
               label: "Listening",
               body: (
                 <Table
-                  rows={s.network.listening ?? []}
+                  rows={s.listening ?? []}
                   rowKey={(l) => `${l.protocol}${l.address}${l.port}`}
                   columns={[
                     { label: "Port", value: (l) => l.port, num: true },
@@ -285,7 +313,7 @@ function body(kind: Kind, s: Snapshot, containerId?: string): ReactNode {
     case "applications":
       return (
         <Table
-          rows={s.applications ?? []}
+          rows={s.processes ?? []}
           rowKey={(p) => String(p.pid)}
           initialSort={2}
           initialDesc
@@ -301,7 +329,7 @@ function body(kind: Kind, s: Snapshot, containerId?: string): ReactNode {
     case "services":
       return (
         <Table
-          rows={s.services ?? []}
+          rows={s.serviceList ?? []}
           rowKey={(v) => v.name}
           columns={[
             { label: "Service", value: (v) => v.displayName },
