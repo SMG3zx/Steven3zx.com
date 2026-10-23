@@ -174,18 +174,21 @@ $traefikKey = Join-Path $dataDir 'crowdsec-traefik.key'
 Set-Content -Path $traefikKey -Value (New-BouncerKey 'traefik') -NoNewline -Encoding ascii
 Protect-File $traefikKey
 
-if (-not (Get-Service crowdsec-firewall-bouncer, cs-windows-firewall-bouncer -ErrorAction SilentlyContinue)) {
+$fwServiceName = 'cs-windows-firewall-bouncer'
+if (-not (Get-Service $fwServiceName -ErrorAction SilentlyContinue)) {
     choco install crowdsec-windows-firewall-bouncer -y
+    if (-not (Get-Service $fwServiceName -ErrorAction SilentlyContinue)) { throw "The Chocolatey package did not create the $fwServiceName service." }
 }
-$fwConfig = 'C:\ProgramData\CrowdSec\bouncers\cs-windows-firewall-bouncer\cs-windows-firewall-bouncer.yaml'
+# The package installs its config under CrowdSec's config folder, with the default local API
+# port (8080). Point it at the moved port and a key of its own.
+$fwConfig = Join-Path $crowdsecConfig 'bouncers\cs-windows-firewall-bouncer.yaml'
 if (-not (Test-Path $fwConfig)) { throw "Firewall bouncer config not found at $fwConfig" }
 $fwKey = New-BouncerKey 'windows-firewall'
 (Get-Content -Raw $fwConfig) `
-    -replace '(?m)^(\s*api_endpoint:\s*).*$', "`${1}http://127.0.0.1:$lapiPort" `
-    -replace '(?m)^(\s*api_key:\s*).*$', "`${1}$fwKey" | Set-Content $fwConfig -Encoding utf8
+    -replace '(?m)^([ \t]*api_endpoint:[ \t]*).*$', "`${1}http://127.0.0.1:$lapiPort" `
+    -replace '(?m)^([ \t]*api_key:[ \t]*).*$', ('${1}' + $fwKey.Replace('$', '$$')) | Set-Content $fwConfig -Encoding utf8
 Protect-File $fwConfig
-$fwService = Get-Service | Where-Object { $_.Name -match 'crowdsec.*firewall|firewall.*bouncer' } | Select-Object -First 1
-if ($fwService) { Restart-Service $fwService.Name } else { Write-Warning 'Could not find the firewall bouncer service to restart; check Get-Service.' }
+Restart-Service $fwServiceName
 
 # --- Windows Firewall rules for Traefik -------------------------------------------------------
 $traefikExe = Join-Path $binDir 'traefik.exe'
