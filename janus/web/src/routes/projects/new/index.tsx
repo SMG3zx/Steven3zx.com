@@ -6,13 +6,10 @@ import {
   type DocumentHead,
 } from "@builder.io/qwik-city";
 import type { RequestEventAction } from "@builder.io/qwik-city/middleware/request-handler";
-import { commitLine, type Commit } from "~/lib/projects";
+import { loadRepositoryChoices } from "~/lib/github";
+import { commitLine } from "~/lib/projects";
 import { gatewayFromEnv } from "~/lib/server";
 import { loadSignedInUser } from "~/lib/session";
-
-type Repository = { full_name: string; private: boolean };
-type Repositories = { connected: boolean; repositories: Repository[] };
-type Branches = { branches: { name: string }[] };
 
 export const useNewProjectForm = routeLoader$(
   async ({ request, url, redirect }) => {
@@ -22,38 +19,12 @@ export const useNewProjectForm = routeLoader$(
     if ("redirectTo" in session) {
       throw redirect(302, session.redirectTo);
     }
-    const repos = await gateway.get<Repositories>("/api/github/repos", {
+    return loadRepositoryChoices(
+      gateway,
       cookie,
-    });
-    const repository = url.searchParams.get("repository") ?? "";
-    if (!repos.connected || !repository) {
-      return {
-        connected: repos.connected,
-        repositories: repos.repositories,
-        repository,
-        branch: "",
-        branches: [] as string[],
-        commits: [] as Commit[],
-      };
-    }
-    const branches = await gateway.get<Branches>(
-      `/api/github/branches?repository=${encodeURIComponent(repository)}`,
-      { cookie },
+      url.searchParams.get("repository") ?? "",
+      url.searchParams.get("branch") ?? "",
     );
-    const names = branches.branches.map((branch) => branch.name);
-    const branch = url.searchParams.get("branch") || names[0] || "";
-    const commits = await gateway.get<Commit[]>(
-      `/api/github/commits?repository=${encodeURIComponent(repository)}&branch=${encodeURIComponent(branch)}`,
-      { cookie },
-    );
-    return {
-      connected: true,
-      repositories: repos.repositories,
-      repository,
-      branch,
-      branches: names,
-      commits,
-    };
   },
 );
 

@@ -35,6 +35,7 @@ export const useAccountChange = routeAction$(async (form, event) => {
   if (intent === "disconnect-github") {
     const response = await gateway.send("POST", "/auth/github/disconnect", {
       cookie,
+      redirect: "manual",
     });
     if (!response.ok && response.status !== 303) {
       return event.fail(500, {

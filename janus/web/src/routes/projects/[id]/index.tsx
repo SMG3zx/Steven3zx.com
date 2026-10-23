@@ -15,6 +15,8 @@ import {
   type Build,
   type Deployment,
 } from "~/lib/detail";
+import { loadRepositoryChoices } from "~/lib/github";
+import { commitLine } from "~/lib/projects";
 import { gatewayFromEnv } from "~/lib/server";
 import { loadSignedInUser } from "~/lib/session";
 
@@ -103,7 +105,17 @@ export const useProjectDetail = routeLoader$(
           .catch(() => null)
       : null;
 
-    return { project, snapshots, agents, build, deployment, run };
+    // Projects without a revision import from GitHub, so they need the repository choices.
+    const choices = project.snapshot_id
+      ? null
+      : await loadRepositoryChoices(
+          gateway,
+          cookie,
+          url.searchParams.get("repository") ?? "",
+          url.searchParams.get("branch") ?? "",
+        ).catch(() => null);
+
+    return { project, snapshots, agents, build, deployment, run, choices };
   },
 );
 
@@ -118,6 +130,29 @@ export const useProjectAction = routeAction$(async (form, event) => {
   const id = encodeURIComponent(event.params.id);
   const intent = String(form.intent ?? "");
   const pageUrl = `/projects/${id}`;
+
+  if (intent === "import") {
+    const response = await gateway.send("POST", `/api/projects/${id}/imports`, {
+      cookie,
+      body: {
+        repository: String(form.repository ?? ""),
+        branch: String(form.branch ?? ""),
+        commit: String(form.commit ?? ""),
+      },
+    });
+    if (!response.ok) {
+      return failed(
+        event,
+        response.status,
+        "The import could not be started. Try again.",
+      );
+    }
+    const started = (await response.json()) as { job_id: string };
+    throw event.redirect(
+      303,
+      `/projects/${id}/import?job=${encodeURIComponent(started.job_id)}`,
+    );
+  }
 
   if (intent === "entrypoint") {
     const response = await gateway.send(
@@ -249,7 +284,7 @@ export default component$(() => {
   const data = useProjectDetail().value;
   const action = useProjectAction();
   const message = (action.value as { message?: string } | undefined)?.message;
-  const { project, snapshots, agents, build, deployment, run } = data;
+  const { project, snapshots, agents, build, deployment, run, choices } = data;
   const buildState = build ? buildLabel(build) : null;
   const deploymentState = deployment ? deploymentLabel(deployment) : null;
   const candidates = entrypointCandidates(project.metadata_json ?? "");
@@ -277,6 +312,97 @@ export default component$(() => {
         <p class="alert" role="alert">
           {message}
         </p>
+      ) : null}
+
+      {choices ? (
+        <section class="card stack" aria-labelledby="import">
+          <h2 id="import">Import from GitHub</h2>
+          {!choices.connected ? (
+            <a class="button" href="/auth/github/connect">
+              Connect GitHub to import repositories
+            </a>
+          ) : (
+            <>
+              <form method="get" class="row">
+                <label class="visually-hidden" for="repository-pick">
+                  Repository
+                </label>
+                <select
+                  id="repository-pick"
+                  name="repository"
+                  style="width: auto"
+                >
+                  <option value="">Choose a repository</option>
+                  {choices.repositories.map((repo) => (
+                    <option
+                      key={repo.full_name}
+                      value={repo.full_name}
+                      selected={repo.full_name === choices.repository}
+                    >
+                      {repo.full_name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" class="button">
+                  Show branches
+                </button>
+              </form>
+              {choices.branches.length > 0 ? (
+                <form method="get" class="row">
+                  <input
+                    type="hidden"
+                    name="repository"
+                    value={choices.repository}
+                  />
+                  <label class="visually-hidden" for="branch-pick">
+                    Branch
+                  </label>
+                  <select id="branch-pick" name="branch" style="width: auto">
+                    {choices.branches.map((name) => (
+                      <option
+                        key={name}
+                        value={name}
+                        selected={name === choices.branch}
+                      >
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="submit" class="button">
+                    Show commits
+                  </button>
+                </form>
+              ) : null}
+              {choices.commits.length > 0 ? (
+                <Form action={action} class="stack">
+                  <input type="hidden" name="intent" value="import" />
+                  <input
+                    type="hidden"
+                    name="repository"
+                    value={choices.repository}
+                  />
+                  <input type="hidden" name="branch" value={choices.branch} />
+                  <div class="field">
+                    <label for="commit">Commit</label>
+                    <select id="commit" name="commit">
+                      {choices.commits.map((commit) => (
+                        <option key={commit.sha} value={commit.sha}>
+                          {commitLine(commit)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="submit" class="button button-primary">
+                    Import selected commit
+                  </button>
+                </Form>
+              ) : null}
+              <p class="muted">
+                Import reads the repository and does not run its code.
+              </p>
+            </>
+          )}
+        </section>
       ) : null}
 
       <div class="split">
@@ -497,7 +623,10 @@ export default component$(() => {
 
 export const head: DocumentHead = ({ resolveValue }) => {
   const data = resolveValue(useProjectDetail);
+  // A build still running is looked at again every few seconds, as the import page does.
+  const pending = data.build !== null && !buildLabel(data.build).done;
   return {
     title: `${data.project.name} · Janus`,
+    meta: pending ? [{ httpEquiv: "refresh", content: "3" }] : [],
   };
 };

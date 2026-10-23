@@ -78,4 +78,14 @@ describe("createApi.send", () => {
 
     expect(response.status).toBe(401);
   });
+
+  test("can hand a redirect back to the caller instead of following it", async () => {
+    const { fetchImpl, calls } = recordingFetch(new Response(null, { status: 303, headers: { location: "/projects" } }));
+    const api = createApi({ baseUrl: "http://gateway:9090", fetch: fetchImpl });
+
+    const response = await api.send("POST", "/auth/github/disconnect", { cookie: "janus_session=abc", redirect: "manual" });
+
+    expect(response.status).toBe(303);
+    expect(calls[0].init.redirect).toBe("manual");
+  });
 });

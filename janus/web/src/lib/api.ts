@@ -20,6 +20,8 @@ type RequestOptions = {
 
 type SendOptions = RequestOptions & {
   body?: unknown;
+  /** "manual" hands a redirect back to the caller instead of following it. */
+  redirect?: RequestRedirect;
 };
 
 export function createApi({ baseUrl, fetch: fetchImpl = fetch }: ApiOptions) {
@@ -40,7 +42,7 @@ export function createApi({ baseUrl, fetch: fetchImpl = fetch }: ApiOptions) {
      * Sends a request and returns the raw response, whatever its status. Callers
      * that forward the gateway's cookies or show its error messages need that.
      */
-    async send(method: string, path: string, { cookie, body }: SendOptions): Promise<Response> {
+    async send(method: string, path: string, { cookie, body, redirect }: SendOptions): Promise<Response> {
       const headers = new Headers();
       if (cookie) {
         headers.set("cookie", cookie);
@@ -50,6 +52,7 @@ export function createApi({ baseUrl, fetch: fetchImpl = fetch }: ApiOptions) {
       }
       return fetchImpl(`${baseUrl}${path}`, {
         method,
+        redirect,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
