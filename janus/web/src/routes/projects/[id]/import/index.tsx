@@ -9,7 +9,7 @@ import { importLabel, type ImportJob } from "~/lib/projects";
 import { gatewayFromEnv } from "~/lib/server";
 import { loadSignedInUser } from "~/lib/session";
 
-export const useImport = routeLoader$(
+export const useImportJob = routeLoader$(
   async ({ request, url, params, redirect }) => {
     const cookie = request.headers.get("cookie") ?? "";
     const gateway = gatewayFromEnv();
@@ -52,7 +52,7 @@ export const useRetryImport = routeAction$(async (form, event) => {
 });
 
 export default component$(() => {
-  const job = useImport().value;
+  const job = useImportJob().value;
   const retry = useRetryImport();
   const progress = importLabel(job);
   const message = (retry.value as { message?: string } | undefined)?.message;
@@ -99,7 +99,7 @@ export default component$(() => {
 });
 
 export const head: DocumentHead = ({ resolveValue }) => {
-  const job = resolveValue(useImport);
+  const job = resolveValue(useImportJob);
   const done = importLabel(job).done;
   return {
     title: "Import · Janus",
