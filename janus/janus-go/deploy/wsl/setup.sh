@@ -11,7 +11,7 @@ BUN_VERSION=1.4.2
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq podman podman-docker build-essential git curl unzip ca-certificates \
-  uidmap slirp4netns fuse-overlayfs >/dev/null
+  uidmap slirp4netns fuse-overlayfs crun passt netavark aardvark-dns >/dev/null
 touch /etc/containers/nodocker   # silence the podman-docker "emulating docker" notice
 
 if ! /usr/local/go/bin/go version 2>/dev/null | grep -q "go$GO_VERSION"; then
