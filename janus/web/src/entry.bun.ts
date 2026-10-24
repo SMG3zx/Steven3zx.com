@@ -14,8 +14,6 @@ const { router, notFound, staticFile } = createQwikCity({
   getOrigin: () => process.env.JANUS_WEB_URL ?? null,
   // TLS ends at Cloudflare, so the server sees http while browsers post from https.
   checkOrigin: "lax-proto",
-  // TLS ends at Cloudflare, so the server sees http while browsers post from https.
-  checkOrigin: "lax-proto",
 });
 
 const port = Number(process.env.PORT ?? 3000);

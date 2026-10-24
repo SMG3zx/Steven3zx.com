@@ -9,7 +9,8 @@ Group=janus
 WorkingDirectory=/var/lib/janus
 EnvironmentFile=/etc/janus/janus.env
 # Rootless Podman for the builds service; /usr/bin/docker is the podman-docker shim.
-Environment=XDG_RUNTIME_DIR=/run/user/%U
+RuntimeDirectory=janus-podman
+Environment=XDG_RUNTIME_DIR=/run/janus-podman
 Environment=HOME=/var/lib/janus
 # One process with an embedded NATS JetStream server (JANUS_NATS_URL is empty).
 ExecStart=/opt/janus/bin/janus serve gateway identity projects builds runs fleet audit
