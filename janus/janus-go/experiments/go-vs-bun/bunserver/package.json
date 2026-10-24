@@ -1,0 +1,9 @@
+{
+  "name": "go-vs-bun-bunserver",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "elysia": "^1.4.30",
+    "nats": "^2.29.3"
+  }
+}
