@@ -25,7 +25,7 @@ if ! command -v bun >/dev/null; then
 fi
 
 id janus >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/janus \
-  --shell /usr/sbin/nologin --add-subuids 100000-165535 --add-subgids 100000-165535 janus
+  --shell /usr/sbin/nologin --add-subids-for-system janus
 # Rootless Podman needs the user's runtime directory, which lingering keeps alive.
 loginctl enable-linger janus
 install -d -o janus -g janus /var/lib/janus /opt/janus /opt/janus/web
