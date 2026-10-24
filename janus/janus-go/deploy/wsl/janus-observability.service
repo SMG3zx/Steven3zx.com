@@ -1,0 +1,20 @@
+[Unit]
+Description=Janus observability containers (Grafana, Loki, Tempo, Pyroscope, Prometheus, Jaeger, OTel collector)
+After=podman.socket network-online.target
+Wants=network-online.target
+Requires=podman.socket
+RequiresMountsFor=/mnt/d
+# The control plane exports telemetry to these.
+Before=janus.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/mnt/d/steven3zx.com/janus/janus-go
+# Named on purpose: the compose file's nats service has no profile and would take 4222
+# from the embedded NATS, and --profile services would start a second gateway.
+ExecStart=/usr/bin/docker compose up -d jaeger otel-collector loki tempo pyroscope-init pyroscope prometheus grafana
+ExecStop=/usr/bin/docker compose stop jaeger otel-collector loki tempo pyroscope prometheus grafana
+
+[Install]
+WantedBy=multi-user.target

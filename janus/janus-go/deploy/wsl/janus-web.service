@@ -6,7 +6,7 @@ After=janus.service
 User=janus
 Group=janus
 WorkingDirectory=/opt/janus/web
-Environment=PORT=3000
+Environment=PORT=3001
 Environment=JANUS_API_URL=http://127.0.0.1:9095
 Environment=JANUS_WEB_URL=https://janus.steven3zx.com
 ExecStart=/usr/local/bin/bun server/entry.bun.js

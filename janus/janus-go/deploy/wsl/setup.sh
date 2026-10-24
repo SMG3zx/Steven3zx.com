@@ -10,7 +10,7 @@ BUN_VERSION=1.4.2
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq podman podman-docker build-essential git curl unzip ca-certificates \
+apt-get install -y -qq docker-compose rsync sqlite3 podman podman-docker build-essential git curl unzip ca-certificates \
   uidmap slirp4netns fuse-overlayfs crun passt netavark aardvark-dns >/dev/null
 touch /etc/containers/nodocker   # silence the podman-docker "emulating docker" notice
 
@@ -50,7 +50,9 @@ if [ ! -f /etc/janus/janus.env ]; then
     # Carry over the secrets and OAuth settings; the paths and addresses are fixed here.
     grep -E '^(JANUS_JWT_SECRET|JANUS_JWT_ISSUER|JANUS_JWT_EXPIRY|JANUS_COOKIE_SECURE|GOOGLE_[A-Z_]+|GITHUB_[A-Z_]+|HEADSCALE_[A-Z_]+)=' "$src_env" | tr -d '\r'
     echo 'JANUS_HTTP_ADDRESS=0.0.0.0:9095'
-    echo 'JANUS_WEB_UPSTREAM=http://127.0.0.1:3000'
+    echo 'OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318'
+    echo 'PYROSCOPE_SERVER_ADDRESS=http://127.0.0.1:4040'
+    echo 'JANUS_WEB_UPSTREAM=http://127.0.0.1:3001'
     echo 'JANUS_WASM_BUILDER_IMAGE=janus-rust-wasm-builder:local'
     echo 'JANUS_GO_WASM_BUILDER_IMAGE=janus-go-wasm-builder:local'
     echo 'JANUS_JS_WASM_BUILDER_IMAGE=janus-js-wasm-builder:local'
@@ -60,6 +62,9 @@ if [ ! -f /etc/janus/janus.env ]; then
 fi
 
 here="$(cd "$(dirname "$0")" && pwd)"
-install -m644 "$here/janus.service" "$here/janus-web.service" /etc/systemd/system/
+install -m644 "$here"/janus.service "$here"/janus-web.service "$here"/janus-edge.service   "$here"/janus-observability.service /etc/systemd/system/
+# Rootful Podman with its Docker-compatible socket runs the edge and observability containers.
+systemctl enable --now podman.socket >/dev/null 2>&1
 systemctl daemon-reload
+systemctl enable janus-edge janus-observability >/dev/null 2>&1
 echo "setup done; run deploy.sh next"

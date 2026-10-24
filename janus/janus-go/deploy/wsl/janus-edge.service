@@ -1,0 +1,18 @@
+[Unit]
+Description=Edge containers (portfolio, admin, Headscale, Gitea, runners, ddns) on rootful Podman
+After=podman.socket network-online.target
+Wants=network-online.target
+Requires=podman.socket
+RequiresMountsFor=/mnt/d
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/mnt/d/steven3zx.com/edge
+# WSL cannot bind the Windows tailnet address, so Gitea's SSH port stays on loopback.
+Environment=TAILNET_IP=127.0.0.1
+ExecStart=/usr/bin/docker compose up -d portfolio ddns headscale admin gitea gitea-runner gitea-runner-deploy
+ExecStop=/usr/bin/docker compose stop
+
+[Install]
+WantedBy=multi-user.target
