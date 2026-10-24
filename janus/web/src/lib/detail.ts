@@ -6,6 +6,8 @@ export type Build = {
   target: string;
   error?: string;
   artifact_name?: string;
+  /** The compiler output, kept on failure too. */
+  log?: string;
   project_id: string;
   snapshot_id: string;
 };

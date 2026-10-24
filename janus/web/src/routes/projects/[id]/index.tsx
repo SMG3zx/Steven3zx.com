@@ -454,6 +454,12 @@ export default component$(() => {
                   </span>{" "}
                   <span class="muted">{build.target}</span>
                 </p>
+                {buildState.failed && build.log ? (
+                  <details open>
+                    <summary>Build log</summary>
+                    <pre style="white-space: pre-wrap">{build.log}</pre>
+                  </details>
+                ) : null}
                 {buildState.canRetry ? (
                   <Form action={action}>
                     <input type="hidden" name="intent" value="retry" />
