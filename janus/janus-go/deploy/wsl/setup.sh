@@ -30,6 +30,15 @@ id janus >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/j
 loginctl enable-linger janus
 install -d -o janus -g janus /var/lib/janus /opt/janus /opt/janus/web
 
+# No systemd user session exists for the janus service, so Podman manages cgroups itself.
+install -d -o janus -g janus /var/lib/janus/.config/containers
+cat > /var/lib/janus/.config/containers/containers.conf <<'CONF'
+[engine]
+cgroup_manager = "cgroupfs"
+events_logger = "file"
+CONF
+chown janus:janus /var/lib/janus/.config/containers/containers.conf
+
 install -d -m 750 -o root -g janus /etc/janus
 if [ ! -f /etc/janus/janus.env ]; then
   [ -n "$src_env" ] || { echo "no /etc/janus/janus.env yet: pass the path of an existing .env" >&2; exit 1; }
