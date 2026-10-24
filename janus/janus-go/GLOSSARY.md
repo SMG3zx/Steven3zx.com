@@ -57,7 +57,7 @@ _Avoid_: Entry point, main
 ## Builds and runs
 
 **Template**:
-A premade recipe for one kind of Project. It names the Language and runtime it covers, the manifest file that marks it, the Targets and build command, how its Entrypoint is found, and the resource limits a WASM Run starts with. Four ship first: Go, Rust, JavaScript/TypeScript on Node, and JavaScript/TypeScript on Bun. Go and Rust are buildable; the two JavaScript templates are detected by the Scan but have no WASM builder yet.
+A premade recipe for one kind of Project. It names the Language and runtime it covers, the manifest file that marks it, the Targets and build command, how its Entrypoint is found, and the resource limits a WASM Run starts with. Four ship first: Go, Rust, JavaScript/TypeScript on Node, and JavaScript/TypeScript on Bun. All four are buildable; the two JavaScript templates compile through Javy to `wasm32-wasip1`.
 _Avoid_: Preset, starter
 
 **WASM Build**:
@@ -138,7 +138,7 @@ A single-use code the web UI shows an Owner once, valid for 15 minutes, that the
 _Avoid_: Token, invite, pairing code
 
 **Tailnet**:
-The one private network the Agents and the control plane join, run by Headscale. It is default-deny: the control plane may open connections to any tagged node, and nothing else may. An Agent cannot reach the control plane or another Account's Agent. Removing an Agent deletes its node, so it can no longer be reached, and expires its pre-auth key.
+The one private network the Agents and the control plane join, run by Headscale. It is default-deny: the control plane may open connections to any tagged node, and an Agent may open only its leaf connection to the control plane. An Agent cannot reach another Agent or any other port of the control plane. Removing an Agent deletes its node, so it can no longer be reached, and expires its pre-auth key.
 _Avoid_: VPN, mesh
 
 ## Jobs

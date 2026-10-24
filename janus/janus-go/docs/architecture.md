@@ -110,7 +110,7 @@ The Agent embeds a NATS server with JetStream (domain `agent-<id>`) and connects
 | Usage | the Agent publishes to its local `USAGE` stream; `fleet` reads it through domain `agent-<id>` with one durable consumer per Agent, and acknowledges each report after it is stored |
 | edge requests | unchanged: HTTP to port 7101 on the tailnet (ADR 0002, ADR 0004) |
 
-tsnet gives a `net.Listener` and a dialer, not a socket the NATS server can bind. Each side bridges: the hub accepts leaf connections on its tsnet node and copies them to the hub's local leaf port; the Agent's leaf remote points at a local port that dials the hub through its own tsnet node. Only nodes tagged `tag:ctrl` are reachable from Agents, as the Headscale policy already enforces.
+tsnet gives a `net.Listener` and a dialer, not a socket the NATS server can bind. Each side bridges: the hub accepts leaf connections on its tsnet node and copies them to the hub's local leaf port; the Agent's leaf remote points at a local port that dials the hub through its own tsnet node. An Agent can reach only the hub's leaf port on the `tag:ctrl` node (`contractfleet.AgentLeafPort`, 7102), as the Headscale policy enforces.
 
 ## 7. Security
 
@@ -127,13 +127,20 @@ cmd/janus/                  one binary. `janus serve <service>...` starts the na
                             also means, runs every service and embeds a NATS server
 cmd/janus-agent/            the Agent
 internal/
-  domain/                   pure types and rules, unchanged: jobs, artifact, cgi, templates, scan,
-                            usage, manifest, deployments
+  domain/                   pure types and rules: jobs, artifact, cgi, templates, scan, goanalysis,
+                            usage, manifest, deployments, fleet, authn, authz, and agent (the
+                            Agent's runtime)
   contract/<service>/       subjects, message types, error codes of one service
   platform/
     natsx/                  connect, the embedded server, micro helpers, trace headers, stream setup
     natstest/               starts an embedded JetStream server for a test
-    tursodb/                open a service's database, run its migrations, the outbox
+    natsauth/  natstrust/   the decentralised NATS credentials of section 7, and the trust
+    keystore/               restored from the encrypted keystore on every start
+    leafbridge/             carries an Agent's leaf connection to the hub over the tailnet
+    tursodb/                open a service's database, run its migrations
+    outbox/                 publish a service's events and jobs from its own database
+    accountevents/          consume the events that ask a service to clear an Account
+    auditlog/               write one Audit Event through zap
     tracing/                spans on Janus's shared instrumentation scope
     tailnode/               a Janus process as a node of its own on the tailnet
     wasmrun/                Wasmtime runs of WASI modules (cgo)
