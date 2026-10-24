@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -68,143 +69,190 @@ func loadSettings(ctx context.Context) (settings, error) {
 	_, span := tracing.StartSpan(ctx, "config.load", trace.WithSpanKind(trace.SpanKindInternal))
 	defer span.End()
 
-	addr := strings.TrimSpace(os.Getenv("JANUS_HTTP_ADDRESS"))
-	source := "environment"
-	if addr == "" {
-		addr = ":9090"
-		source = "default"
-	}
-	identityDatabasePath := strings.TrimSpace(os.Getenv("JANUS_IDENTITY_DATABASE_PATH"))
-	if identityDatabasePath == "" {
-		identityDatabasePath = "data/identity.db"
-	}
-	projectsDatabasePath := strings.TrimSpace(os.Getenv("JANUS_PROJECTS_DATABASE_PATH"))
-	if projectsDatabasePath == "" {
-		projectsDatabasePath = "data/projects.db"
-	}
-	buildsDatabasePath := strings.TrimSpace(os.Getenv("JANUS_BUILDS_DATABASE_PATH"))
-	if buildsDatabasePath == "" {
-		buildsDatabasePath = "data/builds.db"
-	}
-	fleetDatabasePath := strings.TrimSpace(os.Getenv("JANUS_FLEET_DATABASE_PATH"))
-	if fleetDatabasePath == "" {
-		fleetDatabasePath = "data/fleet.db"
-	}
-	secret := os.Getenv("JANUS_JWT_SECRET")
-	if len(secret) < 32 {
-		return settings{}, errors.New("JANUS_JWT_SECRET must contain at least 32 bytes")
-	}
-	issuer := strings.TrimSpace(os.Getenv("JANUS_JWT_ISSUER"))
-	if issuer == "" {
-		issuer = "janus-go"
-	}
-	expiry := 30 * time.Minute
-	if value := strings.TrimSpace(os.Getenv("JANUS_JWT_EXPIRY")); value != "" {
-		parsed, parseErr := time.ParseDuration(value)
-		if parseErr != nil || parsed < time.Minute || parsed > 24*time.Hour {
-			return settings{}, errors.New("JANUS_JWT_EXPIRY must be between 1m and 24h")
-		}
-		expiry = parsed
-	}
-	cookieSecure := false
-	if value := strings.TrimSpace(os.Getenv("JANUS_COOKIE_SECURE")); value != "" {
-		parsed, parseErr := strconv.ParseBool(value)
-		if parseErr != nil {
-			return settings{}, errors.New("JANUS_COOKIE_SECURE must be a boolean")
-		}
-		cookieSecure = parsed
-	}
-	googleID := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID"))
-	googleSecret := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET"))
-	googleCallback := strings.TrimSpace(os.Getenv("GOOGLE_CALLBACK_URL"))
-	pyroscopeAddress := strings.TrimSpace(os.Getenv("PYROSCOPE_SERVER_ADDRESS"))
-	if pyroscopeAddress == "" {
-		pyroscopeAddress = "http://localhost:4040"
-	}
-	googleEnabled := googleID != "" && googleSecret != "" && googleCallback != ""
-	if (googleID != "" || googleSecret != "" || googleCallback != "") && !googleEnabled {
-		return settings{}, errors.New("GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL must all be set")
-	}
-	githubID := strings.TrimSpace(os.Getenv("GITHUB_CLIENT_ID"))
-	githubSecret := strings.TrimSpace(os.Getenv("GITHUB_CLIENT_SECRET"))
-	githubCallback := strings.TrimSpace(os.Getenv("GITHUB_CALLBACK_URL"))
-	wasmBuilderImage := strings.TrimSpace(os.Getenv("JANUS_WASM_BUILDER_IMAGE"))
-	if wasmBuilderImage == "" {
-		wasmBuilderImage = "janus-rust-wasm-builder:local"
-	}
-	goWASMBuilderImage := strings.TrimSpace(os.Getenv("JANUS_GO_WASM_BUILDER_IMAGE"))
-	if goWASMBuilderImage == "" {
-		goWASMBuilderImage = "janus-go-wasm-builder:local"
-	}
-	jsWASMBuilderImage := strings.TrimSpace(os.Getenv("JANUS_JS_WASM_BUILDER_IMAGE"))
-	if jsWASMBuilderImage == "" {
-		jsWASMBuilderImage = "janus-js-wasm-builder:local"
-	}
-	githubEnabled := githubID != "" && githubSecret != "" && githubCallback != ""
-	if (githubID != "" || githubSecret != "" || githubCallback != "") && !githubEnabled {
-		return settings{}, errors.New("GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and GITHUB_CALLBACK_URL must all be set")
-	}
-	headscaleURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HEADSCALE_URL")), "/")
-	headscaleKey := strings.TrimSpace(os.Getenv("HEADSCALE_API_KEY"))
-	if (headscaleURL == "") != (headscaleKey == "") {
-		return settings{}, errors.New("HEADSCALE_URL and HEADSCALE_API_KEY must both be set, or neither")
-	}
-	headscaleControlURL := strings.TrimRight(strings.TrimSpace(os.Getenv("HEADSCALE_CONTROL_URL")), "/")
-	if headscaleControlURL == "" {
-		headscaleControlURL = headscaleURL
-	}
-	tailnetDir := strings.TrimSpace(os.Getenv("JANUS_TAILNET_DIR"))
-	if tailnetDir == "" {
-		tailnetDir = "data/tailnet"
-	}
-	natsURL := strings.TrimSpace(os.Getenv("JANUS_NATS_URL"))
-	natsAddress := strings.TrimSpace(os.Getenv("JANUS_NATS_ADDRESS"))
-	if natsAddress == "" {
-		natsAddress = "127.0.0.1:4222"
-	}
-	natsDir := strings.TrimSpace(os.Getenv("JANUS_NATS_DIR"))
-	if natsDir == "" {
-		natsDir = "data/nats"
-	}
-	natsKeysPath := strings.TrimSpace(os.Getenv("JANUS_NATS_KEYS"))
-	if natsKeysPath == "" {
-		natsKeysPath = filepath.Join(natsDir, "keys.db")
-	}
-	natsLeafAddress := strings.TrimSpace(os.Getenv("JANUS_NATS_LEAF_ADDRESS"))
-	// The NATS trust keys are opened only when a secret is set. Without one the
-	// embedded server accepts any client, as it did before the keys existed.
-	keySecret := os.Getenv("JANUS_KEY_SECRET")
-	if keySecret != "" && len(keySecret) < 32 {
-		return settings{}, errors.New("JANUS_KEY_SECRET must contain at least 32 bytes")
+	cfg, err := readSettings()
+	if err != nil {
+		return settings{}, err
 	}
 	span.SetAttributes(
-		attribute.String("config.http.address", addr),
-		attribute.String("config.http.address.source", source),
-		attribute.String("config.identity.database.path", identityDatabasePath),
-		attribute.String("config.projects.database.path", projectsDatabasePath),
-		attribute.String("config.builds.database.path", buildsDatabasePath),
-		attribute.String("config.fleet.database.path", fleetDatabasePath),
-		attribute.Bool("config.google.enabled", googleEnabled),
-		attribute.Bool("config.github.enabled", githubEnabled),
-		attribute.Bool("config.headscale.enabled", headscaleURL != ""),
-		attribute.Bool("config.pyroscope.enabled", pyroscopeAddress != ""),
-		attribute.Bool("config.nats.embedded", natsURL == ""),
+		attribute.String("config.http.address", cfg.HTTPAddress),
+		attribute.String("config.http.address.source", envSource("JANUS_HTTP_ADDRESS")),
+		attribute.String("config.identity.database.path", cfg.IdentityDatabasePath),
+		attribute.String("config.projects.database.path", cfg.ProjectsDatabasePath),
+		attribute.String("config.builds.database.path", cfg.BuildsDatabasePath),
+		attribute.String("config.fleet.database.path", cfg.FleetDatabasePath),
+		attribute.Bool("config.google.enabled", cfg.GoogleEnabled),
+		attribute.Bool("config.github.enabled", cfg.GitHubEnabled),
+		attribute.Bool("config.headscale.enabled", cfg.HeadscaleURL != ""),
+		attribute.Bool("config.pyroscope.enabled", cfg.PyroscopeServerAddress != ""),
+		attribute.Bool("config.nats.embedded", cfg.NATSURL == ""),
 	)
-	webUpstream := strings.TrimSpace(os.Getenv("JANUS_WEB_UPSTREAM"))
-	if webUpstream != "" {
-		if parsed, err := url.Parse(webUpstream); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			return settings{}, errors.New("JANUS_WEB_UPSTREAM must be an http or https address, for example http://web:3000")
-		}
+	if err := validateWebUpstream(cfg.WebUpstream); err != nil {
+		return settings{}, err
 	}
-	return settings{
-		HTTPAddress: addr, WebUpstream: webUpstream, IdentityDatabasePath: identityDatabasePath, ProjectsDatabasePath: projectsDatabasePath, BuildsDatabasePath: buildsDatabasePath, FleetDatabasePath: fleetDatabasePath, JWTSecret: secret, JWTIssuer: issuer,
-		JWTExpiry: expiry, CookieSecure: cookieSecure, GoogleClientID: googleID,
-		GoogleSecret: googleSecret, GoogleCallback: googleCallback, GoogleEnabled: googleEnabled,
-		GitHubClientID: githubID, GitHubSecret: githubSecret, GitHubCallback: githubCallback, GitHubEnabled: githubEnabled,
-		HeadscaleURL: headscaleURL, HeadscaleAPIKey: headscaleKey, HeadscaleControlURL: headscaleControlURL, TailnetDir: tailnetDir,
-		NATSURL: natsURL, NATSAddress: natsAddress, NATSDir: natsDir,
-		NATSKeysPath: natsKeysPath, NATSLeafAddress: natsLeafAddress, KeySecret: keySecret,
-		WASMBuilderImage: wasmBuilderImage, GoWASMBuilderImage: goWASMBuilderImage, JSWASMBuilderImage: jsWASMBuilderImage,
-		PyroscopeServerAddress: pyroscopeAddress,
-	}, nil
+	return cfg, nil
+}
+
+// readSettings reads every setting from the environment, applying defaults. The
+// web upstream is checked by loadSettings, after the configuration is recorded.
+func readSettings() (settings, error) {
+	cfg := settings{
+		HTTPAddress:            envString("JANUS_HTTP_ADDRESS", ":9090"),
+		WebUpstream:            envString("JANUS_WEB_UPSTREAM", ""),
+		IdentityDatabasePath:   envString("JANUS_IDENTITY_DATABASE_PATH", "data/identity.db"),
+		ProjectsDatabasePath:   envString("JANUS_PROJECTS_DATABASE_PATH", "data/projects.db"),
+		BuildsDatabasePath:     envString("JANUS_BUILDS_DATABASE_PATH", "data/builds.db"),
+		FleetDatabasePath:      envString("JANUS_FLEET_DATABASE_PATH", "data/fleet.db"),
+		JWTIssuer:              envString("JANUS_JWT_ISSUER", "janus-go"),
+		PyroscopeServerAddress: envString("PYROSCOPE_SERVER_ADDRESS", "http://localhost:4040"),
+		WASMBuilderImage:       envString("JANUS_WASM_BUILDER_IMAGE", "janus-rust-wasm-builder:local"),
+		GoWASMBuilderImage:     envString("JANUS_GO_WASM_BUILDER_IMAGE", "janus-go-wasm-builder:local"),
+		JSWASMBuilderImage:     envString("JANUS_JS_WASM_BUILDER_IMAGE", "janus-js-wasm-builder:local"),
+		TailnetDir:             envString("JANUS_TAILNET_DIR", "data/tailnet"),
+		NATSURL:                envString("JANUS_NATS_URL", ""),
+		NATSAddress:            envString("JANUS_NATS_ADDRESS", "127.0.0.1:4222"),
+		NATSDir:                envString("JANUS_NATS_DIR", "data/nats"),
+		NATSLeafAddress:        envString("JANUS_NATS_LEAF_ADDRESS", ""),
+		HeadscaleURL:           envURL("HEADSCALE_URL", ""),
+		HeadscaleAPIKey:        envString("HEADSCALE_API_KEY", ""),
+	}
+	cfg.NATSKeysPath = envString("JANUS_NATS_KEYS", filepath.Join(cfg.NATSDir, "keys.db"))
+	cfg.HeadscaleControlURL = envURL("HEADSCALE_CONTROL_URL", cfg.HeadscaleURL)
+	if (cfg.HeadscaleURL == "") != (cfg.HeadscaleAPIKey == "") {
+		return settings{}, errors.New("HEADSCALE_URL and HEADSCALE_API_KEY must both be set, or neither")
+	}
+	if err := readSecurity(&cfg); err != nil {
+		return settings{}, err
+	}
+	return cfg, nil
+}
+
+// readSecurity reads the JWT, cookie, OAuth and NATS key settings into cfg. The
+// JWT secret and the NATS key secret are not trimmed.
+func readSecurity(cfg *settings) error {
+	cfg.JWTSecret = os.Getenv("JANUS_JWT_SECRET")
+	if err := checkSecret("JANUS_JWT_SECRET", cfg.JWTSecret); err != nil {
+		return err
+	}
+	expiry, err := jwtExpiry()
+	if err != nil {
+		return err
+	}
+	cfg.JWTExpiry = expiry
+	if cfg.CookieSecure, err = cookieSecure(); err != nil {
+		return err
+	}
+	google, err := readOAuthClient("GOOGLE")
+	if err != nil {
+		return err
+	}
+	cfg.GoogleClientID, cfg.GoogleSecret, cfg.GoogleCallback, cfg.GoogleEnabled = google.ID, google.Secret, google.Callback, google.Enabled
+	github, err := readOAuthClient("GITHUB")
+	if err != nil {
+		return err
+	}
+	cfg.GitHubClientID, cfg.GitHubSecret, cfg.GitHubCallback, cfg.GitHubEnabled = github.ID, github.Secret, github.Callback, github.Enabled
+	// The NATS trust keys are opened only when a secret is set. Without one the
+	// embedded server accepts any client, as it did before the keys existed.
+	cfg.KeySecret = os.Getenv("JANUS_KEY_SECRET")
+	if cfg.KeySecret != "" {
+		return checkSecret("JANUS_KEY_SECRET", cfg.KeySecret)
+	}
+	return nil
+}
+
+// oauthClient is one OAuth provider's client settings. A provider is enabled
+// only when all three are set.
+type oauthClient struct {
+	ID       string
+	Secret   string
+	Callback string
+	Enabled  bool
+}
+
+// readOAuthClient reads the client of the provider named by prefix, such as
+// GOOGLE. A partial set of its variables is an error.
+func readOAuthClient(prefix string) (oauthClient, error) {
+	client := oauthClient{
+		ID:       envString(prefix+"_CLIENT_ID", ""),
+		Secret:   envString(prefix+"_CLIENT_SECRET", ""),
+		Callback: envString(prefix+"_CALLBACK_URL", ""),
+	}
+	client.Enabled = client.ID != "" && client.Secret != "" && client.Callback != ""
+	if !client.Enabled && (client.ID != "" || client.Secret != "" || client.Callback != "") {
+		return oauthClient{}, fmt.Errorf("%s_CLIENT_ID, %s_CLIENT_SECRET, and %s_CALLBACK_URL must all be set", prefix, prefix, prefix)
+	}
+	return client, nil
+}
+
+// jwtExpiry reads JANUS_JWT_EXPIRY, which defaults to 30 minutes and must be
+// between a minute and a day.
+func jwtExpiry() (time.Duration, error) {
+	value := envString("JANUS_JWT_EXPIRY", "")
+	if value == "" {
+		return 30 * time.Minute, nil
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed < time.Minute || parsed > 24*time.Hour {
+		return 0, errors.New("JANUS_JWT_EXPIRY must be between 1m and 24h")
+	}
+	return parsed, nil
+}
+
+// cookieSecure reads JANUS_COOKIE_SECURE, which defaults to false.
+func cookieSecure() (bool, error) {
+	value := envString("JANUS_COOKIE_SECURE", "")
+	if value == "" {
+		return false, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, errors.New("JANUS_COOKIE_SECURE must be a boolean")
+	}
+	return parsed, nil
+}
+
+// checkSecret refuses a secret shorter than 32 bytes.
+func checkSecret(name, value string) error {
+	if len(value) < 32 {
+		return fmt.Errorf("%s must contain at least 32 bytes", name)
+	}
+	return nil
+}
+
+// validateWebUpstream accepts an empty upstream, which means there is none, or
+// an http or https address.
+func validateWebUpstream(upstream string) error {
+	if upstream == "" {
+		return nil
+	}
+	parsed, err := url.Parse(upstream)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return errors.New("JANUS_WEB_UPSTREAM must be an http or https address, for example http://web:3000")
+	}
+	return nil
+}
+
+// envString returns the variable without surrounding space, or fallback when it
+// is empty.
+func envString(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+// envURL is envString for an address, which also loses any trailing slash.
+func envURL(name, fallback string) string {
+	if value := strings.TrimRight(envString(name, ""), "/"); value != "" {
+		return value
+	}
+	return fallback
+}
+
+// envSource says where a setting came from, for the configuration span.
+func envSource(name string) string {
+	if strings.TrimSpace(os.Getenv(name)) == "" {
+		return "default"
+	}
+	return "environment"
 }
