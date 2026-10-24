@@ -53,7 +53,7 @@
     },
     {
       "file": "janus-go/cmd/janus/services.go",
-      "line": 540,
+      "line": 555,
       "title": "The composition root starts the fleet",
       "description": "`func (a *application) startFleet`. It joins the control plane to the tailnet, starts the fleet service, and gives the gateway its client."
     }

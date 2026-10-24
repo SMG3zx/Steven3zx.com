@@ -66,15 +66,14 @@ type application struct {
 	auditService *auditservice.Service
 	// identity is the gateway's client of the identity service, which owns
 	// identity.db and is reached over NATS.
-	identity  *identityclient.Gateway
-	tailnet   *headscale.Client
-	tailnode  *tailnode.Node
-	agentLink *link.Link
+	identity *identityclient.Gateway
+	// agent is the Agent side of the fleet service: enrollment's link, the
+	// control plane's tailnet node and the leaf bridge. It is zero when Agent
+	// enrollment is off.
+	agent agentPlane
 	// agentsConn is the fleet service's connection as a user of AGENTS, which
 	// reaches the Agents' state, modules and Usage. It is nil without NATS trust.
-	agentsConn   *nats.Conn
-	leafBridge   *leafbridge.Bridge
-	fleetService *fleetservice.Service
+	agentsConn *nats.Conn
 	// fleet is the gateway's client of the fleet service; nil when Agent
 	// enrollment is off.
 	fleet          *fleetclient.Client
@@ -421,7 +420,7 @@ func (a *application) startClients(ctx context.Context) error {
 	a.runs = runsclient.New(conn)
 	// Without the fleet service in this process, Agent enrollment is on when
 	// Headscale is configured; with it, when the service started.
-	if a.serves("fleet") && a.fleetService != nil || !a.serves("fleet") && a.settings.HeadscaleURL != "" {
+	if a.serves("fleet") && a.agent.service != nil || !a.serves("fleet") && a.settings.HeadscaleURL != "" {
 		a.fleet = fleetclient.New(conn)
 	}
 	return nil
@@ -522,6 +521,32 @@ func (a *application) record(ctx context.Context, level, name string, fields map
 	a.audit.Record(ctx, contractaudit.Event{Level: level, Name: name, Fields: fields})
 }
 
+// agentPlane is the Agent side of the fleet service. Its link and node are set as
+// startFleet makes them, so close releases whichever ones exist.
+type agentPlane struct {
+	link    *link.Link
+	node    *tailnode.Node
+	bridge  *leafbridge.Bridge
+	service *fleetservice.Service
+}
+
+// close closes the leaf bridge, the Agent link and the control plane's node, when
+// they were started.
+func (p *agentPlane) close() error {
+	var errs []error
+	if p.bridge != nil {
+		p.bridge.Close()
+		p.bridge = nil
+	}
+	if p.link != nil {
+		errs = append(errs, p.link.Close())
+	}
+	if p.node != nil {
+		errs = append(errs, p.node.Close())
+	}
+	return errors.Join(errs...)
+}
+
 // startFleet starts the fleet service: Agent enrollment, the Agents on the
 // tailnet, their Deployments and their Usage. It needs Headscale; without it,
 // enrollment is off and the reason is in the log. When the control plane's own
@@ -538,32 +563,43 @@ func (a *application) startFleet(ctx context.Context) error {
 		a.logger.Error("Agent enrollment is off: Headscale could not be prepared", zap.Error(err))
 		return nil
 	}
-	agentsConn := a.nats.Conn()
-	if a.trust.fleetOpts != nil {
-		var err error
-		if agentsConn, err = nats.Connect(a.nats.URL(), a.trust.fleetOpts...); err != nil {
-			return fmt.Errorf("connect the fleet service to the Agents' account: %w", err)
-		}
-		a.agentsConn = agentsConn
+	agentsConn, err := a.connectAgents()
+	if err != nil {
+		return err
 	}
 	link, err := link.NewLink(agentsConn)
 	if err != nil {
-		return errors.Join(fmt.Errorf("open the Agent link: %w", err), a.stopAgentLink())
+		return errors.Join(fmt.Errorf("open the Agent link: %w", err), a.agent.close())
 	}
-	a.agentLink = link
+	a.agent.link = link
 	if node := a.joinTailnet(ctx, client); node != nil {
-		a.tailnode = node
+		a.agent.node = node
 		if err := a.startLeafBridge(); err != nil {
-			return errors.Join(err, a.stopAgentLink())
+			return errors.Join(err, a.agent.close())
 		}
 	}
 	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL,
 		Link: link, Agents: a.trust.agents, Trust: a.trust.public, AgentsConn: a.agentsConn, OnRevoke: a.nats.UpdateAccount})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
-		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
+		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.agent.close())
 	}
-	a.fleetService = service
+	a.agent.service = service
 	return nil
+}
+
+// connectAgents returns the connection the fleet service uses as a user of the
+// AGENTS account. With NATS trust keys that is its own connection, which
+// stopNATS closes; without them it is the NATS connection itself.
+func (a *application) connectAgents() (*nats.Conn, error) {
+	if a.trust.fleetOpts == nil {
+		return a.nats.Conn(), nil
+	}
+	conn, err := nats.Connect(a.nats.URL(), a.trust.fleetOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("connect the fleet service to the Agents' account: %w", err)
+	}
+	a.agentsConn = conn
+	return conn, nil
 }
 
 // joinTailnet puts the control plane on the tailnet as its own node, tagged
@@ -594,10 +630,10 @@ const controlKeyTTL = time.Hour
 // stopFleet stops the fleet service, which waits for its Deployments, then
 // closes every Agent connection and takes the control plane off the tailnet.
 func (a *application) stopFleet(ctx context.Context) error {
-	if a.fleetService == nil {
+	if a.agent.service == nil {
 		return nil
 	}
-	return errors.Join(wrap("stop the fleet service", a.fleetService.Stop(ctx)), a.stopAgentLink())
+	return errors.Join(wrap("stop the fleet service", a.agent.service.Stop(ctx)), a.agent.close())
 }
 
 // startLeafBridge carries the Agents' leaf connections from the control plane's
@@ -607,27 +643,10 @@ func (a *application) startLeafBridge() error {
 	if a.trust.agents == nil || a.settings.NATSLeafAddress == "" {
 		return nil
 	}
-	listener, err := a.tailnode.Listen(contractfleet.AgentLeafPort)
+	listener, err := a.agent.node.Listen(contractfleet.AgentLeafPort)
 	if err != nil {
 		return fmt.Errorf("listen for Agents' leaf connections: %w", err)
 	}
-	a.leafBridge = leafbridge.ServeHub(listener, a.settings.NATSLeafAddress)
+	a.agent.bridge = leafbridge.ServeHub(listener, a.settings.NATSLeafAddress)
 	return nil
-}
-
-// stopAgentLink closes the leaf bridge, the Agent link and the control plane's
-// node, when they were started.
-func (a *application) stopAgentLink() error {
-	var errs []error
-	if a.leafBridge != nil {
-		a.leafBridge.Close()
-		a.leafBridge = nil
-	}
-	if a.agentLink != nil {
-		errs = append(errs, a.agentLink.Close())
-	}
-	if a.tailnode != nil {
-		errs = append(errs, a.tailnode.Close())
-	}
-	return errors.Join(errs...)
 }
