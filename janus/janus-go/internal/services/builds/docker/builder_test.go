@@ -118,3 +118,38 @@ func TestFailedBuildKeepsItsLog(t *testing.T) {
 		t.Fatalf("failed build = %q, %v", got.Log, err)
 	}
 }
+
+func TestGoBuildCompilesTheEntrypointPackage(t *testing.T) {
+	workspace := t.TempDir()
+	for _, name := range []string{"go.mod", "cmd/server/main.go", "main.go"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(workspace, name)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(workspace, name), []byte("package main\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ entry, pkg string }{
+		{"", "."},
+		{"main.go", "."},
+		{"./main.go", "."},
+		{"cmd/server/main.go", "./cmd/server"},
+	} {
+		got, err := goCommand(Request{Workspace: workspace, Target: "wasip1-wasm", Entrypoint: tc.entry})
+		if err != nil || !strings.Contains(got, " -o /workspace/out/main.wasm "+tc.pkg+" >&2") {
+			t.Errorf("entrypoint %q: command = %q, %v; want package %s", tc.entry, got, err, tc.pkg)
+		}
+	}
+}
+
+func TestGoBuildRefusesAnEntrypointOutsideTheRepository(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "go.mod"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range []string{"../main.go", "main.go; rm -rf /", "missing/main.go", "cmd/server/README.md"} {
+		if _, err := goCommand(Request{Workspace: workspace, Target: "wasip1-wasm", Entrypoint: entry}); err == nil {
+			t.Errorf("entrypoint %q was accepted", entry)
+		}
+	}
+}

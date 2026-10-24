@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -119,7 +120,32 @@ func goCommand(r Request) (string, error) {
 	if err := requireManifest(r.Workspace, "go.mod", "Go WASM builds require a go.mod at the repository root"); err != nil {
 		return "", err
 	}
-	return "cp -a /src/. /workspace/ && mkdir -p /workspace/out && cd /workspace && GOOS=wasip1 GOARCH=wasm GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go build -trimpath -buildvcs=false -o /workspace/out/main.wasm . >&2 && cd /workspace/out && tar -cf - main.wasm", nil
+	pkg, err := goPackage(r.Workspace, r.Entrypoint)
+	if err != nil {
+		return "", err
+	}
+	return "cp -a /src/. /workspace/ && mkdir -p /workspace/out && cd /workspace && GOOS=wasip1 GOARCH=wasm GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go build -trimpath -buildvcs=false -o /workspace/out/main.wasm " + pkg + " >&2 && cd /workspace/out && tar -cf - main.wasm", nil
+}
+
+// goPackage returns the package a Go WASM build compiles: the directory of the
+// Entrypoint, such as ./cmd/server for cmd/server/main.go. With no Entrypoint it
+// is the repository root. The Entrypoint goes into a shell command, so it must be
+// a plain .go file inside the repository.
+func goPackage(workspace, entrypoint string) (string, error) {
+	if strings.TrimSpace(entrypoint) == "" {
+		return ".", nil
+	}
+	entry := path.Clean(strings.TrimPrefix(strings.TrimSpace(entrypoint), "./"))
+	if !strings.HasSuffix(entry, ".go") || !safeEntry.MatchString(entry) || strings.Contains(entry, "..") {
+		return "", errors.New("the Go Entrypoint must be a .go file path in the repository, got " + entrypoint)
+	}
+	if info, err := os.Stat(filepath.Join(workspace, filepath.FromSlash(entry))); err != nil || !info.Mode().IsRegular() {
+		return "", errors.New("the Go Entrypoint " + entry + " is not a file in the repository")
+	}
+	if dir := path.Dir(entry); dir != "." {
+		return "./" + dir, nil
+	}
+	return ".", nil
 }
 
 func javaScriptCommand(r Request) (string, error) {
