@@ -163,63 +163,69 @@ func (a *application) Stop(ctx context.Context) error {
 // start order: foundation, identity, projects and builds, runtime, web. Stop runs
 // it in reverse. A group none of whose services run here is left out.
 func (a *application) groups() []group {
-	cfg := &a.settings
-	foundation := []component{
-		{name: "audit", start: a.startAudit, stop: a.tracked(a.stopAudit)},
-		{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
-		{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
-	}
-	if a.serves("audit") {
-		foundation = append(foundation, component{name: "audit service", start: a.startAuditService, stop: a.tracked(a.stopAuditService)})
-	} else {
-		foundation = append(foundation, component{name: "audit stream", start: a.connectAudit, stop: a.tracked(a.disconnectAudit)})
-	}
-	var identity, records, runtime, web []component
-	if a.serves("identity") {
-		identity = append(identity, a.hostService("identity", a.newIdentityService))
-	}
-	if a.serves("projects") {
-		records = append(records, a.hostService("projects", a.newProjectsService))
-	}
-	if a.serves("builds") {
-		records = append(records, a.hostService("builds", a.newBuildsService))
-	}
-	if a.serves("runs") {
-		records = append(records, a.hostService("runs", a.newRunsService))
-	}
-	if a.serves("fleet") {
-		runtime = append(runtime, component{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)})
-	}
-	if a.serves("gateway") {
-		web = []component{
-			{name: "authentication", start: func(context.Context) error {
-				a.authentication = authn.New([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
-				return nil
-			}},
-			{name: "authorization", start: func(context.Context) error {
-				var err error
-				a.authorization, err = authz.New(a.startCtx)
-				return err
-			}},
-			{name: "service clients", start: a.startClients},
-			{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {
-				return a.httpServer.Shutdown(ctx)
-			})},
-		}
+	all := []group{
+		{name: "foundation", components: a.foundationComponents()},
+		{name: "identity", components: a.ifServing("identity", a.hostService("identity", a.newIdentityService))},
+		{name: "projects and builds", components: slices.Concat(
+			a.ifServing("projects", a.hostService("projects", a.newProjectsService)),
+			a.ifServing("builds", a.hostService("builds", a.newBuildsService)),
+			a.ifServing("runs", a.hostService("runs", a.newRunsService)),
+		)},
+		{name: "runtime", components: a.ifServing("fleet", component{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)})},
+		{name: "web", components: a.webComponents()},
 	}
 	var groups []group
-	for _, g := range []group{
-		{name: "foundation", components: foundation},
-		{name: "identity", components: identity},
-		{name: "projects and builds", components: records},
-		{name: "runtime", components: runtime},
-		{name: "web", components: web},
-	} {
+	for _, g := range all {
 		if len(g.components) > 0 {
 			groups = append(groups, g)
 		}
 	}
 	return groups
+}
+
+// ifServing returns the components when this process runs the named service, and
+// none otherwise.
+func (a *application) ifServing(name string, components ...component) []component {
+	if !a.serves(name) {
+		return nil
+	}
+	return components
+}
+
+// foundationComponents are the audit, telemetry and NATS components. The audit
+// component is the service itself when this process runs it, and otherwise the
+// connection to the AUDIT stream that another process's service writes.
+func (a *application) foundationComponents() []component {
+	components := []component{
+		{name: "audit", start: a.startAudit, stop: a.tracked(a.stopAudit)},
+		{name: "telemetry", start: a.startTelemetry, stop: a.tracked(a.stopTelemetry)},
+		{name: "nats", start: a.startNATS, stop: a.tracked(a.stopNATS)},
+	}
+	if a.serves("audit") {
+		return append(components, component{name: "audit service", start: a.startAuditService, stop: a.tracked(a.stopAuditService)})
+	}
+	return append(components, component{name: "audit stream", start: a.connectAudit, stop: a.tracked(a.disconnectAudit)})
+}
+
+// webComponents are the gateway's authentication, authorization, clients and HTTP
+// server, in that order.
+func (a *application) webComponents() []component {
+	cfg := &a.settings
+	return a.ifServing("gateway",
+		component{name: "authentication", start: func(context.Context) error {
+			a.authentication = authn.New([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.JWTExpiry)
+			return nil
+		}},
+		component{name: "authorization", start: func(context.Context) error {
+			var err error
+			a.authorization, err = authz.New(a.startCtx)
+			return err
+		}},
+		component{name: "service clients", start: a.startClients},
+		component{name: "http", start: a.startHTTP, stop: a.tracked(func(ctx context.Context) error {
+			return a.httpServer.Shutdown(ctx)
+		})},
+	)
 }
 
 // wrap prefixes a non-nil err with what was being done.
