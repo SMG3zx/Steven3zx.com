@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -91,10 +92,15 @@ func ensureImage(ctx context.Context, image, dockerfile string) (bool, error) {
 	return true, nil
 }
 
-// EnsureRunning checks the Docker Engine and starts Docker Desktop if needed.
+// EnsureRunning checks the container engine and starts Docker Desktop if needed.
+// On Linux there is no Docker Desktop to start, so a dead engine is an error.
 func EnsureRunning(ctx context.Context) error {
-	if err := checkEngine(ctx); err == nil {
+	err := checkEngine(ctx)
+	if err == nil {
 		return nil
+	}
+	if runtime.GOOS == "linux" {
+		return err
 	}
 
 	startCtx, cancel := context.WithTimeout(ctx, 70*time.Second)
@@ -110,10 +116,16 @@ func EnsureRunning(ctx context.Context) error {
 	return nil
 }
 
+// checkEngine asks for the engine's version. Docker reports it as .ServerVersion;
+// Podman, behind the docker command, as .Version.Version.
 func checkEngine(ctx context.Context) error {
 	output, err := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("check Docker engine: %w: %s", err, strings.TrimSpace(string(output)))
+		podman, podmanErr := exec.CommandContext(ctx, "docker", "info", "--format", "{{.Version.Version}}").CombinedOutput()
+		if podmanErr != nil {
+			return fmt.Errorf("check Docker engine: %w: %s", err, strings.TrimSpace(string(output)))
+		}
+		output = podman
 	}
 	if strings.TrimSpace(string(output)) == "" {
 		return errors.New("Docker daemon returned an empty server version")
