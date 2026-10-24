@@ -1,0 +1,20 @@
+[Unit]
+Description=Janus control plane (gateway, identity, projects, builds, runs, fleet, audit)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=janus
+Group=janus
+WorkingDirectory=/var/lib/janus
+EnvironmentFile=/etc/janus/janus.env
+# Rootless Podman for the builds service; /usr/bin/docker is the podman-docker shim.
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=HOME=/var/lib/janus
+# One process with an embedded NATS JetStream server (JANUS_NATS_URL is empty).
+ExecStart=/opt/janus/bin/janus serve gateway identity projects builds runs fleet audit
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
