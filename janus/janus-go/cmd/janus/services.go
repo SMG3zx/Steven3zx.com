@@ -18,7 +18,6 @@ import (
 	contractaudit "janus/internal/contract/audit"
 	contractfleet "janus/internal/contract/fleet"
 	"janus/internal/platform/leafbridge"
-	"janus/internal/platform/natsauth"
 	"janus/internal/platform/natsx"
 	"janus/internal/platform/tailnode"
 	"janus/internal/platform/tracing"
@@ -60,14 +59,9 @@ type application struct {
 	audit     auditRecorder
 	telemetry *telemetry
 	nats      *natsx.Hub
-	// agents is the AGENTS account fleet signs Agents' leaf credentials with.
-	// It is nil when the control plane runs without NATS trust keys.
-	agents *natsauth.Account
-	// agentTrust is the public trust enrollment hands each Agent. It is nil
-	// when the control plane runs without NATS trust keys.
-	agentTrust *contractfleet.AgentTrust
-	// agentsOpts are the options of the fleet service's AGENTS connection.
-	agentsOpts []nats.Option
+	// trust is the NATS trust the keys file opened. It is zero when the control
+	// plane runs without NATS trust keys.
+	trust natsTrust
 	// auditService writes the Audit Events published to the AUDIT stream.
 	auditService *auditservice.Service
 	// identityService owns identity.db; identity reaches it over NATS.
@@ -377,10 +371,7 @@ func (a *application) startNATS(ctx context.Context) error {
 		}
 		config.Trust, config.ClientOptions = trust.trust, trust.clientOpts
 		config.LeafAddress = cfg.NATSLeafAddress
-		a.agents = trust.agents
-		a.agentTrust = trust.public
-		a.agentsOpts = trust.fleetOpts
-		a.agentTrust = trust.public
+		a.trust = trust
 	}
 	hub, err := natsx.Start(ctx, config)
 	if err != nil {
@@ -549,9 +540,9 @@ func (a *application) startFleet(ctx context.Context) error {
 		return nil
 	}
 	agentsConn := a.nats.Conn()
-	if a.agentsOpts != nil {
+	if a.trust.fleetOpts != nil {
 		var err error
-		if agentsConn, err = nats.Connect(a.nats.URL(), a.agentsOpts...); err != nil {
+		if agentsConn, err = nats.Connect(a.nats.URL(), a.trust.fleetOpts...); err != nil {
 			return fmt.Errorf("connect the fleet service to the Agents' account: %w", err)
 		}
 		a.agentsConn = agentsConn
@@ -568,7 +559,7 @@ func (a *application) startFleet(ctx context.Context) error {
 		}
 	}
 	service := fleetservice.New(fleetservice.Config{DatabasePath: cfg.FleetDatabasePath, Tailnet: client, ControlURL: cfg.HeadscaleControlURL,
-		Link: link, Agents: a.agents, Trust: a.agentTrust, AgentsConn: a.agentsConn, OnRevoke: a.nats.UpdateAccount})
+		Link: link, Agents: a.trust.agents, Trust: a.trust.public, AgentsConn: a.agentsConn, OnRevoke: a.nats.UpdateAccount})
 	if err := service.Start(ctx, a.nats.Conn()); err != nil {
 		return errors.Join(fmt.Errorf("start the fleet service: %w", err), a.stopAgentLink())
 	}
@@ -614,7 +605,7 @@ func (a *application) stopFleet(ctx context.Context) error {
 // tailnet node to the hub's leaf port. It runs only when the hub trusts its keys,
 // since only then does the hub take leaf connections.
 func (a *application) startLeafBridge() error {
-	if a.agents == nil || a.settings.NATSLeafAddress == "" {
+	if a.trust.agents == nil || a.settings.NATSLeafAddress == "" {
 		return nil
 	}
 	listener, err := a.tailnode.Listen(contractfleet.AgentLeafPort)
