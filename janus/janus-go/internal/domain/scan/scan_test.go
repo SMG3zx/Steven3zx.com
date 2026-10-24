@@ -74,3 +74,30 @@ func TestScanFilesRejectsUnsafeCandidatePaths(t *testing.T) {
 		}
 	}
 }
+
+func TestGoCandidatesAreOnlyPackagesThatBuildForWASM(t *testing.T) {
+	result := Files([]File{
+		{Path: "go.mod", Content: []byte("module example.com/l2p\n")},
+		{Path: "main.go", Content: []byte("//go:build linux\n\npackage main\n\nfunc main() {}\n")},
+		{Path: "cmd/decode/main.go", Content: []byte("package main\n\nfunc main() {}\n")},
+	})
+	if len(result.Candidates) != 1 || result.Candidates[0].Path != "cmd/decode/main.go" {
+		t.Fatalf("candidates = %+v, want only cmd/decode/main.go", result.Candidates)
+	}
+	if result.Go == nil || len(result.Go.Packages) != 2 {
+		t.Fatalf("go report = %+v, want both main packages, the root blocked", result.Go)
+	}
+}
+
+func TestALinuxOnlyRepositoryHasNoGoCandidateButAReason(t *testing.T) {
+	result := Files([]File{
+		{Path: "go.mod", Content: []byte("module example.com/l2p\n")},
+		{Path: "main.go", Content: []byte("//go:build linux\n\npackage main\n\nfunc main() {}\n")},
+	})
+	if len(result.Candidates) != 0 {
+		t.Fatalf("candidates = %+v, want none", result.Candidates)
+	}
+	if result.Go == nil || len(result.Go.Packages) != 1 || result.Go.Packages[0].Buildable || len(result.Go.Packages[0].Issues) == 0 {
+		t.Fatalf("go report = %+v, want a blocked root package with a reason", result.Go)
+	}
+}

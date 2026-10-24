@@ -11,6 +11,7 @@ import {
   buildLabel,
   deploymentLabel,
   entrypointCandidates,
+  goDiagnoses,
   targetsFor,
   type Build,
   type Deployment,
@@ -303,6 +304,7 @@ export default component$(() => {
   const buildState = build ? buildLabel(build) : null;
   const deploymentState = deployment ? deploymentLabel(deployment) : null;
   const candidates = entrypointCandidates(project.metadata_json ?? "");
+  const goBlocked = goDiagnoses(project.metadata_json ?? "");
   const targets = targetsFor(project.language ?? "");
   const readyAgents = agents.filter((agent) => agentState(agent).canPause);
 
@@ -609,6 +611,22 @@ export default component$(() => {
                 <button type="submit" class="button">
                   Save entrypoint
                 </button>
+                {goBlocked.module.length > 0 ||
+                goBlocked.packages.length > 0 ? (
+                  <div class="stack" role="note">
+                    <p class="muted">Not buildable as WASM:</p>
+                    <ul>
+                      {goBlocked.module.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                      {goBlocked.packages.map((pkg) => (
+                        <li key={pkg.dir}>
+                          <code>{pkg.dir}</code>: {pkg.reasons.join("; ")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </Form>
             ) : (
               <p class="muted">No revision yet.</p>

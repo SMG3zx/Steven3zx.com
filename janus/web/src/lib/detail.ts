@@ -77,3 +77,24 @@ export function entrypointCandidates(metadataJSON: string): string[] {
     return [];
   }
 }
+
+/** One Go main package that cannot build for WASM, with the reasons the import's analysis found. */
+export type GoBlocked = { dir: string; reasons: string[] };
+
+/** The Go main packages the import's analysis found unbuildable, and the module-wide blockers. */
+export function goDiagnoses(metadataJSON: string): { packages: GoBlocked[]; module: string[] } {
+  type Issue = { blocker?: boolean; message?: string };
+  type Report = { packages?: { dir?: string; buildable?: boolean; issues?: Issue[] }[]; issues?: Issue[] };
+  try {
+    const report = (JSON.parse(metadataJSON) as { scan?: { go?: Report } }).scan?.go;
+    const messages = (issues: Issue[] | undefined) =>
+      (issues ?? []).filter((issue) => issue.blocker && issue.message).map((issue) => issue.message as string);
+    const packages = (report?.packages ?? [])
+      .filter((pkg) => pkg.buildable === false && typeof pkg.dir === "string")
+      .map((pkg) => ({ dir: pkg.dir as string, reasons: messages(pkg.issues) }))
+      .filter((pkg) => pkg.reasons.length > 0);
+    return { packages, module: messages(report?.issues) };
+  } catch {
+    return { packages: [], module: [] };
+  }
+}

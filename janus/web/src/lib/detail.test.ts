@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildLabel, deploymentLabel, entrypointCandidates, targetsFor, type Build, type Deployment } from "./detail";
+import { buildLabel, deploymentLabel, entrypointCandidates, goDiagnoses, targetsFor, type Build, type Deployment } from "./detail";
 
 const build: Build = {
   id: "b1",
@@ -109,5 +109,30 @@ describe("entrypointCandidates", () => {
     expect(entrypointCandidates("")).toEqual([]);
     expect(entrypointCandidates("not json")).toEqual([]);
     expect(entrypointCandidates("{}")).toEqual([]);
+  });
+});
+
+describe("goDiagnoses", () => {
+  test("lists the unbuildable packages and the module blockers", () => {
+    const metadata = JSON.stringify({
+      scan: {
+        go: {
+          packages: [
+            { dir: ".", buildable: false, issues: [{ blocker: true, message: "every Go file is excluded" }] },
+            { dir: "cmd/ok", buildable: true, issues: [{ blocker: false, message: "starts processes" }] },
+          ],
+          issues: [{ blocker: true, message: "not vendored" }],
+        },
+      },
+    });
+    expect(goDiagnoses(metadata)).toEqual({
+      packages: [{ dir: ".", reasons: ["every Go file is excluded"] }],
+      module: ["not vendored"],
+    });
+  });
+
+  test("is empty without a report or with bad metadata", () => {
+    expect(goDiagnoses("{}")).toEqual({ packages: [], module: [] });
+    expect(goDiagnoses("not json")).toEqual({ packages: [], module: [] });
   });
 });

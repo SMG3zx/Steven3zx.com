@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"path"
 	"strings"
+
+	"janus/internal/domain/goanalysis"
 )
 
 // File is one file of a repository snapshot.
@@ -30,6 +32,9 @@ type Result struct {
 	Languages  map[string]int `json:"languages"`
 	// Runtime is "Node" or "Bun" for a JavaScript project, or "" when neither is detected.
 	Runtime string `json:"runtime"`
+	// Go reports which Go main packages can be built for wasip1 and why the others
+	// cannot. It is nil when the snapshot has no go.mod.
+	Go *goanalysis.Report `json:"go,omitempty"`
 }
 
 // detectRuntime labels a repository's JavaScript runtime from root-level files
@@ -100,9 +105,18 @@ func Files(files []File) Result {
 		base := path.Base(file.Path)
 		switch {
 		case base == "go.mod":
+			if path.Dir(path.Clean(file.Path)) != "." {
+				continue
+			}
+			inputs := make([]goanalysis.File, 0, len(files))
 			for _, candidate := range files {
-				if strings.HasSuffix(candidate.Path, ".go") && strings.Contains(string(candidate.Content), "package main") {
-					add(candidate.Path, "Go", "contains a main package")
+				inputs = append(inputs, goanalysis.File{Path: candidate.Path, Content: candidate.Content})
+			}
+			report := goanalysis.Analyze(inputs)
+			result.Go = &report
+			for _, pkg := range report.Packages {
+				if pkg.Buildable {
+					add(pkg.Entry, "Go", "main package that builds for wasip1")
 				}
 			}
 		case base == "Cargo.toml":

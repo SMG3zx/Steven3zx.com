@@ -35,7 +35,7 @@
     },
     {
       "file": "janus-go/internal/domain/scan/scan.go",
-      "line": 67,
+      "line": 72,
       "title": "The scan is pure",
       "description": "`func Files` picks the language with the most files and lists entrypoint candidates. It runs no repository code."
     },
