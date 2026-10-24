@@ -299,12 +299,12 @@ var unsupported = map[string]struct {
 	"golang.org/x/sys/windows":           {CodeUnsupported, "golang.org/x/sys/windows is Windows only", true},
 	"github.com/google/gopacket":         {CodeUnsupported, "gopacket needs libpcap through cgo", true},
 	"github.com/google/gopacket/pcap":    {CodeUnsupported, "gopacket/pcap needs libpcap through cgo", true},
-	"github.com/mdlayher/packet":         {CodeRawSockets, "raw packet sockets (AF_PACKET) do not exist in WASI", true},
-	"github.com/mdlayher/raw":            {CodeRawSockets, "raw sockets do not exist in WASI", true},
+	"github.com/mdlayher/packet":         {CodeRawSockets, "raw packet sockets (AF_PACKET) do not exist in any WASI version", true},
+	"github.com/mdlayher/raw":            {CodeRawSockets, "raw sockets do not exist in any WASI version", true},
 	"github.com/charmbracelet/bubbletea": {CodeNeedsTerminal, "a terminal UI needs a TTY, which a WASM module run by a host does not have", false},
 	"github.com/gdamore/tcell/v2":        {CodeNeedsTerminal, "a terminal UI needs a TTY, which a WASM module run by a host does not have", false},
-	"os/exec":                            {CodeProcesses, "starting processes is not possible in WASI", false},
-	"net/http/httptest":                  {CodeNetwork, "network listeners are not available in WASI", false},
+	"os/exec":                            {CodeProcesses, "starting processes is not possible in WASI 0.1 or 0.2", false},
+	"net/http/httptest":                  {CodeNetwork, "WASI 0.1 has no listening sockets (0.2 does, but Go builds only target 0.1)", false},
 }
 
 // importIssues checks the imports and the source of a package for things WASI lacks.
@@ -321,7 +321,7 @@ func importIssues(fsys *memFS, dir string, pkg *build.Package) []Issue {
 			if strings.Contains(source, needle) {
 				issues = append(issues, Issue{
 					Code: CodeRawSockets, Blocker: true, Files: []string{path.Join(dir, name)},
-					Message: "opens raw sockets (" + strings.TrimSuffix(needle, "(") + "), which WASI does not provide",
+					Message: "opens raw sockets (" + strings.TrimSuffix(needle, "(") + "), which no WASI version provides",
 				})
 				break
 			}
@@ -329,7 +329,7 @@ func importIssues(fsys *memFS, dir string, pkg *build.Package) []Issue {
 		if strings.Contains(source, "net.Listen(") {
 			issues = append(issues, Issue{
 				Code: CodeNetwork, Files: []string{path.Join(dir, name)},
-				Message: "listens on a network address, which only works when the host grants sockets to the module",
+				Message: "listens on a network address, which WASI 0.1 cannot do (0.2 can, but Go builds only target 0.1)",
 			})
 		}
 	}
