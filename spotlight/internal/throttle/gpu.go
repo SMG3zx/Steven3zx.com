@@ -19,9 +19,11 @@ func queryNvidiaSMI(ctx context.Context) (gpuReading, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, smiPath(),
+	cmd := exec.CommandContext(ctx, smiPath(),
 		"--query-gpu=utilization.gpu,memory.used,memory.total",
-		"--format=csv,noheader,nounits").Output()
+		"--format=csv,noheader,nounits")
+	hideConsole(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return gpuReading{}, err
 	}
