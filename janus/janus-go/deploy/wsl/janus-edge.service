@@ -8,6 +8,9 @@ RequiresMountsFor=/mnt/d
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Early at boot Podman can race systemd; try again rather than leave the stack down.
+Restart=on-failure
+RestartSec=10
 WorkingDirectory=/mnt/d/steven3zx.com/edge
 # WSL cannot bind the Windows tailnet address, so Gitea's SSH port stays on loopback.
 Environment=TAILNET_IP=127.0.0.1

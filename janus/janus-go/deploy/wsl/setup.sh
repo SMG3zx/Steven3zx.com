@@ -34,6 +34,13 @@ install -d -o janus -g janus /var/lib/janus /opt/janus /opt/janus/web
 install -d /etc/containers/registries.conf.d
 echo 'unqualified-search-registries = ["docker.io"]' > /etc/containers/registries.conf.d/docker.conf
 
+# Rootful Podman creates cgroup scopes through systemd, which can fail early at boot.
+install -d /etc/containers/containers.conf.d
+printf '[engine]
+cgroup_manager = "cgroupfs"
+events_logger = "file"
+' > /etc/containers/containers.conf.d/10-cgroupfs.conf
+
 # No systemd user session exists for the janus service, so Podman manages cgroups itself.
 install -d -o janus -g janus /var/lib/janus/.config/containers
 cat > /var/lib/janus/.config/containers/containers.conf <<'CONF'
