@@ -1,0 +1,15 @@
+[Unit]
+Description=Gitea Actions runner for Janus deploys (label janus-host)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gitea-runner
+Group=gitea-runner
+WorkingDirectory=/var/lib/gitea-runner
+ExecStart=/usr/local/bin/act_runner daemon --config /var/lib/gitea-runner/config.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
