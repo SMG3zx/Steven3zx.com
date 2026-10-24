@@ -110,7 +110,7 @@ http:
     janus:
       loadBalancer:
         servers:
-          - url: "http://127.0.0.1:9095"
+          - url: "http://[::1]:9095"
     git:
       loadBalancer:
         servers:
