@@ -30,6 +30,10 @@ id janus >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/j
 loginctl enable-linger janus
 install -d -o janus -g janus /var/lib/janus /opt/janus /opt/janus/web
 
+# Builder Dockerfiles use short image names such as oven/bun, as Docker would resolve them.
+install -d /etc/containers/registries.conf.d
+echo 'unqualified-search-registries = ["docker.io"]' > /etc/containers/registries.conf.d/docker.conf
+
 # No systemd user session exists for the janus service, so Podman manages cgroups itself.
 install -d -o janus -g janus /var/lib/janus/.config/containers
 cat > /var/lib/janus/.config/containers/containers.conf <<'CONF'
