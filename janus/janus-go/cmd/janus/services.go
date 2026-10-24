@@ -64,20 +64,12 @@ type application struct {
 	trust natsTrust
 	// auditService writes the Audit Events published to the AUDIT stream.
 	auditService *auditservice.Service
-	// identityService owns identity.db; identity reaches it over NATS.
-	identityService *identityservice.Service
-	identity        *identityclient.Gateway
-	// projectsService owns projects.db and runs Imports.
-	projectsService *projectsservice.Service
-	// buildsService owns builds.db and runs WASM Builds; builds is the gateway's
-	// client of it.
-	buildsService *buildsservice.Service
-	// runsService answers the runs subjects and runs WASM Runs; runs is the
-	// gateway's client of it.
-	runsService *runsservice.Service
-	tailnet     *headscale.Client
-	tailnode    *tailnode.Node
-	agentLink   *link.Link
+	// identity is the gateway's client of the identity service, which owns
+	// identity.db and is reached over NATS.
+	identity  *identityclient.Gateway
+	tailnet   *headscale.Client
+	tailnode  *tailnode.Node
+	agentLink *link.Link
 	// agentsConn is the fleet service's connection as a user of AGENTS, which
 	// reaches the Agents' state, modules and Usage. It is nil without NATS trust.
 	agentsConn   *nats.Conn
@@ -184,24 +176,16 @@ func (a *application) groups() []group {
 	}
 	var identity, records, runtime, web []component
 	if a.serves("identity") {
-		identity = append(identity, component{name: "identity service", start: a.startIdentityService, stop: a.tracked(func(ctx context.Context) error {
-			return wrap("stop the identity service", a.identityService.Stop(ctx))
-		})})
+		identity = append(identity, a.hostService("identity", a.newIdentityService))
 	}
 	if a.serves("projects") {
-		records = append(records, component{name: "projects service", start: a.startProjectsService, stop: a.tracked(func(ctx context.Context) error {
-			return wrap("stop the projects service", a.projectsService.Stop(ctx))
-		})})
+		records = append(records, a.hostService("projects", a.newProjectsService))
 	}
 	if a.serves("builds") {
-		records = append(records, component{name: "builds service", start: a.startBuildsService, stop: a.tracked(func(ctx context.Context) error {
-			return wrap("stop the builds service", a.buildsService.Stop(ctx))
-		})})
+		records = append(records, a.hostService("builds", a.newBuildsService))
 	}
 	if a.serves("runs") {
-		records = append(records, component{name: "runs service", start: a.startRunsService, stop: a.tracked(func(ctx context.Context) error {
-			return wrap("stop the runs service", a.runsService.Stop(ctx))
-		})})
+		records = append(records, a.hostService("runs", a.newRunsService))
 	}
 	if a.serves("fleet") {
 		runtime = append(runtime, component{name: "fleet", start: a.startFleet, stop: a.tracked(a.stopFleet)})
@@ -390,40 +374,30 @@ func (a *application) stopNATS(ctx context.Context) error {
 	return wrap("stop NATS", a.nats.Close(ctx))
 }
 
-// startIdentityService starts the identity service on identity.db.
-func (a *application) startIdentityService(ctx context.Context) error {
+// newIdentityService makes the identity service on identity.db.
+func (a *application) newIdentityService(context.Context) (natsService, error) {
 	cfg := a.settings
-	service := identityservice.New(identityservice.Config{DatabasePath: cfg.IdentityDatabasePath, TokenSecret: cfg.JWTSecret})
-	if err := service.Start(ctx, a.nats.Conn()); err != nil {
-		return fmt.Errorf("start the identity service: %w", err)
-	}
-	a.identityService = service
-	return nil
+	return identityservice.New(identityservice.Config{DatabasePath: cfg.IdentityDatabasePath, TokenSecret: cfg.JWTSecret}), nil
 }
 
-// startBuildsService starts the builds service on builds.db. Before it starts,
-// the Docker builder images are made ready, as the builds compile in them.
-func (a *application) startBuildsService(ctx context.Context) error {
+// newBuildsService makes the builds service on builds.db. Before it is made, the
+// Docker builder images are made ready, as the builds compile in them.
+func (a *application) newBuildsService(context.Context) (natsService, error) {
 	cfg := a.settings
 	if err := docker.EnsureRunning(a.startCtx); err != nil {
-		return fmt.Errorf("ensure Docker Engine is running: %w", err)
+		return nil, fmt.Errorf("ensure Docker Engine is running: %w", err)
 	}
 	a.logger.Info("Docker daemon is ready")
 	images := docker.Images{Rust: cfg.WASMBuilderImage, Go: cfg.GoWASMBuilderImage, JavaScript: cfg.JSWASMBuilderImage}
 	built, err := docker.PrepareImages(a.startCtx, images)
 	if err != nil {
-		return fmt.Errorf("prepare WASM builder images: %w", err)
+		return nil, fmt.Errorf("prepare WASM builder images: %w", err)
 	}
 	for _, image := range built {
 		a.logger.Info("built missing WASM builder image", zap.String("image", image))
 	}
 	compiler := docker.NewDocker(images)
-	service := buildsservice.New(buildsservice.Config{DatabasePath: cfg.BuildsDatabasePath, Compile: compiler.Build, Check: compiler.Check})
-	if err := service.Start(ctx, a.nats.Conn()); err != nil {
-		return fmt.Errorf("start the builds service: %w", err)
-	}
-	a.buildsService = service
-	return nil
+	return buildsservice.New(buildsservice.Config{DatabasePath: cfg.BuildsDatabasePath, Compile: compiler.Build, Check: compiler.Check}), nil
 }
 
 // startClients makes the gateway's clients of the services, which it calls over
@@ -447,26 +421,45 @@ func (a *application) startClients(ctx context.Context) error {
 	return nil
 }
 
-// startRunsService starts the runs service. It owns no database, so it has
-// nothing to split; it runs WASM Runs in this process with Wasmtime.
-func (a *application) startRunsService(ctx context.Context) error {
-	service := runsservice.New(runsservice.Config{})
-	if err := service.Start(ctx, a.nats.Conn()); err != nil {
-		return fmt.Errorf("start the runs service: %w", err)
-	}
-	a.runsService = service
-	return nil
+// newRunsService makes the runs service. It owns no database, so it has nothing
+// to split; it runs WASM Runs in this process with Wasmtime.
+func (a *application) newRunsService(context.Context) (natsService, error) {
+	return runsservice.New(runsservice.Config{}), nil
 }
 
-// startProjectsService starts the projects service on projects.db.
-func (a *application) startProjectsService(ctx context.Context) error {
+// newProjectsService makes the projects service on projects.db.
+func (a *application) newProjectsService(context.Context) (natsService, error) {
 	cfg := a.settings
-	service := projectsservice.New(projectsservice.Config{DatabasePath: cfg.ProjectsDatabasePath})
-	if err := service.Start(ctx, a.nats.Conn()); err != nil {
-		return fmt.Errorf("start the projects service: %w", err)
+	return projectsservice.New(projectsservice.Config{DatabasePath: cfg.ProjectsDatabasePath}), nil
+}
+
+// natsService is a service that runs on the NATS connection until it is stopped.
+type natsService interface {
+	Start(ctx context.Context, conn *nats.Conn) error
+	Stop(ctx context.Context) error
+}
+
+// hostService is a component that makes a service, starts it on NATS and stops
+// it again. The service is built at start, so a failed build or start leaves nothing
+// to stop.
+func (a *application) hostService(name string, build func(context.Context) (natsService, error)) component {
+	var service natsService
+	return component{
+		name: name + " service",
+		start: func(ctx context.Context) error {
+			var err error
+			if service, err = build(ctx); err != nil {
+				return err
+			}
+			if err := service.Start(ctx, a.nats.Conn()); err != nil {
+				return fmt.Errorf("start the %s service: %w", name, err)
+			}
+			return nil
+		},
+		stop: a.tracked(func(ctx context.Context) error {
+			return wrap("stop the "+name+" service", service.Stop(ctx))
+		}),
 	}
-	a.projectsService = service
-	return nil
 }
 
 func (a *application) startHTTP(context.Context) error {
