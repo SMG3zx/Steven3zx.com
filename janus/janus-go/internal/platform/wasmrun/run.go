@@ -19,6 +19,15 @@ type Input struct {
 	Dir       string
 	MaxStdout int
 	Limits    templates.Resources
+	// Grants are the capabilities this run may use. The zero value grants nothing, so
+	// only a caller that sets it can give a module more than WASI: the agent does, the
+	// control plane's runs service never does.
+	Grants []Grant
+	// Audit receives what the granted capabilities do. It may be nil.
+	Audit AuditFunc
+	// RawNetOpener opens packet captures for CapabilityRawNet. Nil uses the operating
+	// system's; tests and privileged helpers set it.
+	RawNetOpener PacketOpener
 }
 
 // Result is what a module produced. Stdout and Stderr are bounded, and

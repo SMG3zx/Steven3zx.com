@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -91,6 +92,17 @@ func execute(ctx context.Context, moduleBytes []byte, input Input) (result Resul
 		return Result{}, err
 	}
 	defer module.Close()
+	// stop ends calls that wait in the host, which the epoch interrupt cannot reach
+	// because it only fires while the module is running its own code.
+	stop := make(chan struct{})
+	var stopOnce sync.Once
+	closeStop := func() { stopOnce.Do(func() { close(stop) }) }
+	defer closeStop()
+	capabilities, err := registerCapabilities(linker, module, input, stop)
+	if err != nil {
+		return Result{}, err
+	}
+	defer capabilities.Close()
 	instance, err := linker.Instantiate(store, module)
 	if err != nil {
 		return Result{}, err
@@ -102,9 +114,13 @@ func execute(ctx context.Context, moduleBytes []byte, input Input) (result Resul
 	var timedOut atomic.Bool
 	timer := time.AfterFunc(limits.Timeout, func() {
 		timedOut.Store(true)
+		closeStop()
 		engine.IncrementEpoch()
 	})
-	stopOnCancel := context.AfterFunc(ctx, engine.IncrementEpoch)
+	stopOnCancel := context.AfterFunc(ctx, func() {
+		closeStop()
+		engine.IncrementEpoch()
+	})
 	wall, cpu, err := measureCall(func() error {
 		_, callErr := start.Call(store)
 		return callErr
@@ -112,6 +128,13 @@ func execute(ctx context.Context, moduleBytes []byte, input Input) (result Resul
 	timer.Stop()
 	stopOnCancel()
 	err = classify(normalizeExit(err), timedOut.Load())
+	if err == nil && capabilities.Interrupted() {
+		if timedOut.Load() {
+			err = ErrRunTimeout
+		} else {
+			err = errors.New("the WebAssembly run was stopped while waiting in a capability call")
+		}
+	}
 	result.Usage.DurationMS = wall.Milliseconds()
 	result.Usage.CPUTimeMicros = cpu.Microseconds()
 	// Read the meters before the deferred store.Close releases the store.
@@ -218,4 +241,52 @@ func readBounded(name string, limit int) (data []byte, truncated bool, err error
 		return data[:limit], true, nil
 	}
 	return data, false, nil
+}
+
+// registeredCapabilities holds what registerCapabilities set up for a run.
+type registeredCapabilities struct{ rawNet *rawNetHost }
+
+// Interrupted reports whether the run ended while the module was waiting in a
+// capability call. The module may have handled the refusal and exited cleanly, so
+// the run still counts as cut short.
+func (r registeredCapabilities) Interrupted() bool {
+	return r.rawNet != nil && r.rawNet.interrupted.Load()
+}
+
+// Close releases everything the module left open.
+func (r registeredCapabilities) Close() {
+	if r.rawNet != nil {
+		r.rawNet.Close()
+	}
+}
+
+// registerCapabilities reads the module's imports, refuses a module that needs a
+// capability that was not granted, and registers the functions of the ones that were.
+// The imports are the module's manifest: they name every capability it can use
+// before it runs.
+func registerCapabilities(linker *wasmtime.Linker, module *wasmtime.Module, input Input, stop <-chan struct{}) (registeredCapabilities, error) {
+	var registered registeredCapabilities
+	needed := make(map[string]string)
+	for _, imported := range module.Imports() {
+		if capability, ok := capabilityModules[imported.Module()]; ok {
+			needed[imported.Module()] = capability
+		}
+	}
+	for moduleName, capability := range needed {
+		if _, ok := granted(input.Grants, capability); !ok {
+			return registered, &CapabilityError{Capability: capability, Module: moduleName}
+		}
+	}
+	for _, capability := range needed {
+		switch capability {
+		case CapabilityRawNet:
+			interfaces, _ := granted(input.Grants, CapabilityRawNet)
+			host, err := registerRawNet(linker, interfaces, input.RawNetOpener, input.Audit, stop)
+			if err != nil {
+				return registered, err
+			}
+			registered.rawNet = host
+		}
+	}
+	return registered, nil
 }
