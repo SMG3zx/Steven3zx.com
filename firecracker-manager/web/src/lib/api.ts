@@ -36,6 +36,20 @@ export interface HostInfo {
   firecrackerError?: string;
 }
 
+export interface Image {
+  name: string;
+  path: string;
+  size: number;
+}
+
+/** Suggestions for the create form. Fields still accept any value typed by hand. */
+export interface Catalog {
+  dir: string;
+  kernels: Image[];
+  rootfs: Image[];
+  bootArgs: string[];
+}
+
 export type VMAction = "start" | "stop" | "pause" | "resume";
 
 export class APIError extends Error {}
@@ -58,6 +72,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   host: () => request<HostInfo>("GET", "/host"),
+  images: () => request<Catalog>("GET", "/images"),
   listVMs: () => request<VM[]>("GET", "/vms"),
   getVM: (id: string) => request<VM>("GET", `/vms/${id}`),
   createVM: (spec: Spec) => request<VM>("POST", "/vms", spec),

@@ -168,6 +168,11 @@ button.danger {
   align-items: center;
 }
 
+.hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .error {
   color: var(--bad);
   font-size: 0.9rem;

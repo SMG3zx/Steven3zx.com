@@ -5,6 +5,7 @@ import {
   allowedActions,
   api,
   errorMessage,
+  type Catalog,
   type HostInfo,
   type Spec,
   type VM,
@@ -16,6 +17,7 @@ const POLL_MS = 2000;
 export default component$(() => {
   const vms = useSignal<VM[]>([]);
   const host = useSignal<HostInfo>();
+  const images = useSignal<Catalog>();
   const error = useSignal("");
   const creating = useSignal(false);
 
@@ -33,6 +35,10 @@ export default component$(() => {
     api
       .host()
       .then((h) => (host.value = h))
+      .catch((err) => (error.value = errorMessage(err)));
+    api
+      .images()
+      .then((c) => (images.value = c))
       .catch((err) => (error.value = errorMessage(err)));
     const timer = setInterval(() => void refresh(), POLL_MS);
     cleanup(() => clearInterval(timer));
@@ -122,16 +128,63 @@ export default component$(() => {
                 <input name="memoryMiB" type="number" min="128" max="32768" value="256" required />
               </label>
               <label>
-                Kernel image (absolute path)
-                <input name="kernelPath" required placeholder="/srv/fc/vmlinux" />
+                Kernel image
+                <input
+                  name="kernelPath"
+                  {...{ list: "kernel-options" }}
+                  required
+                  autocomplete="off"
+                  placeholder="/absolute/path/to/vmlinux"
+                />
+                <datalist id="kernel-options">
+                  {images.value?.kernels.map((img) => (
+                    <option key={img.path} value={img.path}>
+                      {img.name}
+                    </option>
+                  ))}
+                </datalist>
+                <span class="hint">
+                  {images.value?.kernels.length
+                    ? `Pick one or type a path. Found in ${images.value.dir}/kernels`
+                    : `Type a path, or add kernels to ${images.value?.dir ?? "the images"}/kernels`}
+                </span>
               </label>
               <label>
-                Root filesystem (absolute path)
-                <input name="rootfsPath" required placeholder="/srv/fc/rootfs.ext4" />
+                Root filesystem
+                <input
+                  name="rootfsPath"
+                  {...{ list: "rootfs-options" }}
+                  required
+                  autocomplete="off"
+                  placeholder="/absolute/path/to/rootfs.ext4"
+                />
+                <datalist id="rootfs-options">
+                  {images.value?.rootfs.map((img) => (
+                    <option key={img.path} value={img.path}>
+                      {img.name}
+                    </option>
+                  ))}
+                </datalist>
+                <span class="hint">
+                  {images.value?.rootfs.length
+                    ? `Pick one or type a path. Found in ${images.value.dir}/rootfs`
+                    : `Type a path, or add images to ${images.value?.dir ?? "the images"}/rootfs`}
+                </span>
               </label>
               <label>
-                Kernel boot args (optional)
-                <input name="bootArgs" placeholder="console=ttyS0 reboot=k panic=1 pci=off" />
+                Kernel boot args
+                <input
+                  name="bootArgs"
+                  {...{ list: "bootargs-options" }}
+                  autocomplete="off"
+                  placeholder="Leave empty for the default"
+                />
+                <datalist id="bootargs-options">
+                  {images.value?.bootArgs.map((args) => (
+                    <option key={args} value={args} />
+                  ))}
+                </datalist>
+                <span class="hint">Pick a preset or type your own. Empty uses the default.</span>
               </label>
             </div>
             <div class="form-actions">
