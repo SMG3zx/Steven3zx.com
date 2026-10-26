@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"firecracker-manager/internal/images"
 	"firecracker-manager/internal/vm"
 )
 
@@ -24,18 +25,21 @@ const (
 
 // Server routes HTTP requests to the VM manager and serves the built web UI.
 type Server struct {
-	mgr    *vm.Manager
-	fcBin  string
-	webDir string
+	mgr       *vm.Manager
+	fcBin     string
+	webDir    string
+	imagesDir string
 }
 
 // NewHandler returns the HTTP handler. If webDir is non-empty, files under it
-// are served for every non-API path, falling back to index.html.
-func NewHandler(mgr *vm.Manager, fcBin, webDir string) http.Handler {
-	s := &Server{mgr: mgr, fcBin: fcBin, webDir: webDir}
+// are served for every non-API path, falling back to index.html. imagesDir is
+// scanned for kernel and rootfs suggestions.
+func NewHandler(mgr *vm.Manager, fcBin, webDir, imagesDir string) http.Handler {
+	s := &Server{mgr: mgr, fcBin: fcBin, webDir: webDir, imagesDir: imagesDir}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/host", s.handleHost)
+	mux.HandleFunc("GET /api/images", s.handleImages)
 	mux.HandleFunc("GET /api/vms", s.handleList)
 	mux.HandleFunc("POST /api/vms", s.handleCreate)
 	mux.HandleFunc("GET /api/vms/{id}", s.handleGet)
@@ -56,6 +60,15 @@ func NewHandler(mgr *vm.Manager, fcBin, webDir string) http.Handler {
 
 func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, vm.Host(r.Context(), s.fcBin))
+}
+
+func (s *Server) handleImages(w http.ResponseWriter, r *http.Request) {
+	catalog, err := images.Scan(s.imagesDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, catalog)
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {

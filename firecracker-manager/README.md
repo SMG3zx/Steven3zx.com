@@ -38,6 +38,7 @@ cd web && bun run dev
 | `-data-dir` | `$XDG_DATA_HOME/firecracker-manager` or `~/.local/share/firecracker-manager` | VM list and per-VM files |
 | `-firecracker` | `firecracker` | Firecracker binary |
 | `-web-dir` | empty | Built UI to serve (optional) |
+| `-images-dir` | `<data-dir>/images` | Folder whose `kernels/` and `rootfs/` subfolders feed the form dropdowns |
 
 ## API
 
@@ -57,6 +58,10 @@ cd web && bun run dev
 
 Errors are JSON: `{"error": "..."}`, with 400 for invalid input, 404 for unknown VMs, 409 for actions the current state does not allow.
 
+## Images and dropdowns
+
+The create form suggests kernels and root filesystems found in `<images-dir>/kernels` and `<images-dir>/rootfs`, plus a few boot-argument presets. Every field is a text input with those suggestions attached, so you can also type any absolute path or boot-args string. The manager creates both subfolders on startup. Symlinks work.
+
 ## Per-VM files
 
 Each VM gets `<data-dir>/vms/<id>/` containing `api.sock` (Firecracker's API socket) and `console.log` (serial output, truncated on each start). The Unix socket path must fit in 107 bytes, so keep `-data-dir` short. The manager refuses to start if it does not.
@@ -66,7 +71,7 @@ Each VM gets `<data-dir>/vms/<id>/` containing `api.sock` (Firecracker's API soc
 - No authentication. The default listen address is loopback only; do not expose it without adding auth.
 - Firecracker runs directly, not under `jailer`, and VMs get no network interface yet.
 - VM processes are not adopted after a manager restart. All VMs are shown as stopped, and a leftover Firecracker process would need to be stopped by hand. A normal shutdown (SIGINT or SIGTERM) stops running VMs.
-- Images are referenced by host path. There is no upload or image-building step.
+- Images are referenced by host path. There is no upload or image-building step; files are added to the images folders by hand.
 
 ## Tests
 

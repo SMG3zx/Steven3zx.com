@@ -25,7 +25,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *vm.Manager) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(NewHandler(mgr, "no-such-firecracker", ""))
+	srv := httptest.NewServer(NewHandler(mgr, "no-such-firecracker", "", t.TempDir()))
 	t.Cleanup(srv.Close)
 	return srv, mgr
 }
@@ -176,4 +176,42 @@ func TestConsoleStreamReplaysLog(t *testing.T) {
 		}
 	}
 	t.Fatalf("no event received: %v", scanner.Err())
+}
+
+func TestImagesEndpointListsCatalog(t *testing.T) {
+	imagesDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(imagesDir, "kernels"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(imagesDir, "kernels", "vmlinux-6.1"), []byte("k"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mgr, err := vm.NewManager(vm.Options{DataDir: t.TempDir(), FirecrackerBin: "no-such-firecracker"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(NewHandler(mgr, "no-such-firecracker", "", imagesDir))
+	t.Cleanup(srv.Close)
+
+	resp := do(t, http.MethodGet, srv.URL+"/api/images", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var catalog struct {
+		Kernels  []struct{ Path string } `json:"kernels"`
+		RootFS   []struct{ Path string } `json:"rootfs"`
+		BootArgs []string                `json:"bootArgs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Kernels) != 1 || !strings.HasSuffix(catalog.Kernels[0].Path, "vmlinux-6.1") {
+		t.Errorf("kernels = %+v", catalog.Kernels)
+	}
+	if len(catalog.RootFS) != 0 {
+		t.Errorf("rootfs = %+v, want none", catalog.RootFS)
+	}
+	if len(catalog.BootArgs) == 0 {
+		t.Error("expected boot arg presets")
+	}
 }

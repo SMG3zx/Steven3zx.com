@@ -24,7 +24,17 @@ func main() {
 	dataDir := flag.String("data-dir", defaultDataDir(), "directory for VM state and per-VM files")
 	fcBin := flag.String("firecracker", "firecracker", "path to the firecracker binary")
 	webDir := flag.String("web-dir", "", "directory of the built web UI to serve (optional)")
+	imagesDir := flag.String("images-dir", "", "directory with kernels/ and rootfs/ subfolders (default: <data-dir>/images)")
 	flag.Parse()
+
+	if *imagesDir == "" {
+		*imagesDir = filepath.Join(*dataDir, "images")
+	}
+	for _, sub := range []string{"kernels", "rootfs"} {
+		if err := os.MkdirAll(filepath.Join(*imagesDir, sub), 0o755); err != nil {
+			log.Fatalf("firecracker-manager: create images dir: %v", err)
+		}
+	}
 
 	mgr, err := vm.NewManager(vm.Options{DataDir: *dataDir, FirecrackerBin: *fcBin})
 	if err != nil {
@@ -33,7 +43,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           api.NewHandler(mgr, *fcBin, *webDir),
+		Handler:           api.NewHandler(mgr, *fcBin, *webDir, *imagesDir),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
