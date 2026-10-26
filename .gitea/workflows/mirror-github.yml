@@ -2,7 +2,7 @@
 # the checks below, and only a passing gate lets the mirror job push master to GitHub.
 # GitHub never receives a commit that Gitea has not tested first.
 #
-# The mirror job needs the repository secret GITHUB_MIRROR_TOKEN: a GitHub token with
+# The mirror job needs the repository secret MIRROR_TOKEN: a GitHub token with
 # push access to SMG3zx/Steven3zx.com. It is added in the Gitea repository's Actions
 # secrets, not in this file.
 name: mirror-github
@@ -44,10 +44,10 @@ jobs:
       # instead of overwriting them.
       - name: push master to GitHub
         env:
-          GITHUB_MIRROR_TOKEN: ${{ secrets.GITHUB_MIRROR_TOKEN }}
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
         run: |
-          if [ -z "$GITHUB_MIRROR_TOKEN" ]; then
-            echo "GITHUB_MIRROR_TOKEN secret is not set; not publishing." >&2
+          if [ -z "$MIRROR_TOKEN" ]; then
+            echo "MIRROR_TOKEN secret is not set; not publishing." >&2
             exit 1
           fi
-          git push "https://SMG3zx:${GITHUB_MIRROR_TOKEN}@github.com/SMG3zx/Steven3zx.com.git" HEAD:refs/heads/master
+          git push "https://SMG3zx:${MIRROR_TOKEN}@github.com/SMG3zx/Steven3zx.com.git" HEAD:refs/heads/master
