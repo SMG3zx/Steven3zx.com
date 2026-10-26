@@ -13,10 +13,6 @@ on:
       - master
   workflow_dispatch:
 
-env:
-  GOMODCACHE: /ci-cache/go/mod
-  GOCACHE: /ci-cache/go/build
-
 jobs:
   gate:
     runs-on: golang
