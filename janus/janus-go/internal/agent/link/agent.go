@@ -3,8 +3,10 @@ package link
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"janus/internal/domain/agent"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +25,46 @@ const heartbeat = 10 * time.Second
 // usageRetention is how long an Agent keeps its Usage while the hub cannot read
 // it.
 const usageRetention = 7 * 24 * time.Hour
+
+// usageStreamAttempts bounds how often Serve tries to make the Usage stream.
+const usageStreamAttempts = 5
+
+// streamStoreFailed is the JetStream error code for a stream whose store could not
+// be created. The NATS server reports it when the store's directory disappears
+// mid-create: while an account is being enabled, the server removes its streams
+// directory after publishing the account, so a stream made in that moment loses
+// its directory. A later attempt succeeds.
+const streamStoreFailed = 10049
+
+// makeUsageStream creates the Agent's Usage stream on its own server, retrying
+// the store race described at streamStoreFailed.
+func makeUsageStream(ctx context.Context, local jetstream.JetStream, agentID string) error {
+	cfg := jetstream.StreamConfig{
+		Name:     contractfleet.AgentUsageStream,
+		Subjects: []string{contractfleet.AgentUsageSubject(agentID)},
+		MaxAge:   usageRetention,
+	}
+	var err error
+	for attempt := 1; attempt <= usageStreamAttempts; attempt++ {
+		_, err = local.CreateOrUpdateStream(ctx, cfg)
+		if !isStoreRace(err) || attempt == usageStreamAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * 50 * time.Millisecond):
+		}
+	}
+	return err
+}
+
+// isStoreRace reports whether err is the store race of streamStoreFailed.
+func isStoreRace(err error) bool {
+	var apiErr *jetstream.APIError
+	return errors.As(err, &apiErr) && uint16(apiErr.ErrorCode) == streamStoreFailed &&
+		strings.Contains(apiErr.Description, "error creating store")
+}
 
 // Config says how an Agent serves the link. Conn is the Agent's own server; the
 // hub is reached through its leaf connection.
@@ -47,11 +89,7 @@ func Serve(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	if _, err := local.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:     contractfleet.AgentUsageStream,
-		Subjects: []string{contractfleet.AgentUsageSubject(cfg.AgentID)},
-		MaxAge:   usageRetention,
-	}); err != nil {
+	if err := makeUsageStream(ctx, local, cfg.AgentID); err != nil {
 		return fmt.Errorf("make the Usage stream: %w", err)
 	}
 	hub, err := jetstream.NewWithDomain(cfg.Conn, natsx.HubDomain)
