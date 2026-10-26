@@ -11,7 +11,7 @@ BUN_VERSION=1.4.2
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq docker-compose rsync sqlite3 podman podman-docker build-essential git curl unzip ca-certificates \
-  uidmap slirp4netns fuse-overlayfs crun passt netavark aardvark-dns >/dev/null
+  uidmap slirp4netns fuse-overlayfs crun passt netavark aardvark-dns e2fsprogs >/dev/null
 touch /etc/containers/nodocker   # silence the podman-docker "emulating docker" notice
 
 if ! /usr/local/go/bin/go version 2>/dev/null | grep -q "go$GO_VERSION"; then
@@ -60,9 +60,12 @@ if [ ! -f /etc/janus/janus.env ]; then
     echo 'OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318'
     echo 'PYROSCOPE_SERVER_ADDRESS=http://127.0.0.1:4040'
     echo 'JANUS_WEB_UPSTREAM=http://127.0.0.1:3001'
-    echo 'JANUS_WASM_BUILDER_IMAGE=janus-rust-wasm-builder:local'
-    echo 'JANUS_GO_WASM_BUILDER_IMAGE=janus-go-wasm-builder:local'
-    echo 'JANUS_JS_WASM_BUILDER_IMAGE=janus-js-wasm-builder:local'
+    echo 'JANUS_FIRECRACKER_BIN=/opt/janus/firecracker/firecracker'
+    echo 'JANUS_FIRECRACKER_KERNEL=/opt/janus/firecracker/vmlinux'
+    echo 'JANUS_FIRECRACKER_DIR=/var/lib/janus/firecracker/jobs'
+    echo 'JANUS_WASM_RUST_ROOTFS=/var/lib/janus/firecracker/rootfs/janus-rust-wasm.ext4'
+    echo 'JANUS_WASM_GO_ROOTFS=/var/lib/janus/firecracker/rootfs/janus-go-wasm.ext4'
+    echo 'JANUS_WASM_JS_ROOTFS=/var/lib/janus/firecracker/rootfs/janus-js-wasm.ext4'
   } > /etc/janus/janus.env
   chown root:janus /etc/janus/janus.env
   chmod 640 /etc/janus/janus.env

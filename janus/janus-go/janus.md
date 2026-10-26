@@ -349,7 +349,7 @@ sequenceDiagram
 
 The project actor imports GitHub repositories using an owner-linked token. At most two import jobs run concurrently. A source snapshot is limited to 50,000 files, 16 MiB per file, 256 MiB total, and clone depth 50. The scanner records repository metadata and entrypoint candidates. A successful import activates its snapshot; the five newest successful snapshots are retained.
 
-The build coordinator routes Rust snapshots to the Rust builder (`wasm32-unknown-unknown` or `wasm32-wasip1`) and Go snapshots to the Go builder (`wasip1-wasm`, using `GOOS=wasip1 GOARCH=wasm`). At most two builds run concurrently. Configure builder images with `JANUS_WASM_BUILDER_IMAGE` and `JANUS_GO_WASM_BUILDER_IMAGE`; the provided images are built from `build/Dockerfile.wasm-rust` and `build/Dockerfile.wasm-go`. Source snapshots are mounted read-only and copied into a 1 GiB bounded temporary filesystem. Containers have no network, a read-only root, dropped capabilities, 2 GiB memory, two CPUs, a PID limit, and a 10-minute timeout. Both toolchains run offline; dependencies must be vendored or cached in their trusted image. Build logs are capped at 64 KiB and `.zip.zst` artifacts at 128 MiB. The compressor wraps builder ZIP archives in Zstandard level 19 frames. Artifacts are only returned to their owner. Run the format experiment with `go run ./build/compression-exp/experiment.go`.
+The build coordinator routes Rust snapshots to the Rust builder (`wasm32-unknown-unknown` or `wasm32-wasip1`) and Go snapshots to the Go builder (`wasip1-wasm`, using `GOOS=wasip1 GOARCH=wasm`). At most two builds run concurrently. Each build and check boots its own Firecracker microVM from a read-only root filesystem (`JANUS_WASM_RUST_ROOTFS` and `JANUS_WASM_GO_ROOTFS`, built by `build/firecracker/build-rootfs.sh`). Source snapshots are copied into a read-only drive and copied again into a 1 GiB bounded `/workspace`. VMs have no network device, a read-only root, two vCPUs, 2 GiB of memory, and a 10-minute timeout. Both toolchains run offline; dependencies must be vendored or cached in their trusted image. Build logs are capped at 64 KiB and `.zip.zst` artifacts at 128 MiB. The compressor wraps builder ZIP archives in Zstandard level 19 frames. Artifacts are only returned to their owner. Run the format experiment with `go run ./build/compression-exp/experiment.go`.
 
 ## Configuration reference
 
@@ -364,9 +364,12 @@ At startup, Janus loads `.env` from the process working directory, then reads th
 | `JANUS_COOKIE_SECURE` | No | `false` | Boolean; set `true` when HTTPS is used so session and OAuth cookies carry `Secure`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | No | Empty | Set all three to enable Google login. Callback must match the OAuth client configuration. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL` | No | Empty | Set all three to enable GitHub login and linked repository imports. Linking requests `repo` access. |
-| `JANUS_WASM_BUILDER_IMAGE` | No | `janus-rust-wasm-builder:local` | Rust builder image name. |
-| `JANUS_GO_WASM_BUILDER_IMAGE` | No | `janus-go-wasm-builder:local` | Go builder image name. Build images from `build/Dockerfile.wasm-rust` and `build/Dockerfile.wasm-go`. |
-| `JANUS_JS_WASM_BUILDER_IMAGE` | No | `janus-js-wasm-builder:local` | JavaScript/TypeScript builder image name (Bun and Javy). Built from `build/Dockerfile.wasm-js`. |
+| `JANUS_FIRECRACKER_BIN` | No | `firecracker` | Firecracker binary the builds boot microVMs with. |
+| `JANUS_FIRECRACKER_KERNEL` | No | `data/firecracker/vmlinux` | Uncompressed guest kernel (vmlinux) for every microVM. |
+| `JANUS_FIRECRACKER_DIR` | No | `data/firecracker/jobs` | Scratch directory for each job's disk images. |
+| `JANUS_WASM_RUST_ROOTFS` | No | `data/firecracker/rootfs/janus-rust-wasm.ext4` | Rust builder root filesystem. Built by `build/firecracker/build-rootfs.sh rust`. |
+| `JANUS_WASM_GO_ROOTFS` | No | `data/firecracker/rootfs/janus-go-wasm.ext4` | Go builder root filesystem. Built by `build/firecracker/build-rootfs.sh go`. |
+| `JANUS_WASM_JS_ROOTFS` | No | `data/firecracker/rootfs/janus-js-wasm.ext4` | JavaScript/TypeScript builder root filesystem (Bun and Javy). Built by `build/firecracker/build-rootfs.sh js`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | `http://localhost:4318` | OTLP/HTTP endpoint used for traces, metrics, and logs. |
 | `PYROSCOPE_SERVER_ADDRESS` | No | `http://localhost:4040` | Go runtime profile destination. |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | Compose only | `admin` / `change-me-before-sharing` in the example | Local Grafana credentials. Change before sharing or exposing the observability stack. |

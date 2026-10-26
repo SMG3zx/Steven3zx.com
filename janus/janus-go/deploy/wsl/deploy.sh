@@ -23,7 +23,8 @@ cp "$build/janus/web/package.json" /opt/janus/web.new/
 rm -rf /opt/janus/web; mv /opt/janus/web.new /opt/janus/web
 chown -R janus:janus /opt/janus
 
-# The builds service looks for build/Dockerfile.wasm-* above its working directory.
+# build/firecracker/build-rootfs.sh builds the WASM root filesystems; run it by hand with
+# sudo and OUT_DIR=/var/lib/janus/firecracker/rootfs, as the builds service only checks for them.
 rm -rf /var/lib/janus/build; cp -r "$build/janus/janus-go/build" /var/lib/janus/build
 chown -R janus:janus /var/lib/janus
 

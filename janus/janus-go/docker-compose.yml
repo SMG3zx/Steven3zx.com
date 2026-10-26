@@ -50,18 +50,19 @@ services:
     volumes:
       - projects-data:/data
 
+  # The builds service boots Firecracker microVMs, so it needs /dev/kvm and the
+  # firecracker binary, guest kernel and root filesystems from build/firecracker.
+  # The compose file does not mount them yet; run the builds service on the host
+  # (deploy/wsl) until it does.
   builds:
     <<: *janus
-    build:
-      context: .
-      target: builds
+    build: .
     command: ["serve", "builds"]
     environment:
       <<: *janus-environment
       JANUS_BUILDS_DATABASE_PATH: /data/builds.db
     volumes:
       - builds-data:/data
-      - /var/run/docker.sock:/var/run/docker.sock
 
   runs:
     <<: *janus

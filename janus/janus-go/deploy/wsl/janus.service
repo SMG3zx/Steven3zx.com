@@ -8,9 +8,8 @@ User=janus
 Group=janus
 WorkingDirectory=/var/lib/janus
 EnvironmentFile=/etc/janus/janus.env
-# Rootless Podman for the builds service; /usr/bin/docker is the podman-docker shim.
-RuntimeDirectory=janus-podman
-Environment=XDG_RUNTIME_DIR=/run/janus-podman
+# The builds service boots Firecracker microVMs, which need /dev/kvm.
+SupplementaryGroups=kvm
 Environment=HOME=/var/lib/janus
 # One process with an embedded NATS JetStream server (JANUS_NATS_URL is empty).
 ExecStart=/opt/janus/bin/janus serve gateway identity projects builds runs fleet audit

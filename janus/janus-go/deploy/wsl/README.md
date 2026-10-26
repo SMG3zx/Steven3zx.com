@@ -6,7 +6,7 @@ Everything that used to run under Docker Desktop runs here instead.
 |---|---|---|
 | Janus services (gateway, identity, projects, builds, runs, fleet, audit) | `janus.service`, one process, embedded NATS | 9095 |
 | Janus web | `janus-web.service` (Bun) | 3001 |
-| Builds service sandbox | rootless Podman as the `janus` user | |
+| Builds service sandbox | Firecracker microVMs (`/dev/kvm`, `janus` in the `kvm` group) | |
 | Portfolio, admin, Headscale, Gitea, runners, ddns | `janus-edge.service`: `docker compose up -d` against `edge/compose.yaml` on **rootful** Podman | 8190, 8191, 8088, 3010 |
 | Grafana, Loki, Tempo, Pyroscope, Prometheus, Jaeger, OTel collector | `janus-observability.service`: compose, services named explicitly | 3000, 3100, 3200, 4040, 9091, 16686, 4317-4318 |
 

@@ -1,0 +1,9 @@
+# Run WASM Builds and Checks in Firecracker microVMs instead of Docker containers
+
+The builds service compiled each WASM Build and ran each Check in a Docker container from a trusted builder image, with no network, a read-only root and fixed limits. Docker shares the host kernel with every build, and the builds service needed the Docker daemon, a Docker CLI in its image and a socket mount to run at all.
+
+We now boot a Firecracker microVM for each Build, Check and run of a build command. The guest has a kernel of its own and boots its Language's read-only root filesystem, so a build cannot reach the host kernel through a shared namespace. The builds service drives the `firecracker` binary directly, with a configuration file and `--no-api`, and does not use the `firecracker-manager` HTTP API, which has no authentication and is a UI for people, not a job runner. The repository snapshot and the command reach the guest as ext4 drives, and the output comes back on a writable drive that the host reads after the guest reboots. `build/firecracker/janus-init` is the guest's PID 1 and `build/firecracker/build-rootfs.sh` builds the root filesystems, replacing the Dockerfiles under `build/`.
+
+The costs: the builds service needs `/dev/kvm`, so it runs on a host that has KVM, not in a container; each job pays for a VM boot and for building two ext4 drives with e2fsprogs; the root filesystem is one read-only image shared by all jobs, so jobs do not copy it; and the root filesystems are built once by hand with `sudo build/firecracker/build-rootfs.sh`, not at startup. Output is read from an ext4 drive with `debugfs`, so a guest that fails to unmount or fills its output drive is reported as a failed job. The rest of the isolation holds: no network device, a read-only root, a noexec `/tmp`, a bounded `/workspace`, and a deadline that kills the VM.
+
+Decided on 2026-10-26.

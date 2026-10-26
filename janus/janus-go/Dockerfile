@@ -19,15 +19,3 @@ COPY --from=build /out/janus /usr/local/bin/janus
 USER janus
 WORKDIR /data
 ENTRYPOINT ["janus"]
-
-# The builds service compiles in containers of its own, so it needs the Docker
-# CLI and, at run time, the host's Docker socket.
-FROM runtime AS builds
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends docker.io \
-    && rm -rf /var/lib/apt/lists/*
-# At start the service looks for build/Dockerfile.wasm-* in the working directory
-# and above it, to make any builder image that is missing. The working directory is
-# /data, so the Dockerfiles go in /build, which that search reaches.
-COPY build /build
