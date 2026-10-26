@@ -1,0 +1,11 @@
+# Build outputs
+/bin/
+web/dist/
+web/server/
+web/tmp/
+
+# Dependencies
+web/node_modules/
+
+# Local runtime data
+*.log
