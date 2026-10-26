@@ -48,9 +48,12 @@ type settings struct {
 	NATSKeysPath           string
 	NATSLeafAddress        string
 	KeySecret              string
-	WASMBuilderImage       string
-	GoWASMBuilderImage     string
-	JSWASMBuilderImage     string
+	FirecrackerBinary      string
+	FirecrackerKernel      string
+	FirecrackerDir         string
+	WASMRustRootfs         string
+	WASMGoRootfs           string
+	WASMJSRootfs           string
 	PyroscopeServerAddress string
 }
 
@@ -104,9 +107,12 @@ func readSettings() (settings, error) {
 		FleetDatabasePath:      envString("JANUS_FLEET_DATABASE_PATH", "data/fleet.db"),
 		JWTIssuer:              envString("JANUS_JWT_ISSUER", "janus-go"),
 		PyroscopeServerAddress: envString("PYROSCOPE_SERVER_ADDRESS", "http://localhost:4040"),
-		WASMBuilderImage:       envString("JANUS_WASM_BUILDER_IMAGE", "janus-rust-wasm-builder:local"),
-		GoWASMBuilderImage:     envString("JANUS_GO_WASM_BUILDER_IMAGE", "janus-go-wasm-builder:local"),
-		JSWASMBuilderImage:     envString("JANUS_JS_WASM_BUILDER_IMAGE", "janus-js-wasm-builder:local"),
+		FirecrackerBinary:      envString("JANUS_FIRECRACKER_BIN", "firecracker"),
+		FirecrackerKernel:      envString("JANUS_FIRECRACKER_KERNEL", "data/firecracker/vmlinux"),
+		FirecrackerDir:         envString("JANUS_FIRECRACKER_DIR", "data/firecracker/jobs"),
+		WASMRustRootfs:         envString("JANUS_WASM_RUST_ROOTFS", "data/firecracker/rootfs/janus-rust-wasm.ext4"),
+		WASMGoRootfs:           envString("JANUS_WASM_GO_ROOTFS", "data/firecracker/rootfs/janus-go-wasm.ext4"),
+		WASMJSRootfs:           envString("JANUS_WASM_JS_ROOTFS", "data/firecracker/rootfs/janus-js-wasm.ext4"),
 		TailnetDir:             envString("JANUS_TAILNET_DIR", "data/tailnet"),
 		NATSURL:                envString("JANUS_NATS_URL", ""),
 		NATSAddress:            envString("JANUS_NATS_ADDRESS", "127.0.0.1:4222"),

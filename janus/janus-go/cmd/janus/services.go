@@ -23,7 +23,7 @@ import (
 	"janus/internal/platform/tracing"
 	auditservice "janus/internal/services/audit"
 	buildsservice "janus/internal/services/builds"
-	"janus/internal/services/builds/docker"
+	"janus/internal/services/builds/firecracker"
 	fleetservice "janus/internal/services/fleet"
 	"janus/internal/services/fleet/headscale"
 	"janus/internal/services/gateway"
@@ -386,22 +386,17 @@ func (a *application) newIdentityService(context.Context) (natsService, error) {
 }
 
 // newBuildsService makes the builds service on builds.db. Before it is made, the
-// Docker builder images are made ready, as the builds compile in them.
+// host is checked for the microVMs the builds boot in and the root filesystems
+// they run from.
 func (a *application) newBuildsService(context.Context) (natsService, error) {
 	cfg := a.settings
-	if err := docker.EnsureRunning(a.startCtx); err != nil {
-		return nil, fmt.Errorf("ensure Docker Engine is running: %w", err)
+	host := firecracker.Host{Binary: cfg.FirecrackerBinary, Kernel: cfg.FirecrackerKernel, WorkDir: cfg.FirecrackerDir}
+	rootfs := firecracker.Rootfs{Rust: cfg.WASMRustRootfs, Go: cfg.WASMGoRootfs, JavaScript: cfg.WASMJSRootfs}
+	if err := firecracker.Ready(a.startCtx, host, rootfs); err != nil {
+		return nil, fmt.Errorf("check the Firecracker microVM host: %w", err)
 	}
-	a.logger.Info("Docker daemon is ready")
-	images := docker.Images{Rust: cfg.WASMBuilderImage, Go: cfg.GoWASMBuilderImage, JavaScript: cfg.JSWASMBuilderImage}
-	built, err := docker.PrepareImages(a.startCtx, images)
-	if err != nil {
-		return nil, fmt.Errorf("prepare WASM builder images: %w", err)
-	}
-	for _, image := range built {
-		a.logger.Info("built missing WASM builder image", zap.String("image", image))
-	}
-	compiler := docker.NewDocker(images)
+	a.logger.Info("Firecracker microVM host is ready")
+	compiler := firecracker.NewFirecracker(rootfs, host)
 	return buildsservice.New(buildsservice.Config{DatabasePath: cfg.BuildsDatabasePath, Compile: compiler.Build, Check: compiler.Check}), nil
 }
 

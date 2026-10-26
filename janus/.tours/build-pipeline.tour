@@ -31,13 +31,13 @@
       "file": "janus-go/internal/services/builds/worker.go",
       "line": 236,
       "title": "The compile is the outbound call",
-      "description": "`s.cfg.Compile(` is the outbound call. The service does not know that Docker is behind it."
+      "description": "`s.cfg.Compile(` is the outbound call. The service does not know that Firecracker is behind it."
     },
     {
-      "file": "janus-go/internal/services/builds/docker/builder.go",
-      "line": 68,
-      "title": "The Docker compiler",
-      "description": "`func (d *Docker) Build` picks the command for the Language and runs it in an isolated container with no network."
+      "file": "janus-go/internal/services/builds/firecracker/builder.go",
+      "line": 77,
+      "title": "The Firecracker compiler",
+      "description": "`func (d *Firecracker) Build` picks the command for the Language and runs it in its own microVM with no network."
     },
     {
       "file": "janus-go/internal/services/builds/worker.go",
@@ -58,16 +58,16 @@
       "description": "`s.cfg.Check(` is the outbound call for the test commands."
     },
     {
-      "file": "janus-go/internal/services/builds/docker/check.go",
+      "file": "janus-go/internal/services/builds/firecracker/check.go",
       "line": 32,
       "title": "Each Language's test command",
       "description": "`var checkSpecs` holds the test command for each Language, and how that Language's output shows that no test ran."
     },
     {
-      "file": "janus-go/internal/services/builds/docker/check.go",
+      "file": "janus-go/internal/services/builds/firecracker/check.go",
       "line": 39,
       "title": "A failing test is a result",
-      "description": "`func (d *Docker) Check` treats a failing test as a result, and a container that cannot run as an error. The check records both."
+      "description": "`func (d *Firecracker) Check` treats a failing test as a result, and a microVM that cannot run as an error. The check records both."
     },
     {
       "file": "janus-go/internal/services/builds/worker.go",

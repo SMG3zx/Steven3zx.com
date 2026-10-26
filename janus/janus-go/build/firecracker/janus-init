@@ -1,0 +1,35 @@
+#!/bin/sh
+# janus-init is PID 1 in a Janus build microVM. It mounts the job's drives, runs
+# the command in /workspace with the limits the containers had (no network, a
+# read-only root, a noexec /tmp, a 1 GiB writable /workspace), records the stdout,
+# stderr and exit status on the output drive, and reboots. The host reads the
+# output drive after Firecracker exits on that reboot.
+#
+# The root is read-only, so the mount points /root, /src, /job, /out and
+# /workspace must already exist in the image; build-rootfs.sh creates them.
+#
+#   /dev/vda  the Language's root filesystem, read-only
+#   /dev/vdb  the repository snapshot, read-only, mounted at /src
+#   /dev/vdc  command.sh, read-only, mounted at /job
+#   /dev/vdd  the output drive, read-write, mounted at /out
+
+PATH=/usr/local/cargo/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH HOME=/root
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+grep -q ' /dev devtmpfs ' /proc/mounts || mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs -o rw,noexec,nosuid,size=256m tmpfs /tmp
+mount -t tmpfs -o rw,nosuid,size=256m tmpfs /root
+mount -t tmpfs -o rw,exec,nosuid,size=1g tmpfs /workspace
+mount -o ro /dev/vdb /src
+mount -o ro /dev/vdc /job
+mount /dev/vdd /out
+
+cd /workspace || reboot -f
+sh /job/command.sh </dev/null >/out/stdout 2>/out/stderr
+echo $? >/out/status
+
+sync
+umount /out
+reboot -f

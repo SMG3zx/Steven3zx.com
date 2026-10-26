@@ -21,8 +21,8 @@ import (
 // TestEachServiceRunsInItsOwnProcess starts the audit, identity, projects and
 // runs services and the gateway as five processes against one NATS server, and
 // drives the gateway over HTTP: every answer it gives crosses NATS to a service in
-// another process. The builds and fleet services need Docker and Headscale, so
-// they are left out; the flows that need them are tested with their services.
+// another process. The builds service needs Firecracker microVMs and the fleet service needs
+// Headscale, so they are left out; the flows that need them are tested with their services.
 func TestEachServiceRunsInItsOwnProcess(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the janus binary and runs five processes")

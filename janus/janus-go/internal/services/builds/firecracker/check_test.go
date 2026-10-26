@@ -1,4 +1,4 @@
-package docker
+package firecracker
 
 import (
 	"context"
@@ -17,13 +17,13 @@ func checkExecutor(stdout, stderr string, err error, commands *[]string) Executo
 	}
 }
 
-var checkImages = Images{Rust: "janus-rust-builder:test", Go: "janus-go-builder:test"}
+var checkImages = Rootfs{Rust: "/images/rust.ext4", Go: "/images/go.ext4"}
 
 func TestCheckPassesWhenTheTestCommandExitsZero(t *testing.T) {
 	var commands []string
-	docker := newDocker(checkImages, checkExecutor("0\n", "test result: ok. 3 passed; 0 failed\n", nil, &commands))
+	compiler := newFirecracker(checkImages, checkExecutor("0\n", "test result: ok. 3 passed; 0 failed\n", nil, &commands))
 
-	result, err := docker.Check(context.Background(), "Rust", builds.CheckRequest{Workspace: t.TempDir()})
+	result, err := compiler.Check(context.Background(), "Rust", builds.CheckRequest{Workspace: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,9 +37,9 @@ func TestCheckPassesWhenTheTestCommandExitsZero(t *testing.T) {
 
 func TestCheckFailsWhenTheTestCommandReportsANonZeroStatus(t *testing.T) {
 	var commands []string
-	docker := newDocker(checkImages, checkExecutor("101\n", "test result: FAILED\n", nil, &commands))
+	compiler := newFirecracker(checkImages, checkExecutor("101\n", "test result: FAILED\n", nil, &commands))
 
-	result, err := docker.Check(context.Background(), "rust", builds.CheckRequest{Workspace: t.TempDir()})
+	result, err := compiler.Check(context.Background(), "rust", builds.CheckRequest{Workspace: t.TempDir()})
 	if err != nil {
 		t.Fatalf("a failing test is a result, not an error: %v", err)
 	}
@@ -50,26 +50,26 @@ func TestCheckFailsWhenTheTestCommandReportsANonZeroStatus(t *testing.T) {
 
 func TestCheckErrorsWhenTheContainerCannotRun(t *testing.T) {
 	var commands []string
-	docker := newDocker(checkImages, checkExecutor("", "container killed\n", errors.New("container exited with OOM"), &commands))
+	compiler := newFirecracker(checkImages, checkExecutor("", "microVM killed\n", errors.New("microVM was killed"), &commands))
 
-	if _, err := docker.Check(context.Background(), "Go", builds.CheckRequest{Workspace: t.TempDir()}); err == nil {
+	if _, err := compiler.Check(context.Background(), "Go", builds.CheckRequest{Workspace: t.TempDir()}); err == nil {
 		t.Fatal("a container that could not run gave no error")
 	}
 }
 
 func TestCheckReportsNoTestsWhenNothingRan(t *testing.T) {
 	var commands []string
-	docker := newDocker(checkImages, checkExecutor("0\n", "running 0 tests\n", nil, &commands))
+	compiler := newFirecracker(checkImages, checkExecutor("0\n", "running 0 tests\n", nil, &commands))
 
-	result, err := docker.Check(context.Background(), "Rust", builds.CheckRequest{Workspace: t.TempDir()})
+	result, err := compiler.Check(context.Background(), "Rust", builds.CheckRequest{Workspace: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.Passed || !result.NoTests {
 		t.Fatalf("a Rust crate with no tests should pass with NoTests: %+v", result)
 	}
-	docker = newDocker(checkImages, checkExecutor("0\n", "?   \texample.com/app\t[no test files]\n", nil, &commands))
-	result, err = docker.Check(context.Background(), "Go", builds.CheckRequest{Workspace: t.TempDir()})
+	compiler = newFirecracker(checkImages, checkExecutor("0\n", "?   \texample.com/app\t[no test files]\n", nil, &commands))
+	result, err = compiler.Check(context.Background(), "Go", builds.CheckRequest{Workspace: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,9 +80,9 @@ func TestCheckReportsNoTestsWhenNothingRan(t *testing.T) {
 
 func TestCheckRefusesALanguageWithoutChecks(t *testing.T) {
 	var commands []string
-	docker := newDocker(checkImages, checkExecutor("0\n", "", nil, &commands))
+	compiler := newFirecracker(checkImages, checkExecutor("0\n", "", nil, &commands))
 
-	if _, err := docker.Check(context.Background(), "JavaScript/TypeScript", builds.CheckRequest{Workspace: t.TempDir()}); err == nil {
+	if _, err := compiler.Check(context.Background(), "JavaScript/TypeScript", builds.CheckRequest{Workspace: t.TempDir()}); err == nil {
 		t.Fatal("checks ran for a language with no check commands")
 	}
 	if len(commands) != 0 {

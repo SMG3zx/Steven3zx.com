@@ -1,4 +1,4 @@
-package docker
+package firecracker
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	"janus/internal/services/builds"
 )
 
-// Each check command runs the Language's checks in its builder image and exits
+// Each check command runs the Language's checks in its microVM and exits
 // 0 itself, printing the status of the checks as its last line of stdout. So a
-// failing check is a result, and a container that could not run is an error.
+// failing check is a result, and a microVM that could not run is an error.
 const (
 	rustCheckCommand = "cp -a /src/. /workspace/ && cd /workspace && cargo test --locked --offline >&2 2>&1; echo $?"
 	goCheckCommand   = "cp -a /src/. /workspace/ && cd /workspace && (GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go vet ./... && GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test ./...) >&2 2>&1; echo $?"
@@ -35,18 +35,18 @@ var checkSpecs = map[string]checkSpec{
 }
 
 // Check runs the check and test commands of the workspace in the Language's
-// builder image, with the same isolation as a build.
-func (d *Docker) Check(ctx context.Context, language string, request builds.CheckRequest) (builds.CheckResult, error) {
+// microVM, with the same isolation as a build.
+func (d *Firecracker) Check(ctx context.Context, language string, request builds.CheckRequest) (builds.CheckResult, error) {
 	key := strings.ToLower(language)
 	a, ok := d.adapters[key]
 	spec, hasChecks := checkSpecs[key]
 	if !ok || !hasChecks {
 		return builds.CheckResult{}, errors.New("no WASM checks for " + language)
 	}
-	if !validImage.MatchString(a.image) {
-		return builds.CheckResult{}, errors.New("configure a trusted, pre-provisioned WASM builder image")
+	if !validRootfs(a.rootfs) {
+		return builds.CheckResult{}, errors.New("configure a trusted, built WASM root filesystem")
 	}
-	ran := d.execute(ctx, Run{Image: a.image, Workspace: request.Workspace, Command: spec.command, MaxLog: MaxLog, MaxOutput: 64 << 10})
+	ran := d.execute(ctx, Run{Rootfs: a.rootfs, Workspace: request.Workspace, Command: spec.command, MaxLog: MaxLog, MaxOutput: 64 << 10})
 	if ran.Err != nil {
 		return builds.CheckResult{Log: ran.Stderr}, ran.Err
 	}

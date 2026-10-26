@@ -38,8 +38,8 @@ func TestStartRunsGroupsInOrderAndStopRunsThemInReverse(t *testing.T) {
 
 func TestFailedStartStopsOnlyWhatAlreadyStartedAndReturnsTheStartError(t *testing.T) {
 	r := &recorder{}
-	boom := errors.New("builder image missing")
-	failing := r.component("docker")
+	boom := errors.New("builder root filesystem missing")
+	failing := r.component("microvm")
 	failing.start = func(context.Context) error { return boom }
 	lc := newLifecycle(
 		group{name: "foundation", components: []component{r.component("audit")}},

@@ -40,7 +40,7 @@ type Config struct {
 	// DatabasePath is builds.db.
 	DatabasePath string
 	// Compile compiles a workspace. It is required; the container compiler of
-	// services/builds/docker is what Janus runs.
+	// services/builds/firecracker is what Janus runs.
 	Compile CompileFunc
 	// Check runs the checks of a compiled workspace. Nil skips the checks, so a
 	// completed Build has no Check.

@@ -1,10 +1,12 @@
-// Package builder compiles a source workspace to an Artifact. One adapter per
+// Package firecracker compiles a source workspace to an Artifact. One adapter per
 // Template owns that Language's manifest check, Target rule and build command.
 // The Template module stays the source of truth for Languages and Targets.
 //
 // Builds are plain calls, not actors: each runs on its caller's goroutine, so
-// builds of any Language overlap, up to the limit the job runner sets.
-package docker
+// builds of any Language overlap, up to the limit the job runner sets. Each
+// build boots its own microVM, so builds share nothing but the read-only root
+// filesystems.
+package firecracker
 
 import (
 	"context"
@@ -12,7 +14,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"janus/internal/domain/artifact"
@@ -26,7 +27,11 @@ const (
 	artifactName = "wasm-artifacts.zip"
 )
 
-var validImage = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
+// validRootfs accepts an absolute path to a root filesystem image. Only the path
+// shape is checked here; the file is checked once at startup by Ready.
+func validRootfs(path string) bool {
+	return filepath.IsAbs(path) && !strings.ContainsAny(path, "\x00\n")
+}
 
 type (
 	Request       = builds.CompileRequest
@@ -34,38 +39,42 @@ type (
 	ManifestError = builds.ManifestError
 )
 
-// Executor runs a container. Docker is the real one.
+// Executor runs a command in a microVM. Host.Execute is the real one.
 type Executor func(ctx context.Context, run Run) Ran
 
 // adapter is how one Template is built: it checks the workspace, applies the
-// Target rule and returns the shell command to run in the builder image.
+// Target rule and returns the shell command to run in the microVM.
 type adapter struct {
-	image   string
+	rootfs  string
 	command func(Request) (string, error)
 }
 
-// Docker builds in sandboxed containers, one trusted image per Language.
-type Docker struct {
+// Firecracker builds in sandboxed microVMs, one trusted root filesystem per
+// Language.
+type Firecracker struct {
 	adapters map[string]adapter
 	execute  Executor
 }
 
-// Images names the trusted builder image of each Language.
-type Images struct{ Rust, Go, JavaScript string }
+// Rootfs names the trusted root filesystem image of each Language.
+type Rootfs struct{ Rust, Go, JavaScript string }
 
-// NewDocker returns a Builder that runs the adapters in images through Execute.
-func NewDocker(images Images) *Docker { return newDocker(images, Execute) }
+// NewFirecracker returns a Builder that runs the adapters in the root filesystems
+// of images, each in a microVM booted on host.
+func NewFirecracker(images Rootfs, host Host) *Firecracker {
+	return newFirecracker(images, host.Execute)
+}
 
-func newDocker(images Images, execute Executor) *Docker {
-	return &Docker{execute: execute, adapters: map[string]adapter{
-		"rust":                  {image: strings.TrimSpace(images.Rust), command: rustCommand},
-		"go":                    {image: strings.TrimSpace(images.Go), command: goCommand},
-		"javascript/typescript": {image: strings.TrimSpace(images.JavaScript), command: javaScriptCommand},
+func newFirecracker(images Rootfs, execute Executor) *Firecracker {
+	return &Firecracker{execute: execute, adapters: map[string]adapter{
+		"rust":                  {rootfs: strings.TrimSpace(images.Rust), command: rustCommand},
+		"go":                    {rootfs: strings.TrimSpace(images.Go), command: goCommand},
+		"javascript/typescript": {rootfs: strings.TrimSpace(images.JavaScript), command: javaScriptCommand},
 	}}
 }
 
 // Build compiles the workspace and returns the compressed Artifact.
-func (d *Docker) Build(ctx context.Context, language string, request Request) (Result, error) {
+func (d *Firecracker) Build(ctx context.Context, language string, request Request) (Result, error) {
 	a, ok := d.adapters[strings.ToLower(language)]
 	if !ok {
 		return Result{}, errors.New("no WASM builder for " + language)
@@ -74,10 +83,10 @@ func (d *Docker) Build(ctx context.Context, language string, request Request) (R
 	if err != nil {
 		return Result{}, err
 	}
-	if !validImage.MatchString(a.image) {
-		return Result{}, errors.New("configure a trusted, pre-provisioned WASM builder image")
+	if !validRootfs(a.rootfs) {
+		return Result{}, errors.New("configure a trusted, built WASM root filesystem")
 	}
-	ran := d.execute(ctx, Run{Image: a.image, Workspace: request.Workspace, Command: command, MaxLog: MaxLog, MaxOutput: artifact.MaxBytes + (1 << 20)})
+	ran := d.execute(ctx, Run{Rootfs: a.rootfs, Workspace: request.Workspace, Command: command, MaxLog: MaxLog, MaxOutput: artifact.MaxBytes + (1 << 20)})
 	if ran.Err != nil {
 		return Result{Log: ran.Stderr}, ran.Err
 	}
