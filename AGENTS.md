@@ -17,7 +17,7 @@ Any folder named `cold-storage` holds ideas for much later. Do not read, search,
 ## Version control: Git and `origin`
 
 - Use **Git** for repository operations: inspect history, stage, commit, fetch, and push with `git`.
-- `origin` is the canonical remote: `http://localhost:3000/Steven3zx/janus.git` (Gitea). Gitea runs the repository's Actions and is the only remote that gates what gets published.
+- `origin` is the canonical remote: `http://localhost:3000/Steven3zx/Steven3zx.com.git` (Gitea). Gitea runs the repository's Actions and is the only remote that gates what gets published.
 - `github` is a backup remote: `https://github.com/SMG3zx/Steven3zx.com.git`. `.gitea/workflows/mirror-github.yml` pushes `master` to it after the gate passes.
 - Check `git status`, `git diff`, and `git log` before and after making changes.
 - At the end of agent work, before handing back to the human, commit the work with a descriptive message. Do not leave finished changes uncommitted in the working tree. Do not combine incomplete or unrelated changes in one commit; split them into focused commits. Stage only the paths that belong to each change.
