@@ -2,7 +2,7 @@
 
 ## Repository shape
 
-This repository is a monorepo: it contains multiple independent projects and tools under one shared repository and one GitHub remote. A project's dependencies, build steps, and conventions may differ from its neighbors. Before changing a subproject, check its README and any nearer `AGENTS.md` for project-specific guidance.
+This repository is a monorepo: it contains multiple independent projects and tools under one shared repository, with Gitea (`origin`) as the main remote and GitHub as a backup. A project's dependencies, build steps, and conventions may differ from its neighbors. Before changing a subproject, check its README and any nearer `AGENTS.md` for project-specific guidance.
 
 Some of the main project directories are:
 
@@ -17,10 +17,11 @@ Any folder named `cold-storage` holds ideas for much later. Do not read, search,
 ## Version control: Git and `origin`
 
 - Use **Git** for repository operations: inspect history, stage, commit, fetch, and push with `git`.
-- `origin` is the canonical remote: `https://github.com/SMG3zx/Steven3zx.com.git`.
+- `origin` is the canonical remote: `http://localhost:3000/Steven3zx/janus.git` (Gitea). Gitea runs the repository's Actions and is the only remote that gates what gets published.
+- `github` is a backup remote: `https://github.com/SMG3zx/Steven3zx.com.git`. Push to it only after `origin` has the same commits.
 - Check `git status`, `git diff`, and `git log` before and after making changes.
 - At the end of agent work, before handing back to the human, commit the work with a descriptive message. Do not leave finished changes uncommitted in the working tree. Do not combine incomplete or unrelated changes in one commit; split them into focused commits. Stage only the paths that belong to each change.
-- Fetch from `origin` before integrating remote changes, then push the intended branch with `git push origin <branch>`.
+- Fetch from `origin` before integrating remote changes, then push the intended branch with `git push origin <branch>`. Then mirror it with `git push github <branch>`.
 - Do not force-push a remote branch unless explicitly asked.
 - Keep commits focused on the requested work. Do not include local secrets, environment files, build outputs, or unrelated project changes.
 
