@@ -1,0 +1,28 @@
+{
+  "name": "firecracker-manager-web",
+  "description": "Web UI for firecracker-manager",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode ssr",
+    "build.client": "vite build",
+    "build.preview": "vite build --ssr src/entry.preview.tsx",
+    "build.static": "vite build -c adapters/static/vite.config.ts",
+    "build": "bun run build.client && bun run build.preview && bun run build.static",
+    "build.types": "tsc --noEmit",
+    "fmt": "prettier --write .",
+    "fmt.check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@builder.io/qwik": "1.20.0",
+    "@builder.io/qwik-city": "1.20.0",
+    "@types/node": "20.19.0",
+    "prettier": "3.6.2",
+    "typescript": "5.4.5",
+    "vite": "7.3.1",
+    "vite-tsconfig-paths": "^4.2.1"
+  }
+}
