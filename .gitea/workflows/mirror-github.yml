@@ -1,0 +1,53 @@
+# Gates publishing to the GitHub backup. Gitea is the main remote: a master push runs
+# the checks below, and only a passing gate lets the mirror job push master to GitHub.
+# GitHub never receives a commit that Gitea has not tested first.
+#
+# The mirror job needs the repository secret GITHUB_MIRROR_TOKEN: a GitHub token with
+# push access to SMG3zx/Steven3zx.com. It is added in the Gitea repository's Actions
+# secrets, not in this file.
+name: mirror-github
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  GOMODCACHE: /ci-cache/go/mod
+  GOCACHE: /ci-cache/go/build
+
+jobs:
+  gate:
+    runs-on: golang
+    steps:
+      - uses: actions/checkout@v4
+      - name: firecracker-manager
+        working-directory: firecracker-manager
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+      - name: janus-go
+        working-directory: janus/janus-go
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+
+  mirror:
+    needs: [gate]
+    runs-on: golang
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Plain push, no --force: if GitHub has commits Gitea does not, this fails
+      # instead of overwriting them.
+      - name: push master to GitHub
+        env:
+          GITHUB_MIRROR_TOKEN: ${{ secrets.GITHUB_MIRROR_TOKEN }}
+        run: |
+          if [ -z "$GITHUB_MIRROR_TOKEN" ]; then
+            echo "GITHUB_MIRROR_TOKEN secret is not set; not publishing." >&2
+            exit 1
+          fi
+          git push "https://SMG3zx:${GITHUB_MIRROR_TOKEN}@github.com/SMG3zx/Steven3zx.com.git" HEAD:refs/heads/master
