@@ -1,0 +1,40 @@
+# Tests janus-go on master pushes that touch it, then deploys to the WSL host.
+# The deploy job runs on the janus-host runner (janus/janus-go/deploy/wsl/ci/setup-runner.sh),
+# which has no Docker socket. It runs /usr/local/sbin/janus-deploy, a root-owned wrapper that
+# takes no arguments and deploys whatever master holds on the Gitea server.
+#
+# The deploy job stays off until the repository variable JANUS_DEPLOY is set to "true", so a
+# runner registering or a push cannot deploy before the host is ready.
+name: janus-deploy
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "janus/janus-go/**"
+      - "janus/web/**"
+  workflow_dispatch:
+
+# Shared caches, mounted from the steven3zx-ci-cache volume by the runner.
+env:
+  GOMODCACHE: /ci-cache/go/mod
+  GOCACHE: /ci-cache/go/build
+
+jobs:
+  test:
+    runs-on: golang
+    defaults:
+      run:
+        working-directory: janus/janus-go
+    steps:
+      - uses: actions/checkout@v4
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+
+  deploy:
+    needs: [test]
+    if: github.ref == 'refs/heads/master' && vars.JANUS_DEPLOY == 'true'
+    runs-on: janus-host
+    steps:
+      - name: Deploy master to the WSL host
+        run: sudo /usr/local/sbin/janus-deploy

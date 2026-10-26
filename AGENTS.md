@@ -35,7 +35,7 @@ Linear status can lag the code. Before implementing an `ENG-NNN` ticket, run `gi
 ### Working on janus-go
 
 - `master` may be checked out in a second worktree; run `git worktree list` to find it. `git checkout master` fails in a checkout while another worktree holds `master`, so work in that worktree instead.
-- Enable the checks once per clone with `git config core.hooksPath .githooks`. The pre-commit hook runs gofmt and go vet on staged janus-go files. The pre-push hook runs `go test ./...` for janus-go before anything is pushed. Everything runs locally; there is no CI.
+- Enable the checks once per clone with `git config core.hooksPath .githooks`. The pre-commit hook runs gofmt and go vet on staged janus-go files. The pre-push hook runs `go test ./...` for janus-go before anything is pushed. The hooks run locally. The Gitea server runs `.gitea/workflows/janus-deploy.yml` on master pushes: it tests janus-go and, once the `JANUS_DEPLOY` variable is `true`, deploys it to the WSL host (see `janus/janus-go/deploy/wsl/README.md`).
 - Trust `go vet` over gopls in a worktree: gopls reports "could not import" for packages outside its workspace.
 - Tour steps in `janus/.tours` pin the line of a symbol. When `TestTourStepsPointAtTheirSymbols` reports a moved line, run `UPDATE_TOURS=1 go test ./internal/archtest -run TestTourStepsPointAtTheirSymbols` rather than editing the JSON.
 
