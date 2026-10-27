@@ -22,7 +22,6 @@ type Token interface {
 	isToken()
 }
 
-// Atom represents Token::Atom(String), a number or a variable name
 type Atom struct {
 	Value string
 }
@@ -47,6 +46,8 @@ func (Eof) isToken() {}
 
 type Lexer struct {
 	Tokens []Token
+	// trace, when set, receives a line for each parsing decision.
+	trace func(string)
 }
 
 func NewLexer(input string) *Lexer {
@@ -68,13 +69,10 @@ func NewLexer(input string) *Lexer {
 			}
 			tokens = append(tokens, Atom{Value: string(runes[start:i])})
 
-		// A name is a letter followed by letters or digits, such as x or x2
+		// Each letter is its own variable, so xy means x times y
 		case unicode.IsLetter(c):
-			start := i
-			for i < len(runes) && (unicode.IsLetter(runes[i]) || unicode.IsDigit(runes[i])) {
-				i++
-			}
-			tokens = append(tokens, Atom{Value: string(runes[start:i])})
+			tokens = append(tokens, Atom{Value: string(c)})
+			i++
 
 		default:
 			tokens = append(tokens, Op{Value: c})
@@ -112,8 +110,24 @@ func (l *Lexer) Peek() Token {
 	return l.Tokens[len(l.Tokens)-1]
 }
 
+func (l *Lexer) logf(format string, args ...any) {
+	if l.trace != nil {
+		l.trace(fmt.Sprintf(format, args...))
+	}
+}
+
+// Forward returns the tokens in input order, for display.
+func (l *Lexer) Forward() []Token {
+	out := make([]Token, len(l.Tokens))
+	for i, t := range l.Tokens {
+		out[len(l.Tokens)-1-i] = t
+	}
+	return out
+}
+
 type Cons struct {
 	Head rune
+	// Rest holds two operands for a binary operator, or one for unary minus.
 	Rest []SExpression
 }
 
@@ -127,8 +141,12 @@ func (c Cons) String() string {
 	return sb.String()
 }
 
-// Eval evaluates both operands and applies the operator. Division by zero is an error.
+// Eval evaluates the operands and applies the operator. Division by zero is an error.
 func (c Cons) Eval(env map[string]float64) (float64, error) {
+	if len(c.Rest) == 1 {
+		v, err := c.Rest[0].Eval(env)
+		return -v, err
+	}
 	left, err := c.Rest[0].Eval(env)
 	if err != nil {
 		return 0, err
@@ -160,6 +178,9 @@ func (c Cons) Eval(env map[string]float64) (float64, error) {
 // The power rule only handles exponents that contain no variables, so
 // anything else panics, like the other syntax errors in this file.
 func (c Cons) Diff(name string) SExpression {
+	if len(c.Rest) == 1 {
+		return cons('-', c.Rest[0].Diff(name))
+	}
 	a, b := c.Rest[0], c.Rest[1]
 	da, db := a.Diff(name), b.Diff(name)
 
@@ -221,10 +242,27 @@ func number(f float64) SAtom {
 	return SAtom{Value: strconv.FormatFloat(f, 'f', -1, 64)}
 }
 
-// expr parses a whole input string into an S tree.
-// It starts with minBindingPower 0, so every operator is allowed to join the expression.
+// expr parses a whole input string into an S tree. It panics on bad input.
 func expr(input string) SExpression {
+	return parse(input, nil)
+}
+
+// ParseWithTrace parses input and also returns one line per parsing decision,
+// in the order the parser made them. Syntax errors come back as err.
+func ParseWithTrace(input string) (tree SExpression, lines []string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+	tree = parse(input, func(line string) { lines = append(lines, line) })
+	return tree, lines, nil
+}
+
+// parse starts with minBindingPower 0, so every operator is allowed to join the expression.
+func parse(input string, trace func(string)) SExpression {
 	lexer := NewLexer(input)
+	lexer.trace = trace
 	tree := exprBindingPower(lexer, 0)
 
 	// Anything left over, such as an unmatched ")", is a syntax error.
@@ -246,20 +284,30 @@ func expr(input string) SExpression {
 //   - The * call builds (* 2 3) and returns it to the + call.
 //   - The + call builds (+ 1 (* 2 3)) and returns it.
 func exprBindingPower(lexer *Lexer, minBindingPower int) SExpression {
-	// The left-hand side is a name or number, or a parenthesized expression.
-	// Anything else is a syntax error, so we panic.
+	// The left-hand side is a name or number, a parenthesized expression,
+	// or a unary minus. Anything else is a syntax error, so we panic.
 	var lhs SExpression
 	switch t := lexer.Next().(type) {
 	case Atom:
 		lhs = SAtom{Value: t.Value}
+		lexer.logf("read %s as an operand", t.Value)
 	case Op:
-		if t.Value != '(' {
+		switch t.Value {
+		case '(':
+			lexer.logf("open a parenthesized group")
+			lhs = exprBindingPower(lexer, 0)
+			closing, ok := lexer.Next().(Op)
+			if !ok || closing.Value != ')' {
+				panic(fmt.Sprintf("expected ')', got %v", closing))
+			}
+			lexer.logf("close the group with ) as %s", lhs)
+		case '-':
+			// Unary minus binds tighter than * but looser than ^, so -x^2 is -(x^2).
+			lexer.logf("read unary - and parse its operand with power 5")
+			lhs = cons('-', exprBindingPower(lexer, 5))
+			lexer.logf("build %s", lhs)
+		default:
 			panic(fmt.Sprintf("bad token: %v", t))
-		}
-		lhs = exprBindingPower(lexer, 0)
-		closing, ok := lexer.Next().(Op)
-		if !ok || closing.Value != ')' {
-			panic(fmt.Sprintf("expected ')', got %v", closing))
 		}
 	default:
 		panic(fmt.Sprintf("bad token: %v", t))
@@ -270,15 +318,24 @@ func exprBindingPower(lexer *Lexer, minBindingPower int) SExpression {
 		// Look at the next token without consuming it. Eof means the input is
 		// done, so return what we have. A ")" closes a parenthesized group, so the
 		// caller handles it. An operator is the only other valid token.
+		// Two operands side by side, such as 2x or (x)(x+1), mean multiplication.
 		var op rune
+		implicit := false
 		switch t := lexer.Peek().(type) {
 		case Eof:
 			return lhs
+		case Atom:
+			op = '*'
+			implicit = true
 		case Op:
 			if t.Value == ')' {
 				return lhs
 			}
 			op = t.Value
+			if op == '(' {
+				op = '*'
+				implicit = true
+			}
 		default:
 			panic(fmt.Sprintf("bad token: %v", t))
 		}
@@ -287,17 +344,32 @@ func exprBindingPower(lexer *Lexer, minBindingPower int) SExpression {
 		// stop here. The caller will use lhs as its own left-hand side.
 		lBP, rBP := infixBindingPower(op)
 		if lBP < minBindingPower {
+			lexer.logf("see %s with left power %d, below minimum %d: stop", opName(op, implicit), lBP, minBindingPower)
 			return lhs
 		}
 		// Consume the operator token now that we know we are using it.
-		lexer.Next()
+		// Implicit multiplication has no token to consume.
+		if implicit {
+			lexer.logf("no operator before the next operand: multiply implicitly (powers %d, %d)", lBP, rBP)
+		} else {
+			lexer.logf("see %c with powers (%d, %d) at minimum %d: take it", op, lBP, rBP, minBindingPower)
+			lexer.Next()
+		}
 
 		// Parse the right-hand side with rBP as the minimum. Operators that bind
 		// more tightly than op are absorbed into rhs. Weaker ones are left for the
 		// loop here.
 		rhs := exprBindingPower(lexer, rBP)
 		lhs = Cons{Head: op, Rest: []SExpression{lhs, rhs}}
+		lexer.logf("build %s", lhs)
 	}
+}
+
+func opName(op rune, implicit bool) string {
+	if implicit {
+		return "implicit *"
+	}
+	return string(op)
 }
 
 // infixBindingPower returns the left and right binding power of an operator.
@@ -314,8 +386,4 @@ func infixBindingPower(op rune) (int, int) {
 		return 6, 5
 	}
 	panic(fmt.Sprintf("bad op: %c", op))
-}
-
-func main() {
-
 }

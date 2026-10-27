@@ -1,0 +1,55 @@
+package main
+
+import "testing"
+
+func TestPolyStandardForm(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"(x + 4)(x^2 - 4x + 16)", "x^3 + 64"},
+		{"(3 - 8x)^2", "64x^2 - 48x + 9"},
+		{"-x^2 + 1", "-x^2 + 1"},
+		{"(7x^2y + 6xy - 1) + (-4x^2y + 2xy - 10)", "3x^2y + 8xy - 11"},
+		{"(4x + 3y)(4x - 3y)", "16x^2 - 9y^2"},
+		{"x - x", "0"},
+	}
+	for _, c := range cases {
+		p, err := ToPoly(expr(c.input))
+		if err != nil {
+			t.Errorf("ToPoly(%q) returned error: %v", c.input, err)
+			continue
+		}
+		if got := p.String(); got != c.want {
+			t.Errorf("ToPoly(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+func TestPolyDegree(t *testing.T) {
+	cases := []struct {
+		input string
+		want  int
+	}{
+		{"(7x^2y + 6xy - 1) + (-4x^2y + 2xy - 10)", 3},
+		{"(7x^4y^2 + 10x^3y - 7y) - (4x^4y^2 + 5x^3y + 4y + 4x)", 6},
+		{"(7x^2 - 6x - 5) + (3x^2 - 5x + 7) - (x^2 - 2x - 1)", 2},
+	}
+	for _, c := range cases {
+		p, err := ToPoly(expr(c.input))
+		if err != nil {
+			t.Fatalf("ToPoly(%q) returned error: %v", c.input, err)
+		}
+		if got := p.Degree(); got != c.want {
+			t.Errorf("Degree(%q) = %d, want %d", c.input, got, c.want)
+		}
+	}
+}
+
+func TestToPolyRejectsNonPolynomials(t *testing.T) {
+	for _, input := range []string{"1 / x", "x ^ y", "1.5x"} {
+		if _, err := ToPoly(expr(input)); err == nil {
+			t.Errorf("ToPoly(%q) returned no error", input)
+		}
+	}
+}
