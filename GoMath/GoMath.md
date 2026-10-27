@@ -79,3 +79,75 @@ Techniques that `Technique` can name:
 `bank.go` holds the 35 problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.
 
 The TUI's bank view (ctrl+b) lists the same entries. Running one shows whether GoMath's answer matches the worksheet.
+
+## Textbook coverage
+
+This maps the concepts in *Algebra Essentials* (Blitzer) to what GoMath can process. Yes means GoMath handles the concept directly. Partly means it handles some of the concept or one of its steps. No means it is outside the system today.
+
+### Chapter P: Fundamentals
+
+| Concept | Status | Notes |
+| --- | --- | --- |
+| Algebraic expressions and evaluating them at values | Yes | `Eval` with a variable table. |
+| Real-number classes and the models behind word problems | No | Word problems are not parsed. |
+| Integer exponents and the exponent laws | Yes | Expanded by `Simplify`, with whole-number exponents only. |
+| Scientific notation | No | Decimal input is accepted, but not `a × 10^n`. |
+| Radicals and rational exponents | No | No roots and no fractional exponents. |
+| Adding, subtracting, and multiplying polynomials | Yes | `Simplify`, with standard form and degree. |
+| Special products (binomial squares, sum and difference of cubes) | Yes | Expanded by `Simplify`. |
+| Factoring: greatest common factor | Yes | `Factor`, and `Technique` names it. |
+| Factoring: grouping | Partly | The factored result is correct; `Technique` names the method only for four-term inputs. |
+| Factoring: difference of squares, perfect square trinomials, trinomials | Yes | Found by rational roots; `Technique` names each. |
+| Factoring: sum and difference of cubes | Yes | Found by rational roots; `Technique` names them. |
+| Rational expressions: simplifying, multiplying, dividing | No | Division by a variable is not a polynomial operation. |
+
+### Chapter 1: Equations and inequalities
+
+| Concept | Status | Notes |
+| --- | --- | --- |
+| Graphs and graphing utilities | No | No graphing. |
+| Solving linear and rational equations | No | There is no solve operation. |
+| Models and applications | No | Word problems are not parsed. |
+| Complex numbers, including `i` | No | `i` is read as a variable. |
+| Solving quadratic equations by factoring | Partly | `Factor` gives the factors, and solving them is left to you. |
+| Quadratic formula and completing the square | No | |
+| Other equations: radical, absolute value, quadratic in form | No | |
+| Linear and absolute value inequalities | No | |
+
+### Chapter 2: Functions and graphs
+
+| Concept | Status | Notes |
+| --- | --- | --- |
+| Function notation `f(x)`, domain, and range | No | |
+| Graphs, slope, and linear functions | No | |
+| Transformations of graphs | No | |
+| Combining functions and composition | No | |
+| Inverse functions | No | |
+| Distance and midpoint formulas, circles | No | Needs square roots. |
+
+### Chapter 3: Polynomial and rational functions
+
+| Concept | Status | Notes |
+| --- | --- | --- |
+| Quadratic functions: vertex form, completing the square | No | Factoring works; the vertex form does not. |
+| Graphs of polynomial functions, end behavior | No | |
+| Dividing polynomials | No | No division operation. |
+| Remainder and factor theorems | Partly | Factors are found when they are rational roots; remainders are not computed. |
+| Zeros of polynomials: rational zeros | Partly | Rational roots are found; irrational and complex zeros are not. |
+| Rational functions and their graphs | No | |
+| Polynomial and rational inequalities | No | |
+| Modeling with variation | No | |
+
+### Chapters 4 and 5, and the appendix
+
+| Concept | Status | Notes |
+| --- | --- | --- |
+| Exponential and logarithmic functions and equations | No | |
+| Systems of linear and nonlinear equations | No | |
+| Partial fractions | No | |
+| Systems of inequalities and linear programming | No | |
+| Proofs in the appendix | No | |
+
+### Beyond the textbook
+
+`Diff` is not in this book's table of contents. It differentiates with respect to one variable using the sum, product, quotient, and power rules, and `Eval` evaluates expressions. Both are listed under Operations above.
