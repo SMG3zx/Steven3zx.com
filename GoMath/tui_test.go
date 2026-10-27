@@ -128,7 +128,24 @@ func TestTUIStepsThroughRun(t *testing.T) {
 	}
 }
 
-func TestTUITranscriptKeepsEarlierSteps(t *testing.T) {
+func TestStageTextIsTheResultOfTheStep(t *testing.T) {
+	cases := []struct {
+		step Step
+		want string
+	}{
+		{Step{"Compute", "Add", "(x) + (1) = x + 1"}, "x + 1"},
+		{Step{"Compute", "Raise to a power", "(x + 1)^2 = x^2 + 2x + 1"}, "x^2 + 2x + 1"},
+		{Step{"Input", "ASCII form", "(x+1)^(2)"}, "(x+1)^(2)"},
+		{Step{"Parse", "Pratt parser", "read x as an operand"}, "read x as an operand"},
+	}
+	for _, c := range cases {
+		if got := stageText(c.step); got != c.want {
+			t.Errorf("stageText(%q) = %q, want %q", c.step.Detail, got, c.want)
+		}
+	}
+}
+
+func TestTUIShowsOnlyTheCurrentStage(t *testing.T) {
 	var m tea.Model = newModel()
 	m = send(m, typed("(x+1)(x+2)"))
 	m = send(m, key(tea.KeyEnter))
@@ -139,10 +156,11 @@ func TestTUITranscriptKeepsEarlierSteps(t *testing.T) {
 	m = settle(t, m)
 
 	view := m.View()
-	for _, want := range []string{"Read the input", "ASCII form", "Split into tokens"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("view is missing earlier or current step %q:\n%s", want, view)
-		}
+	if !strings.Contains(view, "Split into tokens") {
+		t.Errorf("view does not show the current step:\n%s", view)
+	}
+	if strings.Contains(view, "Read the input") {
+		t.Errorf("view still shows an earlier step, which should be gone:\n%s", view)
 	}
 }
 

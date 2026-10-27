@@ -18,20 +18,31 @@ const (
 )
 
 const (
-	// frameInterval paces the typing animation. A key press still moves one
-	// step at a time; the animation only plays out the text of the current step.
+	// frameInterval paces the decode animation. A key press still moves one
+	// step at a time; the animation only plays out the current stage.
 	frameInterval = time.Second / 30
-	// runesPerFrame is how much of the current step's detail appears each frame.
-	runesPerFrame = 3
-	// chromeLines is the space the header, progress bar, and help take up.
-	chromeLines = 9
+	// charsPerFrame is how many characters of the stage resolve each frame.
+	charsPerFrame = 1
+	// defaultWidth is used until the terminal reports its size.
+	defaultWidth = 80
+	// chromeLines is the screen space around the stage text: the header, the
+	// box border and padding, the caption, progress bar, result, and help.
+	chromeLines = 13
 )
 
 type frameMsg struct{}
 
+// scrambleGlyphs are shown in place of characters that have not resolved yet.
+var scrambleGlyphs = []rune("▓▒░#%&@*?")
+
 var (
-	dimStyle    = lipgloss.NewStyle().Faint(true)
-	boldStyle   = lipgloss.NewStyle().Bold(true)
+	dimStyle   = lipgloss.NewStyle().Faint(true)
+	boldStyle  = lipgloss.NewStyle().Bold(true)
+	stageStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("8")).
+			Padding(1, 3).
+			Bold(true)
 	phaseColors = map[string]lipgloss.Style{
 		"Input":   lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
 		"Tokens":  lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
@@ -47,9 +58,12 @@ type model struct {
 	op     Operation
 	report Report
 	step   int
-	// revealed is how many runes of the current step's detail are showing.
+	// revealed is how many characters of the current stage have resolved.
 	revealed int
-	height   int
+	// frame counts animation frames, so the scramble glyphs keep moving.
+	frame  int
+	width  int
+	height int
 
 	bankIdx     int
 	checked     bool
@@ -65,20 +79,34 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
-// currentLen is the length, in runes, of the current step's detail.
-func (m model) currentLen() int {
-	if m.step >= len(m.report.Steps) {
-		return 0
+// stageText is the part of a step worth showing on its own: the result after
+// the last " = " when the step has one, and the whole detail otherwise.
+func stageText(s Step) string {
+	if i := strings.LastIndex(s.Detail, " = "); i >= 0 {
+		return s.Detail[i+len(" = "):]
 	}
-	return len([]rune(m.report.Steps[m.step].Detail))
+	return s.Detail
 }
 
-// animating reports whether the current step is still typing out.
+// currentStage is the stage text of the step on screen.
+func (m model) currentStage() string {
+	if m.step >= len(m.report.Steps) {
+		return ""
+	}
+	return stageText(m.report.Steps[m.step])
+}
+
+// currentLen is the length, in runes, of the current stage.
+func (m model) currentLen() int {
+	return len([]rune(m.currentStage()))
+}
+
+// animating reports whether the current stage is still decoding.
 func (m model) animating() bool {
 	return m.mode == modeSteps && m.revealed < m.currentLen()
 }
 
-// nextFrame schedules the next animation frame if the current step is still typing out.
+// nextFrame schedules the next animation frame if the current stage is still decoding.
 func (m model) nextFrame() tea.Cmd {
 	if !m.animating() {
 		return nil
@@ -86,7 +114,22 @@ func (m model) nextFrame() tea.Cmd {
 	return tea.Tick(frameInterval, func(time.Time) tea.Msg { return frameMsg{} })
 }
 
-// run solves input with op and switches to the step view.
+// decoded is the current stage with unresolved characters shown as scrambled glyphs.
+// Spaces stay put so the layout does not jump while the text resolves.
+func (m model) decoded() string {
+	var sb strings.Builder
+	for i, r := range []rune(m.currentStage()) {
+		switch {
+		case i < m.revealed || r == ' ':
+			sb.WriteRune(r)
+		default:
+			sb.WriteRune(scrambleGlyphs[(m.frame+i*3)%len(scrambleGlyphs)])
+		}
+	}
+	return sb.String()
+}
+
+// run solves input with op and switches to the stage view.
 func (m model) run(op Operation, input string) (model, tea.Cmd) {
 	m.op = op
 	m.input = input
@@ -101,11 +144,13 @@ func (m model) run(op Operation, input string) (model, tea.Cmd) {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
 	case frameMsg:
+		m.frame++
 		if m.animating() {
-			m.revealed += runesPerFrame
+			m.revealed += charsPerFrame
 			if m.revealed > m.currentLen() {
 				m.revealed = m.currentLen()
 			}
@@ -153,8 +198,8 @@ func (m model) updateInput(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateSteps treats each key as one turn. If the current step is still typing
-// out, the key finishes the typing and nothing else. Otherwise it moves a step.
+// updateSteps treats each key as one turn. If the current stage is still
+// decoding, the key finishes it and nothing else. Otherwise it moves a step.
 func (m model) updateSteps(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 	last := len(m.report.Steps) - 1
 	switch km.Type {
@@ -222,79 +267,94 @@ func (m model) View() string {
 	return sb.String()
 }
 
-// viewSteps shows every step so far, earlier ones dimmed, the current one
-// typing out, and the newest lines kept in view when the window is short.
+// viewSteps shows one stage at a time: a centred box holding the decoding
+// result, a caption for the step, a progress bar, and the help line.
 func (m model) viewSteps(sb *strings.Builder) {
-	fmt.Fprintf(sb, "%s of %q\n\n", m.op, m.input)
+	width := m.screenWidth()
+	center := func(s string) string {
+		return lipgloss.PlaceHorizontal(width, lipgloss.Center, s) + "\n"
+	}
+
+	sb.WriteString(center(dimStyle.Render(fmt.Sprintf("%s of %q", m.op, m.input))))
+	sb.WriteString("\n")
 	if m.report.Err != nil {
-		fmt.Fprintf(sb, "error: %v\n\n", m.report.Err)
+		sb.WriteString(center(fmt.Sprintf("error: %v", m.report.Err)))
+		return
 	}
 	if len(m.report.Steps) == 0 {
-		sb.WriteString("nothing to show\n")
+		sb.WriteString(center("nothing to show"))
 		return
 	}
 
-	for _, line := range m.transcript(m.budget()) {
-		sb.WriteString(line + "\n")
-	}
+	s := m.report.Steps[m.step]
+	box := stageStyle.Width(m.boxWidth()).Render(strings.Join(m.stageLines(), "\n"))
+	sb.WriteString(center(box))
 	sb.WriteString("\n")
-	fmt.Fprintf(sb, "%s\n", m.progressBar())
 
-	if m.step == len(m.report.Steps)-1 && m.report.Err == nil && !m.animating() {
-		fmt.Fprintf(sb, "result: %s\n", m.report.Result)
+	phase := s.Phase
+	if style, ok := phaseColors[s.Phase]; ok {
+		phase = style.Render(s.Phase)
+	}
+	sb.WriteString(center(fmt.Sprintf("%s  %s", phase, boldStyle.Render(s.Title))))
+	sb.WriteString(center(m.progressBar()))
+	sb.WriteString("\n")
+
+	if m.step == len(m.report.Steps)-1 && !m.animating() {
+		sb.WriteString(center(boldStyle.Render("result: " + m.report.Result)))
 	}
 	if m.checked && !m.animating() {
 		if m.checkOK {
-			fmt.Fprintf(sb, "matches the worksheet answer: %s\n", m.report.Result)
+			sb.WriteString(center("matches the worksheet answer"))
 		} else {
-			fmt.Fprintf(sb, "does not match: %s\n", m.checkDetail)
+			sb.WriteString(center("does not match: " + m.checkDetail))
 		}
 	}
-	sb.WriteString("\nleft/right: step (or finish typing)   esc back\n")
+	sb.WriteString("\n")
+	sb.WriteString(center(dimStyle.Render("left/right: next (or finish)   esc back")))
 }
 
-// budget is how many transcript lines fit beside the chrome around them.
-func (m model) budget() int {
-	if m.height <= 0 {
-		return 60
+// screenWidth is the terminal width, or defaultWidth before the terminal reports it.
+func (m model) screenWidth() int {
+	if m.width <= 0 {
+		return defaultWidth
 	}
-	if n := m.height - chromeLines; n > 4 {
-		return n
-	}
-	return 4
+	return m.width
 }
 
-// transcript renders steps 0..m.step as lines, keeping only the last max lines.
-func (m model) transcript(limit int) []string {
+// boxWidth is the fixed width of the stage box, so it does not jump between steps.
+func (m model) boxWidth() int {
+	w := m.screenWidth() - 4
+	if w > 70 {
+		w = 70
+	}
+	if w < 30 {
+		w = 30
+	}
+	return w
+}
+
+// stageLines wraps the decoded stage to fit the box, and clips it to the height left over.
+func (m model) stageLines() []string {
+	// The box border takes 2 columns and its padding takes 3 on each side.
+	inner := m.boxWidth() - 8
+
 	var lines []string
-	for i := 0; i <= m.step; i++ {
-		s := m.report.Steps[i]
-		phase := s.Phase
-		if style, ok := phaseColors[s.Phase]; ok {
-			phase = style.Render(s.Phase)
+	for _, para := range strings.Split(m.decoded(), "\n") {
+		runes := []rune(para)
+		if len(runes) == 0 {
+			lines = append(lines, "")
 		}
-
-		detail := s.Detail
-		if i == m.step {
-			runes := []rune(s.Detail)
-			detail = string(runes[:m.revealed])
-			if m.animating() {
-				detail += "▌"
-			}
-			lines = append(lines, boldStyle.Render(fmt.Sprintf("[%s] %s", phase, s.Title)))
-		} else {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf("[%s] %s", s.Phase, s.Title)))
+		for len(runes) > inner {
+			lines = append(lines, string(runes[:inner]))
+			runes = runes[inner:]
 		}
-		for _, d := range strings.Split(detail, "\n") {
-			if i < m.step {
-				lines = append(lines, dimStyle.Render("    "+d))
-			} else {
-				lines = append(lines, "    "+d)
-			}
-		}
+		lines = append(lines, string(runes))
 	}
-	if len(lines) > limit {
-		lines = lines[len(lines)-limit:]
+
+	if m.height > 0 {
+		if room := m.height - chromeLines; room > 0 && len(lines) > room {
+			lines = append(lines[:room-1], "…")
+		}
 	}
 	return lines
 }
