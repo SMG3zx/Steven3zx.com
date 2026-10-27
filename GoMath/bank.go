@@ -57,6 +57,7 @@ var Worksheet = []WorksheetEntry{
 	{"evaluate_2.png", "x^2 - 2x + 3", OpEvaluate, "27", 0, map[string]float64{"x": 6}},
 	{"simplify_1.png", "7(5y - 6) + 4(3y + 5)", OpSimplify, "47y - 22", 1, nil},
 	{"simplify_2.png", "-(9x - 2y - 5)", OpSimplify, "-9x + 2y + 5", 1, nil},
+	{"evaluate_3.png", "7^2 * 4", OpEvaluate, "196", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
