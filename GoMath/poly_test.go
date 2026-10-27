@@ -13,6 +13,11 @@ func TestPolyStandardForm(t *testing.T) {
 		{"(7x^2y + 6xy - 1) + (-4x^2y + 2xy - 10)", "3x^2y + 8xy - 11"},
 		{"(4x + 3y)(4x - 3y)", "16x^2 - 9y^2"},
 		{"x - x", "0"},
+		{"x^-6 * y", "y/x^6"},
+		{"x^-1 + 2", "(2x + 1)/x"},
+		{"y / x^6", "y/x^6"},
+		{"x * x^-1", "1"},
+		{"(x^2)^-1", "1/x^2"},
 	}
 	for _, c := range cases {
 		p, err := ToPoly(expr(c.input))
@@ -47,7 +52,7 @@ func TestPolyDegree(t *testing.T) {
 }
 
 func TestToPolyRejectsNonPolynomials(t *testing.T) {
-	for _, input := range []string{"1 / x", "x ^ y", "1.5x"} {
+	for _, input := range []string{"1 / (x + 1)", "x / 2", "x ^ y", "1.5x"} {
 		if _, err := ToPoly(expr(input)); err == nil {
 			t.Errorf("ToPoly(%q) returned no error", input)
 		}

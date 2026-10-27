@@ -8,7 +8,8 @@ import (
 	"unicode"
 )
 
-// Monomial maps each variable to a positive exponent, e.g. {"x": 2, "y": 1} for x^2 y.
+// Monomial maps each variable to a whole-number exponent, e.g. {"x": 2, "y": 1} for x^2 y.
+// Exponents may be negative, as in x^-6 y, until String writes them with positive exponents.
 type Monomial map[string]int
 
 // key is the canonical text of the monomial, with variables sorted by name: "x^2y".
@@ -23,7 +24,7 @@ func (m Monomial) key() string {
 	var sb strings.Builder
 	for _, name := range names {
 		sb.WriteString(name)
-		if m[name] > 1 {
+		if m[name] != 1 {
 			fmt.Fprintf(&sb, "^%d", m[name])
 		}
 	}
@@ -109,6 +110,12 @@ func (p Poly) Mul(q Poly) Poly {
 			}
 			for name, exp := range b.Vars {
 				vars[name] += exp
+			}
+			// x times x^-1 cancels, so drop the zero exponent.
+			for name, exp := range vars {
+				if exp == 0 {
+					delete(vars, name)
+				}
 			}
 			terms = append(terms, Term{Coeff: a.Coeff * b.Coeff, Vars: vars})
 		}
@@ -205,8 +212,82 @@ func polyFromCoeffs(name string, coeffs []int) Poly {
 	return normalize(terms)
 }
 
-// String writes p in standard form, such as "3x^3 + 8x^2 - 10x".
+// hasNegativeExponent reports whether any variable in p has a negative exponent.
+func (p Poly) hasNegativeExponent() bool {
+	for _, t := range p {
+		for _, exp := range t.Vars {
+			if exp < 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// positive rewrites p so every exponent is positive: p = num / den. The
+// denominator takes the largest negative power of each variable, and the
+// numerator is multiplied up to match. Without negative exponents, num is p
+// and den is empty.
+func (p Poly) positive() (Poly, Monomial) {
+	den := Monomial{}
+	for _, t := range p {
+		for name, exp := range t.Vars {
+			if exp < 0 && -exp > den[name] {
+				den[name] = -exp
+			}
+		}
+	}
+	if len(den) == 0 {
+		return p, den
+	}
+
+	terms := make([]Term, len(p))
+	for i, t := range p {
+		vars := Monomial{}
+		for name, exp := range t.Vars {
+			vars[name] = exp
+		}
+		for name, d := range den {
+			vars[name] += d
+			if vars[name] == 0 {
+				delete(vars, name)
+			}
+		}
+		terms[i] = Term{Coeff: t.Coeff, Vars: vars}
+	}
+	return normalize(terms), den
+}
+
+// inverse returns 1/p. Only a single term with coefficient 1 or -1 has a
+// polynomial inverse, such as x^3 or -y, so anything else is an error.
+func (p Poly) inverse() (Poly, error) {
+	if len(p) != 1 || (p[0].Coeff != 1 && p[0].Coeff != -1) {
+		return nil, fmt.Errorf("can only divide by a single variable term, got %s", p)
+	}
+	vars := Monomial{}
+	for name, exp := range p[0].Vars {
+		vars[name] = -exp
+	}
+	return Poly{{Coeff: p[0].Coeff, Vars: vars}}, nil
+}
+
+// String writes p in standard form, such as "3x^3 + 8x^2 - 10x". When p has
+// negative exponents it writes a fraction with positive exponents, such as
+// "y/x^6" or "(2x + 1)/x".
 func (p Poly) String() string {
+	num, den := p.positive()
+	if len(den) == 0 {
+		return num.terms()
+	}
+	text := num.terms()
+	if len(num) > 1 {
+		text = "(" + text + ")"
+	}
+	return text + "/" + den.key()
+}
+
+// terms writes each term in order, with signs, such as "3x^3 + 8x^2 - 10x".
+func (p Poly) terms() string {
 	if len(p) == 0 {
 		return "0"
 	}
@@ -237,7 +318,8 @@ func (p Poly) String() string {
 }
 
 // ToPoly converts a parsed expression into a polynomial. It fails for
-// anything that is not a polynomial, such as division or a variable exponent.
+// anything that is not a polynomial, such as a variable exponent or a divisor
+// that is not a single variable term.
 func ToPoly(e SExpression) (Poly, error) {
 	return toPoly(e, nil)
 }
@@ -288,12 +370,28 @@ func toPoly(e SExpression, steps *[]Step) (Poly, error) {
 			res := left.Mul(right)
 			addStep(steps, Step{"Compute", "Multiply", fmt.Sprintf("(%s)(%s) = %s", left, right, res)})
 			return res, nil
+		case '/':
+			inv, err := right.inverse()
+			if err != nil {
+				return nil, err
+			}
+			res := left.Mul(inv)
+			addStep(steps, Step{"Compute", "Divide", fmt.Sprintf("(%s) / (%s) = %s", left, right, res)})
+			return res, nil
 		case '^':
 			exp, ok := right.Constant()
-			if !ok || exp < 0 {
+			if !ok {
 				return nil, fmt.Errorf("exponent must be a whole number, got %s", right)
 			}
-			res := left.Pow(exp)
+			base := left
+			if exp < 0 {
+				inv, err := left.inverse()
+				if err != nil {
+					return nil, err
+				}
+				base, exp = inv, -exp
+			}
+			res := base.Pow(exp)
 			addStep(steps, Step{"Compute", "Raise to a power", fmt.Sprintf("(%s)^%d = %s", left, exp, res)})
 			return res, nil
 		}

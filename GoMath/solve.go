@@ -105,6 +105,13 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return rep
 	}
 
+	// Only simplifying and evaluating accept negative exponents. Factoring
+	// works on whole-number exponents, so reject the rest here.
+	if op != OpSimplify && op != OpEvaluate && poly.hasNegativeExponent() {
+		rep.Err = fmt.Errorf("%s needs positive exponents, got %s", op, poly)
+		return rep
+	}
+
 	switch op {
 	case OpSimplify:
 		rep.Result = poly.String()

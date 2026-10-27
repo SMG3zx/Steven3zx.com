@@ -51,7 +51,7 @@ func TestSolveReportsErrors(t *testing.T) {
 	}{
 		{"x +", OpSimplify},
 		{"x ^ y", OpSimplify},
-		{"1 / x", OpSimplify},
+		{"1 / (x + 1)", OpSimplify},
 	}
 	for _, c := range cases {
 		if rep := Solve(c.input, c.op); rep.Err == nil {
