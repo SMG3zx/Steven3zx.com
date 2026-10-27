@@ -155,13 +155,16 @@ func frame(body []string, title string) []string {
 			inner = n
 		}
 	}
-	total := inner + 4
-
 	label := " " + title + " "
-	dashes := total - 2 - utf8.RuneCountInString(label)
-	if dashes < 0 {
-		dashes = 0
+
+	// The frame is never narrower than its title, so the top border always fits.
+	total := inner + 4
+	if min := utf8.RuneCountInString(label) + 2; total < min {
+		total = min
 	}
+	inner = total - 4
+
+	dashes := total - 2 - utf8.RuneCountInString(label)
 	left := dashes / 2
 	out := []string{"╭" + strings.Repeat("─", left) + label + strings.Repeat("─", dashes-left) + "╮"}
 	for _, line := range body {
