@@ -71,6 +71,7 @@ var Worksheet = []WorksheetEntry{
 	{"factor_2.png", "x^3 - 6x^2 + 6x - 36", OpFactor, "(x - 6)(x^2 + 6)", 0, nil},
 	{"factor_3.png", "x^2 + 16x + 55", OpFactor, "(x + 5)(x + 11)", 0, nil},
 	{"factor_4.png", "3x^2 - 32x - 11", OpFactor, "(3x + 1)(x - 11)", 0, nil},
+	{"prime_1.png", "x^2 + 9", OpPrime, "true", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
