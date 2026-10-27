@@ -61,6 +61,7 @@ var Worksheet = []WorksheetEntry{
 	{"evaluate_4.png", "7^2 * 7^3", OpEvaluate, "16807", 0, nil},
 	{"simplify_3.png", "x^-6 * y", OpSimplify, "y/x^6", 0, nil},
 	{"simplify_4.png", "x^-4 * x^8", OpSimplify, "x^4", 0, nil},
+	{"simplify_5.png", "x^2 - x^6 + x^8 - 3", OpSimplify, "x^8 - x^6 + x^2 - 3", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
