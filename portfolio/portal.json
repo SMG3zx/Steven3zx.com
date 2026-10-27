@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Portfolio",
+    "url": "https://www.steven3zx.com",
+    "description": "Personal portfolio site.",
+    "tags": [
+      "live"
+    ]
+  },
+  {
+    "title": "Portfolio admin",
+    "url": "https://www.steven3zx.com/admin",
+    "description": "Admin panel for the portfolio.",
+    "tags": [
+      "live"
+    ]
+  },
+  {
+    "title": "portfolio source",
+    "url": "https://github.com/SMG3zx/Steven3zx.com/tree/master/portfolio",
+    "description": "Source code for portfolio in the monorepo.",
+    "tags": [
+      "source"
+    ]
+  }
+]

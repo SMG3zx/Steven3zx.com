@@ -1,0 +1,46 @@
+[
+  {
+    "title": "Gitea",
+    "url": "https://git.steven3zx.com",
+    "description": "Self-hosted Git server.",
+    "tags": [
+      "live",
+      "infra"
+    ]
+  },
+  {
+    "title": "Headscale",
+    "url": "https://ts.steven3zx.com",
+    "description": "Tailnet control server.",
+    "tags": [
+      "live",
+      "infra"
+    ]
+  },
+  {
+    "title": "DERP relay",
+    "url": "https://derp.steven3zx.com",
+    "description": "Tailscale DERP relay for the tailnet.",
+    "tags": [
+      "live",
+      "infra"
+    ]
+  },
+  {
+    "title": "Plane",
+    "url": "https://plane.steven3zx.com",
+    "description": "Project management app.",
+    "tags": [
+      "live",
+      "infra"
+    ]
+  },
+  {
+    "title": "edge source",
+    "url": "https://github.com/SMG3zx/Steven3zx.com/tree/master/edge",
+    "description": "Source code for edge in the monorepo.",
+    "tags": [
+      "source"
+    ]
+  }
+]

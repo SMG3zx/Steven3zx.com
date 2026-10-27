@@ -18,6 +18,8 @@ const (
 	OpTechnique
 	// OpPrime reports whether the expression is prime (irreducible over the integers).
 	OpPrime
+	// OpEvaluate substitutes the given variable values and reports the number.
+	OpEvaluate
 )
 
 func (o Operation) String() string {
@@ -30,6 +32,8 @@ func (o Operation) String() string {
 		return "technique"
 	case OpPrime:
 		return "prime check"
+	case OpEvaluate:
+		return "evaluate"
 	}
 	return "unknown"
 }
@@ -52,10 +56,16 @@ type Report struct {
 	Scenes map[int]ParseEvent
 }
 
-// Solve runs the whole pipeline on input: TeX to ASCII, tokens, the Pratt
-// parse, then the operation. Every stage is recorded in Steps. Errors are
-// returned in Err rather than panicking.
-func Solve(input string, op Operation) (rep Report) {
+// Solve runs the whole pipeline on input with no variable values.
+func Solve(input string, op Operation) Report {
+	return SolveAt(input, op, nil)
+}
+
+// SolveAt runs the whole pipeline on input: TeX to ASCII, tokens, the Pratt
+// parse, then the operation. env gives the value of each variable, which
+// OpEvaluate needs. Every stage is recorded in Steps. Errors are returned in
+// Err rather than panicking.
+func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 	var steps []Step
 	defer func() {
 		rep.Steps = steps
@@ -123,6 +133,15 @@ func Solve(input string, op Operation) (rep Report) {
 		}
 		rep.Result = strconv.FormatBool(fz.IsPrime())
 		steps = append(steps, Step{"Result", "Prime?", rep.Result})
+
+	case OpEvaluate:
+		v, err := tree.Eval(env)
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		rep.Result = strconv.FormatFloat(v, 'f', -1, 64)
+		steps = append(steps, Step{"Result", "Value", rep.Result})
 	}
 	return rep
 }

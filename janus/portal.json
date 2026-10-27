@@ -1,0 +1,18 @@
+[
+  {
+    "title": "Janus",
+    "url": "https://janus.steven3zx.com",
+    "description": "Janus control plane and web UI.",
+    "tags": [
+      "live"
+    ]
+  },
+  {
+    "title": "janus source",
+    "url": "https://github.com/SMG3zx/Steven3zx.com/tree/master/janus",
+    "description": "Source code for janus in the monorepo.",
+    "tags": [
+      "source"
+    ]
+  }
+]
