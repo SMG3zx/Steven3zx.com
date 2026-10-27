@@ -48,6 +48,8 @@ type Report struct {
 	Result string
 	Degree int
 	Err    error
+	// Scenes holds the parser's state for each Parse step, keyed by step index.
+	Scenes map[int]ParseEvent
 }
 
 // Solve runs the whole pipeline on input: TeX to ASCII, tokens, the Pratt
@@ -75,9 +77,11 @@ func Solve(input string, op Operation) (rep Report) {
 	}
 	steps = append(steps, Step{"Tokens", "Split into tokens", strings.Join(tokens, "  |  ")})
 
-	tree, lines, err := ParseWithTrace(ascii)
-	for _, line := range lines {
-		steps = append(steps, Step{"Parse", "Pratt parser", line})
+	tree, events, err := ParseWithEvents(ascii)
+	rep.Scenes = map[int]ParseEvent{}
+	for _, ev := range events {
+		rep.Scenes[len(steps)] = ev
+		steps = append(steps, Step{"Parse", "Pratt parser", ev.Text})
 	}
 	if err != nil {
 		rep.Err = err

@@ -164,9 +164,55 @@ func TestTUIShowsOnlyTheCurrentStage(t *testing.T) {
 	}
 }
 
+// parseStep finds the first parse step that takes op, and returns its index.
+func parseStep(t *testing.T, rep Report, op string) int {
+	t.Helper()
+	for i := range rep.Steps {
+		if ev, ok := rep.Scenes[i]; ok && ev.Kind == "take" && ev.Op == op {
+			return i
+		}
+	}
+	t.Fatalf("no parse step taking %q", op)
+	return -1
+}
+
+func TestParseSceneShowsNestedCallsAndComparison(t *testing.T) {
+	rep := Solve("1 + 2 * 3", OpSimplify)
+	ev := rep.Scenes[parseStep(t, rep, "*")]
+
+	scene := renderParseScene(ev, 70)
+	if n := strings.Count(scene, "parse_expression()"); n != ev.Depth+1 {
+		t.Errorf("scene has %d parse_expression frames, want %d:\n%s", n, ev.Depth+1, scene)
+	}
+	if want := "3 ≥ 2"; !strings.Contains(scene, want) {
+		t.Errorf("scene is missing the comparison %q:\n%s", want, scene)
+	}
+	for _, label := range []string{"lhs", "op"} {
+		if !strings.Contains(scene, label) {
+			t.Errorf("scene is missing the %q label:\n%s", label, scene)
+		}
+	}
+}
+
+func TestTUIParseStepShowsTheScene(t *testing.T) {
+	var m tea.Model = newModel()
+	m = send(m, typed("1 + 2 * 3"))
+	m = send(m, key(tea.KeyEnter))
+	idx := parseStep(t, m.(model).report, "*")
+	for i := 0; i < idx; i++ {
+		m = settle(t, m)
+		m = send(m, key(tea.KeyRight))
+	}
+	m = settle(t, m)
+
+	if view := m.View(); !strings.Contains(view, "parse_expression()") {
+		t.Errorf("parse step does not show the nested call frames:\n%s", view)
+	}
+}
+
 func TestTUIViewFitsWindowHeight(t *testing.T) {
 	var m tea.Model = newModel()
-	m = send(m, tea.WindowSizeMsg{Width: 80, Height: 14})
+	m = send(m, tea.WindowSizeMsg{Width: 80, Height: 26})
 	m = send(m, typed("(x+4)(x^2-4x+16)"))
 	m = send(m, key(tea.KeyEnter))
 	for i := 0; i < 30; i++ {

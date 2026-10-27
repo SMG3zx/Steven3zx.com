@@ -96,8 +96,12 @@ func (m model) currentStage() string {
 	return stageText(m.report.Steps[m.step])
 }
 
-// currentLen is the length, in runes, of the current stage.
+// currentLen is the length, in runes, of the current stage. Parse steps are
+// drawn as scenes rather than decoded, so they have no stage text to animate.
 func (m model) currentLen() int {
+	if _, ok := m.report.Scenes[m.step]; ok {
+		return 0
+	}
 	return len([]rune(m.currentStage()))
 }
 
@@ -287,8 +291,12 @@ func (m model) viewSteps(sb *strings.Builder) {
 	}
 
 	s := m.report.Steps[m.step]
-	box := stageStyle.Width(m.boxWidth()).Render(strings.Join(m.stageLines(), "\n"))
-	sb.WriteString(center(box))
+	if ev, ok := m.report.Scenes[m.step]; ok {
+		sb.WriteString(center(renderParseScene(ev, width)))
+	} else {
+		box := stageStyle.Width(m.boxWidth()).Render(strings.Join(m.stageLines(), "\n"))
+		sb.WriteString(center(box))
+	}
 	sb.WriteString("\n")
 
 	phase := s.Phase

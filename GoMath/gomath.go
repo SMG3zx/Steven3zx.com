@@ -44,10 +44,30 @@ type Eof struct{}
 
 func (Eof) isToken() {}
 
+// ParseEvent is one parsing decision, with the state the decision was made in.
+type ParseEvent struct {
+	// Kind is one of operand, group, prefix, take, implicit, stop, build, or close.
+	Kind string
+	// Text is a one-line description of the decision.
+	Text string
+	// Depth is how many parseExpression calls are open, counting this one.
+	Depth int
+	// Op is the operator the decision is about, if any.
+	Op string
+	// LBP and MinBP are the comparison behind a take or stop.
+	LBP, MinBP int
+	// Lhs is the expression built so far, as an S-expression.
+	Lhs string
+	// Remaining holds the tokens not yet read, in input order.
+	Remaining []string
+}
+
 type Lexer struct {
 	Tokens []Token
-	// trace, when set, receives a line for each parsing decision.
-	trace func(string)
+	// trace, when set, receives each parsing decision.
+	trace func(ParseEvent)
+	// depth counts the exprBindingPower calls currently open.
+	depth int
 }
 
 func NewLexer(input string) *Lexer {
@@ -110,10 +130,17 @@ func (l *Lexer) Peek() Token {
 	return l.Tokens[len(l.Tokens)-1]
 }
 
-func (l *Lexer) logf(format string, args ...any) {
-	if l.trace != nil {
-		l.trace(fmt.Sprintf(format, args...))
+// emit sends a decision to the trace hook, filling in the depth and the tokens still unread.
+func (l *Lexer) emit(e ParseEvent) {
+	if l.trace == nil {
+		return
 	}
+	// The top-level call is depth 0, so nested calls count up from there.
+	e.Depth = l.depth - 1
+	for i := len(l.Tokens) - 1; i >= 0; i-- {
+		e.Remaining = append(e.Remaining, tokenText(l.Tokens[i]))
+	}
+	l.trace(e)
 }
 
 // Forward returns the tokens in input order, for display.
@@ -250,17 +277,27 @@ func expr(input string) SExpression {
 // ParseWithTrace parses input and also returns one line per parsing decision,
 // in the order the parser made them. Syntax errors come back as err.
 func ParseWithTrace(input string) (tree SExpression, lines []string, err error) {
+	tree, events, err := ParseWithEvents(input)
+	for _, e := range events {
+		lines = append(lines, e.Text)
+	}
+	return tree, lines, err
+}
+
+// ParseWithEvents parses input and returns each parsing decision with the
+// state it was made in. Syntax errors come back as err.
+func ParseWithEvents(input string) (tree SExpression, events []ParseEvent, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%v", r)
 		}
 	}()
-	tree = parse(input, func(line string) { lines = append(lines, line) })
-	return tree, lines, nil
+	tree = parse(input, func(e ParseEvent) { events = append(events, e) })
+	return tree, events, nil
 }
 
 // parse starts with minBindingPower 0, so every operator is allowed to join the expression.
-func parse(input string, trace func(string)) SExpression {
+func parse(input string, trace func(ParseEvent)) SExpression {
 	lexer := NewLexer(input)
 	lexer.trace = trace
 	tree := exprBindingPower(lexer, 0)
@@ -284,28 +321,33 @@ func parse(input string, trace func(string)) SExpression {
 //   - The * call builds (* 2 3) and returns it to the + call.
 //   - The + call builds (+ 1 (* 2 3)) and returns it.
 func exprBindingPower(lexer *Lexer, minBindingPower int) SExpression {
+	lexer.depth++
+	defer func() { lexer.depth-- }()
+
 	// The left-hand side is a name or number, a parenthesized expression,
 	// or a unary minus. Anything else is a syntax error, so we panic.
 	var lhs SExpression
 	switch t := lexer.Next().(type) {
 	case Atom:
 		lhs = SAtom{Value: t.Value}
-		lexer.logf("read %s as an operand", t.Value)
+		lexer.emit(ParseEvent{Kind: "operand", Lhs: lhs.String(),
+			Text: fmt.Sprintf("read %s as an operand", t.Value)})
 	case Op:
 		switch t.Value {
 		case '(':
-			lexer.logf("open a parenthesized group")
+			lexer.emit(ParseEvent{Kind: "group", Text: "open a parenthesized group"})
 			lhs = exprBindingPower(lexer, 0)
 			closing, ok := lexer.Next().(Op)
 			if !ok || closing.Value != ')' {
 				panic(fmt.Sprintf("expected ')', got %v", closing))
 			}
-			lexer.logf("close the group with ) as %s", lhs)
+			lexer.emit(ParseEvent{Kind: "close", Lhs: lhs.String(),
+				Text: fmt.Sprintf("close the group with ) as %s", lhs)})
 		case '-':
 			// Unary minus binds tighter than * but looser than ^, so -x^2 is -(x^2).
-			lexer.logf("read unary - and parse its operand with power 5")
+			lexer.emit(ParseEvent{Kind: "prefix", Op: "-", Text: "read unary - and parse its operand with power 5"})
 			lhs = cons('-', exprBindingPower(lexer, 5))
-			lexer.logf("build %s", lhs)
+			lexer.emit(ParseEvent{Kind: "build", Op: "-", Lhs: lhs.String(), Text: fmt.Sprintf("build %s", lhs)})
 		default:
 			panic(fmt.Sprintf("bad token: %v", t))
 		}
@@ -344,16 +386,20 @@ func exprBindingPower(lexer *Lexer, minBindingPower int) SExpression {
 		// stop here. The caller will use lhs as its own left-hand side.
 		lBP, rBP := infixBindingPower(op)
 		if lBP < minBindingPower {
-			lexer.logf("see %s with left power %d, below minimum %d: stop", opName(op, implicit), lBP, minBindingPower)
+			lexer.emit(ParseEvent{Kind: "stop", Op: string(op), LBP: lBP, MinBP: minBindingPower, Lhs: lhs.String(),
+				Text: fmt.Sprintf("see %s with left power %d, below minimum %d: stop", opName(op, implicit), lBP, minBindingPower)})
 			return lhs
 		}
 		// Consume the operator token now that we know we are using it.
 		// Implicit multiplication has no token to consume.
 		if implicit {
-			lexer.logf("no operator before the next operand: multiply implicitly (powers %d, %d)", lBP, rBP)
+			lexer.emit(ParseEvent{Kind: "implicit", Op: "*", LBP: lBP, MinBP: minBindingPower, Lhs: lhs.String(),
+				Text: fmt.Sprintf("no operator before the next operand: multiply implicitly (powers %d, %d)", lBP, rBP)})
 		} else {
-			lexer.logf("see %c with powers (%d, %d) at minimum %d: take it", op, lBP, rBP, minBindingPower)
+			// Consume the operator first, so the event lists only the tokens still to read.
 			lexer.Next()
+			lexer.emit(ParseEvent{Kind: "take", Op: string(op), LBP: lBP, MinBP: minBindingPower, Lhs: lhs.String(),
+				Text: fmt.Sprintf("see %c with powers (%d, %d) at minimum %d: take it", op, lBP, rBP, minBindingPower)})
 		}
 
 		// Parse the right-hand side with rBP as the minimum. Operators that bind
@@ -361,7 +407,7 @@ func exprBindingPower(lexer *Lexer, minBindingPower int) SExpression {
 		// loop here.
 		rhs := exprBindingPower(lexer, rBP)
 		lhs = Cons{Head: op, Rest: []SExpression{lhs, rhs}}
-		lexer.logf("build %s", lhs)
+		lexer.emit(ParseEvent{Kind: "build", Op: string(op), Lhs: lhs.String(), Text: fmt.Sprintf("build %s", lhs)})
 	}
 }
 

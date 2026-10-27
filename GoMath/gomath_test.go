@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,69 @@ func TestParseWithTrace(t *testing.T) {
 		if !found {
 			t.Errorf("trace is missing %q; got %q", want, lines)
 		}
+	}
+}
+
+func findEvent(events []ParseEvent, kind, op string) (ParseEvent, bool) {
+	for _, e := range events {
+		if e.Kind == kind && e.Op == op {
+			return e, true
+		}
+	}
+	return ParseEvent{}, false
+}
+
+func TestParseEventsCarryTheNestingAndComparison(t *testing.T) {
+	_, events, err := ParseWithEvents("1 + 2 * 3")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	plus, ok := findEvent(events, "take", "+")
+	if !ok {
+		t.Fatalf("no take event for +; events: %+v", events)
+	}
+	if plus.Depth != 0 || plus.LBP != 1 || plus.MinBP != 0 {
+		t.Errorf("+ take = depth %d, lbp %d, min %d; want depth 0, lbp 1, min 0", plus.Depth, plus.LBP, plus.MinBP)
+	}
+
+	times, ok := findEvent(events, "take", "*")
+	if !ok {
+		t.Fatalf("no take event for *; events: %+v", events)
+	}
+	if times.Depth != 1 || times.LBP != 3 || times.MinBP != 2 {
+		t.Errorf("* take = depth %d, lbp %d, min %d; want depth 1, lbp 3, min 2", times.Depth, times.LBP, times.MinBP)
+	}
+	if times.Lhs != "2" {
+		t.Errorf("* take lhs = %q, want %q", times.Lhs, "2")
+	}
+}
+
+func TestParseEventsRecordRemainingTokens(t *testing.T) {
+	_, events, err := ParseWithEvents("a + b * 2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	star, ok := findEvent(events, "take", "*")
+	if !ok {
+		t.Fatal("no take event for *")
+	}
+	if got, want := strings.Join(star.Remaining, " "), "2"; got != want {
+		t.Errorf("remaining after * = %q, want %q", got, want)
+	}
+}
+
+func TestParseEventsRecordStop(t *testing.T) {
+	_, events, err := ParseWithEvents("1 * 2 + 3")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	stop, ok := findEvent(events, "stop", "+")
+	if !ok {
+		t.Fatalf("no stop event for + inside the right operand of *; events: %+v", events)
+	}
+	if stop.LBP >= stop.MinBP {
+		t.Errorf("stop should have lbp %d < min %d", stop.LBP, stop.MinBP)
 	}
 }
 
