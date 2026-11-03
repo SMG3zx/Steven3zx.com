@@ -52,6 +52,7 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Factor | ctrl+f | Pulls out the integer content and common variable powers, then finds rational roots. | `16x + 40` gives `8(2x + 5)`. |
 | Technique | ctrl+t | Names the factoring method that fits the shape. | `64x^3 - 125` gives `difference of cubes`. |
 | Prime check | ctrl+p | Reports whether the polynomial is irreducible over the integers. | `x^2 - 2x - 2` gives `true`. |
+| Radical form | ctrl+g | Rewrites `a^(m/n)` as a radical without evaluating it. Also accepts `169^{\frac{1}{2}}`. | `169^(1/2)` gives `sqrt(169)`. `8^(2/3)` gives `sqrt[3](8^2)`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.
@@ -79,7 +80,7 @@ Techniques that `Technique` can name:
 
 Simplify accepts `sqrt(n)` and `\sqrt{n}` where the radicand is a single term, such as `175`, `6x`, or `12y^2`. Square factors come out (`sqrt(8)` is `2sqrt(2)`), perfect squares become numbers, and like radicals combine: `7sqrt(2) + 11sqrt(2)` gives `18sqrt(2)`. Roots of any index work with `sqrt[k](n)` or `\sqrt[k]{n}`: `sqrt[3](72)` gives `2sqrt[3](9)`. The product and quotient rules below join radicals of the same index, so `sqrt[3](49) * sqrt[3](14)` gives `7sqrt[3](2)`. The product rule joins neighbours first: `sqrt(6x) * sqrt(30x)` gives `6xsqrt(5)`. Variables are taken as nonnegative, so `sqrt(x^2)` is `x`. `•`, `\cdot`, and `*` all mean multiply. Each distinct radical is swapped for a stand-in letter, so the input should not rely on that letter being a variable. The quotient rule also joins `sqrt(A)/sqrt(B)` when `B` divides `A` exactly: `sqrt(147x^3) / sqrt(3x)` gives `7x`. It handles a root of a whole-number fraction too: `sqrt(1/144)` gives `1/12` and `sqrt(20/9)` gives `2sqrt(5)/3`. A radical left in the denominator would need rationalizing, which is not supported. Radicals are not supported with factor, technique, or prime check.
 
-Evaluate also takes roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no TUI key. The TUI runs it from the bank only.
+Evaluate also takes fractional exponents, so `169^(1/2)` gives `13`, and roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no TUI key. The TUI runs it from the bank only.
 
 ## Worksheet bank
 

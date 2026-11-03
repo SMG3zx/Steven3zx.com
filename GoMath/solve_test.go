@@ -236,3 +236,45 @@ func TestSolveSimplifyHigherRoots(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveRadicalForm(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"169^(1/2)", "sqrt(169)"},
+		{`169^{\frac{1}{2}}`, "sqrt(169)"},
+		{"8^(1/3)", "sqrt[3](8)"},
+		{"8^(2/3)", "sqrt[3](8^2)"},
+		{"(x+1)^(2/5)", "sqrt[5]((x+1)^2)"},
+		{"x^(3/4)", "sqrt[4](x^3)"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpRadicalForm)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+	for _, in := range []string{"169", "x^(1/1)", "x^(-1/2)"} {
+		if rep := Solve(in, OpRadicalForm); rep.Err == nil {
+			t.Errorf("%q: expected an error, got %q", in, rep.Result)
+		}
+	}
+}
+
+func TestSolveEvaluateFractionalExponents(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"169^(1/2)", "13"},
+		{"27^(1/3)", "3"},
+		{"8^(2/3)", "4"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpEvaluate)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}

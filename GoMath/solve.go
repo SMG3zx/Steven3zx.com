@@ -24,6 +24,8 @@ const (
 	OpEvaluate
 	// OpRoot fills the blank in "root(n) = r because ___ = n", giving r^k.
 	OpRoot
+	// OpRadicalForm rewrites a^(m/n) as a radical without evaluating it.
+	OpRadicalForm
 )
 
 func (o Operation) String() string {
@@ -40,6 +42,8 @@ func (o Operation) String() string {
 		return "evaluate"
 	case OpRoot:
 		return "root blank"
+	case OpRadicalForm:
+		return "radical form"
 	}
 	return "unknown"
 }
@@ -93,11 +97,15 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		}
 	}
 
+	if op == OpRadicalForm {
+		return solveRadicalForm(ascii, &steps)
+	}
+
 	if op == OpRoot {
 		return solveRoot(ascii, &steps)
 	}
 
-	tookRoots := op == OpEvaluate && strings.Contains(ascii, "sqrt")
+	tookRoots := op == OpEvaluate && (strings.Contains(ascii, "sqrt") || fractionalExponent.MatchString(ascii))
 	if tookRoots {
 		var rnotes []string
 		var err error
@@ -158,6 +166,10 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		if err != nil {
 			rep.Err = err
 			return rep
+		}
+		// Powers like 27^(1/3) come out a hair off a whole number.
+		if r := math.Round(v); math.Abs(v-r) < 1e-9 {
+			v = r
 		}
 		rep.Result = strconv.FormatFloat(v, 'f', -1, 64)
 		steps = append(steps, Step{"Result", "Value", rep.Result})

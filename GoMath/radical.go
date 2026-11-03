@@ -400,3 +400,48 @@ func radicalText(out, in int) string {
 	}
 	return fmt.Sprintf("%dsqrt(%d)", out, in)
 }
+
+// fractionalExponent finds a power with a whole-number fraction as exponent.
+var fractionalExponent = regexp.MustCompile(`\^\(\(?-?\d+\)?/\(?\d+\)?\)`)
+
+// radicalFormPattern reads base^(m/n), allowing TeX's extra parentheses
+// around the numerator and denominator.
+var groupPattern = regexp.MustCompile(`^\([^()]*\)$`)
+
+var wordPattern = regexp.MustCompile(`^\w+$`)
+
+var radicalFormPattern = regexp.MustCompile(`^(.+)\^\(\(?(-?\d+)\)?/\(?(\d+)\)?\)$`)
+
+// solveRadicalForm rewrites base^(m/n) as the n-th root of base^m, without
+// evaluating it: 169^(1/2) is sqrt(169) and 8^(2/3) is sqrt[3](8^2).
+func solveRadicalForm(ascii string, steps *[]Step) (rep Report) {
+	c := strings.ReplaceAll(ascii, " ", "")
+	g := radicalFormPattern.FindStringSubmatch(c)
+	if g == nil {
+		rep.Err = fmt.Errorf("radical form needs base^(m/n), got %q", ascii)
+		return rep
+	}
+	m, _ := strconv.Atoi(g[2])
+	n, _ := strconv.Atoi(g[3])
+	if n < 2 || m < 1 {
+		rep.Err = fmt.Errorf("radical form needs a positive fraction with a denominator of at least 2, got %d/%d", m, n)
+		return rep
+	}
+
+	radicand := g[1]
+	if m > 1 {
+		base := g[1]
+		if !wordPattern.MatchString(base) && !groupPattern.MatchString(base) {
+			base = "(" + base + ")"
+		}
+		radicand = base + "^" + strconv.Itoa(m)
+	}
+	*steps = append(*steps, Step{"Compute", "Read the exponent", fmt.Sprintf("a^(m/n) means the n-th root of a^m, with m = %d and n = %d", m, n)})
+	index := ""
+	if n != 2 {
+		index = strconv.Itoa(n)
+	}
+	rep.Result = rootText(index, radicand)
+	*steps = append(*steps, Step{"Result", "Radical form", rep.Result})
+	return rep
+}

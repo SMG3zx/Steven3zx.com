@@ -90,6 +90,7 @@ var Worksheet = []WorksheetEntry{
 	{"evaluate_7.png", "sqrt[3](343)", OpEvaluate, "7", 0, nil},
 	{"radical_14.png", "sqrt[3](72)", OpSimplify, "2sqrt[3](9)", 0, nil},
 	{"radical_15.png", "sqrt[3](49) * sqrt[3](14)", OpSimplify, "7sqrt[3](2)", 0, nil},
+	{"radical_16.png", "169^(1/2)", OpRadicalForm, "sqrt(169)", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
