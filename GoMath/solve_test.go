@@ -220,6 +220,10 @@ func TestSolveSimplifyHigherRoots(t *testing.T) {
 		{"sqrt[3](16x^4)", "2xsqrt[3](2x)"},
 		{"sqrt[4](48)", "2sqrt[4](3)"},
 		{"sqrt[3](54) + sqrt[3](2)", "4sqrt[3](2)"},
+		{"sqrt[3](49) * sqrt[3](14)", "7sqrt[3](2)"},
+		{`\sqrt[3]{49} \cdot \sqrt[3]{14}`, "7sqrt[3](2)"},
+		{"sqrt[3](54) / sqrt[3](2)", "3"},
+		{"sqrt(2) * sqrt[3](4)", "sqrt[3](4)sqrt(2)"},
 		{"sqrt[3](2) + sqrt(2)", "sqrt(2) + sqrt[3](2)"},
 	}
 	for _, c := range cases {

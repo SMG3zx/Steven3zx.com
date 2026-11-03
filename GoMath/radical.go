@@ -10,8 +10,8 @@ import (
 
 var (
 	radicalPattern  = regexp.MustCompile(`sqrt(?:\[(\d+)\])?\(([^()]*)\)`)
-	quotientPattern = regexp.MustCompile(`sqrt\(([^()]*)\)\s*/\s*sqrt\(([^()]*)\)`)
-	productPattern  = regexp.MustCompile(`sqrt\(([^()]*)\)\s*\*?\s*sqrt\(([^()]*)\)`)
+	quotientPattern = regexp.MustCompile(`sqrt(?:\[(\d+)\])?\(([^()]*)\)\s*/\s*sqrt(?:\[(\d+)\])?\(([^()]*)\)`)
+	productPattern  = regexp.MustCompile(`sqrt(?:\[(\d+)\])?\(([^()]*)\)\s*\*?\s*sqrt(?:\[(\d+)\])?\(([^()]*)\)`)
 )
 
 // radicalSubst rewrites each sqrt(R) in ascii as a stand-in variable so the
@@ -27,22 +27,32 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 		return ascii, nil, nil, nil
 	}
 	out = ascii
-	for productPattern.MatchString(out) {
+	// Neighbours join only when they share an index, so sqrt(2)sqrt[3](4)
+	// stays as two radicals. Each pass must change something to go on.
+	for changed := true; changed && productPattern.MatchString(out); {
+		changed = false
 		out = productPattern.ReplaceAllStringFunc(out, func(m string) string {
 			g := productPattern.FindStringSubmatch(m)
-			joined := "sqrt(" + wrapSum(g[1]) + "*" + wrapSum(g[2]) + ")"
+			if g[1] != g[3] {
+				return m
+			}
+			joined := rootText(g[1], wrapSum(g[2])+"*"+wrapSum(g[4]))
 			notes = append(notes, fmt.Sprintf("product rule: %s = %s", m, joined))
+			changed = true
 			return joined
 		})
 	}
 
 	out = quotientPattern.ReplaceAllStringFunc(out, func(m string) string {
 		g := quotientPattern.FindStringSubmatch(m)
-		q, ok := divideTerms(g[1], g[2])
+		if g[1] != g[3] {
+			return m
+		}
+		q, ok := divideTerms(g[2], g[4])
 		if !ok {
 			return m
 		}
-		joined := "sqrt(" + q + ")"
+		joined := rootText(g[1], q)
 		notes = append(notes, fmt.Sprintf("quotient rule: %s = %s", m, joined))
 		return joined
 	})
@@ -104,6 +114,14 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 		err = fmt.Errorf("a radical here must hold a single term, such as sqrt(6x), got %q", ascii)
 	}
 	return out, back, notes, err
+}
+
+// rootText writes the root of index k (empty for a square root) of radicand.
+func rootText(k, radicand string) string {
+	if k == "" {
+		return "sqrt(" + radicand + ")"
+	}
+	return "sqrt[" + k + "](" + radicand + ")"
 }
 
 // divideTerms divides one single-term expression by another, such as
