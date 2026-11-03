@@ -84,6 +84,7 @@ var Worksheet = []WorksheetEntry{
 	{"radical_8.png", "sqrt(147x^3) / sqrt(3x)", OpSimplify, "7x", 0, nil},
 	{"radical_9.png", "sqrt(432x^8) / sqrt(6x)", OpSimplify, "6x^3sqrt(2x)", 0, nil},
 	{"radical_10.png", "3sqrt(5) + 6sqrt(5)", OpSimplify, "9sqrt(5)", 0, nil},
+	{"radical_11.png", "3sqrt(11x) - 8sqrt(11x)", OpSimplify, "-5sqrt(11x)", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
