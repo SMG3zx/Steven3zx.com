@@ -59,3 +59,23 @@ func TestSolveReportsErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveSquareRootBlank(t *testing.T) {
+	for _, in := range []string{"sqrt(169)", `\sqrt{169}`, "sqrt(13^2)"} {
+		rep := Solve(in, OpSquareRoot)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", in, rep.Err)
+		}
+		if rep.Result != "13^2" {
+			t.Errorf("%q: Result = %q, want %q", in, rep.Result, "13^2")
+		}
+	}
+}
+
+func TestSolveSquareRootBlankRejectsNonSquares(t *testing.T) {
+	for _, in := range []string{"sqrt(x)", "sqrt(170)", "sqrt(-4)", "169"} {
+		if rep := Solve(in, OpSquareRoot); rep.Err == nil {
+			t.Errorf("%q: expected an error, got result %q", in, rep.Result)
+		}
+	}
+}

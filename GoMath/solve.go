@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -20,6 +21,8 @@ const (
 	OpPrime
 	// OpEvaluate substitutes the given variable values and reports the number.
 	OpEvaluate
+	// OpSquareRoot fills the blank in "sqrt(n) = r because ___ = n", giving r^2.
+	OpSquareRoot
 )
 
 func (o Operation) String() string {
@@ -34,6 +37,8 @@ func (o Operation) String() string {
 		return "prime check"
 	case OpEvaluate:
 		return "evaluate"
+	case OpSquareRoot:
+		return "square root blank"
 	}
 	return "unknown"
 }
@@ -80,6 +85,10 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		steps = append(steps, Step{"Input", "Rewrite TeX", note})
 	}
 	steps = append(steps, Step{"Input", "ASCII form", ascii})
+
+	if op == OpSquareRoot {
+		return solveSquareRoot(ascii, &steps)
+	}
 
 	var tokens []string
 	for _, t := range NewLexer(ascii).Forward() {
@@ -161,4 +170,51 @@ func tokenText(t Token) string {
 		return string(t.Value)
 	}
 	return "end"
+}
+
+// solveSquareRoot answers "sqrt(n) = r because ___ = n". The input is
+// sqrt(n) in ASCII, where n is any expression that evaluates to a perfect
+// square. The blank is r^2, because squaring the root gives back n.
+func solveSquareRoot(ascii string, steps *[]Step) (rep Report) {
+	compact := strings.ReplaceAll(ascii, " ", "")
+	if !strings.HasPrefix(compact, "sqrt(") || !strings.HasSuffix(compact, ")") {
+		rep.Err = fmt.Errorf("square root blank needs sqrt(n), got %q", ascii)
+		return rep
+	}
+	inner := compact[len("sqrt(") : len(compact)-1]
+
+	tree, events, err := ParseWithEvents(inner)
+	rep.Scenes = map[int]ParseEvent{}
+	for _, ev := range events {
+		rep.Scenes[len(*steps)] = ev
+		*steps = append(*steps, Step{"Parse", "Pratt parser", ev.Text})
+	}
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	*steps = append(*steps, Step{"Parse", "Syntax tree", tree.String()})
+
+	n, err := tree.Eval(nil)
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	if n < 0 || n != math.Trunc(n) {
+		rep.Err = fmt.Errorf("sqrt needs a whole number that is not negative, got %s", strconv.FormatFloat(n, 'f', -1, 64))
+		return rep
+	}
+	r := math.Round(math.Sqrt(n))
+	if r*r != n {
+		rep.Err = fmt.Errorf("%s is not a perfect square", strconv.FormatFloat(n, 'f', -1, 64))
+		return rep
+	}
+
+	root := strconv.FormatFloat(r, 'f', -1, 64)
+	nText := strconv.FormatFloat(n, 'f', -1, 64)
+	*steps = append(*steps, Step{"Compute", "Find the root", fmt.Sprintf("sqrt(%s) = %s", nText, root)})
+	*steps = append(*steps, Step{"Compute", "Square the root", fmt.Sprintf("%s^2 = %s", root, nText)})
+	rep.Result = root + "^2"
+	*steps = append(*steps, Step{"Result", "Blank", rep.Result})
+	return rep
 }

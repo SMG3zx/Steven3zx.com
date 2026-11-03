@@ -15,6 +15,7 @@ func TestNormalizeTeX(t *testing.T) {
 		{`4x^{2}-7x`, `4x^(2)-7x`},
 		{`\frac{1}{x}`, `(1)/(x)`},
 		{`\frac{x^{2}}{2}`, `(x^(2))/(2)`},
+		{`\sqrt{169}`, `sqrt(169)`},
 	}
 	for _, c := range cases {
 		got, _ := normalizeTeX(c.input)

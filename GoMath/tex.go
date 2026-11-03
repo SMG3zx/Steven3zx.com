@@ -35,6 +35,11 @@ func normalizeTeX(s string) (string, []string) {
 		}
 	}
 
+	if strings.Contains(s, `\sqrt`) {
+		s = strings.ReplaceAll(s, `\sqrt`, "sqrt")
+		notes = append(notes, `replace \sqrt with sqrt`)
+	}
+
 	if strings.ContainsAny(s, "{}") {
 		s = strings.NewReplacer("{", "(", "}", ")").Replace(s)
 		notes = append(notes, "turn {...} groups into (...), so x^{2} becomes x^(2)")

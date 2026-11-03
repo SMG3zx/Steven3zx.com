@@ -52,6 +52,7 @@ Other TeX commands such as `\sqrt`, `\sin`, `\pi`, subscripts, and `\begin{...}`
 | Factor | ctrl+f | Pulls out the integer content and common variable powers, then finds rational roots. | `16x + 40` gives `8(2x + 5)`. |
 | Technique | ctrl+t | Names the factoring method that fits the shape. | `64x^3 - 125` gives `difference of cubes`. |
 | Prime check | ctrl+p | Reports whether the polynomial is irreducible over the integers. | `x^2 - 2x - 2` gives `true`. |
+| Root blank | ctrl+r | Fills the blank in "sqrt(n) = r because ___ = n" with `r^2`. `n` must be a perfect square. Accepts `sqrt(169)` or `\sqrt{169}`. | `sqrt(169)` gives `13^2`. |
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.
 
@@ -76,7 +77,7 @@ Techniques that `Technique` can name:
 
 ## Worksheet bank
 
-`bank.go` holds the 35 problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.
+`bank.go` holds the problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.
 
 The TUI's bank view (ctrl+b) lists the same entries. Running one shows whether GoMath's answer matches the worksheet.
 
