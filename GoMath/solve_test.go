@@ -148,6 +148,7 @@ func TestSolveSimplifyProductRule(t *testing.T) {
 		{"sqrt(6x) • sqrt(30x)", "6xsqrt(5)"},
 		{"sqrt(2)sqrt(8)", "4"},
 		{"sqrt(x^3)", "xsqrt(x)"},
+		{"sqrt(x^21)", "x^10sqrt(x)"},
 		{"sqrt(12y^2)", "2ysqrt(3)"},
 		{"sqrt(2) * sqrt(3) * sqrt(5)", "sqrt(30)"},
 	}

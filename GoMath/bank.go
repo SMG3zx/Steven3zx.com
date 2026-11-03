@@ -77,6 +77,7 @@ var Worksheet = []WorksheetEntry{
 	{"evaluate_6.png", "sqrt(169) + sqrt(64)", OpEvaluate, "21", 0, nil},
 	{"radical_2.png", "sqrt(175)", OpSimplify, "5sqrt(7)", 0, nil},
 	{"radical_3.png", "sqrt(6x) * sqrt(30x)", OpSimplify, "6xsqrt(5)", 0, nil},
+	{"radical_4.png", "sqrt(x^21)", OpSimplify, "x^10sqrt(x)", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
