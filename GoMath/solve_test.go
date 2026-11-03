@@ -196,6 +196,7 @@ func TestSolveSimplifyQuotientOfRadicals(t *testing.T) {
 		{"sqrt(147x^3) / sqrt(3x)", "7x"},
 		{`\frac{\sqrt{147x^3}}{\sqrt{3x}}`, "7x"},
 		{"sqrt(20) / sqrt(5)", "2"},
+		{"sqrt(432x^8) / sqrt(6x)", "6x^3sqrt(2x)"},
 		{"sqrt(18x) / sqrt(x)", "3sqrt(2)"},
 	}
 	for _, c := range cases {
