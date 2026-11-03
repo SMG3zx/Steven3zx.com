@@ -72,6 +72,7 @@ var Worksheet = []WorksheetEntry{
 	{"factor_3.png", "x^2 + 16x + 55", OpFactor, "(x + 5)(x + 11)", 0, nil},
 	{"factor_4.png", "3x^2 - 32x - 11", OpFactor, "(3x + 1)(x - 11)", 0, nil},
 	{"prime_1.png", "x^2 + 9", OpPrime, "true", 0, nil},
+	{"radical_1.png", "7sqrt(2) + 11sqrt(2)", OpSimplify, "18sqrt(2)", 0, nil},
 	{"root_1.png", "sqrt(169)", OpSquareRoot, "13^2", 0, nil},
 }
 

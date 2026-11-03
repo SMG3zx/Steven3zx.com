@@ -42,7 +42,7 @@ TeX is rewritten to ASCII before parsing. The rewrites are listed in the TUI's f
 | `\,` | a space |
 | Unicode minus `−` | `-` |
 
-Other TeX commands such as `\sqrt`, `\sin`, `\pi`, subscripts, and `\begin{...}` are not supported.
+Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not supported.
 
 ## Operations
 
@@ -71,9 +71,13 @@ Techniques that `Technique` can name:
 
 - Division by anything that is not a number in polynomial operations, such as `1/x` or `x/y`. `Eval` and `Diff` do handle `1/x`.
 - Variable or non-whole exponents in polynomial operations, such as `x^y`, `x^(1/2)`, or `x^-1`. `Diff` requires the exponent to be constant.
-- Functions, roots, absolute values, equations, and inequalities.
+- Functions, roots other than `sqrt(n)` with a whole-number `n` (see Radicals), absolute values, equations, and inequalities.
 - Factoring when more than one variable remains after the common monomial is removed. `x^2 + y` is rejected.
 - Splitting a leftover polynomial of degree 2 or more into quadratic factors when it has no rational roots. Factoring stops there, so `(x^2+1)(x^2+2)` is reported as one irreducible factor.
+
+## Radicals
+
+Simplify accepts `sqrt(n)` and `\sqrt{n}` for whole numbers `n`. Square factors come out (`sqrt(8)` is `2sqrt(2)`), perfect squares become numbers, and like radicals combine: `7sqrt(2) + 11sqrt(2)` gives `18sqrt(2)`. Each distinct radical is swapped for a stand-in letter, so the input should not rely on that letter being a variable. Radicals are not supported with factor, technique, or prime check.
 
 ## Worksheet bank
 

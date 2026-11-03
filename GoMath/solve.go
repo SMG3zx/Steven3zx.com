@@ -90,6 +90,23 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return solveSquareRoot(ascii, &steps)
 	}
 
+	var radicals map[string]string
+	if op == OpSimplify {
+		var rnotes []string
+		var err error
+		ascii, radicals, rnotes, err = radicalSubst(ascii)
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		for _, n := range rnotes {
+			steps = append(steps, Step{"Input", "Treat the radical as a variable", n})
+		}
+		if radicals != nil {
+			steps = append(steps, Step{"Input", "Like radicals combine like terms", ascii})
+		}
+	}
+
 	var tokens []string
 	for _, t := range NewLexer(ascii).Forward() {
 		tokens = append(tokens, tokenText(t))
@@ -123,10 +140,12 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 
 	switch op {
 	case OpSimplify:
-		rep.Result = poly.String()
+		rep.Result = radicalRestore(poly.String(), radicals)
 		rep.Degree = poly.Degree()
 		steps = append(steps, Step{"Result", "Standard form", rep.Result})
-		steps = append(steps, Step{"Result", "Degree", strconv.Itoa(rep.Degree)})
+		if radicals == nil {
+			steps = append(steps, Step{"Result", "Degree", strconv.Itoa(rep.Degree)})
+		}
 
 	case OpFactor:
 		fz, err := Factor(poly, &steps)

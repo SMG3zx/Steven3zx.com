@@ -79,3 +79,21 @@ func TestSolveSquareRootBlankRejectsNonSquares(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveSimplifyCombinesLikeRadicals(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"7sqrt(2) + 11sqrt(2)", "18sqrt(2)"},
+		{`7\sqrt{2} + 11\sqrt{2}`, "18sqrt(2)"},
+		{"sqrt(8) + sqrt(2)", "3sqrt(2)"},
+		{"sqrt(9) + 1", "4"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSimplify)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}
