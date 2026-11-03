@@ -267,6 +267,8 @@ func TestSolveEvaluateFractionalExponents(t *testing.T) {
 		{"169^(1/2)", "13"},
 		{"27^(1/3)", "3"},
 		{"8^(2/3)", "4"},
+		{"21^(1/2) * 21^(1/2)", "21"},
+		{"21^(1/2) • 21^(1/2)", "21"},
 	}
 	for _, c := range cases {
 		rep := Solve(c.in, OpEvaluate)
