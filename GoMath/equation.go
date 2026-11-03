@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +13,10 @@ import (
 // linear equations, and quadratics whose roots are rational. The result is a
 // solution set such as {9} or {-3, 5}, or "no solution" or "all real numbers".
 func solveEquation(ascii string, steps *[]Step) (rep Report) {
+	if strings.Contains(ascii, "sqrt") {
+		return solveRadicalEquation(ascii, steps)
+	}
+
 	sides := strings.Split(ascii, "=")
 	if len(sides) != 2 || strings.TrimSpace(sides[0]) == "" || strings.TrimSpace(sides[1]) == "" {
 		rep.Err = fmt.Errorf("solve needs one equation with a single =, got %q", ascii)
@@ -43,57 +48,84 @@ func solveEquation(ascii string, steps *[]Step) (rep Report) {
 	diff := polys[0].Sub(polys[1])
 	*steps = append(*steps, Step{"Compute", "Move everything to the left", diff.String() + " = 0"})
 
-	name, coeffs, err := diff.univariate()
+	set, special, err := solvePoly(diff, steps)
 	if err != nil {
 		rep.Err = err
 		return rep
 	}
+	rep.Result = special
+	if special == "" {
+		rep.Result = formatSet(set)
+	}
+	*steps = append(*steps, Step{"Result", "Solution set", rep.Result})
+	return rep
+}
+
+// root is one solution, as exact text and as a number for checking.
+type root struct {
+	text string
+	val  float64
+}
+
+// formatSet writes roots as a solution set in ascending order, such as {-3, 5}.
+func formatSet(set []root) string {
+	if len(set) == 0 {
+		return "no solution"
+	}
+	texts := make([]string, len(set))
+	for i, r := range set {
+		texts[i] = r.text
+	}
+	return "{" + strings.Join(texts, ", ") + "}"
+}
+
+// solvePoly finds the roots of diff = 0 for degrees up to 2. special is set
+// instead of the roots for "all real numbers", "no solution", and
+// "no real solution".
+func solvePoly(diff Poly, steps *[]Step) (set []root, special string, err error) {
+	name, coeffs, err := diff.univariate()
+	if err != nil {
+		return nil, "", err
+	}
 
 	switch len(coeffs) {
 	case 0:
-		rep.Result = "all real numbers"
 		*steps = append(*steps, Step{"Compute", "Both sides are equal", "0 = 0 is always true"})
+		return nil, "all real numbers", nil
 
 	case 1:
-		rep.Result = "no solution"
 		*steps = append(*steps, Step{"Compute", "Nothing left to solve", fmt.Sprintf("%d = 0 is never true", coeffs[0])})
+		return nil, "no solution", nil
 
 	case 2:
 		a, b := coeffs[1], coeffs[0]
 		*steps = append(*steps, Step{"Compute", "Isolate the variable", fmt.Sprintf("%s = %s", name, fraction(-b, a))})
-		rep.Result = "{" + fraction(-b, a) + "}"
+		return []root{{fraction(-b, a), float64(-b) / float64(a)}}, "", nil
 
 	case 3:
 		a, b, c := coeffs[2], coeffs[1], coeffs[0]
 		disc := b*b - 4*a*c
 		*steps = append(*steps, Step{"Compute", "Discriminant", fmt.Sprintf("b^2 - 4ac = %d", disc)})
 		if disc < 0 {
-			rep.Result = "no real solution"
-			break
+			return nil, "no real solution", nil
 		}
-		root := isqrt(disc)
-		if root*root != disc {
-			rep.Err = fmt.Errorf("the roots of %s = 0 are not rational, which is not supported", diff)
-			return rep
+		rt := isqrt(disc)
+		if rt*rt != disc {
+			return nil, "", fmt.Errorf("the roots of %s = 0 are not rational, which is not supported", diff)
 		}
-		set := map[string]float64{}
-		for _, num := range []int{-b - root, -b + root} {
-			set[fraction(num, 2*a)] = float64(num) / float64(2*a)
+		seen := map[string]bool{}
+		for _, num := range []int{-b - rt, -b + rt} {
+			text := fraction(num, 2*a)
+			if !seen[text] {
+				seen[text] = true
+				set = append(set, root{text, float64(num) / float64(2*a)})
+			}
 		}
-		texts := make([]string, 0, len(set))
-		for t := range set {
-			texts = append(texts, t)
-		}
-		sort.Slice(texts, func(i, j int) bool { return set[texts[i]] < set[texts[j]] })
+		sort.Slice(set, func(i, j int) bool { return set[i].val < set[j].val })
 		*steps = append(*steps, Step{"Compute", "Quadratic formula", fmt.Sprintf("%s = (-b ± sqrt(%d)) / 2a", name, disc)})
-		rep.Result = "{" + strings.Join(texts, ", ") + "}"
-
-	default:
-		rep.Err = fmt.Errorf("solve handles degree 2 and below, got degree %d", len(coeffs)-1)
-		return rep
+		return set, "", nil
 	}
-	*steps = append(*steps, Step{"Result", "Solution set", rep.Result})
-	return rep
+	return nil, "", fmt.Errorf("solve handles degree 2 and below, got degree %d", len(coeffs)-1)
 }
 
 // fraction writes num/den in lowest terms, as a whole number when it divides.
@@ -117,4 +149,158 @@ func isqrt(n int) int {
 		r++
 	}
 	return r
+}
+
+// solveRadicalEquation solves an equation with one radical, such as
+// sqrt(x + 4) = 8. It isolates the radical, raises both sides to its index,
+// solves the polynomial that is left, and then checks every candidate in the
+// original equation, because raising to a power can add extraneous roots.
+func solveRadicalEquation(ascii string, steps *[]Step) (rep Report) {
+	matches := radicalPattern.FindAllStringSubmatch(ascii, -1)
+	if len(matches) != 1 {
+		rep.Err = fmt.Errorf("a radical equation here needs exactly one radical, with no parentheses inside it, got %q", ascii)
+		return rep
+	}
+	k := 2
+	if matches[0][1] != "" {
+		k, _ = strconv.Atoi(matches[0][1])
+		if k < 2 {
+			rep.Err = fmt.Errorf("the root index must be at least 2, got %d", k)
+			return rep
+		}
+	}
+
+	// Stand in a free letter for the radical so both sides are polynomials.
+	letter := ""
+	for _, r := range "zyxwvutsrqponmlkjihgfedcba" {
+		if !strings.ContainsRune(ascii, r) {
+			letter = string(r)
+			break
+		}
+	}
+	if letter == "" {
+		rep.Err = fmt.Errorf("no free letter to stand for the radical")
+		return rep
+	}
+	rad, _, err := toPolyText(matches[0][2])
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	replaced := radicalPattern.ReplaceAllString(ascii, "("+letter+")")
+	*steps = append(*steps, Step{"Input", "Treat the radical as a variable", fmt.Sprintf("%s = %s, so the equation is %s", matches[0][0], letter, replaced)})
+
+	sides := strings.Split(replaced, "=")
+	if len(sides) != 2 {
+		rep.Err = fmt.Errorf("solve needs one equation with a single =, got %q", ascii)
+		return rep
+	}
+	left, _, err := toPolyText(sides[0])
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	right, _, err := toPolyText(sides[1])
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	diff := left.Sub(right)
+
+	// Split diff into c*letter plus the rest. The radical must appear alone
+	// and to the first power.
+	c := 0
+	var rest []Term
+	for _, t := range diff {
+		switch {
+		case t.Vars[letter] == 0:
+			rest = append(rest, t)
+		case t.Vars[letter] == 1 && len(t.Vars) == 1:
+			c += t.Coeff
+		default:
+			rep.Err = fmt.Errorf("the radical must appear alone and to the first power, got %s", diff)
+			return rep
+		}
+	}
+	if c == 0 {
+		rep.Err = fmt.Errorf("the radical cancels out of %s", diff)
+		return rep
+	}
+	restPoly := normalize(rest)
+	isolated := restPoly.Neg() // c * radical = isolated
+	*steps = append(*steps, Step{"Compute", "Isolate the radical", fmt.Sprintf("%d%s = %s", c, matches[0][0], isolated)})
+
+	// c^k * radicand = isolated^k
+	lhs := rad.Mul(constPoly(ipow(c, k)))
+	rhs := isolated.Pow(k)
+	*steps = append(*steps, Step{"Compute", fmt.Sprintf("Raise both sides to the power %d", k), fmt.Sprintf("%s = %s", lhs, rhs)})
+
+	set, special, err := solvePoly(lhs.Sub(rhs), steps)
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	if special != "" {
+		rep.Err = fmt.Errorf("this radical equation reduced to %q, which is not supported", special)
+		return rep
+	}
+
+	var good []root
+	for _, r := range set {
+		env := map[string]float64{}
+		for _, name := range append(diff.Vars(), rad.Vars()...) {
+			if name != letter {
+				env[name] = r.val
+			}
+		}
+		under := evalPoly(rad, env)
+		var val float64
+		ok := true
+		switch {
+		case under < -1e-9 && k%2 == 0:
+			ok = false
+		default:
+			val = math.Pow(math.Abs(under), 1/float64(k))
+			if under < 0 {
+				val = -val
+			}
+		}
+		if ok {
+			env[letter] = val
+			ok = math.Abs(evalPoly(diff, env)) < 1e-9
+		}
+		verdict := "checks"
+		if !ok {
+			verdict = "is extraneous, so it is dropped"
+		} else {
+			good = append(good, r)
+		}
+		*steps = append(*steps, Step{"Compute", "Check the candidate", fmt.Sprintf("%s %s", r.text, verdict)})
+	}
+	rep.Result = formatSet(good)
+	*steps = append(*steps, Step{"Result", "Solution set", rep.Result})
+	return rep
+}
+
+// toPolyText parses ASCII and reads it as a polynomial.
+func toPolyText(s string) (Poly, SExpression, error) {
+	tree, _, err := ParseWithEvents(s)
+	if err != nil {
+		return nil, nil, err
+	}
+	p, err := toPoly(tree, &[]Step{})
+	return p, tree, err
+}
+
+// evalPoly evaluates p with the given variable values.
+func evalPoly(p Poly, env map[string]float64) float64 {
+	total := 0.0
+	for _, t := range p {
+		v := float64(t.Coeff)
+		for name, e := range t.Vars {
+			v *= math.Pow(env[name], float64(e))
+		}
+		total += v
+	}
+	return total
 }

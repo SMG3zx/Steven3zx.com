@@ -329,3 +329,30 @@ func TestSolveEquation(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveRadicalEquation(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt(x + 4) = 8", "{60}"},
+		{`\sqrt{x + 4} = 8`, "{60}"},
+		{"sqrt(x + 4) = -8", "no solution"},
+		{"sqrt(2x + 3) = x", "{3}"},
+		{"x = sqrt(x + 2)", "{2}"},
+		{"sqrt(x) + 1 = 4", "{9}"},
+		{"sqrt[3](x - 1) = 2", "{9}"},
+		{"2sqrt(x) = 6", "{9}"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSolve)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+	for _, in := range []string{"sqrt(x) = sqrt(x + 1)", "sqrt(x) * sqrt(x) = 1"} {
+		if rep := Solve(in, OpSolve); rep.Err == nil {
+			t.Errorf("%q: expected an error, got %q", in, rep.Result)
+		}
+	}
+}

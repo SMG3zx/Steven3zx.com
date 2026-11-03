@@ -87,6 +87,8 @@ Evaluate also takes fractional exponents, so `169^(1/2)` gives `13`, and roots: 
 
 Simplify takes a power of a fractional power, `(x^(p/q))^r`, and multiplies the exponents: `(x^(6/7))^7` gives `x^6`, and `(x^(2/3))^(1/2)` gives `x^(1/3)`. Only this one shape works. Other expressions with fractional exponents, such as `x^(1/2) * x^(1/2)`, are not supported.
 
+Solve also takes an equation with one radical: `sqrt(x + 4) = 8` gives `{60}`. It isolates the radical, raises both sides to the index, solves what is left, and checks each candidate in the original equation, so extraneous roots are dropped: `sqrt(2x + 3) = x` gives `{3}`, not `{-1, 3}`. The radicand may be any polynomial without parentheses inside, and an equation with two radicals is not supported.
+
 ## Worksheet bank
 
 `bank.go` holds the problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.
