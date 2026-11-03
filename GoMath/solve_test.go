@@ -190,3 +190,21 @@ func TestSolveSimplifyQuotientRule(t *testing.T) {
 		t.Errorf("sqrt(1/5): expected an error, got %q", rep.Result)
 	}
 }
+
+func TestSolveSimplifyQuotientOfRadicals(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt(147x^3) / sqrt(3x)", "7x"},
+		{`\frac{\sqrt{147x^3}}{\sqrt{3x}}`, "7x"},
+		{"sqrt(20) / sqrt(5)", "2"},
+		{"sqrt(18x) / sqrt(x)", "3sqrt(2)"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSimplify)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}

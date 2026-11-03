@@ -9,14 +9,15 @@ import (
 )
 
 var (
-	radicalPattern = regexp.MustCompile(`sqrt\(([^()]*)\)`)
-	productPattern = regexp.MustCompile(`sqrt\(([^()]*)\)\s*\*?\s*sqrt\(([^()]*)\)`)
+	radicalPattern  = regexp.MustCompile(`sqrt\(([^()]*)\)`)
+	quotientPattern = regexp.MustCompile(`sqrt\(([^()]*)\)\s*/\s*sqrt\(([^()]*)\)`)
+	productPattern  = regexp.MustCompile(`sqrt\(([^()]*)\)\s*\*?\s*sqrt\(([^()]*)\)`)
 )
 
 // radicalSubst rewrites each sqrt(R) in ascii as a stand-in variable so the
 // polynomial engine can combine like radicals: 7sqrt(2) + 11sqrt(2) becomes
 // 7a + 11a. First the product rule joins neighbours, so sqrt(6x)*sqrt(30x)
-// becomes sqrt(6x*30x). R must then be a single term. Its largest square
+// becomes sqrt(6x*30x), and the quotient rule joins sqrt(A)/sqrt(B) into sqrt(A/B) when B divides A exactly. R must then be a single term. Its largest square
 // factor comes out, with variables taken as nonnegative, so sqrt(180x^2)
 // becomes 6x times a for sqrt(5). Perfect squares leave no radical.
 // back maps each stand-in letter to the radical it replaced. When ascii has
@@ -34,6 +35,17 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 			return joined
 		})
 	}
+
+	out = quotientPattern.ReplaceAllStringFunc(out, func(m string) string {
+		g := quotientPattern.FindStringSubmatch(m)
+		q, ok := divideTerms(g[1], g[2])
+		if !ok {
+			return m
+		}
+		joined := "sqrt(" + q + ")"
+		notes = append(notes, fmt.Sprintf("quotient rule: %s = %s", m, joined))
+		return joined
+	})
 
 	back = map[string]string{}
 	letterOf := map[string]string{}
@@ -80,6 +92,44 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 		err = fmt.Errorf("a radical here must hold a single term, such as sqrt(6x), got %q", ascii)
 	}
 	return out, back, notes, err
+}
+
+// divideTerms divides one single-term expression by another, such as
+// 147x^3 by 3x giving 49x^2. ok is false unless the division is exact.
+func divideTerms(a, b string) (string, bool) {
+	parse := func(r string) (Term, bool) {
+		tree, _, err := ParseWithEvents(r)
+		if err != nil {
+			return Term{}, false
+		}
+		p, err := toPoly(tree, &[]Step{})
+		if err != nil || len(p) != 1 || p.hasNegativeExponent() {
+			return Term{}, false
+		}
+		return p[0], true
+	}
+	ta, ok := parse(a)
+	if !ok {
+		return "", false
+	}
+	tb, ok := parse(b)
+	if !ok || tb.Coeff == 0 || ta.Coeff%tb.Coeff != 0 {
+		return "", false
+	}
+	vars := Monomial{}
+	for name, e := range ta.Vars {
+		vars[name] = e
+	}
+	for name, e := range tb.Vars {
+		if vars[name] < e {
+			return "", false
+		}
+		vars[name] -= e
+		if vars[name] == 0 {
+			delete(vars, name)
+		}
+	}
+	return Poly{{Coeff: ta.Coeff / tb.Coeff, Vars: vars}}.String(), true
 }
 
 // wrapSum puts parentheses around s when it holds a sum or difference.
