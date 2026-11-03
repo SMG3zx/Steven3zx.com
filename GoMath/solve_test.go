@@ -336,6 +336,7 @@ func TestSolveRadicalEquation(t *testing.T) {
 		{`\sqrt{x + 4} = 8`, "{60}"},
 		{"sqrt(x + 4) = -8", "no solution"},
 		{"sqrt(2x + 3) = x", "{3}"},
+		{"sqrt(19x - 52) = x + 2", "{7, 8}"},
 		{"x = sqrt(x + 2)", "{2}"},
 		{"sqrt(x) + 1 = 4", "{9}"},
 		{"sqrt[3](x - 1) = 2", "{9}"},
