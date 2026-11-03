@@ -175,6 +175,7 @@ func TestSolveSimplifyQuotientRule(t *testing.T) {
 		{"sqrt(25/100)", "1/2"},
 		{"sqrt(8/50)", "2/5"},
 		{"sqrt(9/4)", "3/2"},
+		{"sqrt(81/4)", "9/2"},
 	}
 	for _, c := range cases {
 		rep := Solve(c.in, OpSimplify)
