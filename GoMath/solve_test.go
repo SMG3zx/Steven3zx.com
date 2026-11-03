@@ -166,3 +166,26 @@ func TestSolveSimplifyProductRule(t *testing.T) {
 		t.Errorf("sqrt(x + 1): expected an error, got %q", rep.Result)
 	}
 }
+
+func TestSolveSimplifyQuotientRule(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt(1/144)", "1/12"},
+		{`\sqrt{\frac{1}{144}}`, "1/12"},
+		{"sqrt(20/9)", "2sqrt(5)/3"},
+		{"sqrt(25/100)", "1/2"},
+		{"sqrt(8/50)", "2/5"},
+		{"sqrt(9/4)", "3/2"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSimplify)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+	if rep := Solve("sqrt(1/5)", OpSimplify); rep.Err == nil {
+		t.Errorf("sqrt(1/5): expected an error, got %q", rep.Result)
+	}
+}

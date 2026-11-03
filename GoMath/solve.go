@@ -87,6 +87,12 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 	}
 	steps = append(steps, Step{"Input", "ASCII form", ascii})
 
+	if op == OpSimplify {
+		if num, den, ok := quotientRoot(ascii); ok {
+			return solveQuotientRoot(num, den, &steps)
+		}
+	}
+
 	if op == OpRoot {
 		return solveRoot(ascii, &steps)
 	}

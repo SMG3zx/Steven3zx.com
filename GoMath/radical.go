@@ -218,3 +218,98 @@ func evalRoots(ascii string, env map[string]float64, notes *[]string) (string, e
 		ascii = ascii[:i] + "(" + val + ")" + ascii[end+1:]
 	}
 }
+
+// quotientRoot splits sqrt(A/B) at the top-level slash. ok is false when
+// ascii is not a single root of a fraction.
+func quotientRoot(ascii string) (num, den string, ok bool) {
+	c := strings.ReplaceAll(ascii, " ", "")
+	if !strings.HasPrefix(c, "sqrt(") || !strings.HasSuffix(c, ")") {
+		return "", "", false
+	}
+	inner := c[len("sqrt(") : len(c)-1]
+	depth := 0
+	for i, r := range inner {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth < 0 {
+				return "", "", false
+			}
+		case '/':
+			if depth == 0 {
+				return inner[:i], inner[i+1:], true
+			}
+		}
+	}
+	return "", "", false
+}
+
+// solveQuotientRoot applies the quotient rule, sqrt(A/B) = sqrt(A)/sqrt(B),
+// to whole numbers A and B. Square factors come out of each root and the
+// whole-number parts are reduced, so sqrt(1/144) gives 1/12 and sqrt(20/9)
+// gives 2sqrt(5)/3. The same radical on top and bottom cancels. A denominator that stays under a root would need
+// rationalizing, which is not supported.
+func solveQuotientRoot(num, den string, steps *[]Step) (rep Report) {
+	*steps = append(*steps, Step{"Compute", "Quotient rule", fmt.Sprintf("sqrt(%s/%s) = sqrt(%s)/sqrt(%s)", num, den, num, den)})
+
+	parts := [2]struct{ out, in int }{}
+	for i, side := range []string{num, den} {
+		tree, _, err := ParseWithEvents(side)
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		v, err := tree.Eval(nil)
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		if v != math.Trunc(v) || v <= 0 {
+			rep.Err = fmt.Errorf("the quotient rule here needs positive whole numbers, got %s", strconv.FormatFloat(v, 'f', -1, 64))
+			return rep
+		}
+		outside, inside, err := splitRadicand(strconv.FormatFloat(v, 'f', -1, 64))
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		parts[i].out, _ = strconv.Atoi(outside)
+		parts[i].in = 1
+		if inside != "1" {
+			parts[i].in, _ = strconv.Atoi(inside)
+		}
+		*steps = append(*steps, Step{"Compute", "Simplify the root", fmt.Sprintf("sqrt(%s) = %s", strconv.FormatFloat(v, 'f', -1, 64), radicalText(parts[i].out, parts[i].in))})
+	}
+	if parts[1].in == parts[0].in {
+		// The same radical on top and bottom cancels.
+		parts[0].in, parts[1].in = 1, 1
+	}
+	if parts[1].in != 1 {
+		rep.Err = fmt.Errorf("the denominator sqrt(%s) would need rationalizing, which is not supported", den)
+		return rep
+	}
+
+	a, b := parts[0].out, parts[1].out
+	for g := gcd(a, b); g > 1; g = gcd(a, b) {
+		a, b = a/g, b/g
+	}
+	rep.Result = radicalText(a, parts[0].in)
+	if b != 1 {
+		rep.Result += "/" + strconv.Itoa(b)
+	}
+	*steps = append(*steps, Step{"Result", "Quotient", rep.Result})
+	return rep
+}
+
+// radicalText writes out*sqrt(in) in ASCII, such as 2sqrt(5), sqrt(5), or 4.
+func radicalText(out, in int) string {
+	switch {
+	case in == 1:
+		return strconv.Itoa(out)
+	case out == 1:
+		return fmt.Sprintf("sqrt(%d)", in)
+	}
+	return fmt.Sprintf("%dsqrt(%d)", out, in)
+}
