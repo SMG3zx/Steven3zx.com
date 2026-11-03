@@ -96,6 +96,7 @@ var Worksheet = []WorksheetEntry{
 	{"exponent_1.png", "(x^(6/7))^7", OpSimplify, "x^6", 0, nil},
 	{"evaluate_9.png", "21^(1/2) * 21^(1/2)", OpEvaluate, "21", 0, nil},
 	{"solve_1.png", "7x - 8 = 55", OpSolve, "{9}", 0, nil},
+	{"solve_2.png", "(8x - 7) - 5 = 9(x + 7)", OpSolve, "{-75}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
