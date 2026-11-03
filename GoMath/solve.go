@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -21,8 +22,8 @@ const (
 	OpPrime
 	// OpEvaluate substitutes the given variable values and reports the number.
 	OpEvaluate
-	// OpSquareRoot fills the blank in "sqrt(n) = r because ___ = n", giving r^2.
-	OpSquareRoot
+	// OpRoot fills the blank in "root(n) = r because ___ = n", giving r^k.
+	OpRoot
 )
 
 func (o Operation) String() string {
@@ -37,8 +38,8 @@ func (o Operation) String() string {
 		return "prime check"
 	case OpEvaluate:
 		return "evaluate"
-	case OpSquareRoot:
-		return "square root blank"
+	case OpRoot:
+		return "root blank"
 	}
 	return "unknown"
 }
@@ -86,8 +87,8 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 	}
 	steps = append(steps, Step{"Input", "ASCII form", ascii})
 
-	if op == OpSquareRoot {
-		return solveSquareRoot(ascii, &steps)
+	if op == OpRoot {
+		return solveRoot(ascii, &steps)
 	}
 
 	var radicals map[string]string
@@ -191,18 +192,30 @@ func tokenText(t Token) string {
 	return "end"
 }
 
-// solveSquareRoot answers "sqrt(n) = r because ___ = n". The input is
-// sqrt(n) in ASCII, where n is any expression that evaluates to a perfect
-// square. The blank is r^2, because squaring the root gives back n.
-func solveSquareRoot(ascii string, steps *[]Step) (rep Report) {
+// rootPattern reads sqrt(n) or sqrt[k](n), with k the index of the root.
+var rootPattern = regexp.MustCompile(`^sqrt(?:\[(\d+)\])?\((.*)\)$`)
+
+// solveRoot answers "root(n) = r because ___ = n". The input is sqrt(n) or
+// sqrt[k](n) in ASCII, where n is any expression whose k-th root is a whole
+// number. The blank is r^k, because raising the root to k gives back n. A
+// negative root is written in parentheses, as in (-5)^5.
+func solveRoot(ascii string, steps *[]Step) (rep Report) {
 	compact := strings.ReplaceAll(ascii, " ", "")
-	if !strings.HasPrefix(compact, "sqrt(") || !strings.HasSuffix(compact, ")") {
-		rep.Err = fmt.Errorf("square root blank needs sqrt(n), got %q", ascii)
+	m := rootPattern.FindStringSubmatch(compact)
+	if m == nil {
+		rep.Err = fmt.Errorf("root blank needs sqrt(n) or sqrt[k](n), got %q", ascii)
 		return rep
 	}
-	inner := compact[len("sqrt(") : len(compact)-1]
+	k := 2
+	if m[1] != "" {
+		k, _ = strconv.Atoi(m[1])
+		if k < 2 {
+			rep.Err = fmt.Errorf("the root index must be at least 2, got %d", k)
+			return rep
+		}
+	}
 
-	tree, events, err := ParseWithEvents(inner)
+	tree, events, err := ParseWithEvents(m[2])
 	rep.Scenes = map[int]ParseEvent{}
 	for _, ev := range events {
 		rep.Scenes[len(*steps)] = ev
@@ -219,21 +232,32 @@ func solveSquareRoot(ascii string, steps *[]Step) (rep Report) {
 		rep.Err = err
 		return rep
 	}
-	if n < 0 || n != math.Trunc(n) {
-		rep.Err = fmt.Errorf("sqrt needs a whole number that is not negative, got %s", strconv.FormatFloat(n, 'f', -1, 64))
+	nText := strconv.FormatFloat(n, 'f', -1, 64)
+	if n != math.Trunc(n) {
+		rep.Err = fmt.Errorf("root needs a whole number, got %s", nText)
 		return rep
 	}
-	r := math.Round(math.Sqrt(n))
-	if r*r != n {
-		rep.Err = fmt.Errorf("%s is not a perfect square", strconv.FormatFloat(n, 'f', -1, 64))
+	if n < 0 && k%2 == 0 {
+		rep.Err = fmt.Errorf("an even root of %s is not a real number", nText)
+		return rep
+	}
+	r := math.Round(math.Pow(math.Abs(n), 1/float64(k)))
+	if n < 0 {
+		r = -r
+	}
+	if math.Pow(r, float64(k)) != n {
+		rep.Err = fmt.Errorf("%s is not a perfect power of %d", nText, k)
 		return rep
 	}
 
 	root := strconv.FormatFloat(r, 'f', -1, 64)
-	nText := strconv.FormatFloat(n, 'f', -1, 64)
-	*steps = append(*steps, Step{"Compute", "Find the root", fmt.Sprintf("sqrt(%s) = %s", nText, root)})
-	*steps = append(*steps, Step{"Compute", "Square the root", fmt.Sprintf("%s^2 = %s", root, nText)})
-	rep.Result = root + "^2"
+	base := root
+	if r < 0 {
+		base = "(" + root + ")"
+	}
+	*steps = append(*steps, Step{"Compute", "Find the root", fmt.Sprintf("the root of index %d of %s is %s", k, nText, root)})
+	*steps = append(*steps, Step{"Compute", "Raise the root to the index", fmt.Sprintf("%s^%d = %s", base, k, nText)})
+	rep.Result = fmt.Sprintf("%s^%d", base, k)
 	*steps = append(*steps, Step{"Result", "Blank", rep.Result})
 	return rep
 }

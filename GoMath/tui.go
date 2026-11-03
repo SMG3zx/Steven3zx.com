@@ -187,7 +187,7 @@ func (m model) updateInput(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlP:
 		return m.run(OpPrime, m.input)
 	case tea.KeyCtrlR:
-		return m.run(OpSquareRoot, m.input)
+		return m.run(OpRoot, m.input)
 	case tea.KeyCtrlB:
 		m.mode = modeBank
 	case tea.KeyEsc:

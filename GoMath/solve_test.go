@@ -60,9 +60,9 @@ func TestSolveReportsErrors(t *testing.T) {
 	}
 }
 
-func TestSolveSquareRootBlank(t *testing.T) {
+func TestSolveRootBlank(t *testing.T) {
 	for _, in := range []string{"sqrt(169)", `\sqrt{169}`, "sqrt(13^2)"} {
-		rep := Solve(in, OpSquareRoot)
+		rep := Solve(in, OpRoot)
 		if rep.Err != nil {
 			t.Fatalf("%q: unexpected error: %v", in, rep.Err)
 		}
@@ -72,9 +72,9 @@ func TestSolveSquareRootBlank(t *testing.T) {
 	}
 }
 
-func TestSolveSquareRootBlankRejectsNonSquares(t *testing.T) {
+func TestSolveRootBlankRejectsNonSquares(t *testing.T) {
 	for _, in := range []string{"sqrt(x)", "sqrt(170)", "sqrt(-4)", "169"} {
-		if rep := Solve(in, OpSquareRoot); rep.Err == nil {
+		if rep := Solve(in, OpRoot); rep.Err == nil {
 			t.Errorf("%q: expected an error, got result %q", in, rep.Result)
 		}
 	}
@@ -94,6 +94,29 @@ func TestSolveSimplifyCombinesLikeRadicals(t *testing.T) {
 		}
 		if rep.Result != c.want {
 			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}
+
+func TestSolveRootBlankHigherIndex(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt[5](-3125)", "(-5)^5"},
+		{`\sqrt[5]{-3125}`, "(-5)^5"},
+		{"sqrt[3](27)", "3^3"},
+		{"sqrt[4](16)", "2^4"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpRoot)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+	for _, in := range []string{"sqrt[4](-16)", "sqrt[3](10)", "sqrt[1](4)"} {
+		if rep := Solve(in, OpRoot); rep.Err == nil {
+			t.Errorf("%q: expected an error, got %q", in, rep.Result)
 		}
 	}
 }
