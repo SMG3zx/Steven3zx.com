@@ -53,6 +53,7 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Technique | ctrl+t | Names the factoring method that fits the shape. | `64x^3 - 125` gives `difference of cubes`. |
 | Prime check | ctrl+p | Reports whether the polynomial is irreducible over the integers. | `x^2 - 2x - 2` gives `true`. |
 | Radical form | ctrl+g | Rewrites `a^(m/n)` as a radical without evaluating it. Also accepts `169^{\frac{1}{2}}`. | `169^(1/2)` gives `sqrt(169)`. `8^(2/3)` gives `sqrt[3](8^2)`. |
+| Solve | ctrl+s | Solves an equation in one variable and writes the solution set. Handles linear equations and quadratics with rational roots. | `7x - 8 = 55` gives `{9}`. `x^2 - 5x + 6 = 0` gives `{2, 3}`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.
@@ -72,7 +73,7 @@ Techniques that `Technique` can name:
 
 - Division by anything that is not a number in polynomial operations, such as `1/x` or `x/y`. `Eval` and `Diff` do handle `1/x`.
 - Variable or non-whole exponents in polynomial operations, such as `x^y`, `x^(1/2)`, or `x^-1`. `Diff` requires the exponent to be constant.
-- Functions, roots other than `sqrt(n)` with a whole-number `n` (see Radicals), absolute values, equations, and inequalities.
+- Functions, roots of anything other than a whole number or single term (see Radicals), absolute values, and inequalities. Equations are only solved through Solve.
 - Factoring when more than one variable remains after the common monomial is removed. `x^2 + y` is rejected.
 - Splitting a leftover polynomial of degree 2 or more into quadratic factors when it has no rational roots. Factoring stops there, so `(x^2+1)(x^2+2)` is reported as one irreducible factor.
 

@@ -26,6 +26,8 @@ const (
 	OpRoot
 	// OpRadicalForm rewrites a^(m/n) as a radical without evaluating it.
 	OpRadicalForm
+	// OpSolve solves an equation for its one variable, answering with a solution set.
+	OpSolve
 )
 
 func (o Operation) String() string {
@@ -44,6 +46,8 @@ func (o Operation) String() string {
 		return "root blank"
 	case OpRadicalForm:
 		return "radical form"
+	case OpSolve:
+		return "solve"
 	}
 	return "unknown"
 }
@@ -98,6 +102,10 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		if num, den, ok := quotientRoot(ascii); ok {
 			return solveQuotientRoot(num, den, &steps)
 		}
+	}
+
+	if op == OpSolve {
+		return solveEquation(ascii, &steps)
 	}
 
 	if op == OpRadicalForm {
