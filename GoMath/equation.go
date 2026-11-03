@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,10 @@ import (
 // linear equations, and quadratics whose roots are rational. The result is a
 // solution set such as {9} or {-3, 5}, or "no solution" or "all real numbers".
 func solveEquation(ascii string, steps *[]Step) (rep Report) {
+	if r, ok := solveRationalPower(ascii, steps); ok {
+		return r
+	}
+
 	if strings.Contains(ascii, "sqrt") {
 		return solveRadicalEquation(ascii, steps)
 	}
@@ -303,4 +308,97 @@ func evalPoly(p Poly, env map[string]float64) float64 {
 		total += v
 	}
 	return total
+}
+
+// rationalPowerSide reads v^(p/q) with whole p and q, allowing TeX's extra
+// parentheses around the numerator and denominator.
+var rationalPowerSide = regexp.MustCompile(`^([a-zA-Z])\^\(\(?(\d+)\)?/\(?(\d+)\)?\)$`)
+
+// solveRationalPower solves v^(p/q) = K for a whole number K, such as
+// x^(5/2) = 243. Raising both sides to the power q gives v^p = K^q. Each
+// whole-number root of that is then checked in the original equation, with
+// v^(p/q) read as the real q-th root of v, raised to p.
+func solveRationalPower(ascii string, steps *[]Step) (rep Report, ok bool) {
+	sides := strings.Split(strings.ReplaceAll(ascii, " ", ""), "=")
+	if len(sides) != 2 {
+		return rep, false
+	}
+	var g []string
+	var other string
+	for i, side := range sides {
+		if m := rationalPowerSide.FindStringSubmatch(side); m != nil {
+			g, other = m, sides[1-i]
+			break
+		}
+	}
+	if g == nil {
+		return rep, false
+	}
+
+	tree, _, err := ParseWithEvents(other)
+	if err != nil {
+		rep.Err = err
+		return rep, true
+	}
+	kf, err := tree.Eval(nil)
+	if err != nil || kf != math.Trunc(kf) {
+		rep.Err = fmt.Errorf("the other side must be a whole number, got %q", other)
+		return rep, true
+	}
+	p, _ := strconv.Atoi(g[2])
+	q, _ := strconv.Atoi(g[3])
+	if p == 0 || q == 0 {
+		rep.Err = fmt.Errorf("the exponent %d/%d is not supported", p, q)
+		return rep, true
+	}
+	if d := gcd(p, q); d > 1 {
+		p, q = p/d, q/d
+	}
+	name := g[1]
+
+	rhs := math.Pow(kf, float64(q))
+	*steps = append(*steps, Step{"Compute", fmt.Sprintf("Raise both sides to the power %d", q), fmt.Sprintf("%s^%d = %s", name, p, strconv.FormatFloat(rhs, 'f', -1, 64))})
+
+	// Roots of v^p = rhs: one real root when p is odd, a pair when p is even.
+	var cands []float64
+	r := math.Pow(math.Abs(rhs), 1/float64(p))
+	if rr := math.Round(r); math.Abs(r-rr) < 1e-9*math.Max(1, r) {
+		r = rr
+	} else {
+		rep.Err = fmt.Errorf("the solution %s is not a whole number, which is not supported", strconv.FormatFloat(r, 'f', -1, 64))
+		return rep, true
+	}
+	switch {
+	case rhs == 0:
+		cands = []float64{0}
+	case p%2 == 1 && rhs < 0:
+		cands = []float64{-r}
+	case p%2 == 1:
+		cands = []float64{r}
+	case rhs > 0:
+		cands = []float64{-r, r}
+	}
+
+	var good []root
+	for _, v := range cands {
+		ok := !(v < 0 && q%2 == 0)
+		if ok {
+			rt := math.Pow(math.Abs(v), 1/float64(q))
+			if v < 0 {
+				rt = -rt
+			}
+			ok = math.Abs(math.Pow(rt, float64(p))-kf) < 1e-9*math.Max(1, math.Abs(kf))
+		}
+		text := strconv.FormatFloat(v, 'f', -1, 64)
+		verdict := "checks"
+		if ok {
+			good = append(good, root{text, v})
+		} else {
+			verdict = "is extraneous, so it is dropped"
+		}
+		*steps = append(*steps, Step{"Compute", "Check the candidate", fmt.Sprintf("%s %s", text, verdict)})
+	}
+	rep.Result = formatSet(good)
+	*steps = append(*steps, Step{"Result", "Solution set", rep.Result})
+	return rep, true
 }

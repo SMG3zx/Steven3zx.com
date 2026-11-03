@@ -89,6 +89,8 @@ Simplify takes a power of a fractional power, `(x^(p/q))^r`, and multiplies the 
 
 Solve also takes an equation with one radical: `sqrt(x + 4) = 8` gives `{60}`. It isolates the radical, raises both sides to the index, solves what is left, and checks each candidate in the original equation, so extraneous roots are dropped: `sqrt(2x + 3) = x` gives `{3}`, not `{-1, 3}`. The radicand may be any polynomial without parentheses inside, and an equation with two radicals is not supported.
 
+Solve takes one more shape, `v^(p/q) = K` for a whole number `K`: `x^(5/2) = 243` gives `{9}`. It raises both sides to the power `q`, finds the whole-number roots of `v^p = K^q`, and checks each in the original equation, so `x^(3/2) = -8` gives `no solution`. An answer that is not a whole number is not supported.
+
 ## Worksheet bank
 
 `bank.go` holds the problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.

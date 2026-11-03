@@ -357,3 +357,28 @@ func TestSolveRadicalEquation(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveRationalExponentEquation(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"x^(5/2) = 243", "{9}"},
+		{`x^{\frac{5}{2}} = 243`, "{9}"},
+		{"243 = x^(5/2)", "{9}"},
+		{"x^(3/2) = -8", "no solution"},
+		{"x^(2/3) = 4", "{-8, 8}"},
+		{"x^(1/3) = -2", "{-8}"},
+		{"x^(3/2) = 0", "{0}"},
+		{"x^(4/2) = 9", "{-3, 3}"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSolve)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+	if rep := Solve("x^(2/3) = 5", OpSolve); rep.Err == nil {
+		t.Errorf("x^(2/3) = 5: expected an error, got %q", rep.Result)
+	}
+}
