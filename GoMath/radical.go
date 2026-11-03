@@ -8,41 +8,51 @@ import (
 	"strings"
 )
 
-var radicalPattern = regexp.MustCompile(`sqrt\((\d+)\)`)
+var (
+	radicalPattern = regexp.MustCompile(`sqrt\(([^()]*)\)`)
+	productPattern = regexp.MustCompile(`sqrt\(([^()]*)\)\s*\*?\s*sqrt\(([^()]*)\)`)
+)
 
-// radicalSubst rewrites each sqrt(n) in ascii as a stand-in variable so the
+// radicalSubst rewrites each sqrt(R) in ascii as a stand-in variable so the
 // polynomial engine can combine like radicals: 7sqrt(2) + 11sqrt(2) becomes
-// 7a + 11a. The largest square factor is pulled out first, so sqrt(8) becomes
-// 2a with a standing for sqrt(2). Perfect squares become whole numbers.
+// 7a + 11a. First the product rule joins neighbours, so sqrt(6x)*sqrt(30x)
+// becomes sqrt(6x*30x). R must then be a single term. Its largest square
+// factor comes out, with variables taken as nonnegative, so sqrt(180x^2)
+// becomes 6x times a for sqrt(5). Perfect squares leave no radical.
 // back maps each stand-in letter to the radical it replaced. When ascii has
-// no sqrt(n), it returns ascii unchanged with a nil map.
+// no sqrt(...), it returns ascii unchanged with a nil map.
 func radicalSubst(ascii string) (out string, back map[string]string, notes []string, err error) {
-	if !radicalPattern.MatchString(ascii) {
+	if !strings.Contains(ascii, "sqrt") {
 		return ascii, nil, nil, nil
 	}
-	back = map[string]string{}
-	letterOf := map[int]string{}
-	free := []rune("abcdefghijklmnopqrstuvwxyz")
-	var isFree = func(r rune) bool { return !strings.ContainsRune(ascii, r) }
+	out = ascii
+	for productPattern.MatchString(out) {
+		out = productPattern.ReplaceAllStringFunc(out, func(m string) string {
+			g := productPattern.FindStringSubmatch(m)
+			joined := "sqrt(" + wrapSum(g[1]) + "*" + wrapSum(g[2]) + ")"
+			notes = append(notes, fmt.Sprintf("product rule: %s = %s", m, joined))
+			return joined
+		})
+	}
 
-	out = radicalPattern.ReplaceAllStringFunc(ascii, func(m string) string {
+	back = map[string]string{}
+	letterOf := map[string]string{}
+	// Late letters sort after most variables, so radicals print last: 6xsqrt(5).
+	free := []rune("zyxwvutsrqponmlkjihgfedcba")
+	isFree := func(r rune) bool { return !strings.ContainsRune(ascii, r) }
+
+	out = radicalPattern.ReplaceAllStringFunc(out, func(m string) string {
 		if err != nil {
 			return m
 		}
-		n, _ := strconv.Atoi(radicalPattern.FindStringSubmatch(m)[1])
-		outside, inside := 1, n
-		for f := 2; f*f <= inside; {
-			if inside%(f*f) == 0 {
-				inside /= f * f
-				outside *= f
-			} else {
-				f++
-			}
+		inner := radicalPattern.FindStringSubmatch(m)[1]
+		outside, inside, e := splitRadicand(inner)
+		if e != nil {
+			err = e
+			return m
 		}
-		var rep string
-		if inside == 1 {
-			rep = strconv.Itoa(outside)
-		} else {
+		rep := outside
+		if inside != "1" {
 			l, ok := letterOf[inside]
 			if !ok {
 				for len(free) > 0 && !isFree(free[0]) {
@@ -55,17 +65,80 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 				l = string(free[0])
 				free = free[1:]
 				letterOf[inside] = l
-				back[l] = fmt.Sprintf("sqrt(%d)", inside)
+				back[l] = "sqrt(" + inside + ")"
 			}
-			rep = l
-			if outside > 1 {
-				rep = strconv.Itoa(outside) + l
+			if rep == "1" {
+				rep = l
+			} else {
+				rep += l
 			}
 		}
 		notes = append(notes, fmt.Sprintf("%s = %s", m, rep))
 		return "(" + rep + ")"
 	})
+	if err == nil && strings.Contains(out, "sqrt") {
+		err = fmt.Errorf("a radical here must hold a single term, such as sqrt(6x), got %q", ascii)
+	}
 	return out, back, notes, err
+}
+
+// wrapSum puts parentheses around s when it holds a sum or difference.
+func wrapSum(s string) string {
+	if strings.ContainsAny(s, "+-") {
+		return "(" + s + ")"
+	}
+	return s
+}
+
+// splitRadicand writes the term under a root as outside times sqrt(inside),
+// both as ASCII. A coefficient pulls out its largest square factor and each
+// variable pulls out half of its exponent, rounded down. outside is "1" and
+// inside is "1" when nothing is left on that side.
+func splitRadicand(r string) (outside, inside string, err error) {
+	tree, _, err := ParseWithEvents(r)
+	if err != nil {
+		return "", "", err
+	}
+	poly, err := toPoly(tree, &[]Step{})
+	if err != nil {
+		return "", "", err
+	}
+	if len(poly) != 1 || poly[0].Coeff < 0 || poly.hasNegativeExponent() {
+		return "", "", fmt.Errorf("a radical here must hold a single term with a positive whole-number coefficient, got sqrt(%s)", r)
+	}
+	t := poly[0]
+
+	out, in := 1, t.Coeff
+	for f := 2; f*f <= in; {
+		if in%(f*f) == 0 {
+			in /= f * f
+			out *= f
+		} else {
+			f++
+		}
+	}
+	outVars, inVars := Monomial{}, Monomial{}
+	for name, e := range t.Vars {
+		if e/2 > 0 {
+			outVars[name] = e / 2
+		}
+		if e%2 == 1 {
+			inVars[name] = 1
+		}
+	}
+
+	outside = strconv.Itoa(out) + outVars.key()
+	if outside == "1" || (out == 1 && len(outVars) > 0) {
+		outside = strings.TrimPrefix(outside, "1")
+		if outside == "" {
+			outside = "1"
+		}
+	}
+	inside = strconv.Itoa(in) + inVars.key()
+	if in == 1 && len(inVars) > 0 {
+		inside = inVars.key()
+	}
+	return outside, inside, nil
 }
 
 // radicalRestore puts each radical back in place of its stand-in letter.

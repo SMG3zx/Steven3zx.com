@@ -14,6 +14,8 @@ func normalizeTeX(s string) (string, []string) {
 	}
 
 	simple := []struct{ from, to, note string }{
+		{"•", "*", "replace • with *"},
+		{"·", "*", "replace · with *"},
 		{`\left`, "", `drop \left`},
 		{`\right`, "", `drop \right`},
 		{`\cdot`, "*", `replace \cdot with *`},

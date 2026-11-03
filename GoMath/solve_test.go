@@ -140,3 +140,27 @@ func TestSolveEvaluateRoots(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveSimplifyProductRule(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt(6x) * sqrt(30x)", "6xsqrt(5)"},
+		{`\sqrt{6x} \cdot \sqrt{30x}`, "6xsqrt(5)"},
+		{"sqrt(6x) • sqrt(30x)", "6xsqrt(5)"},
+		{"sqrt(2)sqrt(8)", "4"},
+		{"sqrt(x^3)", "xsqrt(x)"},
+		{"sqrt(12y^2)", "2ysqrt(3)"},
+		{"sqrt(2) * sqrt(3) * sqrt(5)", "sqrt(30)"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSimplify)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+	if rep := Solve("sqrt(x + 1)", OpSimplify); rep.Err == nil {
+		t.Errorf("sqrt(x + 1): expected an error, got %q", rep.Result)
+	}
+}

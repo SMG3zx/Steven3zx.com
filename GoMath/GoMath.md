@@ -77,7 +77,7 @@ Techniques that `Technique` can name:
 
 ## Radicals
 
-Simplify accepts `sqrt(n)` and `\sqrt{n}` for whole numbers `n`. Square factors come out (`sqrt(8)` is `2sqrt(2)`), perfect squares become numbers, and like radicals combine: `7sqrt(2) + 11sqrt(2)` gives `18sqrt(2)`. Each distinct radical is swapped for a stand-in letter, so the input should not rely on that letter being a variable. Radicals are not supported with factor, technique, or prime check.
+Simplify accepts `sqrt(n)` and `\sqrt{n}` where the radicand is a single term, such as `175`, `6x`, or `12y^2`. Square factors come out (`sqrt(8)` is `2sqrt(2)`), perfect squares become numbers, and like radicals combine: `7sqrt(2) + 11sqrt(2)` gives `18sqrt(2)`. The product rule joins neighbours first: `sqrt(6x) * sqrt(30x)` gives `6xsqrt(5)`. Variables are taken as nonnegative, so `sqrt(x^2)` is `x`. `•`, `\cdot`, and `*` all mean multiply. Each distinct radical is swapped for a stand-in letter, so the input should not rely on that letter being a variable. Radicals are not supported with factor, technique, or prime check.
 
 Evaluate also takes roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no TUI key. The TUI runs it from the bank only.
 
