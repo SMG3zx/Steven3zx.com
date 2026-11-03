@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	radicalPattern  = regexp.MustCompile(`sqrt\(([^()]*)\)`)
+	radicalPattern  = regexp.MustCompile(`sqrt(?:\[(\d+)\])?\(([^()]*)\)`)
 	quotientPattern = regexp.MustCompile(`sqrt\(([^()]*)\)\s*/\s*sqrt\(([^()]*)\)`)
 	productPattern  = regexp.MustCompile(`sqrt\(([^()]*)\)\s*\*?\s*sqrt\(([^()]*)\)`)
 )
@@ -57,15 +57,27 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 		if err != nil {
 			return m
 		}
-		inner := radicalPattern.FindStringSubmatch(m)[1]
-		outside, inside, e := splitRadicand(inner)
+		g := radicalPattern.FindStringSubmatch(m)
+		k := 2
+		if g[1] != "" {
+			k, _ = strconv.Atoi(g[1])
+			if k < 2 {
+				err = fmt.Errorf("the root index must be at least 2, got %d", k)
+				return m
+			}
+		}
+		outside, inside, e := splitRadicand(g[2], k)
 		if e != nil {
 			err = e
 			return m
 		}
 		rep := outside
 		if inside != "1" {
-			l, ok := letterOf[inside]
+			sym := "sqrt(" + inside + ")"
+			if k != 2 {
+				sym = fmt.Sprintf("sqrt[%d](%s)", k, inside)
+			}
+			l, ok := letterOf[sym]
 			if !ok {
 				for len(free) > 0 && !isFree(free[0]) {
 					free = free[1:]
@@ -76,8 +88,8 @@ func radicalSubst(ascii string) (out string, back map[string]string, notes []str
 				}
 				l = string(free[0])
 				free = free[1:]
-				letterOf[inside] = l
-				back[l] = "sqrt(" + inside + ")"
+				letterOf[sym] = l
+				back[l] = sym
 			}
 			if rep == "1" {
 				rep = l
@@ -140,11 +152,12 @@ func wrapSum(s string) string {
 	return s
 }
 
-// splitRadicand writes the term under a root as outside times sqrt(inside),
-// both as ASCII. A coefficient pulls out its largest square factor and each
-// variable pulls out half of its exponent, rounded down. outside is "1" and
-// inside is "1" when nothing is left on that side.
-func splitRadicand(r string) (outside, inside string, err error) {
+// splitRadicand writes the term under a k-th root as outside times
+// sqrt[k](inside), both as ASCII. A coefficient pulls out its largest k-th
+// power factor and each variable pulls out its exponent divided by k, rounded
+// down, leaving the remainder inside. outside is "1" and inside is "1" when
+// nothing is left on that side.
+func splitRadicand(r string, k int) (outside, inside string, err error) {
 	tree, _, err := ParseWithEvents(r)
 	if err != nil {
 		return "", "", err
@@ -159,9 +172,9 @@ func splitRadicand(r string) (outside, inside string, err error) {
 	t := poly[0]
 
 	out, in := 1, t.Coeff
-	for f := 2; f*f <= in; {
-		if in%(f*f) == 0 {
-			in /= f * f
+	for f := 2; ipow(f, k) <= in; {
+		if in%ipow(f, k) == 0 {
+			in /= ipow(f, k)
 			out *= f
 		} else {
 			f++
@@ -169,26 +182,32 @@ func splitRadicand(r string) (outside, inside string, err error) {
 	}
 	outVars, inVars := Monomial{}, Monomial{}
 	for name, e := range t.Vars {
-		if e/2 > 0 {
-			outVars[name] = e / 2
+		if e/k > 0 {
+			outVars[name] = e / k
 		}
-		if e%2 == 1 {
-			inVars[name] = 1
+		if e%k > 0 {
+			inVars[name] = e % k
 		}
 	}
 
 	outside = strconv.Itoa(out) + outVars.key()
-	if outside == "1" || (out == 1 && len(outVars) > 0) {
-		outside = strings.TrimPrefix(outside, "1")
-		if outside == "" {
-			outside = "1"
-		}
+	if out == 1 && len(outVars) > 0 {
+		outside = outVars.key()
 	}
 	inside = strconv.Itoa(in) + inVars.key()
 	if in == 1 && len(inVars) > 0 {
 		inside = inVars.key()
 	}
 	return outside, inside, nil
+}
+
+// ipow returns b raised to the whole-number power n.
+func ipow(b, n int) int {
+	r := 1
+	for ; n > 0; n-- {
+		r *= b
+	}
+	return r
 }
 
 // radicalRestore puts each radical back in place of its stand-in letter.
@@ -320,7 +339,7 @@ func solveQuotientRoot(num, den string, steps *[]Step) (rep Report) {
 			rep.Err = fmt.Errorf("the quotient rule here needs positive whole numbers, got %s", strconv.FormatFloat(v, 'f', -1, 64))
 			return rep
 		}
-		outside, inside, err := splitRadicand(strconv.FormatFloat(v, 'f', -1, 64))
+		outside, inside, err := splitRadicand(strconv.FormatFloat(v, 'f', -1, 64), 2)
 		if err != nil {
 			rep.Err = err
 			return rep

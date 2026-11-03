@@ -211,3 +211,24 @@ func TestSolveSimplifyQuotientOfRadicals(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveSimplifyHigherRoots(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt[3](72)", "2sqrt[3](9)"},
+		{`\sqrt[3]{72}`, "2sqrt[3](9)"},
+		{"sqrt[3](343)", "7"},
+		{"sqrt[3](16x^4)", "2xsqrt[3](2x)"},
+		{"sqrt[4](48)", "2sqrt[4](3)"},
+		{"sqrt[3](54) + sqrt[3](2)", "4sqrt[3](2)"},
+		{"sqrt[3](2) + sqrt(2)", "sqrt(2) + sqrt[3](2)"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSimplify)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}
