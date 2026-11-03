@@ -445,3 +445,53 @@ func solveRadicalForm(ascii string, steps *[]Step) (rep Report) {
 	*steps = append(*steps, Step{"Result", "Radical form", rep.Result})
 	return rep
 }
+
+// powerOfPowerPattern reads (base^(p/q))^r, where r is a whole number or a
+// fraction c/d, with TeX's extra parentheses allowed around any exponent.
+var powerOfPowerPattern = regexp.MustCompile(`^\((\w+)\^\(\(?(-?\d+)\)?/\(?(\d+)\)?\)\)\^\(?\(?(-?\d+)\)?(?:/\(?(\d+)\)?)?\)?$`)
+
+// solvePowerOfPower applies (a^m)^n = a^(mn) when m is a fraction, which the
+// polynomial form cannot hold: (x^(6/7))^7 is x^6. ok is false when ascii
+// is not that shape.
+func solvePowerOfPower(ascii string, steps *[]Step) (rep Report, ok bool) {
+	g := powerOfPowerPattern.FindStringSubmatch(strings.ReplaceAll(ascii, " ", ""))
+	if g == nil {
+		return rep, false
+	}
+	p, _ := strconv.Atoi(g[2])
+	q, _ := strconv.Atoi(g[3])
+	c, _ := strconv.Atoi(g[4])
+	d := 1
+	if g[5] != "" {
+		d, _ = strconv.Atoi(g[5])
+	}
+	if q == 0 || d == 0 {
+		rep.Err = fmt.Errorf("a fraction cannot have a denominator of 0")
+		return rep, true
+	}
+
+	num, den := p*c, q*d
+	if gg := gcd(abs(num), den); gg > 1 {
+		num, den = num/gg, den/gg
+	}
+	*steps = append(*steps, Step{"Compute", "Multiply the exponents", fmt.Sprintf("(%d/%d) * (%d/%d) = %d/%d", p, q, c, d, num, den)})
+
+	base := g[1]
+	switch {
+	case num == 0:
+		rep.Result = "1"
+	case den == 1 && num == 1:
+		rep.Result = base
+	case den == 1 && num > 0:
+		rep.Result = fmt.Sprintf("%s^%d", base, num)
+	case den == 1:
+		rep.Result = fmt.Sprintf("1/%s^%d", base, -num)
+		if num == -1 {
+			rep.Result = "1/" + base
+		}
+	default:
+		rep.Result = fmt.Sprintf("%s^(%d/%d)", base, num, den)
+	}
+	*steps = append(*steps, Step{"Result", "Simplified", rep.Result})
+	return rep, true
+}

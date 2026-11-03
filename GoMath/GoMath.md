@@ -82,6 +82,10 @@ Simplify accepts `sqrt(n)` and `\sqrt{n}` where the radicand is a single term, s
 
 Evaluate also takes fractional exponents, so `169^(1/2)` gives `13`, and roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no TUI key. The TUI runs it from the bank only.
 
+## Fractional exponents
+
+Simplify takes a power of a fractional power, `(x^(p/q))^r`, and multiplies the exponents: `(x^(6/7))^7` gives `x^6`, and `(x^(2/3))^(1/2)` gives `x^(1/3)`. Only this one shape works. Other expressions with fractional exponents, such as `x^(1/2) * x^(1/2)`, are not supported.
+
 ## Worksheet bank
 
 `bank.go` holds the problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.

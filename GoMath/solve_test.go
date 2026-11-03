@@ -278,3 +278,24 @@ func TestSolveEvaluateFractionalExponents(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveSimplifyPowerOfFractionalPower(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"(x^(6/7))^7", "x^6"},
+		{`(x^{6/7})^{7}`, "x^6"},
+		{"(x^(1/2))^2", "x"},
+		{"(x^(2/3))^3", "x^2"},
+		{"(x^(2/3))^(1/2)", "x^(1/3)"},
+		{"(x^(1/2))^-2", "1/x"},
+		{"(x^(1/2))^-4", "1/x^2"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpSimplify)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}
