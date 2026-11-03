@@ -120,3 +120,23 @@ func TestSolveRootBlankHigherIndex(t *testing.T) {
 		}
 	}
 }
+
+func TestSolveEvaluateRoots(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"sqrt(100 - 36)", "8"},
+		{`\sqrt{100 - 36}`, "8"},
+		{"sqrt(36 - 100)", "not a real number"},
+		{"sqrt[3](27 - 35)", "-2"},
+		{"2 + sqrt(sqrt(16))", "4"},
+		{"sqrt(2)", "1.4142135623730951"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, OpEvaluate)
+		if rep.Err != nil {
+			t.Fatalf("%q: unexpected error: %v", c.in, rep.Err)
+		}
+		if rep.Result != c.want {
+			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
+		}
+	}
+}

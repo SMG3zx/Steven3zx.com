@@ -91,6 +91,26 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return solveRoot(ascii, &steps)
 	}
 
+	tookRoots := op == OpEvaluate && strings.Contains(ascii, "sqrt")
+	if tookRoots {
+		var rnotes []string
+		var err error
+		ascii, err = evalRoots(ascii, env, &rnotes)
+		for _, n := range rnotes {
+			steps = append(steps, Step{"Compute", "Take the root", n})
+		}
+		if err == errNotReal {
+			rep.Result = "not a real number"
+			steps = append(steps, Step{"Result", "Value", rep.Result})
+			return rep
+		}
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		steps = append(steps, Step{"Input", "Roots replaced by their values", ascii})
+	}
+
 	var radicals map[string]string
 	if op == OpSimplify {
 		var rnotes []string
@@ -125,6 +145,18 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return rep
 	}
 	steps = append(steps, Step{"Parse", "Syntax tree", tree.String()})
+
+	if tookRoots {
+		// Root values are often decimals, which the polynomial form rejects.
+		v, err := tree.Eval(env)
+		if err != nil {
+			rep.Err = err
+			return rep
+		}
+		rep.Result = strconv.FormatFloat(v, 'f', -1, 64)
+		steps = append(steps, Step{"Result", "Value", rep.Result})
+		return rep
+	}
 
 	poly, err := toPoly(tree, &steps)
 	if err != nil {

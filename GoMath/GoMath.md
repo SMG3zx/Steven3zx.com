@@ -79,6 +79,8 @@ Techniques that `Technique` can name:
 
 Simplify accepts `sqrt(n)` and `\sqrt{n}` for whole numbers `n`. Square factors come out (`sqrt(8)` is `2sqrt(2)`), perfect squares become numbers, and like radicals combine: `7sqrt(2) + 11sqrt(2)` gives `18sqrt(2)`. Each distinct radical is swapped for a stand-in letter, so the input should not rely on that letter being a variable. Radicals are not supported with factor, technique, or prime check.
 
+Evaluate also takes roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no TUI key. The TUI runs it from the bank only.
+
 ## Worksheet bank
 
 `bank.go` holds the problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.

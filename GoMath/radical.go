@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -73,4 +74,74 @@ func radicalRestore(s string, back map[string]string) string {
 		s = strings.ReplaceAll(s, l, r)
 	}
 	return s
+}
+
+// errNotReal reports an even root of a negative number.
+var errNotReal = fmt.Errorf("not a real number")
+
+// evalRoots replaces every sqrt(...) and sqrt[k](...) in ascii with its
+// numeric value, innermost first, so the evaluator can finish the rest. env
+// gives variable values for the radicand. It returns errNotReal when an even
+// root of a negative number turns up.
+func evalRoots(ascii string, env map[string]float64, notes *[]string) (string, error) {
+	for {
+		i := strings.LastIndex(ascii, "sqrt")
+		if i < 0 {
+			return ascii, nil
+		}
+		j := i + len("sqrt")
+		k := 2.0
+		if j < len(ascii) && ascii[j] == '[' {
+			end := strings.IndexByte(ascii[j:], ']')
+			if end < 0 {
+				return "", fmt.Errorf("unclosed [ in %q", ascii)
+			}
+			idx, err := strconv.Atoi(strings.TrimSpace(ascii[j+1 : j+end]))
+			if err != nil || idx < 2 {
+				return "", fmt.Errorf("the root index must be a whole number of at least 2")
+			}
+			k = float64(idx)
+			j += end + 1
+		}
+		if j >= len(ascii) || ascii[j] != '(' {
+			return "", fmt.Errorf("sqrt needs parentheses, as in sqrt(9)")
+		}
+		depth, end := 0, -1
+		for p := j; p < len(ascii) && end < 0; p++ {
+			switch ascii[p] {
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					end = p
+				}
+			}
+		}
+		if end < 0 {
+			return "", fmt.Errorf("unclosed ( in %q", ascii)
+		}
+		tree, _, err := ParseWithEvents(ascii[j+1 : end])
+		if err != nil {
+			return "", err
+		}
+		n, err := tree.Eval(env)
+		if err != nil {
+			return "", err
+		}
+		if n < 0 && math.Mod(k, 2) == 0 {
+			*notes = append(*notes, fmt.Sprintf("%s = %s, which is negative under an even root", ascii[i:end+1], strconv.FormatFloat(n, 'f', -1, 64)))
+			return "", errNotReal
+		}
+		r := math.Pow(math.Abs(n), 1/k)
+		if rr := math.Round(r); math.Pow(rr, k) == math.Abs(n) {
+			r = rr
+		}
+		if n < 0 {
+			r = -r
+		}
+		val := strconv.FormatFloat(r, 'f', -1, 64)
+		*notes = append(*notes, fmt.Sprintf("%s = %s", ascii[i:end+1], val))
+		ascii = ascii[:i] + "(" + val + ")" + ascii[end+1:]
+	}
 }
