@@ -74,6 +74,7 @@ var Worksheet = []WorksheetEntry{
 	{"prime_1.png", "x^2 + 9", OpPrime, "true", 0, nil},
 	{"radical_1.png", "7sqrt(2) + 11sqrt(2)", OpSimplify, "18sqrt(2)", 0, nil},
 	{"evaluate_5.png", "sqrt(100 - 36)", OpEvaluate, "8", 0, nil},
+	{"evaluate_6.png", "sqrt(169) + sqrt(64)", OpEvaluate, "21", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
