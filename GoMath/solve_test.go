@@ -127,6 +127,8 @@ func TestSolveEvaluateRoots(t *testing.T) {
 		{`\sqrt{100 - 36}`, "8"},
 		{"sqrt(36 - 100)", "not a real number"},
 		{"sqrt[3](27 - 35)", "-2"},
+		{"sqrt[3](343)", "7"},
+		{`\sqrt[3]{343}`, "7"},
 		{"2 + sqrt(sqrt(16))", "4"},
 		{"sqrt(2)", "1.4142135623730951"},
 	}
