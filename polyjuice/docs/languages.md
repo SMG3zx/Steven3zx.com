@@ -40,7 +40,7 @@ Implemented: `python -> c`, `python -> python`. Every other cell of the 13 x 13 
 Each language costs one frontend and one emitter, but only for the constructs the shared layer can express. Today that is `int`, fixed arrays, `for`, `if`, calls-free functions. Supporting more of each language means widening the shared layer once, which then benefits every language. Proposed ladder, in order:
 
 1. Done: i32, fixed arrays, `for range`, `if/else`, functions.
-2. Floats, bool, `while`, `break`/`continue`, calls between functions.
+2. Mostly done: f64 with explicit `float()`/`int()` casts, `while`, calls between functions (including recursion and calls used only for effect). Still missing: bool values as variables, `break`/`continue`, integer `/`, `//` and `%` (Python and C disagree on negatives), `range()` with a step, strings.
 3. Structs/records.
 4. Strings.
 5. Dynamic arrays and heap data (ownership/GC policy needed).

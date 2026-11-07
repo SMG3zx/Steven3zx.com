@@ -47,21 +47,29 @@ def to_llvm_ir(llvm_module: ir.Module) -> str:
     return result.stdout
 
 
-def execute(llvm_module: ir.Module, name: str, args: list, returns: bool = True):
-    """Call `name` in the lowered module. Ints are passed by value, lists as i32 memrefs."""
+def execute(llvm_module: ir.Module, name: str, args: list, result=ctypes.c_int32):
+    """Call `name` in the lowered module.
+
+    Ints and floats are passed by value, lists as memrefs (float64 if any element is a
+    float, else int32). Pass `result=None` for functions that return nothing.
+    Returns (value, arrays) so callers can inspect in-place array writes.
+    """
     engine = ExecutionEngine(llvm_module)
-    keep = []
+    arrays = []
     c_args = []
     for arg in args:
         if isinstance(arg, list):
-            array = np.array(arg, dtype=np.int32)
-            keep.append(array)
+            dtype = np.float64 if any(isinstance(x, float) for x in arg) else np.int32
+            array = np.array(arg, dtype=dtype)
+            arrays.append(array)
             c_args.append(ctypes.pointer(ctypes.pointer(get_ranked_memref_descriptor(array))))
+        elif isinstance(arg, float):
+            c_args.append(ctypes.pointer(ctypes.c_double(arg)))
         else:
             c_args.append(ctypes.pointer(ctypes.c_int32(arg)))
-    if not returns:
+    if result is None:
         engine.invoke(name, *c_args)
-        return None, keep
-    result = ctypes.c_int32(0)
-    engine.invoke(name, *c_args, ctypes.pointer(result))
-    return result.value, keep
+        return None, arrays
+    out = result(0)
+    engine.invoke(name, *c_args, ctypes.pointer(out))
+    return out.value, arrays

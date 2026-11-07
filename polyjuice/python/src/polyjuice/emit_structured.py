@@ -11,7 +11,7 @@ frontend.py); anything without a name gets `t0`, `t1`, ...
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from polyjuice.mlir_env import ensure_mlir_importable
 
@@ -27,12 +27,20 @@ INDENT = "    "
 PURE = frozenset({
     "arith.constant", "arith.addi", "arith.subi", "arith.muli", "arith.cmpi",
     "arith.select", "arith.index_cast", "memref.load",
+    "arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.negf", "arith.cmpf",
+    "arith.sitofp", "arith.fptosi",
 })  # fmt: skip
-_BINARY = {"arith.addi": ("+", ADD), "arith.subi": ("-", ADD), "arith.muli": ("*", MUL)}
+_BINARY = {
+    "arith.addi": ("+", ADD), "arith.subi": ("-", ADD), "arith.muli": ("*", MUL),
+    "arith.addf": ("+", ADD), "arith.subf": ("-", ADD), "arith.mulf": ("*", MUL),
+    "arith.divf": ("/", MUL),
+}  # fmt: skip
+_FLOAT_PREDICATES = {1: ("==", EQ), 2: (">", REL), 3: (">=", REL), 4: ("<", REL), 5: ("<=", REL), 13: ("!=", EQ)}
 _PREDICATES = {0: ("==", EQ), 1: ("!=", EQ), 2: ("<", REL), 3: ("<=", REL), 4: (">", REL), 5: (">=", REL)}
 
 LEGAL_OPS = frozenset(
-    PURE | {"builtin.module", "func.func", "func.return", "scf.for", "scf.if", "scf.yield", "memref.store"}
+    PURE | {"builtin.module", "func.func", "func.return", "func.call", "scf.for", "scf.if", "scf.while",
+            "scf.condition", "scf.yield", "memref.store"}
 )
 
 
@@ -50,6 +58,7 @@ class Syntax:
     declare: Callable[[str, str, str | None], str | None]  # (type, name, init) -> statement or None
     for_header: Callable[[str, str, str, str], str]  # (iv, lower, upper, step) texts
     if_header: Callable[[str, str], str]  # (keyword, cond)
+    while_header: Callable[[str], str]  # (cond)
     if_keyword: str
     elif_keyword: str
     else_header: str
@@ -74,6 +83,7 @@ class Expr:
     op: str | None = None  # set for binary expressions, enables `x += e`
     lhs: "Expr | None" = None
     rhs: "Expr | None" = None
+    effects: bool = False  # contains a call, so evaluation order matters
 
 
 def _wrap(child: Expr, parent_prec: int, right: bool = False) -> str:
@@ -90,6 +100,7 @@ def _binary(symbol: str, prec: int, lhs: Expr, rhs: Expr) -> Expr:
         symbol,
         lhs,
         rhs,
+        lhs.effects or rhs.effects,
     )
 
 
@@ -164,11 +175,31 @@ class FunctionEmitter:
         return self.env[value]
 
     def build_expr(self, op) -> Expr:
+        expr = self._build_expr(op)
+        if not expr.effects and any(self.expr(v).effects for v in op.operands):
+            expr = replace(expr, effects=True)
+        return expr
+
+    def _build_expr(self, op) -> Expr:
         name = op.operation.name
         ops = [self.expr(v) for v in op.operands]
+        if name == "func.call":
+            callee = self.safe(ir.FlatSymbolRefAttr(op.attributes["callee"]).value)
+            reads = frozenset().union(*(o.reads for o in ops))
+            return Expr(f"{callee}({', '.join(o.text for o in ops)})", PRIMARY, reads, effects=True)
+        if name == "arith.negf":
+            return Expr(f"-{_wrap(ops[0], UNARY)}", UNARY, ops[0].reads)
+        if name == "arith.cmpf":
+            predicate = ir.IntegerAttr(op.attributes["predicate"]).value
+            if predicate not in _FLOAT_PREDICATES:
+                raise UnsupportedForTarget(f"float comparison predicate {predicate}")
+            symbol, prec = _FLOAT_PREDICATES[predicate]
+            return _binary(symbol, prec, ops[0], ops[1])
+        if name in ("arith.sitofp", "arith.fptosi"):
+            return Expr(self.syn.cast(self.syn.type_name(op.results[0].type), _wrap(ops[0], UNARY)), UNARY, ops[0].reads)
         if name in _BINARY:
             symbol, prec = _BINARY[name]
-            if name == "arith.subi" and ops[0].text == "0":
+            if name == "arith.subi" and ops[0].text == "0":  # 0 - x is how the frontend writes -x
                 return Expr(f"-{_wrap(ops[1], UNARY)}", UNARY, ops[1].reads)
             return _binary(symbol, prec, ops[0], ops[1])
         if name == "arith.cmpi":
@@ -211,13 +242,25 @@ class FunctionEmitter:
                 return False
         return False
 
+    def contains_call(self, value: ir.Value) -> bool:
+        if not isinstance(value, ir.OpResult):
+            return False
+        op = value.owner
+        return op.operation.name == "func.call" or (
+            op.operation.name in PURE and any(self.contains_call(v) for v in op.operands)
+        )
+
+    def competes_with_call(self, use) -> bool:
+        """C leaves argument/operand evaluation order open; two calls in one expression must be sequenced."""
+        return sum(self.contains_call(v) for v in use.owner.operands) > 1
+
     def bind_value(self, op) -> None:
         result = op.results[0]
         expr = self.build_expr(op)
         uses = list(result.uses)
         if not uses:
             return
-        if len(uses) == 1 and self.can_inline(op, uses[0]):
+        if len(uses) == 1 and self.can_inline(op, uses[0]) and not self.competes_with_call(uses[0]):
             self.env[result] = expr
             return
         name = self.fresh(_attr_str(op, "polyjuice.name"))
@@ -233,8 +276,20 @@ class FunctionEmitter:
     def emit_block_op(self, op) -> None:
         name = op.operation.name
         if name == "arith.constant":
-            value = ir.IntegerAttr(op.attributes["value"]).value
-            self.env[op.results[0]] = Expr(str(value), UNARY if value < 0 else PRIMARY)
+            if str(op.results[0].type) == "f64":
+                value = ir.FloatAttr(op.attributes["value"]).value
+                text = repr(value)
+            else:
+                value = ir.IntegerAttr(op.attributes["value"]).value
+                text = str(value)
+            self.env[op.results[0]] = Expr(text, UNARY if value < 0 else PRIMARY)
+        elif name == "func.call":
+            if list(op.results) and list(op.results[0].uses):
+                self.bind_value(op)
+            else:
+                self.stmt(self.build_expr(op).text)
+        elif name == "scf.while":
+            self.emit_while(op)
         elif name in PURE:
             self.bind_value(op)
         elif name == "memref.store":
@@ -283,21 +338,27 @@ class FunctionEmitter:
         self.depth += 1
         self.scopes.append(_Scope())
         before = len(self.lines)
-        self.emit_block(block)
+        ops = _ops(block)
+        # A trailing `scf.if` whose results are exactly what the block yields can write
+        # straight into the destination variables instead of going through new ones.
+        tail = None
+        if len(ops) >= 2 and ops[-2].operation.name == "scf.if" and list(ops[-2].results):
+            if list(ops[-1].operands) == list(ops[-2].results):
+                tail = ops[-2]
+        for op in ops[:-1]:
+            if tail is None or op.operation != tail.operation:
+                self.emit_block_op(op)
+        if tail is not None:
+            self.emit_if(tail, dests=dests)
         self.assign(list(zip(dests, self.yields(block))))
         if len(self.lines) == before and self.syn.empty_block:
             self.line(self.syn.empty_block)
         self.scopes.pop()
         self.depth -= 1
 
-    def emit_for(self, op) -> None:
-        lower, upper, step, *inits = [self.expr(v) for v in op.operands]
-        init_values = list(op.operands)[3:]
-        block = op.regions[0].blocks[0]
-        iv_arg, *iter_args = list(block.arguments)
-        hints = _attr_strs(op, "polyjuice.carried")
+    def declare_carried(self, values: list, inits: list[Expr], hints: list[str]) -> list[str]:
         carried: list[str] = []
-        for k, (value, init) in enumerate(zip(init_values, inits)):
+        for k, (value, init) in enumerate(zip(values, inits)):
             hint = hints[k] if k < len(hints) else None
             safe = self.safe(hint) if hint is not None else None
             if safe is not None and init.text == safe and len(list(value.uses)) == 1:
@@ -306,6 +367,37 @@ class FunctionEmitter:
                 name = self.fresh(hint)
                 self.stmt(self.syn.declare(self.syn.type_name(value.type), name, init.text))
                 carried.append(name)
+        return carried
+
+    def emit_while(self, op) -> None:
+        before, after = op.regions[0].blocks[0], op.regions[1].blocks[0]
+        values = list(op.operands)
+        carried = self.declare_carried(
+            values, [self.expr(v) for v in values], _attr_strs(op, "polyjuice.carried")
+        )
+        for block in (before, after):
+            for name, arg in zip(carried, block.arguments):
+                self.env[arg] = self.var(name)
+        *pre, condition = _ops(before)
+        mark = len(self.lines)
+        for pre_op in pre:
+            self.emit_block_op(pre_op)
+        if len(self.lines) != mark:
+            raise UnsupportedForTarget("a while condition that needs statements")
+        if list(condition.operands)[1:] != list(before.arguments):
+            raise UnsupportedForTarget("a while loop that forwards values other than its carried variables")
+        self.line(self.syn.while_header(self.expr(condition.operands[0]).text))
+        self.body(after, carried)
+        self.close()
+        for name, result in zip(carried, op.results):
+            self.env[result] = self.var(name)
+
+    def emit_for(self, op) -> None:
+        lower, upper, step, *inits = [self.expr(v) for v in op.operands]
+        init_values = list(op.operands)[3:]
+        block = op.regions[0].blocks[0]
+        iv_arg, *iter_args = list(block.arguments)
+        carried = self.declare_carried(init_values, inits, _attr_strs(op, "polyjuice.carried"))
         # C re-evaluates `i < stop` every iteration; Python evaluates range() once.
         if not self.syn.range_evaluated_once and (upper.reads & set(carried) or "[" in upper.text):
             limit = self.fresh("limit")
@@ -369,7 +461,10 @@ class FunctionEmitter:
         cond = self.expr(op.operands[0])
         self.line(self.syn.if_header(keyword, cond.text))
         self.body(then_block, dests)
-        if else_is_bare and (not op.results or initialized_from_else):
+        else_changes_nothing = else_is_bare and all(
+            e.text == d for e, d in zip(self.yields(else_block), dests)
+        )
+        if else_is_bare and (not op.results or initialized_from_else or else_changes_nothing):
             self.close()
             return
         chain = self.else_if_target(else_block)

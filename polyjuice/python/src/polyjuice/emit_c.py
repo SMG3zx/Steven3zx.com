@@ -13,17 +13,29 @@ from mlir import ir  # noqa: E402
 
 UnsupportedForC = UnsupportedForTarget
 
-C_RESERVED = frozenset(
-    """auto break case char const continue default do double else enum extern float for goto if
-    inline int long register restrict return short signed sizeof static struct switch typedef
-    union unsigned void volatile while bool true false NULL int32_t size_t ptrdiff_t""".split()
-)
+C_KEYWORDS = """auto break case char const continue default do double else enum extern float
+    for goto if inline int long register restrict return short signed sizeof static struct
+    switch typedef union unsigned void volatile while bool true false NULL int32_t size_t
+    ptrdiff_t"""
+
+# Standard-library names a user function must not shadow: compilers treat many as
+# builtins, and the rest collide at link time.
+C_LIBRARY = """abs labs llabs fabs fabsf floor ceil round trunc rint fmod fmin fmax sqrt cbrt pow exp
+    exp2 expm1 log log2 log10 log1p sin cos tan asin acos atan atan2 sinh cosh tanh hypot erf tgamma
+    printf fprintf sprintf snprintf scanf puts putchar getchar fopen fclose fread fwrite fgets fputs
+    malloc calloc realloc free exit abort atexit atoi atol atof strtol strtod rand srand qsort bsearch
+    memcpy memmove memset memcmp strlen strcpy strncpy strcat strcmp strncmp strchr strstr main
+    time clock signal raise assert errno stdin stdout stderr"""
+
+C_RESERVED = frozenset(C_KEYWORDS.split()) | frozenset(C_LIBRARY.split())
 
 
 def _type(t: ir.Type) -> str:
     text = str(t)
     if text == "i32":
         return "int32_t"
+    if text == "f64":
+        return "double"
     if text == "i1":
         return "bool"
     if text == "index":
@@ -66,6 +78,7 @@ C_SYNTAX = Syntax(
     declare=_declare,
     for_header=_for_header,
     if_header=lambda keyword, cond: f"{keyword} ({cond}) {{",
+    while_header=lambda cond: f"while ({cond}) {{",
     if_keyword="if",
     elif_keyword="} else if",
     else_header="} else {",

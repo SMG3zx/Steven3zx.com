@@ -136,4 +136,7 @@ Known gaps:
 - C signed overflow is undefined; the source subset defines `int` as wrapping 32-bit. Build with `-fwrapv` if it matters. Needs a decision.
 - Full `canonicalize` is off (`enable-patterns=false`) because it rewrites `scf.if` into `arith.select`, which erases the structure emitters rely on. Revisit with the optimization stage.
 - Domain optimizations and lowerings are mechanisms without content so far.
+- A `while` condition that needs statements (a non-inlinable temporary) is refused by the emitters; the general `while true { ...; if !cond break; ... }` form is not built.
+- Float comparison uses ordered predicates, so NaN behaves like Python; `int(x)` of a NaN or out-of-range float is undefined in C and an error in Python.
+- User function names that collide with libc/libm are renamed with a trailing underscore in C, so callers outside the generated file see the new name.
 

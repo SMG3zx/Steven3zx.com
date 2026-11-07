@@ -22,6 +22,8 @@ def _type(t: ir.Type) -> str:
     text = str(t)
     if text in ("i32", "index"):
         return "int"
+    if text == "f64":
+        return "float"
     if text == "i1":
         return "bool"
     raise UnsupportedForTarget(f"no Python type for {text}")
@@ -57,6 +59,7 @@ PY_SYNTAX = Syntax(
     declare=_declare,
     for_header=_for_header,
     if_header=lambda kw, cond: f"{kw} {cond}:",
+    while_header=lambda cond: f"while {cond}:",
     if_keyword="if",
     elif_keyword="elif",
     else_header="else:",
