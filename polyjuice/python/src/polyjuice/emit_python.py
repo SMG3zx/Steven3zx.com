@@ -90,6 +90,7 @@ PY_SYNTAX = Syntax(
     not_expr=lambda a: Expr(f"not ({a.text})" if a.prec <= 45 else f"not {a.text}", 45, a.reads, effects=a.effects),
     logic_symbols=("and", "or"),
     bool_text=lambda value: "True" if value else "False",
+    float_rem=lambda a, b: Expr(f"math.fmod({a.text}, {b.text})", PRIMARY, a.reads | b.reads, effects=a.effects or b.effects),
     int_div=_int_div,
     int_rem=_int_rem,
 )

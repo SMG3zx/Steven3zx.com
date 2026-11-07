@@ -5,7 +5,7 @@ Known gap: C signed overflow is undefined, while the source subset defines
 """
 
 from polyjuice.emit_structured import (
-    LEGAL_OPS, MUL, UNARY, Expr, Syntax, UnsupportedForTarget, binary_expr, emit_module,
+    LEGAL_OPS, MUL, PRIMARY, UNARY, Expr, Syntax, UnsupportedForTarget, binary_expr, emit_module,
 )  # fmt: skip
 from polyjuice.mlir_env import ensure_mlir_importable
 
@@ -61,6 +61,8 @@ def _prelude(body: str) -> str:
     includes = ["<stdint.h>"]
     if "bool " in body or " true" in body or " false" in body or "(true" in body or "(false" in body:
         includes.append("<stdbool.h>")
+    if "fmod(" in body:
+        includes.append("<math.h>")
     if "ptrdiff_t" in body:
         includes.append("<stddef.h>")
     return "".join(f"#include {inc}\n" for inc in sorted(includes))
@@ -98,6 +100,7 @@ C_SYNTAX = Syntax(
     not_expr=lambda a: Expr(f"!({a.text})" if a.prec < UNARY else f"!{a.text}", UNARY, a.reads, effects=a.effects),
     logic_symbols=("&&", "||"),
     bool_text=lambda value: "true" if value else "false",
+    float_rem=lambda a, b: Expr(f"fmod({a.text}, {b.text})", PRIMARY, a.reads | b.reads, effects=a.effects or b.effects),
     int_div=lambda a, b: binary_expr("/", MUL, a, b),
     int_rem=lambda a, b: binary_expr("%", MUL, a, b),
 )

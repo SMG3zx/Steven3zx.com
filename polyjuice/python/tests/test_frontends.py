@@ -33,10 +33,11 @@ def test_original_matches_the_reference(lang):
 def test_transpiled_program_matches_the_reference(lang, target):
     output = run(source(lang), target, source_language=lang).output
     runner = harness.run_emitted_c if target == "c" else harness.run_emitted_python
-    harness.check_results(runner(output), f"{lang} -> {target}")
+    harness.check_results(runner(output, floats=lang in harness.FLOAT_ONLY), f"{lang} -> {target}")
 
 
 @pytest.mark.parametrize("lang", LANGS)
 def test_shared_layer_through_llvm_matches_the_reference(lang):
     build = FRONTENDS[lang].build_module
-    harness.check_results(harness.run_llvm(lambda ctx: build(source(lang), ctx)), f"{lang} -> LLVM")
+    results = harness.run_llvm(lambda ctx: build(source(lang), ctx), floats=lang in harness.FLOAT_ONLY)
+    harness.check_results(results, f"{lang} -> LLVM")

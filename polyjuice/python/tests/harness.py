@@ -97,34 +97,39 @@ def check_results(results: dict, label: str) -> None:
 # -- running emitted code --------------------------------------------------------------------
 
 
-def run_emitted_python(code: str) -> dict:
+def _as_floats(args):
+    return tuple(float(a) for a in args)
+
+
+def run_emitted_python(code: str, floats: bool = False) -> dict:
     namespace: dict = {}
     exec(code, namespace)
-    return {n: [namespace[n](*a) for a in calls] for n, (calls, _) in CALLS.items()}
+    convert = _as_floats if floats else tuple
+    return {n: [namespace[n](*convert(a)) for a in calls] for n, (calls, _) in CALLS.items()}
 
 
-def run_emitted_c(code: str) -> dict:
+def run_emitted_c(code: str, floats: bool = False) -> dict:
     cc = shutil.which("cc") or shutil.which("gcc")
     with tempfile.TemporaryDirectory() as tmp:
         c_file, so_file = Path(tmp) / "out.c", Path(tmp) / "out.so"
         c_file.write_text(code)
         subprocess.run([cc, "-std=c11", "-Wall", "-shared", "-fPIC", "-o", so_file, c_file, "-lm"], check=True)
-        return _call_shared_library(ctypes.CDLL(str(so_file)))
+        return _call_shared_library(ctypes.CDLL(str(so_file)), floats)
 
 
-def _call_shared_library(lib) -> dict:
+def _call_shared_library(lib, floats: bool = False) -> dict:
     results = {}
     for name, (calls, is_float) in CALLS.items():
         fn = getattr(lib, name)
-        fn.restype = ctypes.c_double if is_float else ctypes.c_int32
+        fn.restype = ctypes.c_double if (is_float or floats) else ctypes.c_int32
         results[name] = [
-            fn(*[ctypes.c_double(a) if isinstance(a, float) else ctypes.c_int32(a) for a in args])
+            fn(*[ctypes.c_double(a) if (isinstance(a, float) or floats) else ctypes.c_int32(a) for a in args])
             for args in calls
         ]
     return results
 
 
-def run_llvm(module_builder) -> dict:
+def run_llvm(module_builder, floats: bool = False) -> dict:
     """Execute the shared-layer IR with MLIR's ExecutionEngine."""
     from polyjuice import verify
     from polyjuice.mlir_env import ensure_mlir_importable
@@ -138,8 +143,8 @@ def run_llvm(module_builder) -> dict:
         lowered = verify.lower_to_llvm_dialect(module)
         out = {}
         for name, (calls, is_float) in CALLS.items():
-            result = ctypes.c_double if is_float else ctypes.c_int32
-            out[name] = [verify.execute(lowered, name, list(a), result)[0] for a in calls]
+            result = ctypes.c_double if (is_float or floats) else ctypes.c_int32
+            out[name] = [verify.execute(lowered, name, list(_as_floats(a) if floats else a), result)[0] for a in calls]
         return out
 
 
@@ -234,10 +239,24 @@ def run_original_rust(source: str) -> dict:
         return parse_lines(done.stdout)
 
 
+def run_original_js(source: str) -> dict:
+    calls = _calls_text(lambda n, a: f'console.log("{n} = " + {n}({a}));')
+    return parse_lines(run_in_tmp(["node", "main.js"], {"main.js": source + "\n" + calls + "\n"}))
+
+
+def run_original_ts(source: str) -> dict:
+    calls = _calls_text(lambda n, a: f'console.log("{n} = " + {n}({a}));')
+    return parse_lines(run_in_tmp(["node", "--experimental-strip-types", "main.ts"], {"main.ts": source + "\n" + calls + "\n"}))
+
+
+FLOAT_ONLY = {"javascript", "typescript"}  # every number is a double: call with floats, expect floats
+
 ORIGINALS = {
     "c": ("gcc", run_original_c),
     "go": ("go", run_original_go),
     "java": ("javac", run_original_java),
     "cpp": ("g++", run_original_cpp),
     "rust": ("rustc", run_original_rust),
+    "javascript": ("node", run_original_js),
+    "typescript": ("node", run_original_ts),
 }

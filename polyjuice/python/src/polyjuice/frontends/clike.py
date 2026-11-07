@@ -25,6 +25,7 @@ class CLike:
     unary_operand_field = "argument"
     init_fields, update_fields = ("initializer", "init"), ("update", "increment")
     strict_equality = {"===": "==", "!==": "!="}  # JavaScript only; harmless elsewhere
+    counted_loops = True  # False where the loop variable is a float (JavaScript)
 
     def __init__(self, source: str, parser):
         self.root = _ts.parse(parser, source)
@@ -57,6 +58,9 @@ class CLike:
     def unary_parts(self, n):
         """(operator text, operand node) of a prefix unary expression."""
         return operator(n), field(n, self.unary_operand_field) or named(n)[-1]
+
+    def number(self, n):
+        return _ts.number(n)
 
     def literal(self, n):
         return None  # languages with true/false/null etc. may refuse them explicitly
@@ -103,7 +107,7 @@ class CLike:
 
     def expression_statement(self, e, stmt) -> list:
         where = line(stmt)
-        if e.type == "assignment_expression":
+        if e.type in ("assignment_expression", "augmented_assignment_expression"):
             left, op = self.target(field(e, "left")), operator(e)
             value = self.expr(field(e, "right"))
             if op == "=":
@@ -131,6 +135,8 @@ class CLike:
     def for_statement(self, n) -> list:
         where = line(n)
         init, cond, update = self.first(n, *self.init_fields), field(n, "condition"), self.first(n, *self.update_fields)
+        if cond is not None and cond.type == "expression_statement":
+            cond = named(cond)[0]  # JavaScript wraps the condition
         if cond is None or update is None:
             raise UnsupportedSyntax(where, "for loops need a condition and an update")
         body = self.block(field(n, "body"))
@@ -139,8 +145,8 @@ class CLike:
             pre = self.declaration(init) if init.type != "expression_statement" and init.type != "assignment_expression" else self.expression_statement(init if init.type != "expression_statement" else named(init)[0], init)
         step = self.expression_statement(update, update)
         if (
-            len(pre) == 1 and isinstance(pre[0], nast.Declare) and pre[0].value is not None
-            and pre[0].type in (INT, None) and cond.type == "binary_expression"
+            self.counted_loops and len(pre) == 1 and isinstance(pre[0], nast.Declare)
+            and pre[0].value is not None and pre[0].type in (INT, None) and cond.type == "binary_expression"
             and operator(cond) in ("<", "<=") and field(cond, "left").type in self.identifier_types
             and text(field(cond, "left")) == pre[0].name and len(step) == 1 and is_increment(step[0], pre[0].name)
         ):  # fmt: skip
@@ -155,7 +161,7 @@ class CLike:
     def expr(self, n):
         t, where = n.type, line(n)
         if t in self.number_types:
-            return _ts.number(n)
+            return self.number(n)
         if t in self.identifier_types:
             return nast.Name(text(n), where)
         if t in ("parenthesized_expression", "condition_clause"):

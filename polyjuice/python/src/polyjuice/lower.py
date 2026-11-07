@@ -257,8 +257,11 @@ class _Lowerer:
             op = node.op
             if op == "div":
                 op = "idiv" if lhs.type == self.i32 else "/"
-            if op == "mod" and lhs.type == self.i32:
-                return arith.remsi(lhs, rhs)
+            if op == "mod":
+                if lhs.type == self.i32:
+                    return arith.remsi(lhs, rhs)
+                if lhs.type == self.f64:
+                    return arith.remf(lhs, rhs)  # fmod: takes the dividend's sign
             if op == "idiv":
                 return arith.divsi(lhs, rhs)
             table = _INT_OPS if lhs.type == self.i32 else _FLOAT_OPS if lhs.type == self.f64 else {}

@@ -28,7 +28,7 @@ PURE = frozenset({
     "arith.constant", "arith.addi", "arith.subi", "arith.muli", "arith.cmpi",
     "arith.select", "arith.index_cast", "memref.load",
     "arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.negf", "arith.cmpf",
-    "arith.sitofp", "arith.fptosi", "arith.divsi", "arith.remsi", "arith.xori",
+    "arith.sitofp", "arith.fptosi", "arith.divsi", "arith.remsi", "arith.xori", "arith.remf",
 })  # fmt: skip
 _BINARY = {
     "arith.addi": ("+", ADD), "arith.subi": ("-", ADD), "arith.muli": ("*", MUL),
@@ -76,6 +76,7 @@ class Syntax:
     not_expr: Callable  # (Expr) -> Expr
     logic_symbols: tuple[str, str]  # ("&&", "||")
     bool_text: Callable[[bool], str]
+    float_rem: Callable  # (Expr, Expr) -> Expr; C fmod
     int_div: Callable  # (Expr, Expr) -> Expr; truncates toward zero
     int_rem: Callable  # (Expr, Expr) -> Expr; sign of the dividend
 
@@ -202,6 +203,8 @@ class FunctionEmitter:
             if ops[1].text not in ("true", "True", "1"):
                 raise UnsupportedForTarget("xor other than boolean not")
             return self.syn.not_expr(ops[0])
+        if name == "arith.remf":
+            return self.syn.float_rem(ops[0], ops[1])
         if name == "arith.divsi":
             return self.syn.int_div(ops[0], ops[1])
         if name == "arith.remsi":
@@ -378,9 +381,6 @@ class FunctionEmitter:
         conflict = any(
             names[i] in pairs[j][1].reads for i in range(len(pairs)) for j in range(i + 1, len(pairs))
         )
-        if conflict and self.syn.tuple_assign:
-            self.stmt(f"{', '.join(names)} = {', '.join(e.text for _, e in pairs)}")
-            return
         if conflict:
             self.assign_in_order(pairs)
             return
@@ -404,6 +404,9 @@ class FunctionEmitter:
                 pending.remove(ready)
                 self.assign([ready])
                 continue
+            if self.syn.tuple_assign:  # a true cycle: `a, b = b, a + b`
+                self.stmt(f"{', '.join(n for n, _ in pending)} = {', '.join(e.text for _, e in pending)}")
+                return
             # a cycle: stash the most complex right-hand side, which then reads nothing pending
             victim = max(pending, key=lambda p: len(p[1].text) if p[1].op else 0)
             tmp = self.fresh(f"next_{victim[0]}")

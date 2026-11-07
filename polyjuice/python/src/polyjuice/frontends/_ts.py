@@ -49,8 +49,11 @@ def field(node, name: str):
 
 
 def operator(node) -> str:
+    """The operator token, via the `operator` field when the grammar has one."""
     op = field(node, "operator")
-    return text(op) if op is not None else ""
+    if op is not None:
+        return text(op)
+    return next((text(c) for c in node.children if not c.is_named), "")
 
 
 _INT = re.compile(r"(0[xX][0-9a-fA-F]+|0[bB][01]+|0[0-7]*|[1-9][0-9]*)")

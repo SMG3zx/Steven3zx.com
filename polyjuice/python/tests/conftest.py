@@ -23,7 +23,7 @@ def compile_c():
         so_file = Path(workdir.name) / "out.so"
         c_file.write_text(compile_to_c(source))
         subprocess.run(
-            [cc, "-std=c11", "-Wall", "-Werror", "-shared", "-fPIC", "-o", so_file, c_file],
+            [cc, "-std=c11", "-Wall", "-Werror", "-shared", "-fPIC", "-o", so_file, c_file, "-lm"],
             check=True,
         )
         return ctypes.CDLL(str(so_file))
