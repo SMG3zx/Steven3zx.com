@@ -33,7 +33,7 @@ Latest LLVM release is 23.1.0 (2026-08-25), per [llvm.org schedule via Phoronix]
 ## 2. Phase 0 decisions (proposed)
 
 **Output for v0.** Source-to-source only (owner decision, 2026-11-07). Native executables are out of scope. EmitC gives C/C++ output; other target languages need our own emitters.
-Open tension: the owner wants progressive lowering all the way to LLVM IR, but LLVM IR has lost loops, structs and types, so emitting source from it is decompilation. See section 3.
+LLVM IR is used only as a verification stage; source is emitted at the highest level each target can express. See section 3.
 
 **Dialect architecture.** One dialect per source language (`py`, and for C the upstream `cir`), lowering into a shared layer made of `func`, `arith`, `scf`, `memref`. A single universal high-level dialect stays an open research question: languages disagree on integer semantics (wrap vs trap vs UB), memory, and exceptions.
 Trade-off: per-language dialects cost lowering code per language, but keep each frontend honest.
@@ -76,7 +76,21 @@ Selection is a function from the frontend output (ops used, types used, detected
 
 **Domain optimization.** Passes keyed on detections, for example raising a loop nest to `linalg.matmul`, then fusing or tiling. Each pass needs a verifier-clean before/after and a differential test.
 
-**Progressive lowering and the source-to-source tension.** Lowering to LLVM IR is lossy. Source emission needs structured control flow, named types and loops, which exist at the `scf`/`memref`/`arith`/`func` level and are gone at LLVM IR. Proposal: keep one pipeline, but define *emission taps* at fixed stages, and emit target source from the lowest stage that still has structured control flow. LLVM IR is then used for what it is good at: validating the lowered program (run it and compare with the original under differential testing) and checking that every lowering step is semantics-preserving. Emitting source from LLVM IR itself is possible only for targets that accept unstructured code (C with `goto`, WebAssembly text), and the output would be unreadable. This needs the owner's decision.
+**Lowering depth: per-target legality (decided 2026-11-07).** Source emission needs structured control flow, named types and loops. These exist at the structured shared layer (`scf`, `arith`, `memref`, `math`, `func`) and are gone by `cf` and the LLVM dialect, where emitting source is decompilation. So there is no single fixed emission depth. Each target declares which ops it can express directly (MLIR partial dialect conversion: legal vs illegal ops), and the pipeline lowers only the illegal ones, stopping at the first level the target understands.
+
+| Level | Example dialects | Emitting source from here |
+|---|---|---|
+| 0. Language dialect | `py`, `cir` | Needs an emitter per source-and-target pair; defeats the shared layer. |
+| 1. Domain / high-level | `linalg`, `tensor`, `vector`, `affine` | Most idiomatic, but only for targets that have the idiom. |
+| 2. Structured shared layer | `scf`, `arith`, `memref`, `func` | Default emission level; maps to C, Rust, Python, Go. |
+| 3. Unstructured | `cf` | Loops become blocks and branches; needs a relooper. Avoid. |
+| 4. LLVM dialect / IR | `llvm` | Loops, structs and types are gone. Avoid. |
+
+Examples: a C target accepts `scf` and `arith` but not `linalg.matmul`, so only `linalg` is lowered, to `scf` loops. A Python target with NumPy could keep `linalg.matmul` as `a @ b` and lower nothing.
+
+LLVM IR is a verification stage, not an output: lower the program to it, run it, and compare with the original under differential testing to show each lowering step preserved behavior.
+
+Unverified: how complete the `memref`/`scf`/`arith`/`func` to EmitC conversions are for C. Check in the spike.
 
 ## 4. Performance note
 
@@ -85,7 +99,7 @@ Most heavy compute already runs in C++ (MLIR and LLVM). Python-side hotspots wil
 ## 5. Open questions
 
 1. Which target languages to emit first? (C via EmitC is the only free one.)
-2. Resolve the LLVM IR tension in section 3: emission taps at structured stages, or genuinely emit from LLVM IR?
+2. ~~LLVM IR tension~~ Resolved: per-target legality, LLVM IR for verification only (section 3).
 3. Mechanism for detection: PDL/PDLL, Transform matchers, `linalg` raising, or Python walkers.
 4. Shape of dialect selection: static table, Transform script, or Python.
 5. Runtime language for dynamic sources (C11 proposed), deferred until needed.
