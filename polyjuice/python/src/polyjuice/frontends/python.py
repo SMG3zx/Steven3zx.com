@@ -2,7 +2,8 @@
 
 Supported: functions with `int`, `float` and `Array[int|float, N]` parameters;
 assignment, tuple assignment, augmented assignment, array element store;
-`for i in range(a[, b])`, `while`, `if/elif/else`, early `return`; calls to other
+`for i in range(a[, b])`, `while`, `if/elif/else`, early `return`, `//` and `%` (floor
+semantics, like Python); calls to other
 functions in the same file; + - * (and / for floats), unary -, comparisons, and
 explicit `float(x)` / `int(x)` casts. `int` is 32-bit and wraps.
 """
@@ -18,7 +19,9 @@ ensure_mlir_importable()
 
 from mlir import ir  # noqa: E402
 
-_OPS = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
+_OPS = {
+    ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.FloorDiv: "floordiv", ast.Mod: "floormod",
+}  # fmt: skip
 _CMPS = {ast.Lt: "<", ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=", ast.Eq: "==", ast.NotEq: "!="}
 _SCALARS = {"int": INT, "float": FLOAT}
 

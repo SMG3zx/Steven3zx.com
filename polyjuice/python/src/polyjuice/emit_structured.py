@@ -29,6 +29,7 @@ PURE = frozenset({
     "arith.select", "arith.index_cast", "memref.load",
     "arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.negf", "arith.cmpf",
     "arith.sitofp", "arith.fptosi", "arith.divsi", "arith.remsi", "arith.xori", "arith.remf",
+    "arith.floordivsi",
 })  # fmt: skip
 _BINARY = {
     "arith.addi": ("+", ADD), "arith.subi": ("-", ADD), "arith.muli": ("*", MUL),
@@ -77,6 +78,8 @@ class Syntax:
     logic_symbols: tuple[str, str]  # ("&&", "||")
     bool_text: Callable[[bool], str]
     float_rem: Callable  # (Expr, Expr) -> Expr; C fmod
+    floor_div: Callable  # (Expr, Expr) -> Expr; rounds toward negative infinity
+    floor_rem: Callable  # (Expr, Expr) -> Expr; takes the divisor's sign
     int_div: Callable  # (Expr, Expr) -> Expr; truncates toward zero
     int_rem: Callable  # (Expr, Expr) -> Expr; sign of the dividend
 
@@ -203,6 +206,12 @@ class FunctionEmitter:
             if ops[1].text not in ("true", "True", "1"):
                 raise UnsupportedForTarget("xor other than boolean not")
             return self.syn.not_expr(ops[0])
+        if name == "arith.floordivsi":
+            return self.syn.floor_div(ops[0], ops[1])
+        if name == "arith.subi":
+            rem = self.floor_remainder(op)
+            if rem is not None:
+                return rem
         if name == "arith.remf":
             return self.syn.float_rem(ops[0], ops[1])
         if name == "arith.divsi":
@@ -249,6 +258,18 @@ class FunctionEmitter:
             reads = array.reads | frozenset().union(*(i.reads for i in indices))
             return Expr(array.text + "".join(f"[{i.text}]" for i in indices), PRIMARY, reads)
         raise UnsupportedForTarget(f"cannot build expression for {name}")
+
+    def floor_remainder(self, op):
+        """`a - floordiv(a, b) * b` is how the lowering writes floormod; print it as one operator."""
+        a, product = op.operands
+        if not isinstance(product, ir.OpResult) or product.owner.operation.name != "arith.muli":
+            return None
+        quotient, b = product.owner.operands
+        if not isinstance(quotient, ir.OpResult) or quotient.owner.operation.name != "arith.floordivsi":
+            return None
+        if list(quotient.owner.operands) != [a, b]:
+            return None
+        return self.syn.floor_rem(self.expr(a), self.expr(b))
 
     def can_inline(self, op, use) -> bool:
         """A single-use value may be inlined at its use if nothing in between has effects."""

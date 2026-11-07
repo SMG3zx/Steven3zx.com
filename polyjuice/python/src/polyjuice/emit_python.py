@@ -7,7 +7,7 @@ Known gap: Python integers do not wrap at 32 bits, while the shared layer's
 import builtins
 import keyword
 
-from polyjuice.emit_structured import LEGAL_OPS, PRIMARY, Expr, Syntax, UnsupportedForTarget, emit_module
+from polyjuice.emit_structured import LEGAL_OPS, MUL, PRIMARY, Expr, binary_expr, Syntax, UnsupportedForTarget, emit_module
 from polyjuice.mlir_env import ensure_mlir_importable
 
 ensure_mlir_importable()
@@ -91,6 +91,8 @@ PY_SYNTAX = Syntax(
     logic_symbols=("and", "or"),
     bool_text=lambda value: "True" if value else "False",
     float_rem=lambda a, b: Expr(f"math.fmod({a.text}, {b.text})", PRIMARY, a.reads | b.reads, effects=a.effects or b.effects),
+    floor_div=lambda a, b: binary_expr("//", MUL, a, b),
+    floor_rem=lambda a, b: binary_expr("%", MUL, a, b),
     int_div=_int_div,
     int_rem=_int_rem,
 )

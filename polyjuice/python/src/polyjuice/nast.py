@@ -47,10 +47,12 @@ class Name:
 
 @dataclass
 class Binary:
-    """`/` is true division (floats only). `div` and `mod` are C-style: integer division truncates
-    toward zero and `mod` takes the dividend's sign; `div` on floats is true division."""
+    """`/` is true division (ints are converted to floats first, as in Python and Lua).
+    `div` and `mod` are C-style: integer division truncates toward zero and `mod` takes the
+    dividend's sign; `div` on floats is true division. `floordiv` and `floormod` round toward
+    negative infinity and `floormod` takes the divisor's sign (Python and Lua `//`, `%`)."""
 
-    op: str  # + - * / div mod
+    op: str  # + - * / div mod floordiv floormod
     left: object
     right: object
     line: int = 0

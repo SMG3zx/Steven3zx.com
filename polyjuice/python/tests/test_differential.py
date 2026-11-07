@@ -99,7 +99,7 @@ def test_array_store(compile_c):
 
 @pytest.mark.parametrize(
     "body",
-    ["return x // 2", "return x % 2", "return x / 2", "while x:\n        x -= 1\n    return x"],
+    ["return x ** 2", "return x << 1", "return x / 2", "while x:\n        x -= 1\n    return x"],
 )
 def test_unsupported_syntax_is_rejected(body):
     with pytest.raises(UnsupportedSyntax):

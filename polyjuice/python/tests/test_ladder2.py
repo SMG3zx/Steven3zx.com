@@ -213,8 +213,8 @@ def test_gcd_is_not_mistaken_for_a_reduction():
     "body,message",
     [
         ("return x + 1.0", "returned value does not match"),
-        ("return x / 2", "unsupported operator"),
-        ("return x // 2", "unsupported operator"),
+        ("return x ** 2", "unsupported operator"),
+        ("return x << 2", "unsupported operator"),
         ("while x:\n        x = x - 1\n    return x", "condition must be a comparison"),
         ("if x:\n        x = 1\n    return x", "condition must be a comparison"),
         ("return missing(x)", "unknown function"),

@@ -32,6 +32,23 @@ C_LIBRARY = """abs labs llabs fabs fabsf floor ceil round trunc rint fmod fmin f
 C_RESERVED = frozenset(C_KEYWORDS.split()) | frozenset(C_LIBRARY.split())
 
 
+def _simple(e: Expr) -> bool:
+    return not e.effects and len(e.text) <= 40 and "(" not in e.text
+
+
+def _floor_rem(a: Expr, b: Expr) -> Expr:
+    # C's % truncates; shifting by b and reducing again gives the divisor's sign (for |a % b + b| in range)
+    if not (_simple(a) and _simple(b)):
+        raise UnsupportedForC("floor remainder of a complex expression; assign the operands to variables first")
+    return Expr(f"(({a.text} % {b.text}) + {b.text}) % {b.text}", MUL, a.reads | b.reads)
+
+
+def _floor_div(a: Expr, b: Expr) -> Expr:
+    if not (_simple(a) and _simple(b)):
+        raise UnsupportedForC("floor division of a complex expression; assign the operands to variables first")
+    return Expr(f"({a.text} - ((({a.text} % {b.text}) + {b.text}) % {b.text})) / {b.text}", MUL, a.reads | b.reads)
+
+
 def _type(t: ir.Type) -> str:
     text = str(t)
     if text == "i32":
@@ -101,6 +118,8 @@ C_SYNTAX = Syntax(
     logic_symbols=("&&", "||"),
     bool_text=lambda value: "true" if value else "false",
     float_rem=lambda a, b: Expr(f"fmod({a.text}, {b.text})", PRIMARY, a.reads | b.reads, effects=a.effects or b.effects),
+    floor_div=_floor_div,
+    floor_rem=_floor_rem,
     int_div=lambda a, b: binary_expr("/", MUL, a, b),
     int_rem=lambda a, b: binary_expr("%", MUL, a, b),
 )
