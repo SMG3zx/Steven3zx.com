@@ -117,16 +117,17 @@ def test_parallel_assignment_uses_temporaries_only_when_needed():
 def test_each_stage_writes_a_file(tmp_path):
     result = run("def f(x: int) -> int:\n    return x + 1\n", "c", tmp_path)
     expected = {
-        "00-source.py", "01-ast.txt", "02-frontend.mlir", "03-optimized.mlir",
-        "04-dialects.json", "05-output.c", "manifest.json",
+        "00-source.py", "01-ast.txt", "02-frontend.mlir", "03-cleaned.mlir",
+        "04-selection.json", "05-detected.mlir", "06-optimized.mlir", "07-legalized.mlir",
+        "08-output.c", "manifest.json",
     }  # fmt: skip
     assert {p.name for p in tmp_path.iterdir()} == expected
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     assert [s["file"] for s in manifest["stages"]] == sorted(expected - {"manifest.json"})
-    assert (tmp_path / "05-output.c").read_text() == result.output
-    report = json.loads((tmp_path / "04-dialects.json").read_text())
-    assert report["illegal_for_target"] == []
-    assert "polyjuice.name" not in (tmp_path / "05-output.c").read_text()
+    assert (tmp_path / "08-output.c").read_text() == result.output
+    report = json.loads((tmp_path / "04-selection.json").read_text())
+    assert report["dialects_used"] == ["arith", "func"]
+    assert "polyjuice.name" not in (tmp_path / "08-output.c").read_text()
 
 
 def test_python_names_survive_into_the_ir(tmp_path):
@@ -146,7 +147,9 @@ def test_update_that_cannot_be_carried_is_an_error_not_a_silent_drop():
         )
 
 
-@pytest.mark.parametrize("artifact", ["02-frontend.mlir", "03-optimized.mlir"])
+@pytest.mark.parametrize(
+    "artifact", ["02-frontend.mlir", "03-cleaned.mlir", "05-detected.mlir", "06-optimized.mlir", "07-legalized.mlir"]
+)
 def test_ir_stages_round_trip(tmp_path, artifact):
     """parse -> print -> reparse is stable for every IR stage (see CLAUDE.md)."""
     from polyjuice.mlir_env import ensure_mlir_importable

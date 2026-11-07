@@ -21,7 +21,8 @@ Requires the local LLVM build from `scripts/setup-llvm.sh` and `uv`.
 ```
 cd python
 uv run pytest                        # differential tests: Python original vs compiled C
-uv run polyjuice prog.py --out out/  # writes one file per pipeline stage, prints the C
+uv run polyjuice prog.py --to c|python --out out/  # one file per pipeline stage, prints the result
+uv run polyjuice prog.py --verify    # also lowers to LLVM IR under out/verify/
 ```
 
 Supported Python subset (v0): `int` (32-bit, wraparound) and `Array[int, N]` parameters; assignment, `+ - *`, comparisons, array load/store, `for i in range(a[, b])`, `if/else`, one trailing `return`. Anything else raises `UnsupportedSyntax`.

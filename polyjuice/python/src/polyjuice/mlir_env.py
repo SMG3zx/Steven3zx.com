@@ -15,3 +15,7 @@ PYTHON_PACKAGES = Path(
 def ensure_mlir_importable() -> None:
     if str(PYTHON_PACKAGES) not in sys.path:
         sys.path.insert(0, str(PYTHON_PACKAGES))
+
+MLIR_TRANSLATE = Path(
+    os.environ.get("POLYJUICE_MLIR_TRANSLATE", ROOT / "build/bin/mlir-translate")
+)

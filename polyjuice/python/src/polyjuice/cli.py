@@ -11,6 +11,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("source", type=Path, nargs="?", help="source file")
     parser.add_argument("--from", dest="source_language", help="source language (default: from extension)")
     parser.add_argument("--to", dest="target", default="c", help="target language (default: c)")
+    parser.add_argument("--verify", action="store_true", help="also lower to LLVM and write verify/ artifacts")
     parser.add_argument("--list", action="store_true", help="list supported languages and pipelines")
     parser.add_argument(
         "--out",
@@ -30,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"cannot infer source language from {args.source.name}; pass --from")
     out = args.out or Path("polyjuice-out") / args.source.stem
     try:
-        result = run(args.source.read_text(), args.target, out, source_language)
+        result = run(args.source.read_text(), args.target, out, source_language, args.verify)
     except UnsupportedPipeline as error:
         parser.error(str(error))
     for stage in result.stages:

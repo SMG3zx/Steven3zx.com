@@ -119,14 +119,21 @@ Results are recorded in `docs/spike.md`.
 
 ## 7. Emitters and stage artifacts (decided 2026-11-07)
 
-**Idiomatic output means our own emitters, not EmitC.** EmitC output is correct but reads like compiler output (`v7`, `uint32_t` casts, `size_t` loops). Idiomatic source needs the user's names, mutable variables instead of SSA values, and inlined temporaries, so each target gets an emitter that walks the structured layer. EmitC stays available as a reference (`docs/spike.md`) but is not in the pipeline. The C emitter is `python/src/polyjuice/emit_c.py`; the Python emitter is next.
+**Idiomatic output means our own emitters, not EmitC.** EmitC output is correct but reads like compiler output (`v7`, `uint32_t` casts, `size_t` loops). Idiomatic source needs the user's names, mutable variables instead of SSA values, and inlined temporaries, so each target gets an emitter that walks the structured layer. EmitC stays available as a reference (`docs/spike.md`) but is not in the pipeline. The engine is `emit_structured.py`; each target is a small `Syntax` table (`emit_c.py`, `emit_python.py`).
 
 How names and structure survive: the frontend records Python names as `polyjuice.*` discardable attributes (`arg_names`, `iv`, `carried`, `name`). The emitter turns `scf.for` iter_args and `scf.if` results back into mutable variables, flattens `else`-nested `scf.if` into `else if` chains, and inlines a single-use value only when every op between its definition and its use is pure (no store, loop, or if). Parallel assignment (`a, b = b, a + b`) gets temporaries only when one assigned variable is read by a later one.
 
-**Every stage writes a file** into an output directory, numbered in pipeline order, with a `manifest.json` of timings and sizes: `00-source`, `01-ast`, `02-frontend.mlir`, `03-optimized.mlir`, `04-dialects.json` (dialects and ops used, plus ops the target cannot express), `05-output.<ext>`. New stages (detection, domain optimization, lowering for a target) take their own numbers. This is a working rule in `CLAUDE.md`.
+**Every stage writes a file** into an output directory, numbered in pipeline order, with a `manifest.json` of timings, sizes and per-stage notes: `00-source`, `01-ast` (Python only), `02-frontend.mlir`, `03-cleaned.mlir`, `04-selection.json`, `05-detected.mlir`, `06-optimized.mlir`, `07-legalized.mlir`, `08-output.<ext>`. With `--verify`, `verify/llvm-dialect.mlir` and `verify/module.ll` are added. This is a working rule in `CLAUDE.md`.
+
+What each stage does today:
+- **selection**: lists dialects used, loads the core set plus whatever the program uses, and picks only the detectors whose required ops are present (the rest are listed as skipped with the reason). Static table in `pipeline.py` and `detect.py`.
+- **detect**: Python walkers tag `scf.for` loops with `polyjuice.pattern`: `reduction` (every carried value updated as `acc <op> f(other)`, with the ops recorded) and `elementwise_map` (stores only to `a[i]` at its own index). Detectors never rewrite.
+- **optimize**: runs the domain optimizations registered for the detected patterns. The registry is **empty**: no domain optimization exists yet, so this stage passes the IR through and records what it did not use.
+- **legalize**: checks the IR against the target's legal ops and applies registered lowerings first. The `LOWERINGS` registry is also **empty**; the mechanism is tested with a rewrite of `addi` into `subi`s.
+- **verify** (opt-in): lowers to the LLVM dialect and LLVM IR. Tests also execute the lowered IR with MLIR's ExecutionEngine and compare against Python, which checks the frontend independently of the emitters. LLVM IR is never an output.
 
 Known gaps:
 - C signed overflow is undefined; the source subset defines `int` as wrapping 32-bit. Build with `-fwrapv` if it matters. Needs a decision.
 - Full `canonicalize` is off (`enable-patterns=false`) because it rewrites `scf.if` into `arith.select`, which erases the structure emitters rely on. Revisit with the optimization stage.
-- `04-dialects.json` reports illegal ops but does not yet lower them.
+- Domain optimizations and lowerings are mechanisms without content so far.
 

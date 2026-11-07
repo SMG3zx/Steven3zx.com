@@ -31,7 +31,7 @@ Source: [tiobe.com/tiobe-index](https://www.tiobe.com/tiobe-index/), fetched 202
 
 A pipeline is any (frontend, emitter) pair from the registry in `python/src/polyjuice/languages.py`. N frontends and M emitters give N x M pipelines without N x M code.
 
-Implemented: `python -> c`. Every other cell of the 13 x 13 matrix is open.
+Implemented: `python -> c`, `python -> python`. Every other cell of the 13 x 13 matrix is open.
 
 `polyjuice --list` prints the registered frontends, emitters and pipelines. `--from` is inferred from the file extension.
 
