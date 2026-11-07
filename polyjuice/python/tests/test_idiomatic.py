@@ -163,3 +163,24 @@ def test_ir_stages_round_trip(tmp_path, artifact):
         printed = str(ir.Module.parse(text))
         assert printed == text
         assert str(ir.Module.parse(printed)) == printed
+
+
+def test_unknown_pipeline_names_what_exists():
+    from polyjuice.languages import UnsupportedPipeline
+
+    with pytest.raises(UnsupportedPipeline, match="no emitter for 'rust'.*c"):
+        run("def f() -> int:\n    return 1\n", "rust")
+    with pytest.raises(UnsupportedPipeline, match="no frontend for 'cobol'"):
+        run("", "c", source_language="cobol")
+
+
+def test_cli_lists_pipelines_and_infers_source_language(tmp_path, capsys):
+    from polyjuice.cli import main
+
+    assert main(["--list"]) == 0
+    assert "python->c" in capsys.readouterr().out
+    src = tmp_path / "prog.py"
+    src.write_text("def f(x: int) -> int:\n    return x + 1\n")
+    assert main([str(src), "--out", str(tmp_path / "out")]) == 0
+    assert "return x + 1;" in capsys.readouterr().out
+    assert (tmp_path / "out" / "00-source.py").exists()
