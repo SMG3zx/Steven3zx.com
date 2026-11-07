@@ -1,8 +1,10 @@
-# Pontifex
+# PolyJuice
 
-*Pontifex*: Latin for "bridge-builder" (`pons` + `facere`). Working name; the PyPI names `pontifex`, `pons`, `interpres` and `fabrica` are all taken, so rename before any publication.
+Named for the Polyjuice Potion: take on the form of someone else while staying yourself. Working name; `polyjuice` is already taken on PyPI, so pick a distribution name before any publication.
 
-A source-to-X compiler/transpiler built on MLIR and LLVM. Source code from several languages is lowered through MLIR into a shared mid-level layer, then emitted either as native code (via LLVM) or as source in another language.
+A source-to-source compiler built on MLIR and LLVM. Source code from one language is lowered into MLIR, analysed to detect domain patterns, optimized with domain-specific passes, progressively lowered, and emitted as source in a target language.
+
+Linux only for now. Source-to-source only for now; native executables are out of scope.
 
 ## Status
 

@@ -1,6 +1,8 @@
-# Pontifex working rules
+# PolyJuice working rules
 
-Universal source-to-X compiler on MLIR and LLVM. Read `DESIGN.md` before changing structure. Part of the Steven3zx.com monorepo; root `AGENTS.md` rules (commits, remotes) apply.
+Source-to-source compiler on MLIR and LLVM. Read `DESIGN.md` before changing structure. Part of the Steven3zx.com monorepo; root `AGENTS.md` rules (commits, remotes) apply.
+
+Linux only. Source-to-source only; no native-executable backend for now.
 
 ## Scope discipline
 
