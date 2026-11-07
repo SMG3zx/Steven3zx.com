@@ -14,6 +14,7 @@ from polyjuice.emit_c import emit_c
 from polyjuice.emit_python import LEGAL_OPS as PY_LEGAL_OPS
 from polyjuice.emit_python import emit_python
 from polyjuice.frontends.c import build_module as build_c_module
+from polyjuice.frontends.cpp import build_module as build_cpp_module
 from polyjuice.frontends.csharp import build_module as build_csharp_module
 from polyjuice.frontends.go import build_module as build_go_module
 from polyjuice.frontends.java import build_module as build_java_module
@@ -74,6 +75,7 @@ def language_for_path(path: str) -> str | None:
 
 register_frontend(Frontend("python", "py", build_python_module))
 register_frontend(Frontend("c", "c", build_c_module))
+register_frontend(Frontend("cpp", "cpp", build_cpp_module))
 register_frontend(Frontend("go", "go", build_go_module))
 register_frontend(Frontend("java", "java", build_java_module))
 register_frontend(Frontend("csharp", "cs", build_csharp_module))

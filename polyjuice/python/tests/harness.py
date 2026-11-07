@@ -109,16 +109,19 @@ def run_emitted_c(code: str) -> dict:
         c_file, so_file = Path(tmp) / "out.c", Path(tmp) / "out.so"
         c_file.write_text(code)
         subprocess.run([cc, "-std=c11", "-Wall", "-shared", "-fPIC", "-o", so_file, c_file, "-lm"], check=True)
-        lib = ctypes.CDLL(str(so_file))
-        results = {}
-        for name, (calls, is_float) in CALLS.items():
-            fn = getattr(lib, name + "_" if name in ("power",) and not hasattr(lib, name) else name)
-            fn.restype = ctypes.c_double if is_float else ctypes.c_int32
-            results[name] = [
-                fn(*[ctypes.c_double(a) if isinstance(a, float) else ctypes.c_int32(a) for a in args])
-                for args in calls
-            ]
-        return results
+        return _call_shared_library(ctypes.CDLL(str(so_file)))
+
+
+def _call_shared_library(lib) -> dict:
+    results = {}
+    for name, (calls, is_float) in CALLS.items():
+        fn = getattr(lib, name)
+        fn.restype = ctypes.c_double if is_float else ctypes.c_int32
+        results[name] = [
+            fn(*[ctypes.c_double(a) if isinstance(a, float) else ctypes.c_int32(a) for a in args])
+            for args in calls
+        ]
+    return results
 
 
 def run_llvm(module_builder) -> dict:
@@ -209,8 +212,21 @@ def run_original_java(source: str) -> dict:
         return parse_lines(done.stdout)
 
 
+def run_original_cpp(source: str) -> dict:
+    """Build with g++; wrapping the functions in extern "C" keeps their names for ctypes."""
+    includes = "\n".join(l for l in source.splitlines() if l.startswith("#include"))
+    body = "\n".join(l for l in source.splitlines() if not l.startswith("#include"))
+    program = f'{includes}\nextern "C" {{\n{body}\n}}\n'
+    with tempfile.TemporaryDirectory() as tmp:
+        cpp_file, so_file = Path(tmp) / "out.cpp", Path(tmp) / "out.so"
+        cpp_file.write_text(program)
+        subprocess.run(["g++", "-std=c++17", "-Wall", "-shared", "-fPIC", "-o", so_file, cpp_file], check=True)
+        return _call_shared_library(ctypes.CDLL(str(so_file)))
+
+
 ORIGINALS = {
     "c": ("gcc", run_original_c),
     "go": ("go", run_original_go),
     "java": ("javac", run_original_java),
+    "cpp": ("g++", run_original_cpp),
 }

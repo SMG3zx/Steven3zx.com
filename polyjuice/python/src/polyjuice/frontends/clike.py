@@ -158,8 +158,8 @@ class CLike:
             return _ts.number(n)
         if t in self.identifier_types:
             return nast.Name(text(n), where)
-        if t == "parenthesized_expression":
-            return self.expr(named(n)[0])
+        if t in ("parenthesized_expression", "condition_clause"):
+            return self.expr(field(n, "value") or named(n)[0])
         if t == "binary_expression":
             op = self.strict_equality.get(operator(n), operator(n))
             left, right = self.expr(field(n, "left")), self.expr(field(n, "right"))
