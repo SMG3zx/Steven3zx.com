@@ -21,6 +21,7 @@ from polyjuice.frontends.java import build_module as build_java_module
 from polyjuice.frontends.rust import build_module as build_rust_module
 from polyjuice.frontends.javascript import build_module as build_javascript_module
 from polyjuice.frontends.typescript import build_module as build_typescript_module
+from polyjuice.frontends.kotlin import build_module as build_kotlin_module
 from polyjuice.frontends.lua import build_module as build_lua_module
 from polyjuice.frontends.php import build_module as build_php_module
 from polyjuice.frontends.python import build_module as build_python_module
@@ -83,6 +84,7 @@ register_frontend(Frontend("c", "c", build_c_module))
 register_frontend(Frontend("cpp", "cpp", build_cpp_module))
 register_frontend(Frontend("go", "go", build_go_module))
 register_frontend(Frontend("java", "java", build_java_module))
+register_frontend(Frontend("kotlin", "kt", build_kotlin_module))
 register_frontend(Frontend("lua", "lua", build_lua_module))
 register_frontend(Frontend("php", "php", build_php_module))
 register_frontend(Frontend("javascript", "js", build_javascript_module))

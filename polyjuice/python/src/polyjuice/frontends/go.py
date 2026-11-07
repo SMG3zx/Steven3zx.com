@@ -222,7 +222,7 @@ class _Go:
     def for_statement(self, n) -> list:
         where = line(n)
         body_node = field(n, "body")
-        children = [c for c in named(n) if c is not body_node]
+        children = [c for c in named(n) if c != body_node]
         head = children[0] if children else None
         if head is None or head.type == "block":
             raise UnsupportedSyntax(where, "infinite `for` loops are not supported")
