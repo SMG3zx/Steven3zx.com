@@ -54,6 +54,10 @@ class CLike:
         arg = field(n, "argument") or named(n)[0]
         return arg, operator(n) or ("++" if "++" in text(n) else "--")
 
+    def unary_parts(self, n):
+        """(operator text, operand node) of a prefix unary expression."""
+        return operator(n), field(n, self.unary_operand_field) or named(n)[-1]
+
     def literal(self, n):
         return None  # languages with true/false/null etc. may refuse them explicitly
 
@@ -167,7 +171,8 @@ class CLike:
                 return nast.Logical("and" if op == "&&" else "or", left, right, where)
             raise UnsupportedSyntax(where, f"unsupported operator {op}")
         if t in ("unary_expression", "prefix_unary_expression"):
-            op, operand = operator(n), self.expr(field(n, self.unary_operand_field) or named(n)[-1])
+            op, operand_node = self.unary_parts(n)
+            operand = self.expr(operand_node)
             if op == "-":
                 return _ts.negate(operand)
             if op == "+":
