@@ -116,3 +116,17 @@ Goal: settle the unverified items before writing compiler code. Scripts live in 
 4. How far do the EmitC conversions get a C-shaped `scf`/`arith`/`memref`/`func` program to C source?
 
 Results are recorded in `docs/spike.md`.
+
+## 7. Emitters and stage artifacts (decided 2026-11-07)
+
+**Idiomatic output means our own emitters, not EmitC.** EmitC output is correct but reads like compiler output (`v7`, `uint32_t` casts, `size_t` loops). Idiomatic source needs the user's names, mutable variables instead of SSA values, and inlined temporaries, so each target gets an emitter that walks the structured layer. EmitC stays available as a reference (`docs/spike.md`) but is not in the pipeline. The C emitter is `python/src/polyjuice/emit_c.py`; the Python emitter is next.
+
+How names and structure survive: the frontend records Python names as `polyjuice.*` discardable attributes (`arg_names`, `iv`, `carried`, `name`). The emitter turns `scf.for` iter_args and `scf.if` results back into mutable variables, flattens `else`-nested `scf.if` into `else if` chains, and inlines a single-use value only when every op between its definition and its use is pure (no store, loop, or if). Parallel assignment (`a, b = b, a + b`) gets temporaries only when one assigned variable is read by a later one.
+
+**Every stage writes a file** into an output directory, numbered in pipeline order, with a `manifest.json` of timings and sizes: `00-source`, `01-ast`, `02-frontend.mlir`, `03-optimized.mlir`, `04-dialects.json` (dialects and ops used, plus ops the target cannot express), `05-output.<ext>`. New stages (detection, domain optimization, lowering for a target) take their own numbers. This is a working rule in `CLAUDE.md`.
+
+Known gaps:
+- C signed overflow is undefined; the source subset defines `int` as wrapping 32-bit. Build with `-fwrapv` if it matters. Needs a decision.
+- Full `canonicalize` is off (`enable-patterns=false`) because it rewrites `scf.if` into `arith.select`, which erases the structure emitters rely on. Revisit with the optimization stage.
+- `04-dialects.json` reports illegal ops but does not yet lower them.
+

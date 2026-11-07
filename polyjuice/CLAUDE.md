@@ -32,3 +32,10 @@ Commit the benchmark harness before the optimized implementation. Report mean, s
 - Every IR stage has a verifier and text round-trip tests (parse, print, reparse) checked with FileCheck.
 - Each new frontend lowers into the shared layer, so adding a language never requires a new backend.
 - Source-to-source output is emitted from a high-level MLIR stage (structured control flow), never from LLVM IR.
+
+## Pipeline rules
+
+- Every pipeline stage writes a numbered artifact file (and appears in `manifest.json`) so each stage can be studied and improved on its own. A new stage is not done until it emits its file.
+- Output must read like hand-written code in the target language. Emitters use the user's names, mutable variables, and inline temporaries only when that cannot change behavior.
+- A construct the frontend cannot carry correctly must raise `UnsupportedSyntax`, never be dropped silently.
+
