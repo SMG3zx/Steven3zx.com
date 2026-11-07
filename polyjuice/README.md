@@ -8,7 +8,7 @@ Linux only for now. Source-to-source only for now; native executables are out of
 
 ## Status
 
-Phase 0: survey and design only. No compiler code yet. See [DESIGN.md](DESIGN.md) for the architecture, survey findings and open questions, and [CLAUDE.md](CLAUDE.md) for working rules.
+Phase 0 done; first slice working (Python subset to C, with differential tests). See [DESIGN.md](DESIGN.md) for the architecture, survey findings and open questions, and [CLAUDE.md](CLAUDE.md) for working rules.
 
 ## Vision
 
