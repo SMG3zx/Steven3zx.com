@@ -3,7 +3,22 @@ name = "polyjuice"
 version = "0.0.0"
 description = "Source-to-source compiler built on MLIR"
 requires-python = ">=3.14"
-dependencies = ["numpy"]
+dependencies = [
+    "numpy",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-c>=0.24.2",
+    "tree-sitter-c-sharp>=0.23.5",
+    "tree-sitter-cpp>=0.23.4",
+    "tree-sitter-go>=0.25.0",
+    "tree-sitter-java>=0.23.5",
+    "tree-sitter-javascript>=0.25.0",
+    "tree-sitter-kotlin>=1.1.0",
+    "tree-sitter-lua>=0.5.0",
+    "tree-sitter-php>=0.25.1",
+    "tree-sitter-powershell>=0.26.4",
+    "tree-sitter-rust>=0.24.2",
+    "tree-sitter-typescript>=0.23.2",
+]
 
 [dependency-groups]
 dev = ["pytest"]

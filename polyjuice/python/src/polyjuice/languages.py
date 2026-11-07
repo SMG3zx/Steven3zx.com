@@ -13,7 +13,7 @@ from polyjuice.emit_c import LEGAL_OPS as C_LEGAL_OPS
 from polyjuice.emit_c import emit_c
 from polyjuice.emit_python import LEGAL_OPS as PY_LEGAL_OPS
 from polyjuice.emit_python import emit_python
-from polyjuice.frontend import build_module as build_python_module
+from polyjuice.frontends.python import build_module as build_python_module
 
 
 @dataclass(frozen=True)
