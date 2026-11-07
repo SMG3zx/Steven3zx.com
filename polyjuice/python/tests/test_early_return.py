@@ -194,3 +194,47 @@ def test_return_inside_a_loop_through_llvm():
             assert verify.execute(lowered, "first_multiple", list(args))[0] == py_named(LOOP_RETURN, "first_multiple")(*args)
         for n in (0, 4, 8):
             assert verify.execute(lowered, "nested", [n])[0] == py_named(LOOP_RETURN, "nested")(n)
+
+
+def test_return_inside_a_loop_is_an_early_return_not_a_flag():
+    src = textwrap.dedent(
+        """
+        def is_prime(n: int) -> int:
+            if n < 2:
+                return 0
+            i = 2
+            while i * i <= n:
+                if n % i == 0:
+                    return 0
+                i += 1
+            return 1
+        """
+    )
+    assert run(src, "python").output == textwrap.dedent(
+        """\
+        def is_prime(n: int) -> int:
+            if n < 2:
+                return 0
+            i = 2
+            while i * i <= n:
+                if n % i == 0:
+                    return 0
+                i += 1
+            return 1
+        """
+    )
+    c = run(src, "c").output
+    assert "done" not in c and "polyjuice" not in c and c.count("return 0;") == 2
+
+
+def test_user_variables_named_like_the_old_flags_do_not_confuse_the_emitter(compile_c):
+    src = (
+        "def f(n: int) -> int:\n    done1_ = 0\n    ret1_ = 0\n    for i in range(n):\n"
+        "        if i > 2:\n            return ret1_ + i\n        done1_ += 1\n    return done1_\n"
+    )
+    ns: dict = {}
+    exec(run(src, "python").output, ns)
+    assert [ns["f"](n) for n in (0, 2, 3, 5)] == [0, 2, 3, 3]
+    lib = compile_c(src)
+    lib.f.restype = ctypes.c_int32
+    assert [lib.f(n) for n in (0, 2, 3, 5)] == [0, 2, 3, 3]

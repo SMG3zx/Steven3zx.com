@@ -10,6 +10,7 @@ Names come from the `polyjuice.*` attributes written by the frontend (see
 frontend.py); anything without a name gets `t0`, `t1`, ...
 """
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
@@ -145,6 +146,10 @@ class FunctionEmitter:
         self.env: dict[ir.Value, Expr] = {}
         self.scopes: list[_Scope] = [_Scope()]
         self.temp = 0
+        # loops whose `return`s the lowering turned into a done flag: flag name -> result name.
+        # The flags never appear in the output; their assignments become `return`s.
+        self.exit_flags: dict[str, str | None] = {}
+        self.exit_stack: list[str] = []
 
     # -- output helpers -------------------------------------------------
     def line(self, text: str) -> None:
@@ -162,7 +167,12 @@ class FunctionEmitter:
         return any(name in s.names for s in self.scopes)
 
     def safe(self, name: str) -> str:
-        if name.startswith("__"):  # hidden flags from the lowering; `__x` is reserved in C
+        if name.startswith("__polyjuice_"):  # exit flags: never printed, so keep them collision-proof
+            return name
+        counter = re.fullmatch(r"__ctr_(.+)_\d+", name)  # a loop counter the lowering introduced
+        if counter:
+            name = counter.group(1)
+        elif name.startswith("__"):  # `__x` is reserved in C
             name = name.lstrip("_") + "_"
         return name + "_" if name in self.syn.reserved else name
 
@@ -397,6 +407,13 @@ class FunctionEmitter:
 
     def assign(self, pairs: list[tuple[str, Expr]]) -> None:
         """Assign values to existing variables, keeping parallel-assignment semantics."""
+        if self.exit_stack:
+            done = self.exit_stack[-1]
+            if any(n == done and e.text in ("1", "true", "True") for n, e in pairs):
+                result = self.exit_flags[done]
+                value = next((e for n, e in pairs if n == result), None) if result else None
+                self.stmt(self.syn.return_stmt(value.text if value is not None else None))
+                return
         pairs = [(n, e) for n, e in pairs if e.text != n]
         names = [n for n, _ in pairs]
         conflict = any(
@@ -496,12 +513,14 @@ class FunctionEmitter:
         self.scopes.pop()
         self.depth -= 1
 
-    def declare_carried(self, values: list, inits: list[Expr], hints: list[str]) -> list[str]:
+    def declare_carried(self, values: list, inits: list[Expr], hints: list[str], hidden=()) -> list[str]:
         carried: list[str] = []
         for k, (value, init) in enumerate(zip(values, inits)):
             hint = hints[k] if k < len(hints) else None
             safe = self.safe(hint) if hint is not None else None
-            if safe is not None and init.text == safe and len(list(value.uses)) == 1:
+            if hint in hidden:
+                carried.append(safe)  # an exit flag: used for bookkeeping only, never declared
+            elif safe is not None and init.text == safe and len(list(value.uses)) == 1:
                 carried.append(safe)  # the old value dies here: update it in place
             else:
                 name = self.fresh(hint)
@@ -512,8 +531,12 @@ class FunctionEmitter:
     def emit_while(self, op) -> None:
         before, after = op.regions[0].blocks[0], op.regions[1].blocks[0]
         values = list(op.operands)
+        exits = _attr_strs(op, "polyjuice.exits")
+        done = self.safe(exits[0]) if exits else None
+        if exits:
+            self.exit_flags[done] = self.safe(exits[1]) if exits[1] else None
         carried = self.declare_carried(
-            values, [self.expr(v) for v in values], _attr_strs(op, "polyjuice.carried")
+            values, [self.expr(v) for v in values], _attr_strs(op, "polyjuice.carried"), hidden=set(exits)
         )
         for block in (before, after):
             for name, arg in zip(carried, block.arguments):
@@ -528,8 +551,15 @@ class FunctionEmitter:
             )
         if list(condition.operands)[1:] != list(before.arguments):
             raise UnsupportedForTarget("a while loop that forwards values other than its carried variables")
-        self.line(self.syn.while_header(self.expr(condition.operands[0]).text))
+        cond = self.expr(condition.operands[0])
+        if done is not None and cond.lhs is not None and cond.lhs.text == f"{done} == 0":
+            cond = cond.rhs  # `done == 0 && c` guarded the loop; with real returns it is just `c`
+        self.line(self.syn.while_header(cond.text))
+        if done is not None:
+            self.exit_stack.append(done)
         self.body(after, carried, list(after.arguments))
+        if done is not None:
+            self.exit_stack.pop()
         self.close()
         for name, result in zip(carried, op.results):
             self.env[result] = self.var(name)
@@ -580,7 +610,29 @@ class FunctionEmitter:
                     return None
         return prelude, inner
 
+    def flag_check(self, op) -> bool:
+        """Is this `if done != 0 { ... }` on an exit flag? Then its condition is false wherever
+        it can be reached, because every path that set the flag already returned."""
+        cond = self.expr(op.operands[0]).text
+        return any(cond == f"{flag} != 0" for flag in self.exit_flags)
+
+    def inline_else(self, op, dests) -> None:
+        else_block = op.regions[1].blocks[0]
+        for inner in _ops(else_block)[:-1]:
+            self.emit_block_op(inner)
+        yielded = self.yields(else_block)
+        if dests is not None:
+            self.assign(list(zip(dests, yielded)))
+            for result, name in zip(op.results, dests):
+                self.env[result] = self.var(name)
+        else:
+            for result, value in zip(op.results, yielded):
+                self.env[result] = value
+
     def emit_if(self, op, dests: list[str] | None = None, keyword: str | None = None) -> None:
+        if self.flag_check(op):
+            self.inline_else(op, dests)
+            return
         keyword = keyword or self.syn.if_keyword
         then_block, else_block = op.regions[0].blocks[0], op.regions[1].blocks[0]
         hints = _attr_strs(op, "polyjuice.carried")
@@ -608,6 +660,11 @@ class FunctionEmitter:
         )
         if else_is_bare and (not op.results or initialized_from_else or else_changes_nothing):
             self.close()
+            return
+        if self.lines[-1].strip().startswith("return"):
+            # the then-branch returned: the else path simply continues, no `else` needed
+            self.close()
+            self.inline_else(op, dests)
             return
         chain = self.else_if_target(else_block)
         if chain is not None:
@@ -648,6 +705,9 @@ class FunctionEmitter:
     def emit_return_if(self, op, final: bool) -> None:
         """Guard-clause style: `if (c) { return a; }` then the else path continues unindented."""
         then_block, else_block = op.regions[0].blocks[0], op.regions[1].blocks[0]
+        if self.flag_check(op):
+            self.emit_returning(else_block, final)
+            return
         cond = self.expr(op.operands[0])
         self.line(self.syn.if_header(self.syn.if_keyword, cond.text))
         self.depth += 1

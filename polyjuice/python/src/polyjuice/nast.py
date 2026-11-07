@@ -160,6 +160,7 @@ class While:
     cond: object
     body: list
     line: int = 0
+    exits: tuple | None = None  # (done flag, result variable or None): set when a return was rewritten into this loop
 
 
 @dataclass

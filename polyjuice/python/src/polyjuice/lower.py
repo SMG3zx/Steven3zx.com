@@ -104,12 +104,12 @@ def _replace_returns(stmts: list, done: str, ret: str | None) -> list:
 def _loop_with_exits(st, rest: list, ctx: _Returns) -> list:
     """Rewrite a loop containing returns as: loop guarded by a `done` flag, then `if done: return ret`."""
     k = ctx.next()
-    done, ret = f"__done{k}", (f"__ret{k}" if ctx.ret else None)
+    done, ret = f"__polyjuice_done{k}", (f"__polyjuice_ret{k}" if ctx.ret else None)
     line = st.line
     zero = nast.Const(0.0 if ctx.ret == FLOAT else 0, line)
     body = list(st.body)
     if isinstance(st, nast.For):
-        counter = f"__i{k}"
+        counter = f"__ctr_{st.var}_{k}"  # printed as the loop variable (see the emitters' `safe`)
         body = [nast.Declare(st.var, INT, nast.Name(counter, line), line)] + body
         body.append(nast.Assign(nast.Name(counter, line), nast.Binary("+", nast.Name(counter, line), nast.Const(1, line), line), line))
         start = st.start if st.start is not None else nast.Const(0, line)
@@ -128,7 +128,7 @@ def _loop_with_exits(st, rest: list, ctx: _Returns) -> list:
         rest,
         line,
     )
-    return init + [nast.While(guarded, body, line)] + normalize_returns([after], ctx)
+    return init + [nast.While(guarded, body, line, (done, ret))] + normalize_returns([after], ctx)
 
 
 def normalize_returns(stmts: list, ctx: _Returns) -> list:
@@ -430,6 +430,8 @@ class _Lowerer:
         types = [v.type for v in inits]
         loop = scf.WhileOp(types, inits)
         loop.operation.attributes["polyjuice.carried"] = _names_attr(carried)
+        if node.exits is not None:
+            loop.operation.attributes["polyjuice.exits"] = _names_attr([node.exits[0], node.exits[1] or ""])
         before = loop.before.blocks.append(*types)
         after = loop.after.blocks.append(*types)
         with ir.InsertionPoint(before):

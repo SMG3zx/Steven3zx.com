@@ -140,3 +140,15 @@ Known gaps:
 - Float comparison uses ordered predicates, so NaN behaves like Python; `int(x)` of a NaN or out-of-range float is undefined in C and an error in Python.
 - User function names that collide with libc/libm are renamed with a trailing underscore in C, so callers outside the generated file see the new name.
 
+## 8. Frontends (2026-11-07)
+
+Every frontend produces the neutral AST (`nast.py`); `lower.py` owns SSA conversion, type checks, implicit int-to-float
+widening, typed declarations, early-return rewriting (a loop containing a `return` is guarded by a done flag and a result
+variable, and tagged `polyjuice.exits` so the emitters print a plain `return`), and floor/truncating division. Adding a
+language is a parse-tree mapping, not a new lowering. See `docs/languages.md` for the per-language status and the
+semantic compromises.
+
+Known gaps: arrays need a fixed size (no dynamic arrays or strings), the four languages without a local toolchain are
+checked only against the reference, and a loop containing a `return` is a `while` loop in the output even when the source
+used `for`.
+

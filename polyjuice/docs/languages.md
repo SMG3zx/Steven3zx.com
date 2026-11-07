@@ -1,27 +1,52 @@
 # Languages and pipelines
 
-## Target languages (chosen by the owner, 2026-11-07)
+## Status of the 13 languages (2026-11-07)
 
-The owner's list has 13 entries: JavaScript, Python, TypeScript, Java, C#, PowerShell, C++, C, Rust, PHP, Go, Kotlin, Lua. Every one is both a source and a target eventually. Status: only Python (source) and C (target) exist.
+All 13 have a **frontend** (source -> shared layer). Only **C** and **Python** exist as emitters (targets), so
+13 x 2 = 26 pipelines run today. `polyjuice --list` prints them.
 
-Grouped by what a frontend must do, since that decides the cost:
+Every frontend is a thin mapper from a tree-sitter parse tree (or Python's `ast`) onto the neutral AST in
+`nast.py`; `lower.py` does everything else once. Each is checked with the same nine canonical programs
+(`python/tests/programs/canon.*`): the original program, the emitted C, the emitted Python and the shared-layer
+IR run through LLVM must all agree with a Python reference.
 
-| Group | Languages | What it takes |
-|---|---|---|
-| Static, imperative | C, C++, Go, Rust, Java, C#, Kotlin, TypeScript | Types map directly to MLIR types. Cheapest to start. Objects, generics, exceptions, ownership come later via the shared-layer ladder. |
-| Dynamic | Python, JavaScript, PHP, Lua | Values have no declared types. Needs a type-inference or annotation stage, or a boxed value model. Python is done only for an annotated `int`/array subset. |
-| Shell | PowerShell | Pipelines of objects, dynamic scoping, cmdlets. Least like the rest; defer. |
+| Language | Parsed by | Original run in the tests | Numbers | Notes |
+|---|---|---|---|---|
+| Python | `ast` | yes | `int` = i32, `float` | annotations required; `//` `%` floor like Python |
+| C | tree-sitter-c | gcc | `int`, `double` | `T a[N]` array parameters |
+| C++ | tree-sitter-cpp | g++ | as C | `static_cast`, `using`; no classes/templates |
+| Go | tree-sitter-go | `go run` | `int`/`int32` = i32, `float64` | `*[N]T` and read-only `[N]T`; `:=` infers |
+| Java | tree-sitter-java | javac + java | `int`, `double` | static methods; arrays are unsized so refused |
+| C# | tree-sitter-c-sharp | **no** (runtime only, no SDK) | `int`, `double` | static methods; arrays refused |
+| Rust | tree-sitter-rust | rustc | `i32`, `f64` | tail expressions are returns; `&[T; N]` arrays |
+| JavaScript | tree-sitter-javascript | node | every number is `f64` | counters are floats, so `for` becomes `while`; `%` is `fmod` |
+| TypeScript | tree-sitter-typescript | node (type stripping) | `number` = `f64` | `number`/`void` annotations only |
+| Lua | tree-sitter-lua | lua | `integer` = i32, `number` = `f64` | types from `---@param` / `---@return` comments |
+| PHP | tree-sitter-php | **no** (no php binary) | `int` = i32, `float` | type hints required; first assignment declares; `/` on ints refused |
+| Kotlin | tree-sitter-kotlin | **no** (no kotlinc) | `Int`, `Double` | expression bodies; `0 until n`, `0..n` |
+| PowerShell | tree-sitter-powershell | **no** (no pwsh) | `[int]` = i32, `[double]` | `[OutputType([int])]` gives the result type; calls are commands |
 
-Per-language notes (hypotheses, not verified against each language's tooling):
-- **C, C++**: ClangIR gives structured IR, but LLVM 23.1.5 has no lowering to `scf`/`memref` (see `spike.md`). Open decision: own C++ lowering pass vs a restricted C subset in Python. C++ adds templates, classes, RAII.
-- **Rust**: as a source, ownership and borrowing must be dropped or checked. As a target, idiomatic output needs ownership choices (slices vs arrays, `&mut`), so scalars and arrays first.
-- **Java, C#, Kotlin**: close relatives. One C-family object model in the shared layer could serve all three, plus TypeScript's classes.
-- **TypeScript**: the typed way into JavaScript. Do TypeScript before JavaScript.
-- **Go**: small, regular, statically typed. Good second source after Python.
-- **Lua**: tiny and dynamic. Its single data structure (the table) forces the shared layer to have a map/array model.
-- **PHP, JavaScript**: dynamic, with implicit coercions that differ from every other language; each needs its own semantics layer before it is trustworthy.
+"No original run" means the sample program is only checked against the Python reference through the other
+paths; a mistake in how the sample is written in that language would not be caught by a real compiler.
 
-Suggested order (proposal): sources Python (done), Go, C; targets C (done), Python, Go; then the static family (Java, C#, Kotlin, TypeScript, Rust, C++); then the dynamic ones (JavaScript, Lua, PHP) once a type-inference stage exists; PowerShell last.
+### What every frontend refuses (with a line number)
+
+Strings, booleans as values, collections and objects, closures, `break`/`continue`, `switch`/`match`, ternary
+expressions, bitwise operators, `long`/`float`/`byte`-style types, and anything language-specific outside the
+subset above. Arrays exist only where the language can give them a fixed size (C, C++, Go, Rust, Python).
+
+### Semantic compromises to know about
+
+- `int` is 32-bit and wraps in the shared layer. Python, Go, PHP and Lua integers are wider in the source
+  language; C leaves signed overflow undefined; PowerShell promotes to double. Programs that stay in range agree.
+- `int / int`: C-family and Go/Rust/Java/Kotlin truncate (`div`), Python and Lua give a float (`/`), PHP and
+  PowerShell return an int *or* a float depending on the values, so those two refuse it.
+- `//` and `%`: floor semantics for Python and Lua, truncation for the C family, `fmod` for JavaScript.
+- Early `return` inside a loop is supported; loops containing one are `while` loops in the output.
+
+Suggested next steps: emitters for the other languages (each is one syntax table plus any idiom hooks), dynamic
+arrays with a length (the shared-layer rung that unblocks Java, C#, Kotlin, JavaScript, TypeScript, Lua, PHP and
+PowerShell arrays), strings, structs, then the type-inference stage for fully dynamic code.
 
 ### Reference: TIOBE top 10, November 2026
 
@@ -31,7 +56,7 @@ Source: [tiobe.com/tiobe-index](https://www.tiobe.com/tiobe-index/), fetched 202
 
 A pipeline is any (frontend, emitter) pair from the registry in `python/src/polyjuice/languages.py`. N frontends and M emitters give N x M pipelines without N x M code.
 
-Implemented: `python -> c`, `python -> python`. Every other cell of the 13 x 13 matrix is open.
+Implemented: every one of the 13 languages -> `c` and `python`. The other 11 target columns are open.
 
 `polyjuice --list` prints the registered frontends, emitters and pipelines. `--from` is inferred from the file extension.
 

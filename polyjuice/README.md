@@ -8,7 +8,7 @@ Linux only for now. Source-to-source only for now; native executables are out of
 
 ## Status
 
-Phase 0 done; first slice working (Python subset to C, with differential tests). See [DESIGN.md](DESIGN.md) for the architecture, survey findings and open questions, and [CLAUDE.md](CLAUDE.md) for working rules.
+Frontends for 13 languages (Python, C, C++, Go, Java, C#, Rust, JavaScript, TypeScript, Lua, PHP, Kotlin, PowerShell) and emitters for C and Python, with differential tests. See [docs/languages.md](docs/languages.md) for what each accepts. See [DESIGN.md](DESIGN.md) for the architecture, survey findings and open questions, and [CLAUDE.md](CLAUDE.md) for working rules.
 
 ## Vision
 
@@ -25,7 +25,7 @@ uv run polyjuice prog.py --to c|python --out out/  # one file per pipeline stage
 uv run polyjuice prog.py --verify    # also lowers to LLVM IR under out/verify/
 ```
 
-Supported Python subset (v0): `int` (32-bit, wraparound) and `Array[int, N]` parameters; assignment, `+ - *`, comparisons, array load/store, `for i in range(a[, b])`, `if/else`, one trailing `return`. Anything else raises `UnsupportedSyntax`.
+Each frontend accepts a subset (ints, floats, fixed-size arrays, loops, ifs, calls, early returns) and raises `UnsupportedSyntax` with a line number for anything else. The source language is inferred from the file extension; `--from` and `--to` override.
 
 ## Layout
 
