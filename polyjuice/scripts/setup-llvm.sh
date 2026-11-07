@@ -12,7 +12,7 @@ cd "$ROOT"
 
 if [ ! -d venv ]; then
   python3 -m venv venv
-  venv/bin/pip install --quiet cmake ninja nanobind numpy pybind11 PyYAML lit filecheck
+  venv/bin/pip install --quiet cmake ninja "nanobind>=2.9,<3.0" numpy pybind11 PyYAML lit filecheck
 fi
 export PATH="$ROOT/venv/bin:$PATH"
 
@@ -34,4 +34,4 @@ cmake -G Ninja -S llvm-project/llvm -B build \
   -DLLVM_PARALLEL_LINK_JOBS=3 \
   -DCMAKE_INSTALL_PREFIX="$ROOT/install"
 
-ninja -C build -j"$JOBS" clang mlir-opt mlir-translate mlir-python-bindings FileCheck not count
+ninja -C build -j"$JOBS" clang mlir-opt mlir-translate MLIRPythonModules FileCheck not count
