@@ -18,6 +18,7 @@ from polyjuice.frontends.cpp import build_module as build_cpp_module
 from polyjuice.frontends.csharp import build_module as build_csharp_module
 from polyjuice.frontends.go import build_module as build_go_module
 from polyjuice.frontends.java import build_module as build_java_module
+from polyjuice.frontends.rust import build_module as build_rust_module
 from polyjuice.frontends.python import build_module as build_python_module
 
 
@@ -78,6 +79,7 @@ register_frontend(Frontend("c", "c", build_c_module))
 register_frontend(Frontend("cpp", "cpp", build_cpp_module))
 register_frontend(Frontend("go", "go", build_go_module))
 register_frontend(Frontend("java", "java", build_java_module))
+register_frontend(Frontend("rust", "rs", build_rust_module))
 register_frontend(Frontend("csharp", "cs", build_csharp_module))
 register_emitter(Emitter("c", "c", C_LEGAL_OPS, emit_c))
 register_emitter(Emitter("python", "py", PY_LEGAL_OPS, emit_python))

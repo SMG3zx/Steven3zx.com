@@ -224,9 +224,20 @@ def run_original_cpp(source: str) -> dict:
         return _call_shared_library(ctypes.CDLL(str(so_file)))
 
 
+def run_original_rust(source: str) -> dict:
+    calls = _calls_text(lambda n, a: f'    println!("{n} = {{}}", {n}({a}));')
+    program = source + f"\nfn main() {{\n{calls}\n}}\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "main.rs").write_text(program)
+        subprocess.run(["rustc", "-O", "-o", "prog", "main.rs"], cwd=tmp, check=True, capture_output=True, timeout=180)
+        done = subprocess.run([str(Path(tmp) / "prog")], capture_output=True, text=True, timeout=60, check=True)
+        return parse_lines(done.stdout)
+
+
 ORIGINALS = {
     "c": ("gcc", run_original_c),
     "go": ("go", run_original_go),
     "java": ("javac", run_original_java),
     "cpp": ("g++", run_original_cpp),
+    "rust": ("rustc", run_original_rust),
 }
