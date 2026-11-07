@@ -382,13 +382,7 @@ class FunctionEmitter:
             self.stmt(f"{', '.join(names)} = {', '.join(e.text for _, e in pairs)}")
             return
         if conflict:
-            temps = []
-            for name, expr in pairs:
-                tmp = self.fresh(f"next_{name}")
-                self.stmt(self.syn.declare("int32_t", tmp, expr.text))
-                temps.append((name, tmp))
-            for name, tmp in temps:
-                self.stmt(f"{name} = {tmp}")
+            self.assign_in_order(pairs)
             return
         for name, expr in pairs:
             if self.syn.increment and expr.op in ("+", "-") and expr.lhs.text == name and expr.rhs.text == "1":
@@ -397,6 +391,31 @@ class FunctionEmitter:
                 self.stmt(f"{name} {expr.op}= {expr.rhs.text}")
             else:
                 self.stmt(f"{name} = {expr.text}")
+
+    def assign_in_order(self, pairs: list[tuple[str, Expr]]) -> None:
+        """Parallel assignment without tuples: emit each assignment once nothing pending still
+        reads its target, and break a cycle with one temporary (`next_x`)."""
+        pending = list(pairs)
+        while pending:
+            ready = next(
+                (p for p in pending if not any(p[0] in q[1].reads for q in pending if q is not p)), None
+            )
+            if ready is not None:
+                pending.remove(ready)
+                self.assign([ready])
+                continue
+            # a cycle: stash the most complex right-hand side, which then reads nothing pending
+            victim = max(pending, key=lambda p: len(p[1].text) if p[1].op else 0)
+            tmp = self.fresh(f"next_{victim[0]}")
+            self.stmt(self.syn.declare(self.syn.type_name(self.type_of_name(victim[0])), tmp, victim[1].text))
+            pending[pending.index(victim)] = (victim[0], self.var(tmp))
+
+    def type_of_name(self, name: str):
+        """The MLIR type of a variable: its declared one, found through the environment."""
+        for value, expr in self.env.items():
+            if expr.text == name:
+                return value.type
+        raise UnsupportedForTarget(f"cannot find the type of {name!r}")
 
     def yields(self, block) -> list[Expr]:
         return [self.expr(v) for v in _ops(block)[-1].operands]

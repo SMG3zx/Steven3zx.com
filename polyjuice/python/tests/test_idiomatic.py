@@ -99,7 +99,7 @@ def test_parallel_assignment_uses_temporaries_only_when_needed():
             return a
         """
     )
-    assert "next_a" in swap and "next_b" in swap
+    assert "next_b" in swap and "next_a" not in swap  # one temporary breaks the cycle
     independent = c_of(
         """
         def g(n: int) -> int:

@@ -197,4 +197,20 @@ def run_original_go(source: str) -> dict:
     return parse_lines(run_in_tmp(["go", "run", "main.go"], {"main.go": program}))
 
 
-ORIGINALS = {"c": ("gcc", run_original_c), "go": ("go", run_original_go)}
+def run_original_java(source: str) -> dict:
+    calls = _calls_text(lambda n, a: f'        System.out.println("{n} = " + Canon.{n}({a}));')
+    driver = f"public class Driver {{\n    public static void main(String[] args) {{\n{calls}\n    }}\n}}\n"
+    files = {"Canon.java": source, "Driver.java": driver}
+    with tempfile.TemporaryDirectory() as tmp:
+        for filename, content in files.items():
+            (Path(tmp) / filename).write_text(content)
+        subprocess.run(["javac", "Canon.java", "Driver.java"], cwd=tmp, check=True, capture_output=True, timeout=120)
+        done = subprocess.run(["java", "-cp", tmp, "Driver"], capture_output=True, text=True, timeout=60, check=True)
+        return parse_lines(done.stdout)
+
+
+ORIGINALS = {
+    "c": ("gcc", run_original_c),
+    "go": ("go", run_original_go),
+    "java": ("javac", run_original_java),
+}
