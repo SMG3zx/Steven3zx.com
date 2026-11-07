@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from polyjuice.emit_c import LEGAL_OPS as C_LEGAL_OPS
 from polyjuice.emit_c import emit_c
+from polyjuice.emit_python import LEGAL_OPS as PY_LEGAL_OPS
+from polyjuice.emit_python import emit_python
 from polyjuice.frontend import build_module as build_python_module
 
 
@@ -68,3 +70,4 @@ def language_for_path(path: str) -> str | None:
 
 register_frontend(Frontend("python", "py", build_python_module))
 register_emitter(Emitter("c", "c", C_LEGAL_OPS, emit_c))
+register_emitter(Emitter("python", "py", PY_LEGAL_OPS, emit_python))
