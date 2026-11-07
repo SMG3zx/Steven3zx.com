@@ -30,7 +30,11 @@ Latest LLVM release is 23.1.0 (2026-08-25), per [llvm.org schedule via Phoronix]
 2. **C** via ClangIR. Avoids writing a C parser/type checker. Risk: depends on the unverified CIR lowering question above. Fallback: Polygeist as a reference or a much smaller C subset.
 3. **Optional third, decide later:** Fortran via Flang (largest reuse, hardest to fit the shared layer) or a tiny toy language to stress the shared layer cheaply.
 
-## 2. Phase 0 decisions (proposed)
+## 2. Phase 0 decisions
+
+Owner accepted the recommendations on 2026-11-07. Distribution name and packaging are explicitly not a concern.
+
+**Accepted summary.** Targets: C first (EmitC), Python second (own emitter). Sources: Python subset first, C via ClangIR second. Detection: Python walkers. Dialect selection: static Python table. Runtime: none for v0; later shipped as source in the target language, written in C11. License: Apache-2.0. LLVM pinned to `llvmorg-23.1.5`. First work item: the build spike (section 6).
 
 **Output for v0.** Source-to-source only (owner decision, 2026-11-07). Native executables are out of scope. EmitC gives C/C++ output; other target languages need our own emitters.
 LLVM IR is used only as a verification stage; source is emitted at the highest level each target can express. See section 3.
@@ -40,13 +44,13 @@ Trade-off: per-language dialects cost lowering code per language, but keep each 
 
 **Runtime.** Dynamic languages need an object model, GC, exceptions and dispatch linked into the output. Proposal: a small runtime in C11, built with CMake into a static library, shared across frontends, versioned with the compiler. Rust is the alternative (the monorepo already uses it) at the cost of a second toolchain in the build. Do not write it until the Python frontend needs it. v0 Python subset can avoid it by restricting to statically typed ints/floats/arrays.
 
-**Definition of done for v0 (proposed).** Translate a statically-typed Python subset program to C, and a C program to the Python subset or another target, such that the translated program passes the same tests as the original under differential testing. Targets to be chosen by the owner.
+**Definition of done for v0.** Translate a statically-typed Python subset program to C, and a C program to Python, such that the translated program passes the same tests as the original under differential testing.
 
 **Non-goals for v0.** Binary decompilation. Full Python dynamism (`eval`, metaclasses, monkey-patching). Idiomatic-output guarantee for source-to-source. More than two frontends. Windows.
 
-**Build and dependency policy.** Pin one LLVM/MLIR release, proposed 23.1.x. Source build is likely required because CIR is off by default; prebuilt wheels cover only the Python bindings and may lack CIR. Target platform: Linux only (owner decision; x86_64 assumed). CMake + Ninja for C++, `uv` for Python.
+**Build and dependency policy.** Pinned to LLVM `llvmorg-23.1.5` (latest 23.1.x tag, verified 2026-11-07). Source build is likely required because CIR is off by default; prebuilt wheels cover only the Python bindings and may lack CIR. Target platform: Linux only (owner decision; x86_64 assumed). CMake + Ninja for C++, `uv` for Python.
 
-**License.** Proposal: Apache-2.0 (matches LLVM's Apache-2.0 with LLVM Exceptions and Pylir). Not committed; no LICENSE file yet.
+**License.** Apache-2.0 (matches LLVM's Apache-2.0 with LLVM Exceptions and Pylir). No LICENSE file yet.
 
 ## 3. Pipeline (owner's direction, with the open tension marked)
 
@@ -70,9 +74,9 @@ source -> frontend -> language dialect
 | Emission and lowering | emitc, llvm, ptr | Terminal stages |
 | Infrastructure | irdl, pdl, pdl_interp, transform, dlti, smt | Defining dialects, rewriting, driving passes |
 
-Selection is a function from the frontend output (ops used, types used, detected patterns) to a set of dialects to load and a pass pipeline to run. First version: a static table keyed on op and type usage, with the core bucket always loaded. Whether selection is a declarative table, a Transform-dialect script, or Python code is open.
+Selection is a function from the frontend output (ops used, types used, detected patterns) to a set of dialects to load and a pass pipeline to run. First version: a static table keyed on op and type usage, with the core bucket always loaded. Decided: a static Python table; a Transform-dialect script may replace it later.
 
-**Detection pipeline.** Analyses that tag regions of IR with a recognised domain (for example a loop nest that is a matmul, a reduction, a stencil, or an elementwise map). Detection only annotates; it never rewrites. Optimization passes read the annotations. This keeps detectors independently testable. Candidate mechanisms: `linalg` generalization and raising, PDL/PDLL pattern matching, Transform-dialect matchers, or Python walkers. Which one is open.
+**Detection pipeline.** Analyses that tag regions of IR with a recognised domain (for example a loop nest that is a matmul, a reduction, a stencil, or an elementwise map). Detection only annotates; it never rewrites. Optimization passes read the annotations. This keeps detectors independently testable. Candidate mechanisms: `linalg` generalization and raising, PDL/PDLL pattern matching, Transform-dialect matchers, or Python walkers. Decided: Python walkers first; move to PDL/PDLL or Transform matchers once patterns are stable or profiling demands it.
 
 **Domain optimization.** Passes keyed on detections, for example raising a loop nest to `linalg.matmul`, then fusing or tiling. Each pass needs a verifier-clean before/after and a differential test.
 
@@ -98,9 +102,15 @@ Most heavy compute already runs in C++ (MLIR and LLVM). Python-side hotspots wil
 
 ## 5. Open questions
 
-1. Which target languages to emit first? (C via EmitC is the only free one.)
-2. ~~LLVM IR tension~~ Resolved: per-target legality, LLVM IR for verification only (section 3).
-3. Mechanism for detection: PDL/PDLL, Transform matchers, `linalg` raising, or Python walkers.
-4. Shape of dialect selection: static table, Transform script, or Python.
-5. Runtime language for dynamic sources (C11 proposed), deferred until needed.
-6. License (Apache-2.0 proposed), and a distribution name since `polyjuice` is taken on PyPI.
+All Phase 0 questions are answered. Remaining unknowns are the unverified items in section 1 and the EmitC coverage in section 3, to be settled by the spike.
+
+## 6. Spike: build and verify
+
+Goal: settle the unverified items before writing compiler code. Scripts live in `scripts/`; build output lives outside the repo in `~/llvm-polyjuice/`.
+
+1. Build LLVM `llvmorg-23.1.5` with clang (CIR enabled) and MLIR with Python bindings.
+2. Does `mlir.dialects.ext` exist in this release?
+3. Does CIR lower to `scf`/`memref`/`arith`, or only to the LLVM dialect?
+4. How far do the EmitC conversions get a C-shaped `scf`/`arith`/`memref`/`func` program to C source?
+
+Results are recorded in `docs/spike.md`.
