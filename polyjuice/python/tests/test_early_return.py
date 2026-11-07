@@ -126,8 +126,71 @@ def test_emitted_python_agrees():
         assert ns["clamp_sum"](a, b, limit) == py_named(FIND, "clamp_sum")(a, b, limit)
 
 
-def test_missing_return_and_return_in_loop_are_refused():
+def test_missing_return_is_refused():
     with pytest.raises(UnsupportedSyntax, match="does not return|returns a value"):
         run("def f(x: int) -> int:\n    if x > 0:\n        return 1\n", "c")
-    with pytest.raises(UnsupportedSyntax, match="return inside a loop"):
-        run("def f(n: int) -> int:\n    for i in range(n):\n        if i > 3:\n            return i\n    return 0\n", "c")
+
+
+LOOP_RETURN = textwrap.dedent(
+    """
+    def first_multiple(n: int, k: int) -> int:
+        for i in range(1, n):
+            if i * k > 50:
+                return i
+        return -1
+
+    def nested(n: int) -> int:
+        for i in range(n):
+            for j in range(n):
+                if i * j == 12:
+                    return i * 100 + j
+        return 0
+
+    def stop_early(n: int):
+        total = 0
+        for i in range(n):
+            if i > 3:
+                return
+            total += i
+    """
+)
+
+
+@pytest.mark.parametrize("args", [(100, 3), (5, 3), (100, 100), (2, 60)])
+def test_return_inside_a_loop(compile_c, args):
+    expected = py_named(LOOP_RETURN, "first_multiple")(*args)
+    lib = compile_c(LOOP_RETURN)
+    lib.first_multiple.restype = ctypes.c_int32
+    assert lib.first_multiple(*args) == expected
+    ns: dict = {}
+    exec(run(LOOP_RETURN, "python").output, ns)
+    assert ns["first_multiple"](*args) == expected
+
+
+@pytest.mark.parametrize("n", [0, 3, 4, 8])
+def test_return_inside_nested_loops(compile_c, n):
+    expected = py_named(LOOP_RETURN, "nested")(n)
+    lib = compile_c(LOOP_RETURN)
+    lib.nested.restype = ctypes.c_int32
+    assert lib.nested(n) == expected
+    ns: dict = {}
+    exec(run(LOOP_RETURN, "python").output, ns)
+    assert ns["nested"](n) == expected
+
+
+def test_return_inside_a_loop_through_llvm():
+    from polyjuice import verify
+    from polyjuice.frontend import build_module
+    from polyjuice.mlir_env import ensure_mlir_importable
+
+    ensure_mlir_importable()
+    from mlir import ir
+
+    context = ir.Context()
+    module = build_module(LOOP_RETURN, context)
+    with context:
+        lowered = verify.lower_to_llvm_dialect(module)
+        for args in [(100, 3), (5, 3), (2, 60)]:
+            assert verify.execute(lowered, "first_multiple", list(args))[0] == py_named(LOOP_RETURN, "first_multiple")(*args)
+        for n in (0, 4, 8):
+            assert verify.execute(lowered, "nested", [n])[0] == py_named(LOOP_RETURN, "nested")(n)

@@ -212,7 +212,7 @@ def test_gcd_is_not_mistaken_for_a_reduction():
 @pytest.mark.parametrize(
     "body,message",
     [
-        ("return x + 1.0", "mixed types"),
+        ("return x + 1.0", "returned value does not match"),
         ("return x / 2", "unsupported operator"),
         ("return x // 2", "unsupported operator"),
         ("while x:\n        x = x - 1\n    return x", "condition must be a comparison"),
@@ -228,7 +228,12 @@ def test_type_errors_are_unsupported_syntax(body, message):
 
 def test_wrong_argument_type_is_refused():
     with pytest.raises(UnsupportedSyntax, match="expects"):
-        run("def g(x: float) -> float:\n    return x\n\ndef f(n: int) -> float:\n    return g(n)\n", "c")
+        run("def g(x: int) -> int:\n    return x\n\ndef f(n: float) -> int:\n    return g(n)\n", "c")
+
+
+def test_int_widens_to_float_where_every_language_does_it():
+    out = run("def g(x: float) -> float:\n    return x\n\ndef f(n: int) -> float:\n    return g(n) + n\n", "c").output
+    assert "g((double)n) + (double)n" in out
 
 
 def test_variable_cannot_change_type_inside_a_loop():

@@ -19,7 +19,7 @@ ensure_mlir_importable()
 
 from mlir import ir  # noqa: E402
 
-PRIMARY, UNARY, MUL, ADD, REL, EQ, TERNARY = 100, 90, 80, 70, 60, 50, 10
+PRIMARY, UNARY, MUL, ADD, REL, EQ, AND, OR, TERNARY = 100, 90, 80, 70, 60, 50, 40, 30, 10
 INDENT = "    "
 
 # Ops between a definition and its single use that cannot change what an
@@ -28,7 +28,7 @@ PURE = frozenset({
     "arith.constant", "arith.addi", "arith.subi", "arith.muli", "arith.cmpi",
     "arith.select", "arith.index_cast", "memref.load",
     "arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.negf", "arith.cmpf",
-    "arith.sitofp", "arith.fptosi",
+    "arith.sitofp", "arith.fptosi", "arith.divsi", "arith.remsi", "arith.xori",
 })  # fmt: skip
 _BINARY = {
     "arith.addi": ("+", ADD), "arith.subi": ("-", ADD), "arith.muli": ("*", MUL),
@@ -73,6 +73,11 @@ class Syntax:
     prelude: Callable[[str], str]  # body text -> header (includes) text
     return_stmt: Callable[[str | None], str]
     cast: Callable[[str, str], str]  # (type, operand text)
+    not_expr: Callable  # (Expr) -> Expr
+    logic_symbols: tuple[str, str]  # ("&&", "||")
+    bool_text: Callable[[bool], str]
+    int_div: Callable  # (Expr, Expr) -> Expr; truncates toward zero
+    int_rem: Callable  # (Expr, Expr) -> Expr; sign of the dividend
 
 
 @dataclass(frozen=True)
@@ -102,6 +107,10 @@ def _binary(symbol: str, prec: int, lhs: Expr, rhs: Expr) -> Expr:
         rhs,
         lhs.effects or rhs.effects,
     )
+
+
+def binary_expr(symbol: str, prec: int, lhs: "Expr", rhs: "Expr") -> "Expr":
+    return _binary(symbol, prec, lhs, rhs)
 
 
 def _attr_str(op, key: str) -> str | None:
@@ -149,6 +158,8 @@ class FunctionEmitter:
         return any(name in s.names for s in self.scopes)
 
     def safe(self, name: str) -> str:
+        if name.startswith("__"):  # hidden flags from the lowering; `__x` is reserved in C
+            name = name.lstrip("_") + "_"
         return name + "_" if name in self.syn.reserved else name
 
     def fresh(self, hint: str | None) -> str:
@@ -187,6 +198,14 @@ class FunctionEmitter:
             callee = self.safe(ir.FlatSymbolRefAttr(op.attributes["callee"]).value)
             reads = frozenset().union(*(o.reads for o in ops))
             return Expr(f"{callee}({', '.join(o.text for o in ops)})", PRIMARY, reads, effects=True)
+        if name == "arith.xori":
+            if ops[1].text not in ("true", "True", "1"):
+                raise UnsupportedForTarget("xor other than boolean not")
+            return self.syn.not_expr(ops[0])
+        if name == "arith.divsi":
+            return self.syn.int_div(ops[0], ops[1])
+        if name == "arith.remsi":
+            return self.syn.int_rem(ops[0], ops[1])
         if name == "arith.negf":
             return Expr(f"-{_wrap(ops[0], UNARY)}", UNARY, ops[0].reads)
         if name == "arith.cmpf":
@@ -276,6 +295,10 @@ class FunctionEmitter:
     def emit_block_op(self, op) -> None:
         name = op.operation.name
         if name == "arith.constant":
+            if str(op.results[0].type) == "i1":
+                value = bool(ir.IntegerAttr(op.attributes["value"]).value)
+                self.env[op.results[0]] = Expr(self.syn.bool_text(value))
+                return
             if str(op.results[0].type) == "f64":
                 value = ir.FloatAttr(op.attributes["value"]).value
                 text = repr(value)
@@ -299,9 +322,54 @@ class FunctionEmitter:
         elif name == "scf.for":
             self.emit_for(op)
         elif name == "scf.if":
-            self.emit_if(op)
+            if not self.try_logical(op):
+                self.emit_if(op)
         else:
             raise UnsupportedForTarget(f"cannot emit {name}")
+
+    def try_logical(self, op) -> bool:
+        """`if a { b } else { false }` is `a && b`; `if a { true } else { b }` is `a || b`."""
+        if len(list(op.results)) != 1 or str(op.results[0].type) != "i1":
+            return False
+        then_block, else_block = op.regions[0].blocks[0], op.regions[1].blocks[0]
+
+        def constant(block):
+            """The boolean a block yields when it does nothing else (canonicalize hoists constants out)."""
+            ops = _ops(block)
+            if len(ops) > 2 or ops[-1].operation.name != "scf.yield" or len(list(ops[-1].operands)) != 1:
+                return None
+            if len(ops) == 2 and ops[0].operation.name != "arith.constant":
+                return None
+            value = ops[-1].operands[0]
+            if isinstance(value, ir.OpResult) and value.owner.operation.name == "arith.constant":
+                return bool(ir.IntegerAttr(value.owner.attributes["value"]).value)
+            return None
+
+        if constant(else_block) is False:
+            symbol, prec, operand_block = self.syn.logic_symbols[0], AND, then_block
+        elif constant(then_block) is True:
+            symbol, prec, operand_block = self.syn.logic_symbols[1], OR, else_block
+        else:
+            return False
+        mark = len(self.lines)
+        for inner in _ops(operand_block)[:-1]:
+            self.emit_block_op(inner)
+        if len(self.lines) != mark:
+            raise UnsupportedForTarget("a logical operand that needs statements")
+        left = self.expr(op.operands[0])
+        right = self.expr(_ops(operand_block)[-1].operands[0])
+        expr = _binary(symbol, prec, left, right)
+        result = op.results[0]
+        uses = list(result.uses)
+        if not uses:
+            return True
+        if len(uses) == 1 and self.can_inline(op, uses[0]) and not self.competes_with_call(uses[0]):
+            self.env[result] = expr
+        else:
+            name = self.fresh(_attr_str(op, "polyjuice.name"))
+            self.stmt(self.syn.declare(self.syn.type_name(result.type), name, expr.text))
+            self.env[result] = self.var(name)
+        return True
 
     def assign(self, pairs: list[tuple[str, Expr]]) -> None:
         """Assign values to existing variables, keeping parallel-assignment semantics."""
@@ -383,7 +451,9 @@ class FunctionEmitter:
         for pre_op in pre:
             self.emit_block_op(pre_op)
         if len(self.lines) != mark:
-            raise UnsupportedForTarget("a while condition that needs statements")
+            raise UnsupportedForTarget(
+                "a while condition that needs statements: " + "; ".join(l.strip() for l in self.lines[mark:])
+            )
         if list(condition.operands)[1:] != list(before.arguments):
             raise UnsupportedForTarget("a while loop that forwards values other than its carried variables")
         self.line(self.syn.while_header(self.expr(condition.operands[0]).text))

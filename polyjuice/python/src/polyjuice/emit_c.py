@@ -4,7 +4,9 @@ Known gap: C signed overflow is undefined, while the source subset defines
 `int` as wrapping 32-bit. Build the output with `-fwrapv` if that matters.
 """
 
-from polyjuice.emit_structured import LEGAL_OPS, Syntax, UnsupportedForTarget, emit_module
+from polyjuice.emit_structured import (
+    LEGAL_OPS, MUL, UNARY, Expr, Syntax, UnsupportedForTarget, binary_expr, emit_module,
+)  # fmt: skip
 from polyjuice.mlir_env import ensure_mlir_importable
 
 ensure_mlir_importable()
@@ -57,7 +59,7 @@ def _declare(type_text: str, name: str, init: str | None) -> str:
 
 def _prelude(body: str) -> str:
     includes = ["<stdint.h>"]
-    if "bool " in body:
+    if "bool " in body or " true" in body or " false" in body or "(true" in body or "(false" in body:
         includes.append("<stdbool.h>")
     if "ptrdiff_t" in body:
         includes.append("<stddef.h>")
@@ -93,6 +95,11 @@ C_SYNTAX = Syntax(
     prelude=_prelude,
     return_stmt=lambda value: f"return {value}" if value is not None else "return",
     cast=lambda type_text, operand: f"({type_text}){operand}",
+    not_expr=lambda a: Expr(f"!({a.text})" if a.prec < UNARY else f"!{a.text}", UNARY, a.reads, effects=a.effects),
+    logic_symbols=("&&", "||"),
+    bool_text=lambda value: "true" if value else "false",
+    int_div=lambda a, b: binary_expr("/", MUL, a, b),
+    int_rem=lambda a, b: binary_expr("%", MUL, a, b),
 )
 
 

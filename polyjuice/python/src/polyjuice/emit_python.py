@@ -7,7 +7,7 @@ Known gap: Python integers do not wrap at 32 bits, while the shared layer's
 import builtins
 import keyword
 
-from polyjuice.emit_structured import LEGAL_OPS, Syntax, UnsupportedForTarget, emit_module
+from polyjuice.emit_structured import LEGAL_OPS, PRIMARY, Expr, Syntax, UnsupportedForTarget, emit_module
 from polyjuice.mlir_env import ensure_mlir_importable
 
 ensure_mlir_importable()
@@ -15,7 +15,7 @@ ensure_mlir_importable()
 from mlir import ir  # noqa: E402
 
 # Shadowing `range`, `int`, `list`, ... would break the code we emit.
-PY_RESERVED = frozenset(keyword.kwlist) | frozenset(dir(builtins))
+PY_RESERVED = frozenset(keyword.kwlist) | frozenset(dir(builtins)) | {"math"}
 
 
 def _type(t: ir.Type) -> str:
@@ -50,6 +50,19 @@ def _function_header(ret: str | None, name: str, params: list[str]) -> str:
     return f"def {name}({', '.join(params)})" + (f" -> {ret}:" if ret else ":")
 
 
+def _int_div(a: Expr, b: Expr) -> Expr:
+    # Python's // floors; C-style division truncates toward zero.
+    return Expr(f"int({a.text} / {b.text})", PRIMARY, a.reads | b.reads, effects=a.effects or b.effects)
+
+
+def _int_rem(a: Expr, b: Expr) -> Expr:
+    return Expr(f"int(math.fmod({a.text}, {b.text}))", PRIMARY, a.reads | b.reads, effects=a.effects or b.effects)
+
+
+def _prelude(body: str) -> str:
+    return "import math\n\n" if "math.fmod(" in body else ""
+
+
 PY_SYNTAX = Syntax(
     language="python",
     reserved=PY_RESERVED,
@@ -71,9 +84,14 @@ PY_SYNTAX = Syntax(
     increment=False,
     empty_block="pass",
     function_separator="\n\n\n",
-    prelude=lambda body: "",
+    prelude=_prelude,
     return_stmt=lambda value: f"return {value}" if value is not None else "return",
     cast=lambda type_text, operand: f"{type_text}({operand})",
+    not_expr=lambda a: Expr(f"not ({a.text})" if a.prec <= 45 else f"not {a.text}", 45, a.reads, effects=a.effects),
+    logic_symbols=("and", "or"),
+    bool_text=lambda value: "True" if value else "False",
+    int_div=_int_div,
+    int_rem=_int_rem,
 )
 
 

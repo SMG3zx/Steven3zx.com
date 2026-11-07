@@ -51,6 +51,14 @@ def _expr(node: ast.expr):
         return nast.Binary(_OPS[type(node.op)], _expr(node.left), _expr(node.right), line)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         return nast.Unary("-", _expr(node.operand), line)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return nast.Not(_expr(node.operand), line)
+    if isinstance(node, ast.BoolOp):
+        op = "and" if isinstance(node.op, ast.And) else "or"
+        result = _expr(node.values[0])
+        for value in node.values[1:]:
+            result = nast.Logical(op, result, _expr(value), line)
+        return result
     if isinstance(node, ast.Compare) and len(node.ops) == 1 and type(node.ops[0]) in _CMPS:
         return nast.Compare(_CMPS[type(node.ops[0])], _expr(node.left), _expr(node.comparators[0]), line)
     if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):

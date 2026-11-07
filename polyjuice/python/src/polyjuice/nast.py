@@ -47,7 +47,10 @@ class Name:
 
 @dataclass
 class Binary:
-    op: str  # + - * /
+    """`/` is true division (floats only). `div` and `mod` are C-style: integer division truncates
+    toward zero and `mod` takes the dividend's sign; `div` on floats is true division."""
+
+    op: str  # + - * / div mod
     left: object
     right: object
     line: int = 0
@@ -65,6 +68,22 @@ class Compare:
     op: str  # < <= > >= == !=
     left: object
     right: object
+    line: int = 0
+
+
+@dataclass
+class Logical:
+    """Short-circuit `and` / `or` over conditions."""
+
+    op: str  # and | or
+    left: object
+    right: object
+    line: int = 0
+
+
+@dataclass
+class Not:
+    operand: object
     line: int = 0
 
 
@@ -94,6 +113,24 @@ class Cast:
 class Assign:
     target: object  # Name or Index
     value: object
+    line: int = 0
+
+
+@dataclass
+class Declare:
+    """A typed local declaration. `value` may be None (declared, assigned later)."""
+
+    name: str
+    type: object  # INT or FLOAT
+    value: object | None
+    line: int = 0
+
+
+@dataclass
+class Scope:
+    """A nested block: names declared inside disappear afterwards; updates to outer names stay."""
+
+    body: list
     line: int = 0
 
 
@@ -155,6 +192,7 @@ class Function:
     ret: str | None  # INT, FLOAT or None
     body: list
     line: int = 0
+    static: bool = False  # statically typed language: assignments coerce to the declared type
 
 
 @dataclass
@@ -168,8 +206,12 @@ def assigned_names(stmts) -> set[str]:
     for st in stmts:
         if isinstance(st, Assign) and isinstance(st.target, Name):
             names.add(st.target.id)
+        elif isinstance(st, Declare):
+            names.add(st.name)
         elif isinstance(st, ParallelAssign):
             names.update(t.id for t in st.targets)
+        elif isinstance(st, Scope):
+            names |= assigned_names(st.body)
         elif isinstance(st, For):
             names.add(st.var)
             names |= assigned_names(st.body)
