@@ -14,6 +14,17 @@ Phase 0: survey and design only. No compiler code yet. See [DESIGN.md](DESIGN.md
 
 Ingest code from many languages and emit from the lowered representation. "Any language" is an aspiration, not a design driver. Nothing is designed for it until two or three frontends work end to end.
 
+## Try it
+
+Requires the local LLVM build from `scripts/setup-llvm.sh` and `uv`.
+
+```
+cd python
+uv run pytest            # differential tests: Python original vs compiled C
+```
+
+Supported Python subset (v0): `int` (32-bit, wraparound) and `Array[int, N]` parameters; assignment, `+ - *`, comparisons, array load/store, `for i in range(a[, b])`, `if/else`, one trailing `return`. Anything else raises `UnsupportedSyntax`.
+
 ## Layout
 
 ```

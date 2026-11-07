@@ -37,3 +37,13 @@ Caveats:
 2. Alternatives for C: a restricted C subset frontend written in Python (for example over `pycparser` or libclang), or stale Polygeist as a reference. Decision needed.
 3. **Python subset to C is viable now.** It needs only the MLIR Python bindings and EmitC. Do this path first.
 4. Dynamic memrefs need investigation before they can be a source-language feature.
+
+## First end-to-end slice (Python subset to C)
+
+`polyjuice/python` compiles the Python subset to `func`/`arith`/`scf`/`memref`, lowers with `convert-to-emitc`, and prints C with `mlir-translate`. 20 differential tests pass (compiled C vs the original Python).
+
+Findings while building it:
+- **`range()` with a negative bound was a real bug.** EmitC loops use unsigned `size_t`, so `i32 -> index` turned `range(-3)` into about 2^64 iterations. Fixed by iterating `k` in `[0, max(hi - lo, 0))` and binding `i = lo + k`. `test_negative_bound_runs_zero_iterations` guards it.
+- **EmitC has no conversion for `arith.maxsi`.** Full `canonicalize` rewrites `select(x > 0, x, 0)` into `maxsi`, which `mlir-translate` then cannot print. The pipeline uses `canonicalize{enable-patterns=false}`, which still removes dead ops and runs folds.
+- Output needs `<stdint.h>`, `<stddef.h>` and `<stdbool.h>`; the pipeline prepends them.
+- `int` is 32-bit with wraparound, not Python's unbounded integer. `//` and `%` are rejected because Python floors and C truncates. Step in `range()` is rejected for now.
