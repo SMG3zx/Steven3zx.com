@@ -59,6 +59,9 @@ class CLike:
         """(operator text, operand node) of a prefix unary expression."""
         return operator(n), field(n, self.unary_operand_field) or named(n)[-1]
 
+    def ident(self, n) -> str:
+        return text(n)
+
     def number(self, n):
         return _ts.number(n)
 
@@ -125,11 +128,11 @@ class CLike:
 
     def target(self, n):
         if n.type in self.identifier_types:
-            return nast.Name(text(n), line(n))
+            return nast.Name(self.ident(n), line(n))
         if n.type in self.index_types:
             array = field(n, self.index_array_field)
             if array is not None and array.type in self.identifier_types:
-                return nast.Index(text(array), self.expr(field(n, self.index_field)), line(n))
+                return nast.Index(self.ident(array), self.expr(field(n, self.index_field)), line(n))
         raise UnsupportedSyntax(line(n), "unsupported assignment target")
 
     def for_statement(self, n) -> list:
@@ -163,7 +166,7 @@ class CLike:
         if t in self.number_types:
             return self.number(n)
         if t in self.identifier_types:
-            return nast.Name(text(n), where)
+            return nast.Name(self.ident(n), where)
         if t in ("parenthesized_expression", "condition_clause"):
             return self.expr(field(n, "value") or named(n)[0])
         if t == "binary_expression":
@@ -195,7 +198,7 @@ class CLike:
         if t in self.index_types:
             array = field(n, self.index_array_field)
             if array is not None and array.type in self.identifier_types:
-                return nast.Index(text(array), self.expr(field(n, self.index_field)), where)
+                return nast.Index(self.ident(array), self.expr(field(n, self.index_field)), where)
         found = self.literal(n)
         if found is not None:
             return found

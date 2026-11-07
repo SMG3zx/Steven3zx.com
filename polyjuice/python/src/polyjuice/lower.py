@@ -260,6 +260,13 @@ class _Lowerer:
                     raise UnsupportedSyntax(node, "floor division is only supported on ints")
                 quotient = arith.floordivsi(lhs, rhs)
                 return quotient if op == "floordiv" else arith.subi(lhs, arith.muli(quotient, rhs))
+            if op == "fdiv":
+                if lhs.type != self.f64:
+                    raise UnsupportedSyntax(
+                        node, "`/` on two ints returns an int or a float depending on the values; "
+                        "use intdiv() or cast an operand to float",
+                    )
+                op = "/"
             if op == "/" and lhs.type == self.i32:  # true division: ints become floats first
                 lhs, rhs = self.coerce(node, lhs, self.f64), self.coerce(node, rhs, self.f64)
             if op == "div":
