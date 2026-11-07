@@ -27,7 +27,7 @@ Latest LLVM release is 23.1.0 (2026-08-25), per [llvm.org schedule via Phoronix]
 ### Recommended first languages
 
 1. **Python subset** (own frontend). Parse with the stdlib `ast` module, emit MLIR from Python through the bindings. Pylir is stale, so nothing replaces this. Python-only work, no C++ needed to start.
-2. **C** via ClangIR. Avoids writing a C parser/type checker. Risk: depends on the unverified CIR lowering question above. Fallback: Polygeist as a reference or a much smaller C subset.
+2. **C** via ClangIR. Avoids writing a C parser/type checker, but the spike (`docs/spike.md`) found that LLVM 23.1.5 has no CIR-to-core-dialect lowering, so we must write it, as a C++ pass, or use a restricted C subset frontend in Python. Open decision.
 3. **Optional third, decide later:** Fortran via Flang (largest reuse, hardest to fit the shared layer) or a tiny toy language to stress the shared layer cheaply.
 
 ## 2. Phase 0 decisions
@@ -105,6 +105,8 @@ Most heavy compute already runs in C++ (MLIR and LLVM). Python-side hotspots wil
 All Phase 0 questions are answered. Remaining unknowns are the unverified items in section 1 and the EmitC coverage in section 3, to be settled by the spike.
 
 ## 6. Spike: build and verify
+
+Done 2026-11-07; results in `docs/spike.md`. Summary: build works; `mlir.dialects.ext` ships (ops not yet exercised); no CIR lowering to `scf`/`memref`/`arith`; EmitC produces C for static memrefs.
 
 Goal: settle the unverified items before writing compiler code. Scripts live in `scripts/`; build output lives outside the repo in `~/llvm-polyjuice/`.
 
