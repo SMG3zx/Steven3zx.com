@@ -251,6 +251,11 @@ def run_original_ts(source: str) -> dict:
 
 FLOAT_ONLY = {"javascript", "typescript"}  # every number is a double: call with floats, expect floats
 
+def run_original_lua(source: str) -> dict:
+    calls = _calls_text(lambda n, a: f'print("{n} = " .. {n}({a}))')
+    return parse_lines(run_in_tmp(["lua", "main.lua"], {"main.lua": source + "\n" + calls + "\n"}))
+
+
 ORIGINALS = {
     "c": ("gcc", run_original_c),
     "go": ("go", run_original_go),
@@ -259,4 +264,5 @@ ORIGINALS = {
     "rust": ("rustc", run_original_rust),
     "javascript": ("node", run_original_js),
     "typescript": ("node", run_original_ts),
+    "lua": ("lua", run_original_lua),
 }
