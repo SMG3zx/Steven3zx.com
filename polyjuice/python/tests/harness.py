@@ -175,3 +175,26 @@ def lit(value, style: str = "plain") -> str:
 
 def json_dumps(obj):
     return json.dumps(obj)
+
+
+# -- original runners: one per language with an installed toolchain -------------------------------
+
+
+def _calls_text(render) -> str:
+    return "\n".join(
+        render(name, ", ".join(lit(a) for a in args)) for name, args, _ in call_list()
+    )
+
+
+def run_original_c(source: str) -> dict:
+    return run_emitted_c(source)  # same thing: build with gcc and call through ctypes
+
+
+def run_original_go(source: str) -> dict:
+    calls = _calls_text(lambda n, a: f'\tfmt.Printf("{n} = %v\\n", {n}({a}))')
+    program = source.replace("package main\n", 'package main\n\nimport "fmt"\n', 1)
+    program += f"\nfunc main() {{\n{calls}\n}}\n"
+    return parse_lines(run_in_tmp(["go", "run", "main.go"], {"main.go": program}))
+
+
+ORIGINALS = {"c": ("gcc", run_original_c), "go": ("go", run_original_go)}

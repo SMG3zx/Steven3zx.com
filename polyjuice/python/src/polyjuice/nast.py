@@ -121,7 +121,7 @@ class Declare:
     """A typed local declaration. `value` may be None (declared, assigned later)."""
 
     name: str
-    type: object  # INT or FLOAT
+    type: object  # INT, FLOAT, or None to take the type of `value` (Go `:=`, Rust `let`, JS `let`)
     value: object | None
     line: int = 0
 

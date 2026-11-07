@@ -332,6 +332,12 @@ class _Lowerer:
         if isinstance(node, nast.Declare):
             if node.name in self.env or node.name in self.declared:
                 raise UnsupportedSyntax(node, f"{node.name!r} is already declared (shadowing is not supported)")
+            if node.type is None:
+                value = self.expr(node.value)
+                if value is None or _is_array(value):
+                    raise UnsupportedSyntax(node, f"cannot infer a scalar type for {node.name!r}")
+                self.bind(node.name, value)
+                return
             want = self.mlir_type(node.type)
             if node.value is None:
                 self.declared[node.name] = want

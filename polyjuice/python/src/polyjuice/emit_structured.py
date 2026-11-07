@@ -401,23 +401,52 @@ class FunctionEmitter:
     def yields(self, block) -> list[Expr]:
         return [self.expr(v) for v in _ops(block)[-1].operands]
 
-    def body(self, block, dests: list[str]) -> None:
+    def in_place_ifs(self, block, dests: list[str], args) -> dict:
+        """scf.if ops whose results only feed the block's yield can assign the destinations directly.
+
+        `args` are the block arguments holding the destinations' old values (None when the
+        destinations are fresh). The old value must be dead once the if has run.
+        """
+        ops = _ops(block)
+        yielded = list(ops[-1].operands)
+        found = {}
+        for pos, op in enumerate(ops[:-1]):
+            if op.operation.name != "scf.if" or "polyjuice.returns" in op.attributes or not list(op.results):
+                continue
+            slots = []
+            for result in op.results:
+                uses = list(result.uses)
+                if len(uses) != 1 or uses[0].owner != ops[-1].operation or result not in yielded:
+                    break
+                slots.append(yielded.index(result))
+            else:
+                if args is not None and not all(self.dead_after(args[j], ops, pos) for j in slots):
+                    continue
+                found[op.operation] = [dests[j] for j in slots]
+        return found
+
+    def dead_after(self, value: ir.Value, ops: list, pos: int) -> bool:
+        """No use of `value` happens after the op at `pos` (uses inside that op are fine)."""
+        later = {o.operation for o in ops[pos + 1 :]}
+        for use in value.uses:
+            owner = use.owner
+            while owner is not None:
+                if owner in later:
+                    return False
+                owner = owner.parent
+        return True
+
+    def body(self, block, dests: list[str], args=None) -> None:
         """Emit a nested block's statements plus the assignments of its yielded values."""
         self.depth += 1
         self.scopes.append(_Scope())
         before = len(self.lines)
-        ops = _ops(block)
-        # A trailing `scf.if` whose results are exactly what the block yields can write
-        # straight into the destination variables instead of going through new ones.
-        tail = None
-        if len(ops) >= 2 and ops[-2].operation.name == "scf.if" and list(ops[-2].results):
-            if list(ops[-1].operands) == list(ops[-2].results):
-                tail = ops[-2]
-        for op in ops[:-1]:
-            if tail is None or op.operation != tail.operation:
+        in_place = self.in_place_ifs(block, dests, args)
+        for op in _ops(block)[:-1]:
+            if op.operation in in_place:
+                self.emit_if(op, dests=in_place[op.operation])
+            else:
                 self.emit_block_op(op)
-        if tail is not None:
-            self.emit_if(tail, dests=dests)
         self.assign(list(zip(dests, self.yields(block))))
         if len(self.lines) == before and self.syn.empty_block:
             self.line(self.syn.empty_block)
@@ -457,7 +486,7 @@ class FunctionEmitter:
         if list(condition.operands)[1:] != list(before.arguments):
             raise UnsupportedForTarget("a while loop that forwards values other than its carried variables")
         self.line(self.syn.while_header(self.expr(condition.operands[0]).text))
-        self.body(after, carried)
+        self.body(after, carried, list(after.arguments))
         self.close()
         for name, result in zip(carried, op.results):
             self.env[result] = self.var(name)
@@ -481,7 +510,7 @@ class FunctionEmitter:
         self.env[iv_arg] = self.var(iv)
         for name, arg in zip(carried, iter_args):
             self.env[arg] = self.var(name)
-        self.body(block, carried)
+        self.body(block, carried, iter_args)
         self.close()
         self.scopes.pop()
         for name, result in zip(carried, op.results):
