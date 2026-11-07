@@ -478,6 +478,44 @@ class FunctionEmitter:
         self.body(else_block, dests)
         self.close()
 
+    # -- early returns --------------------------------------------------
+    def returning_tail(self, block):
+        """The scf.if that ends `block` with its results returned from the function, if any."""
+        ops = _ops(block)
+        if len(ops) >= 2 and ops[-2].operation.name == "scf.if" and "polyjuice.returns" in ops[-2].attributes:
+            if list(ops[-1].operands) == list(ops[-2].results):
+                return ops[-2]
+        return None
+
+    def emit_returning(self, block, final: bool = False) -> None:
+        """Emit `block` whose every path returns; `final` skips a redundant trailing bare return."""
+        ops = _ops(block)
+        tail = self.returning_tail(block)
+        for op in ops[:-1]:
+            if tail is None or op.operation != tail.operation:
+                self.emit_block_op(op)
+        if tail is not None:
+            self.emit_return_if(tail, final)
+            return
+        values = list(ops[-1].operands)
+        if values:
+            self.stmt(self.syn.return_stmt(self.expr(values[0]).text))
+        elif not final:
+            self.stmt(self.syn.return_stmt(None))
+
+    def emit_return_if(self, op, final: bool) -> None:
+        """Guard-clause style: `if (c) { return a; }` then the else path continues unindented."""
+        then_block, else_block = op.regions[0].blocks[0], op.regions[1].blocks[0]
+        cond = self.expr(op.operands[0])
+        self.line(self.syn.if_header(self.syn.if_keyword, cond.text))
+        self.depth += 1
+        self.scopes.append(_Scope())
+        self.emit_returning(then_block)
+        self.scopes.pop()
+        self.depth -= 1
+        self.close()
+        self.emit_returning(else_block, final)
+
     # -- functions ------------------------------------------------------
     def emit(self) -> str:
         fn = self.fn
@@ -495,10 +533,13 @@ class FunctionEmitter:
         self.line(self.syn.function_header(ret, sym, params))
         self.depth = 1
         before = len(self.lines)
-        self.emit_block(block)
-        terminator = _ops(block)[-1]
-        if terminator.operands:
-            self.stmt(self.syn.return_stmt(self.expr(terminator.operands[0]).text))
+        if self.returning_tail(block) is not None:
+            self.emit_returning(block, final=not results)
+        else:
+            self.emit_block(block)
+            terminator = _ops(block)[-1]
+            if terminator.operands:
+                self.stmt(self.syn.return_stmt(self.expr(terminator.operands[0]).text))
         if len(self.lines) == before and self.syn.empty_block:
             self.line(self.syn.empty_block)
         self.depth = 0
