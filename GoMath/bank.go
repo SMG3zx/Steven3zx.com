@@ -158,6 +158,7 @@ var Worksheet = []WorksheetEntry{
 	{"radical_26.png", "27^(4/3)", OpRadicalForm, "sqrt[3](27^4)", 0, nil},
 	{"evaluate_13.png", "27^(4/3)", OpEvaluate, "81", 0, nil},
 	{"evaluate_14.png", "2(x + 3)/(4x - 20)", OpEvaluate, "-3/2", 0, map[string]float64{"x": 3}},
+	{"domain_20.png", "(y - 2)/(y^2 - 4)", OpDomain, "{-2, 2}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 	{"root_3.png", "sqrt(25)", OpRoot, "5^2", 0, nil},
