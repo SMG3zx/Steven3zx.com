@@ -100,6 +100,7 @@ var Worksheet = []WorksheetEntry{
 	{"solve_3.png", "sqrt(x + 4) = 8", OpSolve, "{60}", 0, nil},
 	{"solve_4.png", "sqrt(19x - 52) = x + 2", OpSolve, "{7, 8}", 0, nil},
 	{"solve_5.png", "x^(5/2) = 243", OpSolve, "{9}", 0, nil},
+	{"evaluate_10.png", "3(x + 3)/(6x - 18)", OpEvaluate, "17/22", 0, map[string]float64{"x": 14}},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }

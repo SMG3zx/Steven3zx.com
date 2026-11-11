@@ -382,3 +382,10 @@ func TestSolveRationalExponentEquation(t *testing.T) {
 		t.Errorf("x^(2/3) = 5: expected an error, got %q", rep.Result)
 	}
 }
+
+func TestSolveEvaluateDividesBySum(t *testing.T) {
+	rep := SolveAt("3(x + 3)/(6x - 18)", OpEvaluate, map[string]float64{"x": 14})
+	if rep.Err != nil || rep.Result != "17/22" {
+		t.Fatalf("got %q, %v; want 17/22", rep.Result, rep.Err)
+	}
+}

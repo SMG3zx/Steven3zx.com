@@ -188,6 +188,17 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 	}
 
 	poly, err := toPoly(tree, &steps)
+	if err != nil && op == OpEvaluate {
+		// A polynomial cannot divide by a sum such as 6x - 18, but a number can.
+		v, evalErr := tree.Eval(env)
+		if evalErr != nil {
+			rep.Err = err
+			return rep
+		}
+		rep.Result = formatValue(v)
+		steps = append(steps, Step{"Result", "Value", rep.Result})
+		return rep
+	}
 	if err != nil {
 		rep.Err = err
 		return rep
@@ -321,4 +332,20 @@ func solveRoot(ascii string, steps *[]Step) (rep Report) {
 	rep.Result = fmt.Sprintf("%s^%d", base, k)
 	*steps = append(*steps, Step{"Result", "Blank", rep.Result})
 	return rep
+}
+
+// formatValue writes v as a whole number, or as a simplified fraction such as
+// 17/22 when v is a ratio of small integers, or else as a decimal. Trying the
+// denominators in increasing order finds the fraction in lowest terms.
+func formatValue(v float64) string {
+	if r := math.Round(v); math.Abs(v-r) < 1e-9 {
+		return strconv.FormatFloat(r, 'f', -1, 64)
+	}
+	for q := 2; q <= 10000; q++ {
+		p := math.Round(v * float64(q))
+		if math.Abs(v-p/float64(q)) < 1e-9 {
+			return fmt.Sprintf("%d/%d", int(p), q)
+		}
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
