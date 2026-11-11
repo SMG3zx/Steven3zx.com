@@ -153,6 +153,8 @@ var Worksheet = []WorksheetEntry{
 	{"radical_22.png", "sqrt(9/4)", OpSimplify, "3/2", 0, nil},
 	{"radical_23.png", "6sqrt(5) + 4sqrt(5)", OpSimplify, "10sqrt(5)", 0, nil},
 	{"radical_24.png", "sqrt(72x) - sqrt(8x)", OpSimplify, "4sqrt(2x)", 0, nil},
+	{"radical_25.png", "169^(1/2)", OpRadicalForm, "sqrt(169)", 0, nil},
+	{"evaluate_10.png", "169^(1/2)", OpEvaluate, "13", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 	{"root_3.png", "sqrt(25)", OpRoot, "5^2", 0, nil},
