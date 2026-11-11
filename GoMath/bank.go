@@ -166,6 +166,8 @@ var Worksheet = []WorksheetEntry{
 	{"domain_22.png", "7/(2x) - 6/5", OpDomain, "{0}", 0, nil},
 	{"simplify_35.png", "(9x + 3)/(4x + 3) + (3x + 6)/(4x + 3)", OpSimplify, "3", 0, nil},
 	{"domain_23.png", "(9x + 3)/(4x + 3) + (3x + 6)/(4x + 3)", OpDomain, "{-3/4}", 0, nil},
+	{"simplify_36.png", "6/(x + 4) - 6/x", OpSimplify, "-24/(x(x + 4))", 0, nil},
+	{"domain_24.png", "6/(x + 4) - 6/x", OpDomain, "{-4, 0}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 	{"root_3.png", "sqrt(25)", OpRoot, "5^2", 0, nil},
