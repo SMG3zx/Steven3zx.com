@@ -105,7 +105,7 @@ func wrapDenominator(f Factorization) string {
 		return text
 	}
 	// A single factor already carries its own parentheses.
-	if f.Content == 1 && len(f.Monomial) == 0 && len(f.Factors) == 1 && f.Factors[0].Power == 1 {
+	if f.Content == 1 && len(f.Monomial) == 0 && len(f.Factors) == 1 {
 		return text
 	}
 	if len(f.Monomial) == 0 && len(f.Factors) == 0 {
@@ -114,11 +114,42 @@ func wrapDenominator(f Factorization) string {
 	return "(" + text + ")"
 }
 
-// divisionParts returns the numerator and denominator when e is a division.
-func divisionParts(e SExpression) (num, den SExpression, ok bool) {
+// rationalParts reads e as numerator/denominator polynomials. Products,
+// quotients and whole-number powers of fractions combine; a sum of fractions
+// does not, and reports ok false.
+func rationalParts(e SExpression) (num, den Poly, ok bool) {
 	c, isCons := e.(Cons)
-	if !isCons || c.Head != '/' || len(c.Rest) != 2 {
+	if !isCons || len(c.Rest) != 2 {
+		if p, err := toPoly(e, nil); err == nil {
+			return p, constPoly(1), true
+		}
 		return nil, nil, false
 	}
-	return c.Rest[0], c.Rest[1], true
+	switch c.Head {
+	case '*', '/':
+		an, ad, ok1 := rationalParts(c.Rest[0])
+		bn, bd, ok2 := rationalParts(c.Rest[1])
+		if !ok1 || !ok2 {
+			return nil, nil, false
+		}
+		if c.Head == '*' {
+			return an.Mul(bn), ad.Mul(bd), true
+		}
+		return an.Mul(bd), ad.Mul(bn), true
+	case '^':
+		exp, err := toPoly(c.Rest[1], nil)
+		n, isConst := exp.Constant()
+		if err != nil || !isConst || n < 0 {
+			return nil, nil, false
+		}
+		bn, bd, ok1 := rationalParts(c.Rest[0])
+		if !ok1 {
+			return nil, nil, false
+		}
+		return bn.Pow(n), bd.Pow(n), true
+	}
+	if p, err := toPoly(e, nil); err == nil {
+		return p, constPoly(1), true
+	}
+	return nil, nil, false
 }

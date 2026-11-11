@@ -415,6 +415,9 @@ func TestSimplifyRational(t *testing.T) {
 		{"(2x + 4)/(4x + 8)", "1/2"},
 		{"(x - 3)/(x + 5)", "(x - 3)/(x + 5)"},
 		{"(x^2 - 9)/(x^2 + 6x + 9)", "(x - 3)/(x + 3)"},
+		{"(5x - 5)/x * 3x^2/(7x - 7)", "15x/7"},
+		{"(x + 1)/(x - 2) / ((x + 1)/(x + 3))", "(x + 3)/(x - 2)"},
+		{"((x - 1)/(x + 1))^2", "(x - 1)^2/(x + 1)^2"},
 	} {
 		rep := Solve(c.input, OpSimplify)
 		if rep.Err != nil || rep.Result != c.want {

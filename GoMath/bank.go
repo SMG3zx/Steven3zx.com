@@ -110,6 +110,7 @@ var Worksheet = []WorksheetEntry{
 	{"domain_4.png", "(3x - 6)/(x^2 - 4x + 4)", OpDomain, "{2}", 0, nil},
 	{"simplify_13.png", "(x^2 - 8x + 16)/(3x - 12)", OpSimplify, "(x - 4)/3", 0, nil},
 	{"domain_5.png", "(x^2 - 8x + 16)/(3x - 12)", OpDomain, "{4}", 0, nil},
+	{"simplify_14.png", "(5x - 5)/x * 3x^2/(7x - 7)", OpSimplify, "15x/7", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
