@@ -3,8 +3,8 @@ package main
 import "testing"
 
 func TestWorksheetBank(t *testing.T) {
-	if len(Worksheet) != 149 {
-		t.Fatalf("worksheet has %d entries, want 149 (one per screenshot)", len(Worksheet))
+	if len(Worksheet) != 151 {
+		t.Fatalf("worksheet has %d entries, want 151 (one per screenshot)", len(Worksheet))
 	}
 	for _, e := range Worksheet {
 		ok, detail := e.Check()
