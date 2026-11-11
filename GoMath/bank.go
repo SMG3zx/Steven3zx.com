@@ -120,6 +120,8 @@ var Worksheet = []WorksheetEntry{
 	{"simplify_19.png", "(2x^2 - 14x)/(x^2 - 4x - 21) / ((x^2 - 5x)/(x + 3))", OpSimplify, "2/(x - 5)", 0, nil},
 	{"domain_8.png", "(2x^2 - 14x)/(x^2 - 4x - 21) / ((x^2 - 5x)/(x + 3))", OpDomain, "{-3, 0, 5, 7}", 0, nil},
 	{"simplify_20.png", "(x^2 - 25)/(7x - 7) / ((x^2 + 10x + 25)/(x^2 + 4x - 5))", OpSimplify, "(x - 5)/7", 0, nil},
+	{"simplify_21.png", "(x + 1)/7 / ((5x + 5)/6)", OpSimplify, "6/35", 0, nil},
+	{"domain_9.png", "(x + 1)/7 / ((5x + 5)/6)", OpDomain, "{-1}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
