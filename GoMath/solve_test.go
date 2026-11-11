@@ -389,3 +389,19 @@ func TestSolveEvaluateDividesBySum(t *testing.T) {
 		t.Fatalf("got %q, %v; want 17/22", rep.Result, rep.Err)
 	}
 }
+
+func TestSolveDomain(t *testing.T) {
+	for _, c := range []struct{ input, want string }{
+		{"4/(x + 6)", "{-6}"},
+		{"1/(x^2 - 5x + 6)", "{2, 3}"},
+		{"1/(x^2 + 4)", "all real numbers"},
+		{"x/3", "all real numbers"},
+		{"1/(2x - 1)", "{1/2}"},
+		{"1/x + 1/(x - 1)", "{0, 1}"},
+	} {
+		rep := Solve(c.input, OpDomain)
+		if rep.Err != nil || rep.Result != c.want {
+			t.Errorf("Solve(%q, OpDomain) = %q, %v; want %q", c.input, rep.Result, rep.Err, c.want)
+		}
+	}
+}

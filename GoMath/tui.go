@@ -192,6 +192,8 @@ func (m model) updateInput(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.run(OpSolve, m.input)
 	case tea.KeyCtrlG:
 		return m.run(OpRadicalForm, m.input)
+	case tea.KeyCtrlD:
+		return m.run(OpDomain, m.input)
 	case tea.KeyCtrlB:
 		m.mode = modeBank
 	case tea.KeyEsc:
@@ -267,7 +269,7 @@ func (m model) View() string {
 	case modeInput:
 		sb.WriteString("GoMath: type ASCII (x^2 + 1) or TeX (\\frac{x}{2})\n\n")
 		fmt.Fprintf(&sb, "> %s_\n\n", m.input)
-		sb.WriteString("enter simplify   ctrl+f factor   ctrl+t technique   ctrl+p prime check   ctrl+r root blank   ctrl+g radical form   ctrl+s solve\n")
+		sb.WriteString("enter simplify   ctrl+f factor   ctrl+t technique   ctrl+p prime check   ctrl+r root blank   ctrl+g radical form   ctrl+s solve   ctrl+d excluded numbers\n")
 		sb.WriteString("ctrl+b worksheet bank   esc quit\n")
 	case modeSteps:
 		m.viewSteps(&sb)

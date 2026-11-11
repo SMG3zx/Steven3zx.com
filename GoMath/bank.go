@@ -103,6 +103,7 @@ var Worksheet = []WorksheetEntry{
 	{"evaluate_10.png", "3(x + 3)/(6x - 18)", OpEvaluate, "17/22", 0, map[string]float64{"x": 14}},
 	{"evaluate_11.png", "(5x + y)/(xy - 5x)", OpEvaluate, "2", 0, map[string]float64{"x": -2, "y": 6}},
 	{"simplify_11.png", "x^2/3 - (x - 4)/3", OpSimplify, "(x^2 - x + 4)/3", 2, nil},
+	{"domain_1.png", "4/(x + 6)", OpDomain, "{-6}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }

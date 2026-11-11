@@ -28,6 +28,8 @@ const (
 	OpRadicalForm
 	// OpSolve solves an equation for its one variable, answering with a solution set.
 	OpSolve
+	// OpDomain lists the numbers a rational expression must exclude from its domain.
+	OpDomain
 )
 
 func (o Operation) String() string {
@@ -48,6 +50,8 @@ func (o Operation) String() string {
 		return "radical form"
 	case OpSolve:
 		return "solve"
+	case OpDomain:
+		return "excluded numbers"
 	}
 	return "unknown"
 }
@@ -106,6 +110,10 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 
 	if op == OpSolve {
 		return solveEquation(ascii, &steps)
+	}
+
+	if op == OpDomain {
+		return solveDomain(ascii, &steps)
 	}
 
 	if op == OpRadicalForm {
