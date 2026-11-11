@@ -398,6 +398,7 @@ func TestSolveDomain(t *testing.T) {
 		{"x/3", "all real numbers"},
 		{"1/(2x - 1)", "{1/2}"},
 		{"1/x + 1/(x - 1)", "{0, 1}"},
+		{"(2x^2 - 14x)/(x^2 - 4x - 21) / ((x^2 - 5x)/(x + 3))", "{-3, 0, 5, 7}"},
 	} {
 		rep := Solve(c.input, OpDomain)
 		if rep.Err != nil || rep.Result != c.want {
@@ -416,6 +417,7 @@ func TestSimplifyRational(t *testing.T) {
 		{"(x - 3)/(x + 5)", "(x - 3)/(x + 5)"},
 		{"(x^2 - 9)/(x^2 + 6x + 9)", "(x - 3)/(x + 3)"},
 		{"(5x - 5)/x * 3x^2/(7x - 7)", "15x/7"},
+		{"(2x^2 - 14x)/(x^2 - 4x - 21) / ((x^2 - 5x)/(x + 3))", "2/(x - 5)"},
 		{"(x + 1)/(x - 2) / ((x + 1)/(x + 3))", "(x + 3)/(x - 2)"},
 		{"((x - 1)/(x + 1))^2", "(x - 1)^2/(x + 1)^2"},
 	} {

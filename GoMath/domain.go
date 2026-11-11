@@ -22,7 +22,7 @@ func solveDomain(ascii string, steps *[]Step) (rep Report) {
 	}
 	*steps = append(*steps, Step{"Parse", "Syntax tree", tree.String()})
 
-	var denominators []SExpression
+	var denominators []Poly
 	collectDenominators(tree, &denominators)
 	if len(denominators) == 0 {
 		*steps = append(*steps, Step{"Compute", "No denominators", "nothing can be divided by zero"})
@@ -32,12 +32,8 @@ func solveDomain(ascii string, steps *[]Step) (rep Report) {
 	}
 
 	excluded := map[string]float64{}
-	for _, d := range denominators {
-		poly, err := toPoly(d, &[]Step{})
-		if err == nil {
-			err = poly.requireWhole()
-		}
-		if err != nil {
+	for _, poly := range denominators {
+		if err := poly.requireWhole(); err != nil {
 			rep.Err = err
 			return rep
 		}
@@ -78,14 +74,20 @@ func solveDomain(ascii string, steps *[]Step) (rep Report) {
 	return rep
 }
 
-// collectDenominators gathers the right side of every division in e.
-func collectDenominators(e SExpression, out *[]SExpression) {
+// collectDenominators gathers every polynomial that must not be zero: the
+// right side of each division, and for a fraction that is divided by, its
+// numerator too, since dividing by a fraction multiplies by its flip.
+func collectDenominators(e SExpression, out *[]Poly) {
 	c, ok := e.(Cons)
 	if !ok {
 		return
 	}
 	if c.Head == '/' && len(c.Rest) == 2 {
-		*out = append(*out, c.Rest[1])
+		if num, _, ok := rationalParts(c.Rest[1]); ok {
+			*out = append(*out, num)
+		} else if p, err := toPoly(c.Rest[1], nil); err == nil {
+			*out = append(*out, p)
+		}
 	}
 	for _, r := range c.Rest {
 		collectDenominators(r, out)
