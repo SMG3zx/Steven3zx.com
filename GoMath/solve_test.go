@@ -434,3 +434,11 @@ func TestSolveAddsFractions(t *testing.T) {
 		t.Errorf("got %q, %v", rep.Result, rep.Err)
 	}
 }
+
+func TestSolveClearsFractions(t *testing.T) {
+	for input, want := range map[string]string{"x/2 = 3": "{6}", "x/2 = x/8 + 7": "{56/3}"} {
+		if rep := Solve(input, OpSolve); rep.Err != nil || rep.Result != want {
+			t.Errorf("Solve(%q) = %q, %v, want %q", input, rep.Result, rep.Err, want)
+		}
+	}
+}

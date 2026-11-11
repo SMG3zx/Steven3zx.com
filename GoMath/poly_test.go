@@ -85,7 +85,7 @@ func TestFractionalCoefficientsRejectedWhereWholeNeeded(t *testing.T) {
 	for _, c := range []struct {
 		input string
 		op    Operation
-	}{{"x/2 + 1", OpFactor}, {"x/2 = 3", OpSolve}} {
+	}{{"x/2 + 1", OpFactor}} {
 		if rep := Solve(c.input, c.op); rep.Err == nil {
 			t.Errorf("Solve(%q, %v) returned %q, want an error", c.input, c.op, rep.Result)
 		}

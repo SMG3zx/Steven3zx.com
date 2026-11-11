@@ -88,6 +88,17 @@ func (p Poly) whole() bool {
 	return true
 }
 
+// commonDenominator returns the least common multiple of the coefficient
+// denominators, which clears every fraction when multiplied through.
+func (p Poly) commonDenominator() int {
+	l := 1
+	for _, t := range p {
+		d := t.den()
+		l = l / gcd(l, d) * d
+	}
+	return l
+}
+
 // requireWhole returns an error when p has a fractional coefficient.
 func (p Poly) requireWhole() error {
 	if !p.whole() {

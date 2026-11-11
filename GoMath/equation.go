@@ -44,9 +44,6 @@ func solveEquation(ascii string, steps *[]Step) (rep Report) {
 		}
 		*steps = append(*steps, Step{"Parse", "Syntax tree", tree.String()})
 		polys[i], err = toPoly(tree, steps)
-		if err == nil {
-			err = polys[i].requireWhole()
-		}
 		if err != nil {
 			rep.Err = err
 			return rep
@@ -55,6 +52,16 @@ func solveEquation(ascii string, steps *[]Step) (rep Report) {
 
 	diff := polys[0].Sub(polys[1])
 	*steps = append(*steps, Step{"Compute", "Move everything to the left", diff.String() + " = 0"})
+
+	// Multiply through by the least common denominator to clear fractions.
+	if lcd := diff.commonDenominator(); lcd > 1 {
+		diff = diff.Mul(constPoly(lcd))
+		*steps = append(*steps, Step{"Compute", fmt.Sprintf("Multiply both sides by %d to clear fractions", lcd), diff.String() + " = 0"})
+	}
+	if err := diff.requireWhole(); err != nil {
+		rep.Err = err
+		return rep
+	}
 
 	set, special, err := solvePoly(diff, steps)
 	if err != nil {
