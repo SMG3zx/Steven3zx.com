@@ -138,6 +138,8 @@ var Worksheet = []WorksheetEntry{
 	{"domain_16.png", "2/(x + 6) - 2/x", OpDomain, "{-6, 0}", 0, nil},
 	{"simplify_29.png", "2x/(x + 13) + (x + 13)/(x - 13)", OpSimplify, "(3x^2 + 169)/((x - 13)(x + 13))", 0, nil},
 	{"domain_17.png", "2x/(x + 13) + (x + 13)/(x - 13)", OpDomain, "{-13, 13}", 0, nil},
+	{"simplify_30.png", "4/(x^2 + 10x + 25) + 2/(x + 5)", OpSimplify, "2(x + 7)/(x + 5)^2", 0, nil},
+	{"domain_18.png", "4/(x^2 + 10x + 25) + 2/(x + 5)", OpDomain, "{-5}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
