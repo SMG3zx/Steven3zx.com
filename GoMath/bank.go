@@ -148,6 +148,7 @@ var Worksheet = []WorksheetEntry{
 	{"solve_9.png", "(x + 8)/4 = 19/12 - (x - 3)/3", OpSolve, "{1}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
+	{"root_3.png", "sqrt(25)", OpRoot, "5^2", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
