@@ -115,6 +115,8 @@ var Worksheet = []WorksheetEntry{
 	{"simplify_16.png", "m/2 * m/10", OpSimplify, "m^2/20", 0, nil},
 	{"simplify_17.png", "(x - 2)/(5x + 25) * (6x + 30)/(6x - 12)", OpSimplify, "1/5", 0, nil},
 	{"domain_6.png", "(x - 2)/(5x + 25) * (6x + 30)/(6x - 12)", OpDomain, "{-5, 2}", 0, nil},
+	{"simplify_18.png", "(x^2 - 16)/(x^2 - 8x + 16) * (3x - 12)/(x + 4)", OpSimplify, "3", 0, nil},
+	{"domain_7.png", "(x^2 - 16)/(x^2 - 8x + 16) * (3x - 12)/(x + 4)", OpDomain, "{-4, 4}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
