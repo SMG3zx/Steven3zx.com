@@ -145,6 +145,7 @@ var Worksheet = []WorksheetEntry{
 	{"solve_6.png", "x/2 = x/8 + 7", OpSolve, "{56/3}", 0, nil},
 	{"solve_7.png", "x/7 = x/6 + 2/7", OpSolve, "{-12}", 0, nil},
 	{"solve_8.png", "x/7 = x/6 + 2/7", OpSolve, "{-12}", 0, nil},
+	{"solve_9.png", "(x + 8)/4 = 19/12 - (x - 3)/3", OpSolve, "{1}", 0, nil},
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 }
