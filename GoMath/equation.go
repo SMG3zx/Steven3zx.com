@@ -44,6 +44,9 @@ func solveEquation(ascii string, steps *[]Step) (rep Report) {
 		}
 		*steps = append(*steps, Step{"Parse", "Syntax tree", tree.String()})
 		polys[i], err = toPoly(tree, steps)
+		if err == nil {
+			err = polys[i].requireWhole()
+		}
 		if err != nil {
 			rep.Err = err
 			return rep
@@ -294,6 +297,9 @@ func toPolyText(s string) (Poly, SExpression, error) {
 		return nil, nil, err
 	}
 	p, err := toPoly(tree, &[]Step{})
+	if err == nil {
+		err = p.requireWhole()
+	}
 	return p, tree, err
 }
 
@@ -301,7 +307,7 @@ func toPolyText(s string) (Poly, SExpression, error) {
 func evalPoly(p Poly, env map[string]float64) float64 {
 	total := 0.0
 	for _, t := range p {
-		v := float64(t.Coeff)
+		v := float64(t.Coeff) / float64(t.den())
 		for name, e := range t.Vars {
 			v *= math.Pow(env[name], float64(e))
 		}

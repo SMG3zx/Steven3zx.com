@@ -39,31 +39,83 @@ func (m Monomial) degree() int {
 	return total
 }
 
-// Term is a coefficient times a monomial, such as -3x^2y.
+// Term is a coefficient times a monomial, such as -3x^2y or x^2/3.
+// The coefficient is the fraction Coeff/Den in lowest terms. Den is 0 for a
+// whole number, so a whole-number term is written {Coeff: c, Vars: v}. Only
+// normalize and mkTerm should build a term with a denominator.
 type Term struct {
 	Coeff int
+	Den   int
 	Vars  Monomial
 }
 
-// Poly is a sum of terms with integer coefficients. Values are kept normalized:
+// den is the denominator of the coefficient, which is 1 for a whole number.
+func (t Term) den() int {
+	if t.Den == 0 {
+		return 1
+	}
+	return t.Den
+}
+
+// mkTerm builds the term num/den times vars in lowest terms, with the sign on
+// the numerator. The denominator must not be zero.
+func mkTerm(num, den int, vars Monomial) Term {
+	if den < 0 {
+		num, den = -num, -den
+	}
+	if g := gcd(abs(num), den); g > 1 {
+		num, den = num/g, den/g
+	}
+	if den == 1 {
+		den = 0
+	}
+	return Term{Coeff: num, Den: den, Vars: vars}
+}
+
+// Poly is a sum of terms with rational coefficients. Values are kept normalized:
 // like terms are combined, zero terms are dropped, and terms are sorted by
 // degree (highest first), then by variable text.
 type Poly []Term
 
+// whole reports whether every coefficient is a whole number. Factoring and
+// equation solving need that, so they reject anything else.
+func (p Poly) whole() bool {
+	for _, t := range p {
+		if t.Den != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// requireWhole returns an error when p has a fractional coefficient.
+func (p Poly) requireWhole() error {
+	if !p.whole() {
+		return fmt.Errorf("fractional coefficients are not supported here, got %s", p)
+	}
+	return nil
+}
+
 // normalize combines like terms, drops zeros, and sorts the result.
 func normalize(terms []Term) Poly {
-	coeffs := map[string]int{}
+	type frac struct{ num, den int }
+	coeffs := map[string]frac{}
 	vars := map[string]Monomial{}
 	for _, t := range terms {
 		k := t.Vars.key()
-		coeffs[k] += t.Coeff
+		f, seen := coeffs[k]
+		if !seen {
+			f = frac{0, 1}
+		}
+		d := t.den()
+		coeffs[k] = frac{f.num*d + t.Coeff*f.den, f.den * d}
 		vars[k] = t.Vars
 	}
 
 	var out Poly
-	for k, c := range coeffs {
-		if c != 0 {
-			out = append(out, Term{Coeff: c, Vars: vars[k]})
+	for k, f := range coeffs {
+		if f.num != 0 {
+			out = append(out, mkTerm(f.num, f.den, vars[k]))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -91,7 +143,7 @@ func (p Poly) Add(q Poly) Poly {
 func (p Poly) Neg() Poly {
 	terms := make([]Term, len(p))
 	for i, t := range p {
-		terms[i] = Term{Coeff: -t.Coeff, Vars: t.Vars}
+		terms[i] = Term{Coeff: -t.Coeff, Den: t.Den, Vars: t.Vars}
 	}
 	return normalize(terms)
 }
@@ -117,7 +169,7 @@ func (p Poly) Mul(q Poly) Poly {
 					delete(vars, name)
 				}
 			}
-			terms = append(terms, Term{Coeff: a.Coeff * b.Coeff, Vars: vars})
+			terms = append(terms, mkTerm(a.Coeff*b.Coeff, a.den()*b.den(), vars))
 		}
 	}
 	return normalize(terms)
@@ -143,13 +195,13 @@ func (p Poly) Degree() int {
 	return max
 }
 
-// Constant returns the value when p has no variables.
+// Constant returns the value when p is a whole number with no variables.
 func (p Poly) Constant() (int, bool) {
 	switch len(p) {
 	case 0:
 		return 0, true
 	case 1:
-		if len(p[0].Vars) == 0 {
+		if len(p[0].Vars) == 0 && p[0].Den == 0 {
 			return p[0].Coeff, true
 		}
 	}
@@ -176,6 +228,9 @@ func (p Poly) Vars() []string {
 // the constant term upward, so coeffs[i] is the coefficient of name^i.
 // It fails when p contains more than one variable.
 func (p Poly) univariate() (string, []int, error) {
+	if err := p.requireWhole(); err != nil {
+		return "", nil, err
+	}
 	vars := p.Vars()
 	if len(vars) > 1 {
 		return "", nil, fmt.Errorf("expected one variable, found %s", strings.Join(vars, ", "))
@@ -253,37 +308,58 @@ func (p Poly) positive() (Poly, Monomial) {
 				delete(vars, name)
 			}
 		}
-		terms[i] = Term{Coeff: t.Coeff, Vars: vars}
+		terms[i] = Term{Coeff: t.Coeff, Den: t.Den, Vars: vars}
 	}
 	return normalize(terms), den
 }
 
-// inverse returns 1/p. Only a single term with coefficient 1 or -1 has a
-// polynomial inverse, such as x^3 or -y, so anything else is an error.
+// inverse returns 1/p. Only a single term has an inverse that is a
+// polynomial, such as 1/x^3, -1/y or 3/(2x), so a sum or zero is an error.
 func (p Poly) inverse() (Poly, error) {
-	if len(p) != 1 || (p[0].Coeff != 1 && p[0].Coeff != -1) {
-		return nil, fmt.Errorf("can only divide by a single variable term, got %s", p)
+	if len(p) != 1 {
+		return nil, fmt.Errorf("can only divide by a single term, got %s", p)
 	}
 	vars := Monomial{}
 	for name, exp := range p[0].Vars {
 		vars[name] = -exp
 	}
-	return Poly{{Coeff: p[0].Coeff, Vars: vars}}, nil
+	return Poly{mkTerm(p[0].den(), p[0].Coeff, vars)}, nil
 }
 
 // String writes p in standard form, such as "3x^3 + 8x^2 - 10x". When p has
 // negative exponents it writes a fraction with positive exponents, such as
 // "y/x^6" or "(2x + 1)/x".
 func (p Poly) String() string {
+	// Fractional coefficients share one whole-number denominator, so
+	// x^2/3 - x/3 + 4/3 is written (x^2 - x + 4)/3.
+	scale := 1
+	for _, t := range p {
+		scale = scale / gcd(scale, t.den()) * t.den()
+	}
+	if scale > 1 {
+		scaled := make([]Term, len(p))
+		for i, t := range p {
+			scaled[i] = Term{Coeff: t.Coeff * (scale / t.den()), Vars: t.Vars}
+		}
+		p = Poly(scaled)
+	}
+
 	num, den := p.positive()
-	if len(den) == 0 {
+	if len(den) == 0 && scale == 1 {
 		return num.terms()
 	}
 	text := num.terms()
 	if len(num) > 1 {
 		text = "(" + text + ")"
 	}
-	return text + "/" + den.key()
+	bottom := den.key()
+	switch {
+	case scale > 1 && len(den) > 0:
+		bottom = "(" + strconv.Itoa(scale) + bottom + ")"
+	case scale > 1:
+		bottom = strconv.Itoa(scale)
+	}
+	return text + "/" + bottom
 }
 
 // terms writes each term in order, with signs, such as "3x^3 + 8x^2 - 10x".

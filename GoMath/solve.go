@@ -211,6 +211,13 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return rep
 	}
 
+	if op != OpSimplify && op != OpEvaluate {
+		if err := poly.requireWhole(); err != nil {
+			rep.Err = err
+			return rep
+		}
+	}
+
 	switch op {
 	case OpSimplify:
 		rep.Result = radicalRestore(poly.String(), radicals)

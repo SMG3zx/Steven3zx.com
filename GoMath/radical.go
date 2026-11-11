@@ -133,7 +133,7 @@ func divideTerms(a, b string) (string, bool) {
 			return Term{}, false
 		}
 		p, err := toPoly(tree, &[]Step{})
-		if err != nil || len(p) != 1 || p.hasNegativeExponent() {
+		if err != nil || len(p) != 1 || !p.whole() || p.hasNegativeExponent() {
 			return Term{}, false
 		}
 		return p[0], true
@@ -184,7 +184,7 @@ func splitRadicand(r string, k int) (outside, inside string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	if len(poly) != 1 || poly[0].Coeff < 0 || poly.hasNegativeExponent() {
+	if len(poly) != 1 || poly[0].Coeff < 0 || !poly.whole() || poly.hasNegativeExponent() {
 		return "", "", fmt.Errorf("a radical here must hold a single term with a positive whole-number coefficient, got sqrt(%s)", r)
 	}
 	t := poly[0]

@@ -52,9 +52,42 @@ func TestPolyDegree(t *testing.T) {
 }
 
 func TestToPolyRejectsNonPolynomials(t *testing.T) {
-	for _, input := range []string{"1 / (x + 1)", "x / 2", "x ^ y", "1.5x"} {
+	for _, input := range []string{"1 / (x + 1)", "x / 0", "x ^ y", "1.5x"} {
 		if _, err := ToPoly(expr(input)); err == nil {
 			t.Errorf("ToPoly(%q) returned no error", input)
+		}
+	}
+}
+
+func TestPolyFractionalCoefficients(t *testing.T) {
+	cases := []struct{ input, want string }{
+		{"x / 2", "x/2"},
+		{"x^2/3 - (x - 4)/3", "(x^2 - x + 4)/3"},
+		{"x/2 + x/2", "x"},
+		{"x/2 + x/3", "5x/6"},
+		{"1/2 + 1/3", "5/6"},
+		{"x / (2x)", "1/2"},
+		{"1 / (2x)", "1/(2x)"},
+		{"x/2 - 1/3", "(3x - 2)/6"},
+	}
+	for _, c := range cases {
+		p, err := ToPoly(expr(c.input))
+		if err != nil {
+			t.Fatalf("ToPoly(%q) returned error: %v", c.input, err)
+		}
+		if got := p.String(); got != c.want {
+			t.Errorf("ToPoly(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+func TestFractionalCoefficientsRejectedWhereWholeNeeded(t *testing.T) {
+	for _, c := range []struct {
+		input string
+		op    Operation
+	}{{"x/2 + 1", OpFactor}, {"x/2 = 3", OpSolve}} {
+		if rep := Solve(c.input, c.op); rep.Err == nil {
+			t.Errorf("Solve(%q, %v) returned %q, want an error", c.input, c.op, rep.Result)
 		}
 	}
 }
