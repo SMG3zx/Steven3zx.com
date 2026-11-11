@@ -196,6 +196,27 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 	}
 
 	poly, err := toPoly(tree, &steps)
+	if err != nil && op == OpSimplify {
+		// A quotient of polynomials cancels common factors instead.
+		if n, d, ok := divisionParts(tree); ok {
+			np, nerr := toPoly(n, &steps)
+			dp, derr := toPoly(d, &steps)
+			if nerr == nil && derr == nil {
+				text, serr := simplifyRational(np, dp, &steps)
+				if serr != nil {
+					rep.Err = serr
+					return rep
+				}
+				var scratch []Step
+				if dom := solveDomain(ascii, &scratch); dom.Err == nil {
+					steps = append(steps, Step{"Compute", "Numbers excluded from the domain", dom.Result})
+				}
+				rep.Result = text
+				steps = append(steps, Step{"Result", "Simplified", rep.Result})
+				return rep
+			}
+		}
+	}
 	if err != nil && op == OpEvaluate {
 		// A polynomial cannot divide by a sum such as 6x - 18, but a number can.
 		v, evalErr := tree.Eval(env)

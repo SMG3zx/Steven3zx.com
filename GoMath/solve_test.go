@@ -51,7 +51,7 @@ func TestSolveReportsErrors(t *testing.T) {
 	}{
 		{"x +", OpSimplify},
 		{"x ^ y", OpSimplify},
-		{"1 / (x + 1)", OpSimplify},
+		{"1 / (x + 1) + 1", OpSimplify},
 	}
 	for _, c := range cases {
 		if rep := Solve(c.input, c.op); rep.Err == nil {
@@ -402,6 +402,23 @@ func TestSolveDomain(t *testing.T) {
 		rep := Solve(c.input, OpDomain)
 		if rep.Err != nil || rep.Result != c.want {
 			t.Errorf("Solve(%q, OpDomain) = %q, %v; want %q", c.input, rep.Result, rep.Err, c.want)
+		}
+	}
+}
+
+func TestSimplifyRational(t *testing.T) {
+	for _, c := range []struct{ input, want string }{
+		{"(3x - 6)/(x^2 - 4x + 4)", "3/(x - 2)"},
+		{"(y + 2)/(y^2 - 4)", "1/(y - 2)"},
+		{"(x^2 - 1)/(x - 1)", "x + 1"},
+		{"(x + 1)/(x^2 + 3x + 2)", "1/(x + 2)"},
+		{"(2x + 4)/(4x + 8)", "1/2"},
+		{"(x - 3)/(x + 5)", "(x - 3)/(x + 5)"},
+		{"(x^2 - 9)/(x^2 + 6x + 9)", "(x - 3)/(x + 3)"},
+	} {
+		rep := Solve(c.input, OpSimplify)
+		if rep.Err != nil || rep.Result != c.want {
+			t.Errorf("Solve(%q) = %q, %v; want %q", c.input, rep.Result, rep.Err, c.want)
 		}
 	}
 }
