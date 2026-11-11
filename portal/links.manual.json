@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Qwik Docs",
+    "url": "https://qwik.dev/",
+    "description": "Official documentation for the Qwik framework.",
+    "tags": ["docs", "qwik"]
+  },
+  {
+    "title": "Bun",
+    "url": "https://bun.sh/docs",
+    "description": "Bun runtime, package manager, and bundler docs.",
+    "tags": ["docs", "tooling"]
+  },
+  {
+    "title": "TypeScript Handbook",
+    "url": "https://www.typescriptlang.org/docs/",
+    "description": "Language reference and guides for TypeScript.",
+    "tags": ["docs", "typescript"]
+  }
+]

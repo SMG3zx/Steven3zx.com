@@ -1,0 +1,14 @@
+[Unit]
+Description=Steven3zx portal (Qwik on Bun)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# scripts/deploy.sh copies the built portal here; the service never runs from the git checkout.
+WorkingDirectory=%h/.local/share/portal
+ExecStart=/usr/bin/bun x vite preview --host 127.0.0.1 --port 4000 --strictPort
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

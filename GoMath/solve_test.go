@@ -51,7 +51,7 @@ func TestSolveReportsErrors(t *testing.T) {
 	}{
 		{"x +", OpSimplify},
 		{"x ^ y", OpSimplify},
-		{"1 / (x + 1) + 1", OpSimplify},
+		{"1 / (x + 1) + x ^ y", OpSimplify},
 	}
 	for _, c := range cases {
 		if rep := Solve(c.input, c.op); rep.Err == nil {
@@ -425,5 +425,12 @@ func TestSimplifyRational(t *testing.T) {
 		if rep.Err != nil || rep.Result != c.want {
 			t.Errorf("Solve(%q) = %q, %v; want %q", c.input, rep.Result, rep.Err, c.want)
 		}
+	}
+}
+
+func TestSolveAddsFractions(t *testing.T) {
+	rep := Solve("1/(x + 1) + 1", OpSimplify)
+	if rep.Err != nil || rep.Result != "(x + 2)/(x + 1)" {
+		t.Errorf("got %q, %v", rep.Result, rep.Err)
 	}
 }

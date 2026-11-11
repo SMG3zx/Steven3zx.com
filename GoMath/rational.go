@@ -115,8 +115,8 @@ func wrapDenominator(f Factorization) string {
 }
 
 // rationalParts reads e as numerator/denominator polynomials. Products,
-// quotients and whole-number powers of fractions combine; a sum of fractions
-// does not, and reports ok false.
+// quotients, sums, differences and whole-number powers of fractions combine
+// over a common denominator.
 func rationalParts(e SExpression) (num, den Poly, ok bool) {
 	c, isCons := e.(Cons)
 	if !isCons || len(c.Rest) != 2 {
@@ -136,6 +136,16 @@ func rationalParts(e SExpression) (num, den Poly, ok bool) {
 			return an.Mul(bn), ad.Mul(bd), true
 		}
 		return an.Mul(bd), ad.Mul(bn), true
+	case '+', '-':
+		an, ad, ok1 := rationalParts(c.Rest[0])
+		bn, bd, ok2 := rationalParts(c.Rest[1])
+		if !ok1 || !ok2 {
+			return nil, nil, false
+		}
+		if c.Head == '+' {
+			return an.Mul(bd).Add(bn.Mul(ad)), ad.Mul(bd), true
+		}
+		return an.Mul(bd).Sub(bn.Mul(ad)), ad.Mul(bd), true
 	case '^':
 		exp, err := toPoly(c.Rest[1], nil)
 		n, isConst := exp.Constant()
