@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -16,49 +18,155 @@ public sealed record Seen(IReadOnlyList<Activity> Activities, DateTimeOffset Thr
 /// record of activity cannot be reached.
 public delegate Seen? ActivitySource(DateTimeOffset from, DateTimeOffset to);
 
-/// Turns window activity into time on ideas, so nobody starts or stops a timer.
+/// One commit and the full paths of the files it changed.
+public sealed record Commit(string Hash, DateTimeOffset At, string Subject, IReadOnlyList<string> Files);
+
+/// The commits that changed something under a folder, oldest first: those
+/// after a moment, or only the latest one when no moment is given.
+public delegate IReadOnlyList<Commit> CommitSource(string folder, DateTimeOffset? after);
+
+/// Writes down what the machine already knows, so nobody has to: time in
+/// windows, commits, and use of what was shipped.
 public static class Tracker
 {
+    public const string NothingWatched = "Nothing is watched. vinci home <idea> <folder>, or vinci watch <idea> \"text in its window titles\"";
+
     /// With nothing to credit, the place reached is still written down this
     /// often, so one sync never has to read months of activity.
     public static readonly TimeSpan MarkEvery = TimeSpan.FromDays(1);
 
-    /// Credits the activity since the last sync to the ideas that watch for
-    /// it, as "spent" facts dated when the work ended. Returns what it did,
-    /// one line each, for `vinci sync` to print.
-    public static IReadOnlyList<string> Sync(Journal journal, ActivitySource? source, DateTimeOffset now)
+    /// A glance at a window is not use. This much time in it, in one sync, is.
+    public static readonly TimeSpan UseAtLeast = TimeSpan.FromMinutes(1);
+
+    /// Returns what it recorded, one line each, for `vinci sync` to print.
+    public static IReadOnlyList<string> Sync(Journal journal, ActivitySource? activity, CommitSource? commits, DateTimeOffset now)
     {
         var s = State.From(journal.Read());
-        var watches = s.Watches.Where(w => s.Idea(w.IdeaId)!.Stage != Stage.Retired).ToList();
-        if (watches.Count == 0) return ["Nothing is watched. vinci watch <idea> \"text in its window titles\""];
+        if (!s.AllWatches.Any()) return [NothingWatched];
+        List<string> lines = [.. Windows(journal, s, activity, now), .. Commits(journal, s, commits)];
+        return lines;
+    }
 
+    /// Credits the window time since the last sync: work becomes a "spent"
+    /// fact dated when it ended, use becomes at most one "used" fact a day.
+    private static List<string> Windows(Journal journal, State s, ActivitySource? source, DateTimeOffset now)
+    {
+        // The most specific watch wins when several match the same window.
+        var watches = s.AllWatches.OrderByDescending(w => w.Pattern.Length).ToList();
         var from = s.SyncedTo ?? s.WatchingSince!.Value;
         if (source?.Invoke(from, now) is not { } seen)
             return ["ActivityWatch did not answer, so no window time was added. It will be picked up next time."];
 
         var to = seen.Through < now ? seen.Through : now;
-        var credit = new Dictionary<string, (TimeSpan Total, DateTimeOffset Last)>();
+        var credit = new Dictionary<Watch, (TimeSpan Total, DateTimeOffset Last)>();
         foreach (var a in seen.Activities)
         {
             var start = a.Start > from ? a.Start : from;
             var end = a.Start + a.Length < to ? a.Start + a.Length : to;
             if (end <= start) continue;
-            // The first watch recorded wins when two match the same window.
             if (watches.Find(w => a.Window.Contains(w.Pattern, StringComparison.OrdinalIgnoreCase)) is not { } watch) continue;
-            var (total, last) = credit.GetValueOrDefault(watch.IdeaId, (TimeSpan.Zero, end));
-            credit[watch.IdeaId] = (total + (end - start), end > last ? end : last);
+            // Several watches can stand for one idea; they share one total.
+            var key = new Watch(watch.IdeaId, "", watch.Use);
+            var (total, last) = credit.GetValueOrDefault(key, (TimeSpan.Zero, end));
+            credit[key] = (total + (end - start), end > last ? end : last);
         }
 
         var lines = new List<string>();
-        foreach (var (ideaId, (total, last)) in credit)
+        foreach (var (watch, (total, last)) in credit)
         {
+            var idea = s.Idea(watch.IdeaId)!;
+            if (watch.Use)
+            {
+                if (idea.Ships.Count == 0 || total < UseAtLeast) continue;
+                if (idea.Uses.Exists(u => u.ToLocalTime().Date == last.ToLocalTime().Date)) continue;
+                journal.Append(new(last, "used", idea.Id, $"{Text.Span(total)} on screen", Where: "window"));
+                lines.Add($"{idea.Id,-4} used  {idea.Title}");
+                continue;
+            }
             var minutes = Math.Round(total.TotalMinutes, 2);
             if (minutes <= 0) continue;
-            journal.Append(new(last, "spent", ideaId, Value: minutes, Where: "window"));
-            lines.Add($"{ideaId,-4} +{Text.Span(total)}  {s.Idea(ideaId)!.Title}");
+            journal.Append(new(last, "spent", idea.Id, Value: minutes, Where: "window"));
+            lines.Add($"{idea.Id,-4} +{Text.Span(total)}  {idea.Title}");
         }
-        if (lines.Count > 0 || to - from > MarkEvery) journal.Append(new(to, "sync"));
+        if (credit.Count > 0 || to - from > MarkEvery) journal.Append(new(to, "sync"));
         return lines.Count > 0 ? lines : [$"No watched window since {from.ToLocalTime():yyyy-MM-dd HH:mm}."];
+    }
+
+    /// Records each new commit under an idea's home as a "work" fact. An idea
+    /// that has just been given a home gets its latest commit only, so the
+    /// journal knows when it was last worked on without copying its history.
+    private static List<string> Commits(Journal journal, State s, CommitSource? source)
+    {
+        var homed = s.Ideas.Where(i => i.Home is not null && i.Stage != Stage.Retired).ToList();
+        if (source is null || homed.Count == 0) return [];
+
+        var found = new List<(Idea Idea, Commit Commit)>();
+        foreach (var idea in homed.Where(i => i.Work.Count == 0))
+            found.AddRange(source(idea.Home!, null).Select(c => (idea, c)));
+
+        // One question per repository covers every idea that already has work.
+        var since = homed.SelectMany(i => i.Work).Select(w => (DateTimeOffset?)w.At).Max();
+        if (since is not null)
+            foreach (var root in homed.Where(i => i.Work.Count > 0).Select(i => RepositoryOf(i.Home!)).OfType<string>().Distinct())
+                foreach (var commit in source(root, since))
+                    // A commit belongs to the deepest home that holds one of its files.
+                    foreach (var idea in commit.Files.Select(f => homed.Where(i => i.Work.Count > 0 && Inside(f, i.Home!)).MaxBy(i => i.Home!.Length)).OfType<Idea>().Distinct())
+                        found.Add((idea, commit));
+
+        var lines = new List<string>();
+        foreach (var group in found.Where(f => !s.Commits.Contains(f.Commit.Hash)).GroupBy(f => f.Idea))
+        {
+            foreach (var (idea, commit) in group.OrderBy(f => f.Commit.At))
+                journal.Append(new(commit.At, "work", idea.Id, commit.Subject, Where: commit.Hash));
+            lines.Add($"{group.Key.Id,-4} {group.Count()} commit{(group.Count() == 1 ? "" : "s")}  {group.Key.Title}");
+        }
+        return lines;
+    }
+
+    private static bool Inside(string file, string folder) =>
+        file.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
+    /// The nearest folder at or above this one that holds a .git.
+    private static string? RepositoryOf(string folder)
+    {
+        for (var dir = folder; dir is not null; dir = Path.GetDirectoryName(dir))
+            if (Path.Exists(Path.Combine(dir, ".git"))) return dir;
+        return null;
+    }
+}
+
+/// Reads commits by running git.
+public static class Git
+{
+    public static IReadOnlyList<Commit> Log(string folder, DateTimeOffset? after)
+    {
+        if (!Directory.Exists(folder)) return [];
+        var start = new ProcessStartInfo("git") { RedirectStandardOutput = true, RedirectStandardError = true };
+        // \x01 marks the start of a commit; the changed files follow, one per line, relative to the folder.
+        string[] args = ["-C", folder, "log", "--format=%x01%H%x09%cI%x09%s", "--name-only", "--relative", "--reverse",
+            after is { } a ? $"--after={a.ToUnixTimeSeconds()}" : "-1", "--", "."];
+        foreach (var arg in args) start.ArgumentList.Add(arg);
+        try
+        {
+            using var git = Process.Start(start)!;
+            git.ErrorDataReceived += (_, _) => { };
+            git.BeginErrorReadLine();
+            var text = git.StandardOutput.ReadToEnd();
+            git.WaitForExit();
+            if (git.ExitCode != 0) return [];
+            return [.. text.Split('\x01', StringSplitOptions.RemoveEmptyEntries).Select(block =>
+            {
+                var rows = block.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                var head = rows[0].Split('\t', 3);
+                return new Commit(head[0], DateTimeOffset.Parse(head[1], CultureInfo.InvariantCulture), head[2],
+                    [.. rows[1..].Select(file => Path.Combine(folder, file))]);
+            })];
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or FormatException)
+        {
+            // No git, or not a repository: there are simply no commits to count.
+            return [];
+        }
     }
 }
 

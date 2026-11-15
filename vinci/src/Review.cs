@@ -50,8 +50,8 @@ public static class Review
                     $"use it and vinci used {idea.Id}, or vinci retire {idea.Id} \"why\""));
 
             if (idea.Stage == Stage.Build && !s.Watched(idea))
-                found.Add(new(3, idea.Id, $"no window is watched, so its time is not counted: {idea.Title}",
-                    $"vinci watch {idea.Id} \"text in its window titles\""));
+                found.Add(new(3, idea.Id, $"has no home, so its time is not counted: {idea.Title}",
+                    $"vinci home {idea.Id} <folder>, or vinci watch {idea.Id} \"text in its window titles\""));
 
             var idle = now - idea.LastTouched;
             var limit = idea.Stage == Stage.Tend ? TendingIdleLimit : BuildingIdleLimit;

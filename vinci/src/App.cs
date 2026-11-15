@@ -24,11 +24,11 @@ public static class App
     /// Window time is credited before the command runs, so every command
     /// sees current totals and nobody has to start or stop a timer.
     public static int Run(string[] args, Journal journal, TextReader input, TextWriter output, TextWriter errors, DateTimeOffset now,
-        ActivitySource? activity = null)
+        ActivitySource? activity = null, CommitSource? commits = null)
     {
         try
         {
-            var tracked = Tracker.Sync(journal, activity, now);
+            var tracked = Tracker.Sync(journal, activity, commits, now);
             new Session(journal, input, output, now, tracked).Dispatch(args);
             return 0;
         }
@@ -61,7 +61,9 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
             case "req": Req(IdeaArg(a), Arg(a, 1, "requirement"), Arg(a, 2, "who asked, by name"), Arg(a, 3, "why")); break;
             case "cut": Cut(Arg(a, 0, "requirement id"), Arg(a, 1, "why")); break;
             case "advance": Advance(IdeaArg(a), a.Length > 1 ? Number(a[1], "days") : 1); break;
-            case "watch": Watch(IdeaArg(a), Arg(a, 1, "text in its window titles")); break;
+            case "adopt": Adopt(Arg(a, 0, "folder")); break;
+            case "home": Home(IdeaArg(a), Arg(a, 1, "folder")); break;
+            case "watch": Watch(IdeaArg(a), Arg(a, 1, "text in its window titles"), a.ElementAtOrDefault(2)); break;
             case "unwatch": Unwatch(IdeaArg(a), Arg(a, 1, "watched text")); break;
             case "watches": Watches(); break;
             case "sync": foreach (var line in tracked) o.WriteLine(line); break;
@@ -190,7 +192,7 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
                 MoveTo(idea, Stage.Build);
                 o.WriteLine(s.Watched(idea)
                     ? "Next: ship the smallest thing that works."
-                    : $"Next: vinci watch {idea.Id} \"text in its window titles\", then ship the smallest thing that works.");
+                    : $"Next: vinci home {idea.Id} <folder>, then ship the smallest thing that works.");
                 break;
 
             case Stage.Build:
@@ -320,13 +322,47 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
 
     // ---- time ----
 
-    private void Watch(Idea idea, string pattern)
+    /// An existing folder becomes an idea in one step, named after the folder.
+    /// Adopting it again does nothing, so a whole directory can be adopted in a loop.
+    private void Adopt(string folder)
+    {
+        var path = FolderArg(folder);
+        if (s.Ideas.Find(i => i.Home == path) is { } owner)
+        {
+            o.WriteLine($"{owner.Id} already lives in {path}.");
+            return;
+        }
+        var id = s.NextId('i');
+        Record(new(now, "idea", id, Path.GetFileName(path)));
+        Record(new(now, "home", id, path));
+        o.WriteLine($"{id} adopted from {path}. Its windows and commits now count as work.");
+    }
+
+    private void Home(Idea idea, string folder)
     {
         if (idea.Stage == Stage.Retired) throw new UserError($"{idea.Id} is retired");
-        if (s.Watches.Find(w => w.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)) is { } taken)
+        var path = FolderArg(folder);
+        if (s.Ideas.Find(i => i.Home == path) is { } owner) throw new UserError($"{owner.Id} already lives in {path}");
+        Record(new(now, "home", idea.Id, path));
+        o.WriteLine($"{idea.Id} lives in {path}. Time in windows titled \"{State.HomePattern(path)}\" and commits there now count as work.");
+    }
+
+    private static string FolderArg(string folder)
+    {
+        var path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        return Directory.Exists(path) ? path : throw new UserError($"{path} is not a folder");
+    }
+
+    private void Watch(Idea idea, string pattern, string? kind)
+    {
+        if (idea.Stage == Stage.Retired) throw new UserError($"{idea.Id} is retired");
+        if (kind is not (null or "use")) throw new UserError($"after the text comes \"use\" or nothing, got '{kind}'");
+        if (s.AllWatches.FirstOrDefault(w => w.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)) is { } taken)
             throw new UserError($"\"{pattern}\" is already watched for {taken.IdeaId}");
-        Record(new(now, "watch", idea.Id, pattern));
-        o.WriteLine($"Time in a window whose app or title contains \"{pattern}\" now counts for {idea.Id}.");
+        Record(new(now, "watch", idea.Id, pattern, Value: kind is null ? null : 1));
+        o.WriteLine(kind is null
+            ? $"Time in a window whose app or title contains \"{pattern}\" now counts for {idea.Id}."
+            : $"A window whose app or title contains \"{pattern}\" now counts as using {idea.Id}.");
     }
 
     private void Unwatch(Idea idea, string pattern)
@@ -339,8 +375,9 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
 
     private void Watches()
     {
-        if (s.Watches.Count == 0) { o.WriteLine("Nothing is watched. vinci watch <idea> \"text in its window titles\""); return; }
-        foreach (var w in s.Watches) o.WriteLine($"{w.IdeaId,-4} \"{w.Pattern}\"  {s.Idea(w.IdeaId)!.Title}");
+        var watches = s.AllWatches.ToList();
+        if (watches.Count == 0) { o.WriteLine(Tracker.NothingWatched); return; }
+        foreach (var w in watches) o.WriteLine($"{w.IdeaId,-4} {(w.Use ? "use " : "work")} \"{w.Pattern}\"  {s.Idea(w.IdeaId)!.Title}");
     }
 
     private void Spent(Idea idea, double minutes)
@@ -464,7 +501,9 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
         o.WriteLine($"for     {i.For ?? "(nobody yet)"}");
         o.WriteLine($"goal    {i.Goal ?? "(none)"}{(i.Goal is null ? "" : $"  [{GoalStatus(i)}]")}");
         o.WriteLine($"time    born {Text.Day(i.Born)}, age {Text.Span(now - i.Born)}, touch {Text.Span(i.Touch)}, flow {Flow(i)}");
-        if (s.Watched(i)) o.WriteLine($"watch   {string.Join(", ", s.Watches.Where(w => w.IdeaId == i.Id).Select(w => $"\"{w.Pattern}\""))}");
+        if (i.Home is not null) o.WriteLine($"home    {i.Home}{(i.Work.Count > 0 ? $"  ({i.Work.Count} commit{(i.Work.Count == 1 ? "" : "s")}, last {Text.Day(i.Work[^1].At)})" : "")}");
+        var watches = s.AllWatches.Where(w => w.IdeaId == i.Id).Select(w => $"\"{w.Pattern}\"{(w.Use ? " (use)" : "")}").ToList();
+        if (watches.Count > 0) o.WriteLine($"watch   {string.Join(", ", watches)}");
         var stages = Enum.GetValues<Stage>().Where(st => st != Stage.Retired && i.Entered(st)).Select(st =>
             $"{st} {Text.Span(i.TimeIn(st, now))}{(i.TouchIn.TryGetValue(st, out var t) ? $" (touch {Text.Span(t)})" : "")}");
         o.WriteLine($"stages  {string.Join(", ", stages)}");
@@ -773,10 +812,13 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
           pipeline   next   ideas   show <id>
 
         Time
-          watch <idea> "text"                 count time in windows whose app or title contains the text
+          adopt <folder>                      make an existing folder an idea, named after it
+          home <idea> <folder>                where the idea lives: its editor windows and commits count as work
+          watch <idea> "text" [use]           count time in windows whose app or title contains the text;
+                                              with "use", such a window counts as using what you shipped
           unwatch <idea> "text"               stop counting it
           watches                             what is watched
-          sync                                show the window time just credited (every command credits it)
+          sync                                show what was just counted (every command counts it)
           spent <idea> <minutes>              add time spent away from the screen
 
         Knowledge

@@ -5,4 +5,4 @@ var home = Environment.GetEnvironmentVariable("VINCI_HOME")
 var activityWatch = Environment.GetEnvironmentVariable("VINCI_ACTIVITYWATCH") ?? "http://127.0.0.1:5600";
 
 return App.Run(args, new Journal(Path.Combine(home, "journal.jsonl")), Console.In, Console.Out, Console.Error, DateTimeOffset.Now,
-    ActivityWatch.At(activityWatch));
+    ActivityWatch.At(activityWatch), Git.Log);

@@ -14,6 +14,19 @@ public sealed class VinciTests : IDisposable
     private DateTimeOffset? known;
     private bool reachable = true;
 
+    /// What git holds, oldest first.
+    private readonly List<Commit> commits = [];
+
+    private void Committed(string subject, params string[] files) =>
+        commits.Add(new Commit($"hash{commits.Count}", now, subject, files));
+
+    /// A folder inside a pretend repository.
+    private string Folder(string name)
+    {
+        Directory.CreateDirectory(Path.Combine(dir, "repo", ".git"));
+        return Directory.CreateDirectory(Path.Combine(dir, "repo", name)).FullName;
+    }
+
     private void Window(DateTimeOffset start, double minutes, string window) =>
         windows.Add(new Activity(start, TimeSpan.FromMinutes(minutes), window));
 
@@ -25,7 +38,10 @@ public sealed class VinciTests : IDisposable
     {
         var output = new StringWriter();
         var code = App.Run(args, new Journal(JournalPath), new StringReader(stdin), output, output, now,
-            (from, to) => reachable ? new Seen(windows, known ?? to) : null);
+            (from, to) => reachable ? new Seen(windows, known ?? to) : null,
+            (folder, after) => after is { } a
+                ? [.. commits.Where(c => c.At > a && c.Files.Any(f => f.StartsWith(folder + "/")))]
+                : [.. commits.Where(c => c.Files.Any(f => f.StartsWith(folder + "/"))).TakeLast(1)]);
         return (code, output.ToString());
     }
 
@@ -229,7 +245,7 @@ public sealed class VinciTests : IDisposable
         Run("idea", "Bridge");
         Run("watch", "i1", "wing");
         Run("watch", "i2", "bridge");
-        Assert.Contains("i1   \"wing\"  Flying machine", Run("watches"));
+        Assert.Contains("i1   work \"wing\"  Flying machine", Run("watches"));
         Run("unwatch", "i1", "wing");
         Assert.Contains("does not watch", Fail("unwatch", "i1", "wing"));
         Run("retire", "i2", "The river moved");
@@ -239,6 +255,92 @@ public sealed class VinciTests : IDisposable
         var ideas = Run("ideas").Split('\n');
         Assert.Contains("touch 0m", ideas[0]);
         Assert.Contains("touch 0m", ideas[1]);
+    }
+
+    [Fact]
+    public void A_home_folder_counts_its_editor_windows_and_its_commits_as_work()
+    {
+        var glider = Folder("glider");
+        Assert.StartsWith("i1 adopted", Run("adopt", glider));
+        Assert.Contains("i1 already lives", Run("adopt", glider + "/"));
+        Run("idea", "Bridge");
+        Assert.Contains("is not a folder", Fail("home", "i2", Path.Combine(dir, "nowhere")));
+        Assert.Contains("i1 already lives", Fail("home", "i2", glider));
+        Run("home", "i2", Folder("bridge"));
+        Assert.EndsWith(" glider", Run("ideas").Split('\n')[0]);
+
+        Window(now, 30, "code Wing.cs - glider - Visual Studio Code");
+        Window(now.AddMinutes(30), 30, "code README.md - glider-notes - Visual Studio Code");
+        Wait(TimeSpan.FromHours(1));
+        Assert.Contains("touch 30m", Run("ideas").Split('\n')[0]);
+
+        Committed("Shape the wing", glider + "/Wing.cs");
+        Wait(TimeSpan.FromDays(20));
+        Committed("Brace the wing", glider + "/Wing.cs", glider + "/Strut.cs");
+        Committed("Survey the river", Path.Combine(dir, "repo", "bridge", "notes.md"));
+        Committed("Elsewhere", Path.Combine(dir, "repo", "other", "x.md"));
+
+        var synced = Run("sync");
+        // A newly homed idea takes its latest commit only; after that, every new one.
+        Assert.Contains("i1   1 commit  glider", synced);
+        Assert.Contains("i2   1 commit  Bridge", synced);
+        Wait(TimeSpan.FromDays(1));
+        Committed("Cover the wing", glider + "/Wing.cs");
+        Committed("Cover it again", glider + "/Wing.cs");
+        Assert.Contains("i1   2 commits  glider", Run("sync"));
+        Assert.DoesNotContain("commit", Run("sync"));
+        Assert.Contains("(3 commits, last 2026-01-22)", Run("show", "i1"));
+        // The commits are why the idea is not stale.
+        Assert.DoesNotContain("i1     untouched", Run("review"));
+    }
+
+    [Fact]
+    public void The_most_specific_watch_wins_a_window()
+    {
+        Run("idea", "Flying machine");
+        Run("idea", "Wing");
+        Run("watch", "i1", "glider");
+        Run("watch", "i2", "glider/wing");
+        Window(now, 30, "code ~/glider/wing/Rib.cs");
+        Wait(TimeSpan.FromHours(1));
+
+        var ideas = Run("ideas").Split('\n');
+        Assert.Contains("touch 0m", ideas[0]);
+        Assert.Contains("touch 30m", ideas[1]);
+    }
+
+    [Fact]
+    public void Having_the_shipped_thing_on_screen_counts_as_using_it_once_a_day()
+    {
+        GrowToBuild();
+        Assert.Contains("use\" or nothing", Fail("watch", "i1", "Glider Simulator", "used"));
+        Run("watch", "i1", "Glider Simulator", "use");
+        Assert.Contains("i1   use  \"Glider Simulator\"", Run("watches"));
+
+        // Not shipped yet, so there is nothing to use.
+        Window(now, 10, "brave Glider Simulator");
+        Wait(TimeSpan.FromHours(1));
+        Assert.DoesNotContain("used", Run("sync"));
+
+        Run("ship", "i1", "Glider model");
+        Window(now, 0.5, "brave Glider Simulator");
+        Wait(TimeSpan.FromHours(1));
+        Assert.DoesNotContain("used", Run("sync"));
+
+        Window(now, 10, "brave Glider Simulator");
+        Wait(TimeSpan.FromHours(1));
+        Assert.Contains("i1   used  Flying machine", Run("sync"));
+        Window(now, 10, "brave Glider Simulator");
+        Wait(TimeSpan.FromHours(1));
+        Assert.DoesNotContain("used", Run("sync"));
+
+        Wait(TimeSpan.FromDays(1));
+        Window(now, 10, "brave Glider Simulator");
+        Wait(TimeSpan.FromHours(1));
+        Run("sync");
+        Assert.Contains("used    2 times", Run("show", "i1"));
+        // Use is not work.
+        Assert.Contains("touch 0m", Run("ideas"));
     }
 
     [Fact]

@@ -26,6 +26,10 @@ public sealed class Idea(string id, string title, DateTimeOffset born)
     public List<(Stage Stage, DateTimeOffset At)> StageLog { get; } = [(Stage.Seed, born)];
     public List<(DateTimeOffset At, string What)> Ships { get; } = [];
     public List<DateTimeOffset> Uses { get; } = [];
+    /// The folder the idea lives in. Its window titles and its commits count as work.
+    public string? Home { get; set; }
+    /// Commits under Home: proof that work happened, read from git.
+    public List<(DateTimeOffset At, string What)> Work { get; } = [];
     public string? RetiredWhy { get; set; }
 
     public string GoalTarget =>
@@ -120,8 +124,9 @@ public sealed class Commitment(DateTimeOffset at, string text, string? ideaId)
     public bool? Kept { get; set; }
 }
 
-/// Time in a window whose app or title contains Pattern is work on the idea.
-public sealed record Watch(string IdeaId, string Pattern);
+/// Time in a window whose app or title contains Pattern is work on the idea,
+/// or, when Use is set, is the idea being used: the shipped thing on screen.
+public sealed record Watch(string IdeaId, string Pattern, bool Use = false);
 
 public sealed class Metric(string name)
 {
@@ -158,7 +163,20 @@ public sealed class State
         return state;
     }
 
-    public bool Watched(Idea idea) => Watches.Exists(w => w.IdeaId == idea.Id);
+    /// Commit hashes already recorded as work, so none is counted twice.
+    public HashSet<string> Commits { get; } = [];
+
+    /// True when work on the idea is counted without anyone recording it.
+    public bool Watched(Idea idea) => idea.Home is not null || Watches.Exists(w => w.IdeaId == idea.Id && !w.Use);
+
+    /// What a home folder watches for: its name as an editor shows it,
+    /// "App.cs - vinci - Visual Studio Code".
+    public static string HomePattern(string home) => $"- {Path.GetFileName(home)} -";
+
+    /// Every watch in force: the ones recorded, and one implied by each home.
+    public IEnumerable<Watch> AllWatches =>
+        Watches.Concat(Ideas.Where(i => i.Home is not null).Select(i => new Watch(i.Id, HomePattern(i.Home!))))
+            .Where(w => Idea(w.IdeaId)!.Stage != Stage.Retired);
 
     public Idea? Idea(string id) => Ideas.Find(i => i.Id == id);
     public Requirement? Requirement(string id) => Requirements.Find(r => r.Id == id);
@@ -238,10 +256,18 @@ public sealed class State
                 break;
             case "watch":
                 WatchingSince ??= e.At;
-                Watches.Add(new Watch(e.Id!, e.Text!));
+                Watches.Add(new Watch(e.Id!, e.Text!, Use: e.Value == 1));
                 break;
             case "unwatch":
                 Watches.RemoveAll(w => w.IdeaId == e.Id && w.Pattern.Equals(e.Text, StringComparison.OrdinalIgnoreCase));
+                break;
+            case "home":
+                WatchingSince ??= e.At;
+                Idea(e.Id!)!.Home = e.Text;
+                break;
+            case "work":
+                Idea(e.Id!)!.Work.Add((e.At, e.Text!));
+                Commits.Add(e.Where!);
                 break;
             case "sync":
                 SyncedTo = e.At;

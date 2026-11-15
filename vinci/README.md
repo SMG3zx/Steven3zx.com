@@ -19,7 +19,7 @@ Every fact is written once, with the time, to an append-only journal (`~/.vinci/
 That one decision gives you several things without building them separately:
 
 - **Provenance.** Every fact has a date, and a note points at the source it came from.
-- **Time tracking.** Time in a watched window is one more fact, written for you.
+- **Time tracking.** Time in an idea's windows and each commit in its folder are facts too, written for you.
 - **Life tracking.** A measurement is a fact with a number in it.
 - **Self-measurement.** The system's own defects are facts too, so it can chart them.
 - **A tool that fits in a pipe.** The journal is plain JSON lines, so `jq` and `grep` work on it.
@@ -71,8 +71,8 @@ vinci advance i1 3                                 # incubate for 3 days
 
 vinci advance i1                                   # 3 days later: -> Build
 vinci commit "Build the wing frame" i1             # this week's one thing
-vinci watch i1 "- glider -"                        # once: windows with this in the title are i1
-                                                   # ... work; the time is counted for you ...
+vinci home i1 ~/code/glider                        # once: where the idea lives
+                                                   # ... work; time and commits are counted for you ...
 vinci ship i1 "Glider model"                       # -> Tend
 
 vinci used i1 "Flew 20 m off the hill"
@@ -88,26 +88,40 @@ vinci review                                       # weekly
 vinci kept                                         # or: vinci missed "why"
 ```
 
-## Time counts itself
+## The machine writes down what it already knows
 
-There is no timer to start or stop. You say once which windows belong to an idea:
+There is no timer to start or stop, and you do not report that you worked. You say once where an idea lives:
 
 ```sh
-vinci watch i1 "- vinci -"      # VS Code titles look like "App.cs - vinci - Visual Studio Code"
-vinci watch i1 "vinci/README"   # an idea can watch for several texts
-vinci watches                   # what is watched
-vinci unwatch i1 "vinci/README"
+vinci adopt ~/code/glider       # a folder that already exists becomes an idea, named after it
+vinci home i1 ~/code/glider     # or give an idea you already have a home
+```
+
+A home does two things.
+
+- **Editor windows count as time.** VS Code titles look like `Wing.cs - glider - Visual Studio Code`, so a home watches for `- glider -`. This works when the folder itself is what you opened. If you open a parent folder, the title names the parent, and you need a `watch` for a text that does appear.
+- **Commits count as work.** Each new commit that changes a file under the home is recorded as a `work` fact with its subject and hash. That keeps the idea from being flagged as untouched. A newly homed idea takes only its latest commit, so the journal learns when it was last worked on without copying its history. A commit goes to the deepest home that holds one of its files.
+
+For anything a home does not cover, watch for a text yourself:
+
+```sh
+vinci watch i1 "glider/README"         # work: time in this window counts for i1
+vinci watch i1 "Glider Simulator" use  # use: this window is the shipped thing on screen
+vinci watches                          # every watch in force
+vinci unwatch i1 "glider/README"
 ```
 
 The text is matched, ignoring case, against the app name and the window title together. Open `http://localhost:5600` and look at the Timeline to see what your titles look like.
 
-Every time vinci runs, it first asks ActivityWatch which windows had the focus since the last time, drops the time you were away from the keyboard, and writes a `spent` fact for each idea whose text matched. So every command shows current totals. `vinci sync` prints what was just added.
+A `use` watch records that you used what you shipped: at most one `used` fact a day, and only after a minute on screen and only once the idea has shipped. It never adds to the time worked.
+
+Every time vinci runs, it first asks ActivityWatch which windows had the focus since the last time, drops the time you were away from the keyboard, asks git for new commits, and writes the facts. So every command shows current totals. `vinci sync` prints what was just written.
 
 - **It lags a few minutes while you work.** The watcher only confirms you were present after its idle timeout (3 minutes), so vinci counts up to the last confirmed moment and picks up the rest next time. Nothing is lost.
 - **If ActivityWatch is not running**, vinci works as before and adds no time. ActivityWatch keeps its own record, so the time is added the next time both are up.
 - **Time away from the screen** is `vinci spent i1 <minutes>`.
-- **When two watches match one window**, the one recorded first gets the time.
-- **A Build idea with no watch** is a finding in `vinci review`.
+- **When several watches match one window**, the longest text wins, since it is the most specific.
+- **A Build idea with no home and no watch** is a finding in `vinci review`.
 
 ### Setting up ActivityWatch
 
@@ -184,7 +198,7 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 - **A database, a server, a web page.** One file and a command line do the job.
 - **Editing and deleting facts.** Correct a fact by recording a new one.
 - **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
-- **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time is the one source that earned it.
+- **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.
 
 ## Privacy
 
@@ -201,7 +215,7 @@ dotnet test tests
 | `src/Journal.cs` | The event record and the append-only file |
 | `src/State.cs` | Rebuilding the current state from events |
 | `src/App.cs` | The commands and the stage gates |
-| `src/Tracker.cs` | Crediting window time to ideas, and reading it from ActivityWatch |
+| `src/Tracker.cs` | Recording window time, commits and use, read from ActivityWatch and git |
 | `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch |
 | `src/Review.cs` | The findings, the limits, and what to do next |
 | `src/Stats.cs` | Control limits and sigma level |
