@@ -2,7 +2,7 @@
 
 A command-line tool that takes an idea from first thought to shipped work and keeps it alive afterwards. It also records what you know and where you learned it, what you predicted and whether you were right, how long you spend on each idea, and anything else about your life you choose to measure.
 
-It is written in C# on .NET 10 and has no dependencies. All data is one file. `vinci serve` shows your saved links, your projects' links and every local web page on one page. Time on each idea is counted for you from the windows you work in, using [ActivityWatch](https://activitywatch.net/).
+It is written in C# on .NET 10. The journal commands need nothing else and keep all their data in one file; `vinci memory` is the one part that needs a database (Neo4j) and the one package, its driver. `vinci serve` shows your saved links, your projects' links and every local web page on one page. Time on each idea is counted for you from the windows you work in, using [ActivityWatch](https://activitywatch.net/).
 
 ## Install
 
@@ -161,6 +161,46 @@ systemctl --user enable --now portal
 
 `./install.sh` restarts that service so it runs the new build.
 
+## Memory for agents
+
+`vinci memory` is a durable memory for AI agents, kept apart from the journal because it needs a database and runs as long-lived processes. Agents save what happened as **events**, and a worker turns events into **memories**, **entities**, **claims** and **procedures** that all point back at the events they came from. Nothing is deleted: a memory is superseded, archived or retracted, and recall hides it. It was the separate `personal-memory` project, rewritten in C#.
+
+```sh
+docker compose -f deploy/memory/docker-compose.yml up -d    # Neo4j
+export NEO4J_URI=neo4j://127.0.0.1:7687 NEO4J_USERNAME=neo4j NEO4J_PASSWORD=change-me
+
+vinci memory serve        # REST API and web pages on http://127.0.0.1:4781
+vinci memory worker       # turns queued events into memories
+vinci memory mcp          # the tools for an agent, over standard input and output
+vinci memory hook         # what Codex runs on each prompt, tool use and reply
+vinci memory backup       # a snapshot of the whole graph
+vinci memory restore <snapshot.json>
+```
+
+`vinci memory help` lists the rest, and `deploy/memory/memory.env.example` lists every setting.
+
+**Recall** looks a question up three ways at once (words, meaning through an embedding service if you run one, and the graph around the entities it names), lets each vote by rank, and orders the result for the kind of question it is: *when* questions favour recent and historical memories, *how* questions favour procedures, *who* and *which* questions favour the graph. It answers `abstain` when the evidence does not contain the question's distinctive words, instead of guessing. `build_context` packs the evidence into a text block with a `[type:id]` marker on every line, and `/v1/answers/validate` checks that an answer cites only what was retrieved.
+
+**Connecting an agent.** The MCP server offers 15 tools (`remember_event`, `recall_memory`, `build_context`, `create_memory`, `retract_memory`, and so on). For Claude Code:
+
+```sh
+claude mcp add vinci-memory -- vinci memory mcp
+```
+
+To record every Codex prompt, tool use and reply, point Codex's `UserPromptSubmit`, `PostToolUse` and `Stop` hooks at `vinci memory hook`. If the API is down, the hook keeps what it could not send in `~/.vinci/codex-hook-spool.jsonl` and sends it with the next event.
+
+**Keeping it running:**
+
+```sh
+cp deploy/memory.service deploy/memory-worker.service ~/.config/systemd/user/
+mkdir -p ~/.config/vinci && cp deploy/memory/memory.env.example ~/.config/vinci/memory.env
+systemctl --user enable --now memory memory-worker
+```
+
+**Measuring it.** `vinci memory seed` writes a small fixed world and `vinci memory benchmark` asks it 15 questions (`BENCHMARK_STRICT=1` fails on any miss, so it can gate a change). `ablation` repeats that with each way of retrieving on its own, `simulate` plays an invented history that includes a deleted secret and an instruction hidden in an untrusted document, and `longmemeval` runs a LongMemEval file you have downloaded. All of them talk to the running API.
+
+**What changed in the port.** Cypher and routes are as they were. A clash with an earlier event of the same id now answers 409 instead of 500. The Codex hook sends the API key when one is set. The web pages are the originals, embedded in the program.
+
 ## In a pipe
 
 Any quoted text can be `-`, which reads it from standard input:
@@ -221,7 +261,7 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 
 ## What was left out on purpose
 
-- **A database.** One file does the job. The one web page is the portal, which only reads that file.
+- **A database for the journal.** One file does the job. The journal never touches Neo4j; only `vinci memory` does.
 - **Editing and deleting facts.** Correct a fact by recording a new one.
 - **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
 - **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.
@@ -243,7 +283,10 @@ dotnet test tests
 | `src/App.cs` | The commands and the stage gates |
 | `src/Tracker.cs` | Recording window time, commits and use, read from ActivityWatch and git |
 | `src/Portal.cs` | The portal: which links go on the page, how it is drawn, and the server |
+| `src/Memory/` | `vinci memory`: the Neo4j store (`Neo4jStore.cs`), recall and ranking (`Retrieval.cs`), the API (`Service.cs`), the worker (`Worker.cs`), the MCP server (`Mcp.cs`), the Codex hook (`Hook.cs`), the audit log (`Audit.cs`), the web pages (`Pages/`), and the benchmarks (`Evaluation/`) |
 | `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch |
 | `deploy/portal.service` | The systemd user unit that runs `vinci serve` |
+| `deploy/memory.service`, `deploy/memory-worker.service` | The systemd user units for `vinci memory serve` and `worker` |
+| `deploy/memory/` | The Neo4j compose file and the settings example |
 | `src/Review.cs` | The findings, the limits, and what to do next |
 | `src/Stats.cs` | Control limits and sigma level |
