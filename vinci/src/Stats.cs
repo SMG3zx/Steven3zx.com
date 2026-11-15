@@ -4,6 +4,9 @@ namespace Vinci;
 /// capability (defects per million opportunities, sigma level).
 public static class Stats
 {
+    /// Below this many measurements a sigma level is noise, so none is given.
+    public const int MinForSigmaLevel = 30;
+
     public sealed record Limits(double Center, double Lower, double Upper)
     {
         public bool Holds(double x) => x >= Lower && x <= Upper;

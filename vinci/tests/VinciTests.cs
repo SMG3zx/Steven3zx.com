@@ -8,13 +8,16 @@ public sealed class VinciTests : IDisposable
 {
     private readonly string dir = Directory.CreateTempSubdirectory("vinci-test").FullName;
     private DateTimeOffset now = new(2026, 1, 1, 9, 0, 0, TimeSpan.Zero);
+    private string stdin = "";
 
     public void Dispose() => Directory.Delete(dir, recursive: true);
+
+    private string JournalPath => Path.Combine(dir, "journal.jsonl");
 
     private (int Code, string Out) Try(params string[] args)
     {
         var output = new StringWriter();
-        var code = App.Run(args, new Journal(Path.Combine(dir, "journal.jsonl")), output, output, now);
+        var code = App.Run(args, new Journal(JournalPath), new StringReader(stdin), output, output, now);
         return (code, output.ToString());
     }
 
@@ -34,27 +37,45 @@ public sealed class VinciTests : IDisposable
 
     private void Wait(TimeSpan t) => now += t;
 
-    /// An idea taken as far as Build, by the shortest honest route.
-    private void GrowToBuild()
+    private void Seed(string id, string title)
     {
-        Run("idea", "Flying machine");
-        Run("goal", "i1", "Carry one person 100 m");
-        Run("advance", "i1");
-        Run("note", "Birds gain lift from the shape of the wing", "i1");
-        Run("req", "i1", "Lifts 80 kg", "Leonardo", "A person has to be on it");
-        Run("advance", "i1", "2");
-        Wait(TimeSpan.FromDays(2));
-        Run("advance", "i1");
+        Run("idea", title);
+        Run("for", id, "Leonardo");
+        Run("goal", id, "Carry one person 100 m", $"distance-{id}", "at-least", "100");
     }
+
+    /// An idea taken through Prepare, with everything the gate out of it asks for.
+    private void Prepare(string id, string title)
+    {
+        Seed(id, title);
+        Run("advance", id);
+        Run("note", "Birds gain lift from the shape of the wing", id);
+        Run("req", id, "Lifts 80 kg", "Leonardo", "A person has to be on it");
+        Run("predict", "A 10 m wing lifts 80 kg", "70", id);
+    }
+
+    /// An idea taken as far as Build, by the shortest honest route.
+    private void GrowToBuild(string id = "i1", string title = "Flying machine")
+    {
+        Prepare(id, title);
+        Run("advance", id, "2");
+        Wait(TimeSpan.FromDays(2));
+        Run("advance", id);
+    }
+
+    // ---- the gates ----
 
     [Fact]
     public void An_idea_cannot_skip_a_gate()
     {
         Run("idea", "Flying machine");
-        Assert.Contains("no goal", Fail("advance", "i1"));
+        Assert.Contains("for nobody", Fail("advance", "i1"));
         Assert.Contains("ships from Build or Tend", Fail("ship", "i1", "a sketch"));
 
-        Run("goal", "i1", "Carry one person 100 m");
+        Run("for", "i1", "Leonardo");
+        Assert.Contains("no goal", Fail("advance", "i1"));
+
+        Run("goal", "i1", "Carry one person 100 m", "distance", "at-least", "100");
         Run("advance", "i1");
         Assert.Contains("no notes", Fail("advance", "i1"));
 
@@ -62,6 +83,9 @@ public sealed class VinciTests : IDisposable
         Assert.Contains("no requirements", Fail("advance", "i1"));
 
         Run("req", "i1", "Lifts 80 kg", "Leonardo", "A person has to be on it");
+        Assert.Contains("no prediction", Fail("advance", "i1"));
+
+        Run("predict", "A 10 m wing lifts 80 kg", "70", "i1");
         Run("advance", "i1", "2");
         Wait(TimeSpan.FromDays(1));
         Assert.Contains("Leave it alone", Fail("advance", "i1"));
@@ -71,10 +95,18 @@ public sealed class VinciTests : IDisposable
     }
 
     [Fact]
-    public void A_cut_requirement_does_not_count_as_a_requirement()
+    public void A_goal_must_be_tied_to_a_number()
     {
         Run("idea", "Flying machine");
-        Run("goal", "i1", "Carry one person 100 m");
+        Assert.Contains("needs a number", Fail("goal", "i1", "Fly well"));
+        Assert.Contains("not at-least, at-most or between", Fail("goal", "i1", "Fly well", "distance", "around", "100"));
+        Assert.Contains("low must not be above high", Fail("goal", "i1", "Fly well", "distance", "between", "9", "2"));
+    }
+
+    [Fact]
+    public void A_cut_requirement_does_not_count_as_a_requirement()
+    {
+        Seed("i1", "Flying machine");
         Run("advance", "i1");
         Run("note", "Birds gain lift from the shape of the wing", "i1");
         Run("req", "i1", "Flaps like a bird", "Leonardo", "Birds do");
@@ -85,19 +117,44 @@ public sealed class VinciTests : IDisposable
     }
 
     [Fact]
-    public void Shipping_grows_the_idea_and_it_can_ship_again()
+    public void Only_three_ideas_may_be_in_Build_at_once()
+    {
+        foreach (var n in new[] { 1, 2, 3 }) GrowToBuild($"i{n}", $"Machine {n}");
+        Prepare("i4", "Machine 4");
+        Run("advance", "i4", "0");
+
+        Assert.Contains("3 ideas are already in Build (i1, i2, i3)", Fail("advance", "i4"));
+
+        Run("ship", "i2", "First model");
+        Assert.Contains("now in Build", Run("advance", "i4"));
+    }
+
+    // ---- the goal ----
+
+    [Fact]
+    public void Shipping_grows_the_idea_but_only_a_measurement_meets_the_goal()
     {
         GrowToBuild();
         Wait(TimeSpan.FromDays(1));
 
         var first = Run("ship", "i1", "Glider model");
         Assert.Contains("Cycle time 3d0h since inception", first);
+        Assert.Contains("Goal: distance-i1 not measured yet, needs ≥ 100", first);
+        Assert.Contains("Predictions to settle: h1", first);
         Assert.Contains("now in Tend", first);
+
+        Assert.Contains("i1 goal not met: needs ≥ 100", Run("log", "distance-i1", "60"));
+        Assert.Contains("not met, distance-i1 60 needs ≥ 100", Run("show", "i1"));
+        Assert.Contains("i1 has not met its goal", Run("commit", "Fly further", "i1") + Run("next"));
 
         Wait(TimeSpan.FromHours(5));
         Assert.Contains("Cycle time 5h0m since the last ship", Run("ship", "i1", "Bigger wing"));
+        Assert.Contains("i1 goal met", Run("log", "distance-i1", "120"));
+        Assert.Contains("met, distance-i1 120 is ≥ 100. Raise it?", Run("show", "i1"));
         Assert.Contains("tended, not finished", Fail("advance", "i1"));
     }
+
+    // ---- time ----
 
     [Fact]
     public void Time_is_tracked_per_idea()
@@ -124,30 +181,154 @@ public sealed class VinciTests : IDisposable
         Run("idea", "Flying machine");
         Run("start", "i1");
         Wait(TimeSpan.FromHours(20));
-        Assert.Contains("timer has run 20h0m", Run("review"));
+        Assert.StartsWith("i1     timer has run 20h0m", Run("review"));
 
         Run("stop", "45");
         Assert.Contains("touch 45m", Run("ideas"));
     }
 
     [Fact]
-    public void A_note_keeps_where_it_came_from()
+    public void Time_and_work_are_counted_per_stage()
+    {
+        Seed("i1", "Flying machine");
+        Run("spent", "i1", "30");
+        Wait(TimeSpan.FromDays(3));
+        Run("advance", "i1");
+        Run("spent", "i1", "90");
+        Wait(TimeSpan.FromDays(5));
+
+        Assert.Contains("stages  Seed 3d0h (touch 30m), Prepare 5d0h (touch 1h30m)", Run("show", "i1"));
+    }
+
+    // ---- the pipeline ----
+
+    [Fact]
+    public void The_pipeline_shows_every_stage_the_slowest_one_and_what_to_do_next()
+    {
+        GrowToBuild();
+        Run("idea", "Bridge");
+        Run("commit", "Glue the first wing rib", "i1");
+        Wait(TimeSpan.FromDays(4));
+
+        var lines = Run().Split('\n');
+        Assert.StartsWith("Seed       i2   Bridge  (4d0h here)", lines[0]);
+        Assert.StartsWith("Prepare    -", lines[1]);
+        Assert.StartsWith("Incubate   -", lines[2]);
+        Assert.StartsWith("Build 1/3  i1   Flying machine  (4d0h here, touch 0m; goal distance-i1 not measured", lines[3]);
+        Assert.StartsWith("Tend       -", lines[4]);
+        // i1: Seed 0d, Build 4d. i2: Seed 4d. So Build averages 4d, Seed 2d.
+        Assert.StartsWith("Slowest stage: Build, 4d0h on average", lines[5]);
+        Assert.StartsWith("Next: build i1: Flying machine", lines[6]);
+        Assert.Contains("vinci start i1", lines[7]);
+    }
+
+    [Fact]
+    public void Next_is_the_worst_finding_when_there_is_one()
+    {
+        Run("idea", "Flying machine");
+        Run("issue", "Workshop flooded", "big");
+        Run("note", "An orphan");
+
+        Assert.StartsWith("Next: week: no commitment", Run("next"));
+        Run("commit", "Dry the workshop");
+        Assert.StartsWith("Next: x1: big issue, no root cause yet", Run("next"));
+    }
+
+    [Fact]
+    public void With_no_ideas_and_no_command_it_explains_itself()
+    {
+        Assert.StartsWith("vinci: one journal", Run());
+    }
+
+    // ---- knowledge ----
+
+    [Fact]
+    public void A_note_keeps_where_it_came_from_down_to_the_page()
     {
         Run("idea", "Flying machine");
         Run("source", "Leonardo da Vinci, Codex on the Flight of Birds, 1505", "https://example.org/codex");
-        Run("note", "A bird steers by shifting its centre of gravity", "s1", "i1");
+        Run("note", "A bird steers by shifting its centre of gravity", "s1:f.7v", "i1");
         Assert.Contains("your own thought", Run("note", "So a pilot could steer by leaning", "n1"));
 
-        Assert.Contains("is not a note, idea or source", Fail("note", "Unfounded claim", "s9"));
+        Assert.Contains("is not a note, idea, source or prediction", Fail("note", "Unfounded claim", "s9"));
+        Assert.Contains("only a source has a place", Fail("note", "Misplaced", "i1:p.3"));
 
         var cited = Run("show", "n1");
-        Assert.Contains("origin   s1 Leonardo da Vinci, Codex on the Flight of Birds, 1505 <https://example.org/codex>", cited);
+        Assert.Contains("origin   s1 Leonardo da Vinci, Codex on the Flight of Birds, 1505, f.7v <https://example.org/codex>", cited);
         Assert.Contains("n2", cited); // linked from
         Assert.Contains("origin   your own thought", Run("show", "n2"));
 
         Assert.Contains("n1", Run("show", "s1"));
         Assert.Contains("s1   Leonardo da Vinci", Run("show", "i1")); // credits
     }
+
+    [Fact]
+    public void Tags_are_an_index_into_the_notes()
+    {
+        Run("note", "Water moves fastest in the middle of a river", "+Water", "+flow");
+        Run("note", "Air behaves like thin water", "n1", "+flow");
+
+        var index = Run("tags").Split('\n');
+        Assert.StartsWith("+flow", index[0]);
+        Assert.EndsWith("2", index[0]);
+        Assert.StartsWith("+water", index[1]);
+
+        var found = Run("notes", "+water");
+        Assert.Contains("n1", found);
+        Assert.DoesNotContain("n2", found);
+        Assert.Contains("n2", Run("notes", "thin"));
+    }
+
+    [Fact]
+    public void Review_finds_notes_that_connect_to_nothing()
+    {
+        Run("note", "Water moves fastest in the middle of a river");
+        Assert.Contains("n1     note connects to nothing", Run("review"));
+
+        Run("note", "So silt settles at the banks", "n1");
+        Assert.DoesNotContain("connects to nothing", Run("review"));
+    }
+
+    // ---- inquiry ----
+
+    [Fact]
+    public void A_prediction_is_made_before_the_test_and_settled_after()
+    {
+        Run("idea", "Flying machine");
+        Assert.Contains("1 to 99", Fail("predict", "It flies", "100"));
+        Run("predict", "A 10 m wing lifts 80 kg", "90", "i1");
+        Assert.Contains("say right or wrong", Fail("result", "h1", "maybe", "Unclear"));
+
+        Assert.Contains("h1 was wrong", Run("result", "h1", "wrong", "Lifted 35 kg"));
+        Assert.Contains("already settled", Fail("result", "h1", "right", "Second try"));
+        Run("note", "Lift did not scale with span alone", "h1");
+
+        var shown = Run("show", "h1");
+        Assert.Contains("wrong  90%  A 10 m wing lifts 80 kg", shown);
+        Assert.Contains("outcome  Lifted 35 kg", shown);
+        Assert.Contains("n1", shown);
+    }
+
+    [Fact]
+    public void Predictions_show_how_your_confidence_compares_with_your_record()
+    {
+        for (var n = 1; n <= 10; n++)
+        {
+            Run("predict", $"Claim {n}", "90");
+            Run("result", $"h{n}", n <= 6 ? "right" : "wrong", "Tested");
+        }
+        Assert.Contains("Settled 10: right 60%, average confidence 90%. You are overconfident by 30 points.", Run("predictions"));
+    }
+
+    [Fact]
+    public void Review_finds_predictions_never_tested()
+    {
+        Run("predict", "Silk is strong enough", "60");
+        Wait(TimeSpan.FromDays(31));
+        Assert.Contains("h1     predicted 31d0h ago and never tested", Run("review"));
+    }
+
+    // ---- neglect and use ----
 
     [Fact]
     public void Review_finds_neglected_ideas_but_not_resting_or_retired_ones()
@@ -170,28 +351,30 @@ public sealed class VinciTests : IDisposable
     [Fact]
     public void Review_says_when_incubation_is_over()
     {
-        Run("idea", "Flying machine");
-        Run("goal", "i1", "Carry one person 100 m");
-        Run("advance", "i1");
-        Run("note", "Birds gain lift from the shape of the wing", "i1");
-        Run("req", "i1", "Lifts 80 kg", "Leonardo", "A person has to be on it");
+        Prepare("i1", "Flying machine");
         Run("advance", "i1", "30");
+        Run("commit", "Read about silk", "i1");
 
-        Wait(TimeSpan.FromDays(20));
+        Wait(TimeSpan.FromDays(5));
         Assert.Contains("Nothing to fix", Run("review"));
-        Wait(TimeSpan.FromDays(10));
+        Wait(TimeSpan.FromDays(25));
         Assert.Contains("incubation is over", Run("review"));
     }
 
     [Fact]
-    public void Review_finds_notes_that_connect_to_nothing()
+    public void Review_finds_what_was_shipped_and_never_used()
     {
-        Run("note", "Water moves fastest in the middle of a river");
-        Assert.Contains("n1     note connects to nothing", Run("review"));
+        GrowToBuild();
+        Assert.Contains("has not shipped", Fail("used", "i1"));
+        Run("ship", "i1", "Glider model");
+        Wait(TimeSpan.FromDays(15));
+        Assert.Contains("i1     shipped 15d0h ago and never used", Run("review"));
 
-        Run("note", "So silt settles at the banks", "n1");
-        Assert.DoesNotContain("connects to nothing", Run("review"));
+        Assert.Contains("i1 used 1 times", Run("used", "i1", "Flew 20 m off the hill"));
+        Assert.DoesNotContain("never used", Run("review"));
     }
+
+    // ---- getting better ----
 
     [Fact]
     public void An_issue_is_diagnosed_before_it_becomes_a_principle()
@@ -209,6 +392,91 @@ public sealed class VinciTests : IDisposable
     }
 
     [Fact]
+    public void Big_issues_come_before_small_ones()
+    {
+        Run("issue", "Ink smudged");
+        Run("issue", "Workshop flooded", "big");
+        var review = Run("review").Split('\n');
+        Assert.StartsWith("x2     big issue", review[0]);
+        Assert.StartsWith("x1 ", review[2]);
+    }
+
+    [Fact]
+    public void Issues_are_counted_by_the_stage_they_happened_in()
+    {
+        GrowToBuild();
+        Run("issue", "Wing tore", "i1");
+        Run("issue", "Glue failed", "i1");
+        Run("idea", "Bridge");
+        Run("issue", "Vague idea", "i2");
+
+        Assert.Contains("By stage: Build 2, Seed 1. Most go wrong in Build.", Run("issues"));
+        Assert.Contains("on i1 in Build", Run("show", "x1"));
+    }
+
+    [Fact]
+    public void A_principle_comes_back_at_the_stage_where_its_issue_happened()
+    {
+        GrowToBuild();
+        Run("issue", "Wing tore on the first test", "i1");
+        Run("diagnose", "x1", "Never load-tested the cloth");
+        Run("principle", "Test each material alone first", "x1");
+        Run("ship", "i1", "Glider");
+
+        Prepare("i2", "Bridge");
+        Run("advance", "i2", "0");
+        Assert.Contains("Remember p1: Test each material alone first", Run("advance", "i2"));
+    }
+
+    [Fact]
+    public void A_principle_that_keeps_being_broken_is_flagged()
+    {
+        Run("issue", "Skipped the load test");
+        Run("diagnose", "x1", "Was in a hurry");
+        Run("principle", "Always load-test", "x1");
+
+        Run("issue", "Skipped it again", "p1");
+        Assert.DoesNotContain("p1 ", Run("review"));
+        Run("issue", "And again", "p1");
+
+        Assert.Contains("p1     broken 2 times, so the rule is not working", Run("review"));
+        Assert.Contains("broken 2 times", Run("principles"));
+        Assert.Contains("broke       p1 Always load-test", Run("show", "x2"));
+    }
+
+    // ---- the week ----
+
+    [Fact]
+    public void A_commitment_is_answered_for_a_week_later()
+    {
+        Run("idea", "Flying machine");
+        Assert.Contains("week   no commitment for this week", Run("review"));
+
+        Assert.Contains("Due 2026-01-08", Run("commit", "Build the wing frame", "i1"));
+        Assert.Contains("already committed", Fail("commit", "Something else"));
+        Assert.Contains("Nothing to fix", Run("review"));
+
+        Wait(TimeSpan.FromDays(7));
+        Assert.Contains("week   commitment from 2026-01-01 is due: Build the wing frame", Run("review"));
+        Assert.Contains("1 of 1 commitments kept", Run("kept"));
+        Assert.Contains("no open commitment", Fail("kept"));
+    }
+
+    [Fact]
+    public void A_missed_commitment_becomes_an_issue()
+    {
+        Run("idea", "Flying machine");
+        Run("commit", "Build the wing frame", "i1");
+        Wait(TimeSpan.FromDays(7));
+
+        Assert.Contains("0 of 1 commitments kept. Logged as x1", Run("missed", "Spent the week on the bridge"));
+        Assert.Contains("Missed commitment \"Build the wing frame\": Spent the week on the bridge", Run("show", "x1"));
+        Assert.Contains("0 of 1 commitments kept", Run("review"));
+    }
+
+    // ---- measurement ----
+
+    [Fact]
     public void Each_review_is_itself_measured()
     {
         Run("note", "An orphan");
@@ -219,7 +487,7 @@ public sealed class VinciTests : IDisposable
     }
 
     [Fact]
-    public void Measurements_get_control_limits_and_a_sigma_level()
+    public void Measurements_get_control_limits()
     {
         foreach (var hours in new[] { "7", "8", "7", "8", "7", "8", "7" })
         {
@@ -230,12 +498,20 @@ public sealed class VinciTests : IDisposable
         Assert.Contains("Nothing to fix", Run("review"));
 
         Run("log", "sleep", "2", "Deadline night");
-        var stats = Run("stats", "sleep");
-        Assert.Contains("special cause: 2 on 2026-01-08", stats);
+        Assert.Contains("special cause: 2 on 2026-01-08", Run("stats", "sleep"));
         Assert.Contains("sleep  out of control", Run("review"));
+    }
 
+    [Fact]
+    public void A_sigma_level_is_only_given_once_there_is_enough_data()
+    {
         Run("spec", "sleep", "7", "9");
-        Assert.Contains("1 of 8 outside, 125000 per million, sigma level 2.7", Run("stats", "sleep"));
+        for (var n = 0; n < 29; n++) Run("log", "sleep", n < 3 ? "5" : "8");
+        Assert.Contains("3 of 29 outside, too few to give a sigma level (29 of 30)", Run("stats", "sleep"));
+
+        Run("log", "sleep", "8");
+        // 3 of 30 is a 90% yield: 1.28 sigma, plus the 1.5 shift.
+        Assert.Contains("3 of 30 outside, sigma level 2.8", Run("stats", "sleep"));
     }
 
     [Fact]
@@ -269,13 +545,35 @@ public sealed class VinciTests : IDisposable
         Assert.Null(Stats.ControlLimits([10]));
     }
 
+    // ---- as a tool in a pipe ----
+
+    [Fact]
+    public void A_dash_reads_the_text_from_standard_input()
+    {
+        stdin = "  Water finds\n  its own level \n";
+        Run("note", "-");
+        Assert.Contains("n1   Water finds its own level", Run("notes"));
+
+        stdin = "";
+        Assert.Contains("<text> is empty", Fail("note", "-"));
+    }
+
+    [Fact]
+    public void Path_prints_the_journal_and_the_journal_is_one_json_object_per_line()
+    {
+        Run("idea", "Flying machine");
+        Assert.Equal(JournalPath, Run("path").Trim());
+        var line = Assert.Single(File.ReadAllLines(JournalPath));
+        Assert.Contains("\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Flying machine\"", line);
+    }
+
     [Fact]
     public void Bad_input_is_refused_and_writes_nothing()
     {
         Assert.Contains("unknown command", Fail("fly"));
         Assert.Contains("missing <title>", Fail("idea"));
-        Assert.Contains("no idea i7", Fail("goal", "i7", "x"));
+        Assert.Contains("no idea i7", Fail("for", "i7", "x"));
         Assert.Contains("must be a number", Fail("log", "sleep", "lots"));
-        Assert.False(File.Exists(Path.Combine(dir, "journal.jsonl")));
+        Assert.False(File.Exists(JournalPath));
     }
 }

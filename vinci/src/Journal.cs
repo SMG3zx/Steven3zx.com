@@ -8,7 +8,8 @@ namespace Vinci;
 ///
 /// Id is the thing the event creates or acts on. Refs are other things it
 /// points at. Ids carry their type in the first letter (i idea, r requirement,
-/// n note, s source, x issue, p principle), so Refs needs no further shape.
+/// n note, s source, x issue, p principle, h prediction), so Refs needs no
+/// further shape.
 public sealed record Event(
     DateTimeOffset At,
     string Kind,
@@ -19,7 +20,10 @@ public sealed record Event(
     double? Hi = null,
     string? Who = null,
     string? Why = null,
-    string? Url = null);
+    string? Url = null,
+    string? Metric = null,
+    string[]? Tags = null,
+    string? Where = null);
 
 /// The append-only file of events: one JSON object per line.
 public sealed class Journal(string path)
