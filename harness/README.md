@@ -16,8 +16,8 @@ A C# agent harness modeled on [Harness²](https://harness2.github.io/): an agent
 # Defaults: Ollama at 127.0.0.1:11434, model qwen3:8b, context 16384.
 # Override with OLLAMA_HOST, HARNESS_MODEL, HARNESS_NUM_CTX.
 # For Claude instead: HARNESS_PROVIDER=anthropic ANTHROPIC_API_KEY=...
-dotnet run --project src -- run examples/hello-task.json
-dotnet run --project src -- improve examples/hello-task.json --k 3
+dotnet run --project src -- run examples/tasks/hello.json
+dotnet run --project src -- improve examples/tasks/hello.json --k 3
 dotnet test tests
 ```
 

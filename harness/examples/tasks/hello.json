@@ -1,6 +1,6 @@
 {
   "id": "hello",
   "prompt": "Read input.txt and write greeting.txt containing exactly: Hello, <name>!",
-  "fixture": "fixtures/hello",
+  "fixture": "../fixtures/hello",
   "checks": [{ "file": "greeting.txt", "contains": "Hello, world!" }]
 }

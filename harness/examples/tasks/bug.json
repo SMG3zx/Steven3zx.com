@@ -1,0 +1,1 @@
+{"id":"bug","prompt":"calc.py has a bug: add() does not add. Fix it in place.","fixture":"../fixtures/bug","checks":[{"file":"calc.py","contains":"return a + b"}]}

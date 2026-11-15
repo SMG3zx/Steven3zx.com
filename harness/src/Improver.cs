@@ -91,7 +91,7 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         var (edits, why) = await AskForEditsAsync(prompt, ct);
         try
         {
-            return ($"candidate-{i}", h0.Apply(edits), why);
+            return ($"candidate-{i}", KeepDenyRules(h0, h0.Apply(edits)), why);
         }
         catch (InvalidOperationException)
         {
@@ -117,7 +117,7 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         var (edits, _) = await AskForEditsAsync(sb.ToString(), ct);
         try
         {
-            return h0.Apply(edits);
+            return KeepDenyRules(h0, h0.Apply(edits));
         }
         catch (InvalidOperationException)
         {
@@ -178,6 +178,18 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
     {
         var path = Path.Combine(dir, "EXPERIENCE.md");
         return File.Exists(path) ? File.ReadAllText(path) : "(none yet)";
+    }
+
+    /// <summary>Deny rules are append-only: a candidate may add rules but never drop the base harness's.</summary>
+    public static HarnessFiles KeepDenyRules(HarnessFiles baseline, HarnessFiles candidate)
+    {
+        const string path = "plugins/deny.txt";
+        var have = candidate.Get(path).Split('\n').Select(l => l.Trim()).ToHashSet();
+        var missing = baseline.Get(path).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !have.Contains(l)).ToList();
+        if (missing.Count == 0)
+            return candidate;
+        var text = candidate.Get(path).TrimEnd();
+        return candidate.Apply(new Dictionary<string, string?> { [path] = (text.Length > 0 ? text + "\n" : "") + string.Join("\n", missing) + "\n" });
     }
 
     private static string Dump(HarnessFiles h) =>

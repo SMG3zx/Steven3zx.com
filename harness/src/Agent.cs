@@ -48,7 +48,7 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
             var pattern = rule.Trim();
             if (pattern.Length == 0 || pattern.StartsWith('#'))
                 continue;
-            if (Regex.IsMatch(call.Name + " " + call.Input.ToJsonString(), pattern))
+            if (Denies(pattern, call.Name + " " + call.Input.ToJsonString()))
                 return ($"Blocked by plugin rule: {pattern}", true);
         }
         try
@@ -58,6 +58,23 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
         catch (Exception e) when (e is not OperationCanceledException)
         {
             return ($"{e.GetType().Name}: {e.Message}", true);
+        }
+    }
+
+    /// <summary>A rule that is not a valid regex still denies, as a literal substring.</summary>
+    public static bool Denies(string pattern, string text)
+    {
+        try
+        {
+            return Regex.IsMatch(text, pattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+        }
+        catch (ArgumentException)
+        {
+            return text.Contains(pattern, StringComparison.Ordinal);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return true;
         }
     }
 

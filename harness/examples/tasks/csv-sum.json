@@ -1,0 +1,1 @@
+{"id":"csv-sum","prompt":"data.csv lists items and quantities. Write total.txt containing the sum of all qty values and nothing else.","fixture":"../fixtures/csv","checks":[{"file":"total.txt","contains":"23"}]}

@@ -1,0 +1,1 @@
+{"id":"config","prompt":"In config.json change the port to 8080 and add a boolean key \"debug\" set to true. Keep it valid JSON.","fixture":"../fixtures/config","checks":[{"file":"config.json","contains":"8080"},{"file":"config.json","contains":"\"debug\": true"},{"file":"config.json","contains":"\"name\": \"svc\""}]}

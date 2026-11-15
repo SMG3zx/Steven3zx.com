@@ -72,6 +72,14 @@ public class HarnessTests
     }
 
     [Fact]
+    public void Invalid_deny_regex_falls_back_to_literal_match()
+    {
+        Assert.True(Agent.Denies("^[^\\]\\./backup$", "x ^[^\\]\\./backup$ y"));
+        Assert.False(Agent.Denies("[unclosed", "harmless"));
+        Assert.True(Agent.Denies("write_file", "write_file {}"));
+    }
+
+    [Fact]
     public async Task Turn_limit_stops_a_looping_model()
     {
         var model = new ScriptedModel(_ => Call("list_dir", new()));
@@ -109,6 +117,16 @@ public class HarnessTests
         var h = new HarnessFiles().Apply(new Dictionary<string, string?> { ["systemprompt.md"] = "a", ["skills/x.md"] = "b" });
         h.Save(dir);
         Assert.Equal(h.Files, HarnessFiles.Load(dir).Files);
+    }
+
+    [Fact]
+    public void Deny_rules_cannot_be_removed_only_added()
+    {
+        var baseline = new HarnessFiles().Apply(new Dictionary<string, string?> { ["plugins/deny.txt"] = "a\nb\n" });
+        var dropped = baseline.Apply(new Dictionary<string, string?> { ["plugins/deny.txt"] = null });
+        Assert.Equal(["a", "b"], Improver.KeepDenyRules(baseline, dropped).Get("plugins/deny.txt").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        var added = baseline.Apply(new Dictionary<string, string?> { ["plugins/deny.txt"] = "a\nb\nc\n" });
+        Assert.Equal("a\nb\nc\n", Improver.KeepDenyRules(baseline, added).Get("plugins/deny.txt"));
     }
 
     [Fact]

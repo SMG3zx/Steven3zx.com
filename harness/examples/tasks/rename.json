@@ -1,0 +1,1 @@
+{"id":"rename","prompt":"Rename the function calc_total to compute_total in every Python file in the workspace, including its call sites.","fixture":"../fixtures/rename","checks":[{"file":"lib.py","contains":"def compute_total"},{"file":"main.py","contains":"import compute_total"},{"file":"main.py","contains":"compute_total([1,2,3])"}]}
