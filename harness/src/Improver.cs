@@ -73,7 +73,15 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         var ws = task.NewWorkspace();
         try
         {
-            var run = await new Agent(model, h, ws, agentOptions).RunAsync(task.Prompt, ct);
+            var run = await new Agent(
+                model,
+                h,
+                ws,
+                agentOptions with
+                {
+                    TestCommand = task.TestCommand,
+                }
+            ).RunAsync(task.Prompt, ct);
             return new(label, h, run, task.Verify(ws));
         }
         finally

@@ -8,7 +8,8 @@ public sealed record AgentOptions(
     int MaxTurns = 20,
     bool AllowScripts = false,
     int MaxDepth = 1,
-    int MaxNudges = 2
+    int MaxNudges = 2,
+    string? TestCommand = null
 );
 
 public sealed record RunResult(
@@ -195,6 +196,11 @@ public sealed class Agent(
                 var sub = await RunAsync(harness.Get(p), S("task"), depth + 1, ct);
                 return Trim(sub.Final);
             }
+            case "run_tests" when _o.TestCommand is { } cmd:
+            {
+                var (code, output) = await Task.Run(() => Sandbox.Run(cmd, _root), ct);
+                return $"exit {code}\n{Sandbox.Tail(output)}";
+            }
             case "run_script" when _o.AllowScripts:
             {
                 var p = harness.Path_("scripts", S("name"));
@@ -279,6 +285,14 @@ public sealed class Agent(
             new("read_file", "Read a workspace file.", Schema("path")),
             new("write_file", "Write a workspace file.", Schema("path", "content")),
         };
+        if (_o.TestCommand is not null)
+            tools.Add(
+                new(
+                    "run_tests",
+                    "Run the task's tests in the workspace and return their output.",
+                    Schema()
+                )
+            );
         if (harness.Names("skills").Any())
             tools.Add(new("load_skill", "Read a skill by name.", Schema("name")));
         if (depth < _o.MaxDepth && harness.Names("subagents").Any())

@@ -10,7 +10,8 @@ public sealed record HarnessTask(
     string Id,
     string Prompt,
     string? Fixture,
-    IReadOnlyList<Check> Checks
+    IReadOnlyList<Check> Checks,
+    string? TestCommand = null
 )
 {
     public static HarnessTask Load(string path)
@@ -41,7 +42,8 @@ public sealed record HarnessTask(
 
     public Evidence Verify(string workspace)
     {
-        if (Checks.Count == 0)
+        var total = Checks.Count + (TestCommand is null ? 0 : 1);
+        if (total == 0)
             return new(0, "Task has no checks.");
         var notes = new List<string>();
         var passed = 0;
@@ -56,7 +58,16 @@ public sealed record HarnessTask(
                 passed++;
             notes.Add($"{(ok ? "PASS" : "FAIL")} {c.File} contains \"{c.Contains}\"");
         }
-        return new((double)passed / Checks.Count, string.Join("\n", notes));
+        if (TestCommand is not null)
+        {
+            var (code, output) = Sandbox.Run(TestCommand, workspace);
+            if (code == 0)
+                passed++;
+            notes.Add(
+                $"{(code == 0 ? "PASS" : "FAIL")} {TestCommand} (exit {code})\n{Sandbox.Tail(output, 1500)}"
+            );
+        }
+        return new((double)passed / total, string.Join("\n", notes));
     }
 }
 
