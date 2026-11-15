@@ -1,15 +1,31 @@
 import { component$, useComputed$, useSignal } from "@builder.io/qwik";
-import type { DocumentHead } from "@builder.io/qwik-city";
+import { routeLoader$, type DocumentHead } from "@builder.io/qwik-city";
 import { LinkCard } from "../components/link-card/link-card";
-import { allTags, links } from "../links";
+import { discoverLocal, localPortOf } from "../discover";
+import { links as saved, tagsOf } from "../links";
+
+/**
+ * Saved links plus every web page served on this machine right now. A saved link
+ * that points at a local port wins over the discovered one, since it says more.
+ */
+export const useLinks = routeLoader$(async ({ url }) => {
+  const covered = saved.flatMap((link) => {
+    const port = localPortOf(link.url);
+    return port === undefined ? [] : [port];
+  });
+  const own = Number(url.port) || (url.protocol === "https:" ? 443 : 80);
+  return [...saved, ...(await discoverLocal([own, ...covered]))];
+});
 
 export default component$(() => {
+  const links = useLinks();
+  const allTags = tagsOf(links.value);
   const query = useSignal("");
   const activeTag = useSignal<string | null>(null);
 
   const visible = useComputed$(() => {
     const q = query.value.trim().toLowerCase();
-    return links.filter((link) => {
+    return links.value.filter((link) => {
       if (activeTag.value && !link.tags.includes(activeTag.value)) {
         return false;
       }
@@ -28,7 +44,7 @@ export default component$(() => {
       <header>
         <h1>Portal</h1>
         <p class="count">
-          {visible.value.length} of {links.length} links
+          {visible.value.length} of {links.value.length} links
         </p>
       </header>
 

@@ -26,6 +26,20 @@ Links come from two places, merged by `scripts/collect-links.ts` into `src/gener
 
 Titles must be unique, since each one names its preview image. Duplicate URLs are dropped.
 
+## Local pages are found for you
+
+Any web page served on this machine appears in the portal by itself, tagged `local`. Nothing has to be written down.
+
+When the page is requested, `src/discover.ts` reads the listening ports from `/proc/net/tcp`, asks each one on
+localhost for its front page, and keeps those that answer with HTML. The page's `<title>` becomes the link title.
+A scan is reused for 30 seconds and refreshed in the background, so a newly started tool shows up within about a
+minute and disappears the same way when it stops.
+
+- A saved link that points at the same local port replaces the discovered one, so write one when you want a
+  description, tags, or a screenshot. Discovered links show the placeholder image.
+- The portal does not list itself.
+- Only ports bound to loopback or to every address are checked.
+
 ## Commands
 
 ```sh
