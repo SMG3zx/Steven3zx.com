@@ -61,6 +61,9 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
             case "req": Req(IdeaArg(a), Arg(a, 1, "requirement"), Arg(a, 2, "who asked, by name"), Arg(a, 3, "why")); break;
             case "cut": Cut(Arg(a, 0, "requirement id"), Arg(a, 1, "why")); break;
             case "advance": Advance(IdeaArg(a), a.Length > 1 ? Number(a[1], "days") : 1); break;
+            case "bookmark": NewBookmark(Arg(a, 0, "title"), Arg(a, 1, "url"), a[2..]); break;
+            case "unbookmark": Unbookmark(Arg(a, 0, "bookmark id")); break;
+            case "bookmarks": Bookmarks(); break;
             case "adopt": Adopt(Arg(a, 0, "folder")); break;
             case "home": Home(IdeaArg(a), Arg(a, 1, "folder")); break;
             case "watch": Watch(IdeaArg(a), Arg(a, 1, "text in its window titles"), a.ElementAtOrDefault(2)); break;
@@ -321,6 +324,33 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
     }
 
     // ---- time ----
+
+    // ---- the portal ----
+
+    private void NewBookmark(string title, string url, string[] rest)
+    {
+        if (!Portal.IsWebAddress(url)) throw new UserError($"'{url}' is not an http or https address");
+        if (s.Bookmarks.Find(b => b.Url == url) is { } same) throw new UserError($"{same.Id} already points there: {same.Title}");
+        var tags = rest.Where(r => r.StartsWith('+') && r.Length > 1).Select(r => r[1..]).ToArray();
+        var why = string.Join(' ', rest.Where(r => !r.StartsWith('+')));
+        var id = s.NextId('b');
+        Record(new(now, "bookmark", id, title, Url: url, Why: why.Length > 0 ? why : null, Tags: tags.Length > 0 ? tags : null));
+        o.WriteLine($"{id} saved. It is on the portal: vinci serve");
+    }
+
+    private void Unbookmark(string id)
+    {
+        if (!s.Bookmarks.Exists(b => b.Id == id)) throw new UserError($"no bookmark {id}");
+        Record(new(now, "unbookmark", id));
+        o.WriteLine($"{id} is off the portal.");
+    }
+
+    private void Bookmarks()
+    {
+        if (s.Bookmarks.Count == 0) { o.WriteLine("No bookmarks yet. vinci bookmark \"title\" <url> [\"what it is for\"] [+tag...]"); return; }
+        foreach (var b in s.Bookmarks)
+            o.WriteLine($"{b.Id,-4} {b.Title}  {b.Url}{string.Concat(b.Tags.Select(t => $" +{t}"))}{(b.Why is null ? "" : $"  ({b.Why})")}");
+    }
 
     /// An existing folder becomes an idea in one step, named after the folder.
     /// Adopting it again does nothing, so a whole directory can be adopted in a loop.
@@ -820,6 +850,13 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
           watches                             what is watched
           sync                                show what was just counted (every command counts it)
           spent <idea> <minutes>              add time spent away from the screen
+
+        Portal
+          bookmark "title" <url> ["what it is for"] [+tag...]
+          unbookmark <b>   bookmarks
+          serve [port]                        the page of saved links, on localhost (default port 4000).
+                                              It also shows each project's portal.json and any web page
+                                              this machine is serving.
 
         Knowledge
           source "citation" [url]             where knowledge came from

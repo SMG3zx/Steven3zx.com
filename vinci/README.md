@@ -2,7 +2,7 @@
 
 A command-line tool that takes an idea from first thought to shipped work and keeps it alive afterwards. It also records what you know and where you learned it, what you predicted and whether you were right, how long you spend on each idea, and anything else about your life you choose to measure.
 
-It is written in C# on .NET 10 and has no dependencies. All data is one file. Time on each idea is counted for you from the windows you work in, using [ActivityWatch](https://activitywatch.net/).
+It is written in C# on .NET 10 and has no dependencies. All data is one file. `vinci serve` shows your saved links, your projects' links and every local web page on one page. Time on each idea is counted for you from the windows you work in, using [ActivityWatch](https://activitywatch.net/).
 
 ## Install
 
@@ -135,6 +135,32 @@ systemctl --user enable --now awatcher
 
 vinci reads `http://127.0.0.1:5600`. Set `VINCI_ACTIVITYWATCH` to point it somewhere else.
 
+## The portal
+
+`vinci serve` is a page of your saved links on `http://127.0.0.1:4000`, with search, tag filters and a screenshot of each one. Three kinds of link appear on it.
+
+- **Bookmarks** are facts in the journal:
+
+  ```sh
+  vinci bookmark "Qwik Docs" https://qwik.dev/ "Official documentation" +docs +qwik
+  vinci bookmarks
+  vinci unbookmark b1
+  ```
+
+- **Project links.** A project lists its own links in a `portal.json` at its root, an array of `{ "title", "url", "description"?, "tags"? }`. vinci reads every tracked `portal.json` in each repository an idea lives in, so a new project's links appear once the file is committed. Entries without a title or an http address are skipped, and `cold-storage/` folders are never read.
+- **Local pages.** Any web page this machine is serving appears by itself, tagged `local`. vinci reads the listening ports from `/proc/net/tcp`, asks each one for its front page, and keeps those that answer with HTML. A scan is reused for 30 seconds, so a tool shows up within about a minute of starting. A saved link to the same port replaces the discovered one, and the portal does not list itself.
+
+The first link to a URL wins. Screenshots are taken in the background with headless Chromium the first time a link is shown, and kept in `previews/` beside the journal; until then a placeholder is shown. Delete a picture to have it taken again. Set `CHROMIUM` if the browser is not at `/usr/bin/chromium`.
+
+The page reads the journal on every request, so nothing needs restarting when a bookmark is added. To keep it running:
+
+```sh
+cp deploy/portal.service ~/.config/systemd/user/
+systemctl --user enable --now portal
+```
+
+`./install.sh` restarts that service so it runs the new build.
+
 ## In a pipe
 
 Any quoted text can be `-`, which reads it from standard input:
@@ -195,7 +221,7 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 
 ## What was left out on purpose
 
-- **A database, a server, a web page.** One file and a command line do the job.
+- **A database.** One file does the job. The one web page is the portal, which only reads that file.
 - **Editing and deleting facts.** Correct a fact by recording a new one.
 - **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
 - **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.
@@ -216,6 +242,8 @@ dotnet test tests
 | `src/State.cs` | Rebuilding the current state from events |
 | `src/App.cs` | The commands and the stage gates |
 | `src/Tracker.cs` | Recording window time, commits and use, read from ActivityWatch and git |
+| `src/Portal.cs` | The portal: which links go on the page, how it is drawn, and the server |
 | `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch |
+| `deploy/portal.service` | The systemd user unit that runs `vinci serve` |
 | `src/Review.cs` | The findings, the limits, and what to do next |
 | `src/Stats.cs` | Control limits and sigma level |

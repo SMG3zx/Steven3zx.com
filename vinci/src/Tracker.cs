@@ -127,7 +127,7 @@ public static class Tracker
         file.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
     /// The nearest folder at or above this one that holds a .git.
-    private static string? RepositoryOf(string folder)
+    public static string? RepositoryOf(string folder)
     {
         for (var dir = folder; dir is not null; dir = Path.GetDirectoryName(dir))
             if (Path.Exists(Path.Combine(dir, ".git"))) return dir;
@@ -135,16 +135,19 @@ public static class Tracker
     }
 }
 
-/// Reads commits by running git.
+/// Reads commits and tracked files by running git.
 public static class Git
 {
-    public static IReadOnlyList<Commit> Log(string folder, DateTimeOffset? after)
+    /// Only tracked files are listed, so ignored and untracked ones never reach the page.
+    public static IReadOnlyList<string> PortalFiles(string repository) =>
+        [.. Run(repository, "ls-files", "-z", "--", "portal.json", "*/portal.json")
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries).Select(file => Path.Combine(repository, file))];
+
+    private static string Run(string folder, params string[] args)
     {
-        if (!Directory.Exists(folder)) return [];
         var start = new ProcessStartInfo("git") { RedirectStandardOutput = true, RedirectStandardError = true };
-        // \x01 marks the start of a commit; the changed files follow, one per line, relative to the folder.
-        string[] args = ["-C", folder, "log", "--format=%x01%H%x09%cI%x09%s", "--name-only", "--relative", "--reverse",
-            after is { } a ? $"--after={a.ToUnixTimeSeconds()}" : "-1", "--", "."];
+        start.ArgumentList.Add("-C");
+        start.ArgumentList.Add(folder);
         foreach (var arg in args) start.ArgumentList.Add(arg);
         try
         {
@@ -153,20 +156,28 @@ public static class Git
             git.BeginErrorReadLine();
             var text = git.StandardOutput.ReadToEnd();
             git.WaitForExit();
-            if (git.ExitCode != 0) return [];
-            return [.. text.Split('\x01', StringSplitOptions.RemoveEmptyEntries).Select(block =>
-            {
-                var rows = block.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                var head = rows[0].Split('\t', 3);
-                return new Commit(head[0], DateTimeOffset.Parse(head[1], CultureInfo.InvariantCulture), head[2],
-                    [.. rows[1..].Select(file => Path.Combine(folder, file))]);
-            })];
+            return git.ExitCode == 0 ? text : "";
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or FormatException)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            // No git, or not a repository: there are simply no commits to count.
-            return [];
+            // No git, or not a repository: there is simply nothing to read.
+            return "";
         }
+    }
+
+    public static IReadOnlyList<Commit> Log(string folder, DateTimeOffset? after)
+    {
+        if (!Directory.Exists(folder)) return [];
+        // \x01 marks the start of a commit; the changed files follow, one per line, relative to the folder.
+        var text = Run(folder, "log", "--format=%x01%H%x09%cI%x09%s", "--name-only", "--relative", "--reverse",
+            after is { } a ? $"--after={a.ToUnixTimeSeconds()}" : "-1", "--", ".");
+        return [.. text.Split('\x01', StringSplitOptions.RemoveEmptyEntries).Select(block =>
+        {
+            var rows = block.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var head = rows[0].Split('\t', 3);
+            return new Commit(head[0], DateTimeOffset.Parse(head[1], CultureInfo.InvariantCulture), head[2],
+                [.. rows[1..].Select(file => Path.Combine(folder, file))]);
+        })];
     }
 }
 

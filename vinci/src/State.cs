@@ -124,6 +124,9 @@ public sealed class Commitment(DateTimeOffset at, string text, string? ideaId)
     public bool? Kept { get; set; }
 }
 
+/// A link worth keeping. Why is what it is for.
+public sealed record Bookmark(string Id, DateTimeOffset At, string Title, string Url, string? Why, List<string> Tags);
+
 /// Time in a window whose app or title contains Pattern is work on the idea,
 /// or, when Use is set, is the idea being used: the shipped thing on screen.
 public sealed record Watch(string IdeaId, string Pattern, bool Use = false);
@@ -150,6 +153,9 @@ public sealed class State
     public List<Metric> Metrics { get; } = [];
     public List<Prediction> Predictions { get; } = [];
     public List<Commitment> Commitments { get; } = [];
+    public List<Bookmark> Bookmarks { get; } = [];
+    /// Bookmarks ever made, kept or not, so an id is never used twice.
+    private int bookmarksMade;
     public List<Watch> Watches { get; } = [];
     /// When the first watch was set: where window tracking begins.
     public DateTimeOffset? WatchingSince { get; private set; }
@@ -215,6 +221,7 @@ public sealed class State
             'x' => Issues.Count,
             'p' => Principles.Count,
             'h' => Predictions.Count,
+            'b' => bookmarksMade,
             _ => throw new ArgumentOutOfRangeException(nameof(prefix)),
         };
         return $"{prefix}{count + 1}";
@@ -261,6 +268,13 @@ public sealed class State
                 break;
             case "unwatch":
                 Watches.RemoveAll(w => w.IdeaId == e.Id && w.Pattern.Equals(e.Text, StringComparison.OrdinalIgnoreCase));
+                break;
+            case "bookmark":
+                bookmarksMade++;
+                Bookmarks.Add(new Bookmark(e.Id!, e.At, e.Text!, e.Url!, e.Why, [.. e.Tags ?? []]));
+                break;
+            case "unbookmark":
+                Bookmarks.RemoveAll(b => b.Id == e.Id);
                 break;
             case "home":
                 WatchingSince ??= e.At;

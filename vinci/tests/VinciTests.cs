@@ -374,6 +374,100 @@ public sealed class VinciTests : IDisposable
         Assert.Contains("stages  Seed 3d0h (touch 30m), Prepare 5d0h (touch 1h30m)", Run("show", "i1"));
     }
 
+    // ---- the portal ----
+
+    [Fact]
+    public void A_bookmark_is_kept_in_the_journal_until_it_is_dropped()
+    {
+        Assert.Contains("No bookmarks yet", Run("bookmarks"));
+        Assert.StartsWith("b1 saved", Run("bookmark", "Qwik Docs", "https://qwik.dev/", "Official docs", "+docs", "+qwik"));
+        Assert.Contains("not an http", Fail("bookmark", "Files", "file:///etc"));
+        Assert.Contains("b1 already points there", Fail("bookmark", "Again", "https://qwik.dev/"));
+        Run("bookmark", "Bun", "https://bun.sh/docs");
+        Assert.Contains("b1   Qwik Docs  https://qwik.dev/ +docs +qwik  (Official docs)", Run("bookmarks"));
+
+        Run("unbookmark", "b1");
+        Assert.Contains("no bookmark b1", Fail("unbookmark", "b1"));
+        Assert.DoesNotContain("Qwik", Run("bookmarks"));
+        // A dropped bookmark's id is not handed out again.
+        Assert.StartsWith("b3 saved", Run("bookmark", "TypeScript", "https://www.typescriptlang.org/docs/"));
+    }
+
+    [Fact]
+    public void The_portal_lists_bookmarks_and_each_projects_own_links()
+    {
+        var glider = Folder("glider");
+        File.WriteAllText(Path.Combine(glider, "portal.json"), """
+            [
+              { "title": "Glider", "url": "https://glider.example", "description": "The site.", "tags": ["live"] },
+              { "title": "Docs again", "url": "https://qwik.dev/" },
+              { "title": "", "url": "https://untitled.example" },
+              { "title": "Not the web", "url": "ftp://files.example" },
+              "nonsense"
+            ]
+            """);
+        var hidden = Directory.CreateDirectory(Path.Combine(dir, "repo", "cold-storage")).FullName;
+        File.WriteAllText(Path.Combine(hidden, "portal.json"), """[{ "title": "Later", "url": "https://later.example" }]""");
+        File.WriteAllText(Path.Combine(Folder("broken"), "portal.json"), "{ not json");
+        Run("bookmark", "Qwik Docs", "https://qwik.dev/", "+docs");
+
+        PortalFiles tracked = repository => Directory.GetFiles(repository, "portal.json", SearchOption.AllDirectories);
+        // No idea lives anywhere yet, so no repository is read.
+        Assert.Single(Portal.Saved(State.From(new Journal(JournalPath).Read()), tracked));
+
+        Run("adopt", glider);
+        var links = Portal.Saved(State.From(new Journal(JournalPath).Read()), tracked);
+        Assert.Equal(["Qwik Docs", "Glider"], links.Select(l => l.Title));
+        Assert.Equal(["live"], links[1].Tags);
+    }
+
+    [Fact]
+    public void Local_pages_are_found_from_the_listening_ports()
+    {
+        const string proc = """
+              sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+               0: 0100007F:15E0 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1 1
+               1: 3500007F:0035 00000000:0000 0A 00000000:00000000 00:00000000 00000000   977        0 2 1
+               2: 00000000:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 3 1
+               3: 0100007F:9C40 0100007F:15E0 01 00000000:00000000 00:00000000 00000000  1000        0 4 1
+               4: 00000000000000000000000001000000:0277 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000 0 0 5 1
+            """;
+        // Loopback and every-address listeners only: not the resolver on 127.0.0.53, not an open connection.
+        Assert.Equal([631, 3000, 5600], Portal.ListeningPorts(proc));
+        Assert.Equal("Home & Away - CUPS", Portal.TitleOf("<html><head><TITLE>\n Home &amp; Away -\n CUPS </TITLE>"));
+        Assert.Null(Portal.TitleOf("<p>no title</p>"));
+        Assert.Equal(5600, Portal.LocalPortOf("http://localhost:5600/#/home"));
+        Assert.Null(Portal.LocalPortOf("https://qwik.dev/"));
+
+        var saved = new[] { new Link("ActivityWatch", "http://localhost:5600", "Where the time went.", ["tools"]) };
+        var found = new[]
+        {
+            new Link("ActivityWatch", "http://localhost:5600", null, ["local"], Discovered: true),
+            new Link("Gitea", "http://localhost:3000", null, ["local"], Discovered: true),
+            new Link("Portal", "http://localhost:4000", null, ["local"], Discovered: true),
+        };
+        // A saved link to a port wins over the discovered one, and the portal does not list itself.
+        var links = Portal.Merge(saved, found, ownPort: 4000);
+        Assert.Equal(["http://localhost:5600", "http://localhost:3000"], links.Select(l => l.Url));
+        Assert.Equal(["activitywatch", "local-3000"], links.Select(l => l.Preview));
+    }
+
+    [Fact]
+    public void The_page_shows_every_link_and_cannot_be_broken_by_its_text()
+    {
+        var page = Portal.Page([
+            new Link("Qwik <Docs>", "https://www.qwik.dev/a?b=1&c=2", "Fast \"apps\"", ["docs", "qwik"]),
+            new Link("Gitea", "http://localhost:3000", null, ["local"], Discovered: true),
+        ]);
+        Assert.Contains("<span id=\"shown\">2</span> of 2 links", page);
+        Assert.Contains("<span class=\"title\">Qwik &lt;Docs&gt;</span><span class=\"host\">qwik.dev</span>", page);
+        Assert.Contains("href=\"https://www.qwik.dev/a?b=1&amp;c=2\"", page);
+        Assert.Contains("src=\"/previews/qwik-docs.png\"", page);
+        Assert.Contains("src=\"/previews/local-3000.png\"", page);
+        Assert.Contains("data-tag=\"local\">local</button>", page);
+        Assert.DoesNotContain("<Docs>", page);
+    }
+
     // ---- the pipeline ----
 
     [Fact]

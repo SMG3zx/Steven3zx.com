@@ -1,0 +1,11 @@
+[Unit]
+Description=vinci portal (saved links and local pages)
+
+[Service]
+# install.sh puts the built vinci here; the service never runs from the git checkout.
+ExecStart=%h/.local/bin/vinci serve 4000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

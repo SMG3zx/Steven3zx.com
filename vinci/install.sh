@@ -12,6 +12,9 @@ dotnet publish "$here/src" -c Release -o "$app" --nologo -v q
 mkdir -p "$bin"
 ln -sf "$app/vinci" "$bin/vinci"
 
+# The portal keeps running the old build until it is restarted.
+systemctl --user try-restart portal.service 2>/dev/null || true
+
 echo "Installed: $bin/vinci"
 case ":$PATH:" in
   *":$bin:"*) ;;
