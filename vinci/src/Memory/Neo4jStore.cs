@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Neo4j.Driver;
@@ -116,6 +118,15 @@ public sealed partial class Neo4jStore : IAsyncDisposable
     private static Dictionary<string, object?> P(params (string Key, object? Value)[] parameters) => With([], parameters);
 
     private static string NewId() => Guid.NewGuid().ToString();
+
+    /// The id of a memory that has none: the same text in the same scope always gets the same id,
+    /// so consolidating an event again reinforces the memory instead of storing a copy of it.
+    public static string ContentMemoryId(MemoryScope scope, string content)
+    {
+        var normalized = string.Join(' ', content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+        var key = JsonSerializer.Serialize(new[] { scope.UserId ?? "", scope.ProjectId ?? "", scope.SessionId ?? "", normalized });
+        return "mem-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..32];
+    }
 
     private static string Now() => DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
@@ -602,6 +613,26 @@ public sealed partial class Neo4jStore : IAsyncDisposable
 
     // ---- memories ----
 
+    private async Task<string?> NearestDuplicate(CuratedMemory input, IReadOnlyList<double> embedding)
+    {
+        await using var session = Session();
+        var rows = await Rows(session, """
+            CALL db.index.vector.queryNodes('memory_embedding', 5, $embedding) YIELD node, score
+            WHERE score >= $threshold AND node.status = 'active'
+              AND coalesce(node.userId, '') = coalesce($userId, '')
+              AND coalesce(node.projectId, '') = coalesce($projectId, '')
+              AND coalesce(node.sessionId, '') = coalesce($sessionId, '')
+            RETURN node.id AS id
+            ORDER BY score DESC
+            LIMIT 1
+            """, P(("embedding", embedding.ToList()), ("threshold", DuplicateSimilarity),
+                   ("userId", input.UserId), ("projectId", input.ProjectId), ("sessionId", input.SessionId)));
+        return rows.FirstOrDefault()?["id"] is { } id ? Json.Str(id) : null;
+    }
+
+    /// A memory at least this similar (cosine) to an active one in the same scope is the same memory.
+    public const double DuplicateSimilarity = 0.95;
+
     /// Saves a memory with its sources and the entities it is about. A memory
     /// that says something else about the same subject and predicate is
     /// linked as a contradiction, and one that agrees as a reinforcement;
@@ -609,9 +640,13 @@ public sealed partial class Neo4jStore : IAsyncDisposable
     public async Task<JsonObject> CreateMemory(CuratedMemory input)
     {
         var embedding = embeddings.Enabled ? (await embeddings.EmbedDocuments([input.Content]))[0].ToList() : null;
+        // Consolidating the same event twice, or a paraphrase of it, must not store a second copy:
+        // the nearest active memory in scope is reinforced instead.
+        var existing = input.Id is null && embedding is not null
+            ? await NearestDuplicate(input, embedding) : null;
         var memory = new Dictionary<string, object?>
         {
-            ["id"] = input.Id ?? NewId(),
+            ["id"] = input.Id ?? existing ?? ContentMemoryId(input, input.Content),
             ["content"] = input.Content,
             ["category"] = input.Category ?? "fact",
             ["status"] = input.Status ?? "active",

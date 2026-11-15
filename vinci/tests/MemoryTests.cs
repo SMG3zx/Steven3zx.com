@@ -238,6 +238,16 @@ public sealed class MemoryTests
     }
 
     [Fact]
+    public void The_same_memory_text_in_the_same_scope_gets_the_same_id()
+    {
+        var scope = new MemoryScope { ProjectId = "p" };
+        var a = Neo4jStore.ContentMemoryId(scope, "The  worker   restarts\nafter a failure.");
+        Assert.Equal(a, Neo4jStore.ContentMemoryId(scope, "the worker restarts after a failure."));
+        Assert.NotEqual(a, Neo4jStore.ContentMemoryId(new MemoryScope { ProjectId = "other" }, "the worker restarts after a failure."));
+        Assert.NotEqual(a, Neo4jStore.ContentMemoryId(scope, "a different fact"));
+    }
+
+    [Fact]
     public async Task Provider_status_tells_disabled_ready_and_unreachable_apart()
     {
         Assert.Equal(new ProviderStatus(false, "disabled"), await ProviderStatus.Probe(null));
