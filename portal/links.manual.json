@@ -16,5 +16,11 @@
     "url": "https://www.typescriptlang.org/docs/",
     "description": "Language reference and guides for TypeScript.",
     "tags": ["docs", "typescript"]
+  },
+  {
+    "title": "ActivityWatch",
+    "url": "http://localhost:5600",
+    "description": "Where the time went: windows and idle time on this machine. vinci reads it to count time per idea.",
+    "tags": ["tools", "vinci"]
   }
 ]
