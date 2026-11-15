@@ -176,6 +176,31 @@ var Worksheet = []WorksheetEntry{
 	{"root_2.png", "sqrt[5](-3125)", OpRoot, "(-5)^5", 0, nil},
 	{"root_1.png", "sqrt(169)", OpRoot, "13^2", 0, nil},
 	{"root_3.png", "sqrt(25)", OpRoot, "5^2", 0, nil},
+	// EquationsUnit5.md has no screenshots, so these are named by problem number.
+	// Problem 10 is left out because its graph (Graph_1) is not in the repository.
+	{"unit5_1", "6x + 8 = 5 - 6x", OpSolve, "{-1/4}", 0, nil},
+	{"unit5_2", "0.8x - 0.3(40 + x) = 0.45(40)", OpSolve, "{60}", 0, nil},
+	{"unit5_3", "x + 677.3", OpSimplify, "x + 677.3", 1, nil},
+	{"unit5_4", "6 + 0.49x", OpSimplify, "0.49x + 6", 1, nil},
+	{"unit5_5", "(1 - 0.8)x = 140", OpSolve, "{700}", 0, nil},
+	{"unit5_6", "1.08x = 149.04", OpSolve, "{138}", 0, nil},
+	{"unit5_7", "r = ba for b", OpSolveFor, "b = r/a", 0, nil},
+	{"unit5_8", "y = x - 2; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-5, -4, -3, -2, -1, 0, 1", 0, nil},
+	{"unit5_9", "y = (3/2)x; x = -6, -4, -2, 0, 2, 4, 6", OpTable, "-9, -6, -3, 0, 3, 6, 9", 0, nil},
+	{"unit5_11", "y = 2x - 4; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-10, -8, -6, -4, -2, 0, 2", 0, nil},
+	{"unit5_12", "y = -1; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-1, -1, -1, -1, -1, -1, -1", 0, nil},
+	{"unit5_13", "2x + 4 > 10", OpInequality, "(3, ∞)", 0, nil},
+	{"unit5_14", "-5x >= 35", OpInequality, "(-∞, -7]", 0, nil},
+	{"unit5_15", "9x - 11 <= 2x - 12", OpInequality, "(-∞, -1/7]", 0, nil},
+	{"unit5_16", "5 < x + 9 < 7", OpInequality, "(-4, -2)", 0, nil},
+	{"unit5_17", "3 < 2x + 1 <= 9", OpInequality, "(1, 4]", 0, nil},
+	{"unit5_18", "(6,2) and (7,6)", OpSlope, "4 (rises)", 0, nil},
+	{"unit5_19", "(-2,-2) and (-4,-2)", OpSlope, "0 (horizontal)", 0, nil},
+	{"unit5_20", "(-5,3) and (1,9)", OpSlope, "1 (rises)", 0, nil},
+	{"unit5_21", "slope 3 through (3,2)", OpPointSlope, "y - 2 = 3(x - 3)", 0, nil},
+	{"unit5_21b", "slope 3 through (3,2)", OpSlopeIntercept, "y = 3x - 7", 0, nil},
+	{"unit5_22", "(-4,0) and (0,4)", OpPointSlope, "y - 0 = 1(x + 4)", 0, nil},
+	{"unit5_22b", "(-4,0) and (0,4)", OpSlopeIntercept, "y = x + 4", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.

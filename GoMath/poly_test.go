@@ -52,10 +52,23 @@ func TestPolyDegree(t *testing.T) {
 }
 
 func TestToPolyRejectsNonPolynomials(t *testing.T) {
-	for _, input := range []string{"1 / (x + 1)", "x / 0", "x ^ y", "1.5x"} {
+	for _, input := range []string{"1 / (x + 1)", "x / 0", "x ^ y"} {
 		if _, err := ToPoly(expr(input)); err == nil {
 			t.Errorf("ToPoly(%q) returned no error", input)
 		}
+	}
+}
+
+func TestToPolyReadsDecimalsAsFractions(t *testing.T) {
+	p, err := ToPoly(expr("1.5x + 0.25"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.String(); got != "(6x + 1)/4" {
+		t.Errorf("1.5x + 0.25 = %q, want (6x + 1)/4", got)
+	}
+	if got, _ := p.decimalString(); got != "1.5x + 0.25" {
+		t.Errorf("decimalString = %q, want 1.5x + 0.25", got)
 	}
 }
 

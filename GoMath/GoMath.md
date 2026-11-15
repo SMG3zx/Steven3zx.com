@@ -13,7 +13,7 @@ Run the TUI with `go run .` in this directory. Tests run with `go test ./...`.
 | Element | Examples | Notes |
 | --- | --- | --- |
 | Whole numbers | `12`, `-4` | Polynomial operations need whole-number coefficients. |
-| Decimal numbers | `3.5` | Accepted by `Eval` and `Diff`. Rejected by polynomial operations. |
+| Decimal numbers | `3.5` | Read as the exact fraction `7/2` by polynomial operations. Simplify writes the answer in decimals when it can, such as `0.49x + 6`. |
 | Variables | `x`, `y` | One letter each. `xy` means `x*y`. `x2` means `x*2`. |
 | Operators | `+ - * / ^` | Binary `+ - * /` and power `^`. |
 | Implicit multiplication | `2x`, `7x^2y`, `2(x + 1)`, `(x+4)(x-4)` | Same binding as `*`. |
@@ -55,6 +55,11 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Radical form | ctrl+g | Rewrites `a^(m/n)` as a radical without evaluating it. Also accepts `169^{\frac{1}{2}}`. | `169^(1/2)` gives `sqrt(169)`. `8^(2/3)` gives `sqrt[3](8^2)`. |
 | Solve | ctrl+s | Solves an equation in one variable and writes the solution set. Handles linear equations and quadratics with rational roots. | `7x - 8 = 55` gives `{9}`. `x^2 - 5x + 6 = 0` gives `{2, 3}`. |
 | Excluded numbers | ctrl+d | Lists the numbers a rational expression must exclude from its domain, which are the roots of its denominators. Answers `all real numbers` when no denominator can reach 0. | `4/(x + 6)` gives `{-6}`. `1/(x^2 + 4)` gives `all real numbers`. |
+| Inequality | none yet | Solves a linear or compound inequality and writes interval notation. | `2x + 4 > 10` gives `(3, ∞)`. `3 < 2x + 1 <= 9` gives `(1, 4]`. |
+| Slope | none yet | Gives the slope through two points and whether the line rises, falls, is horizontal, or is vertical. | `(6,2) and (7,6)` gives `4 (rises)`. |
+| Point-slope / slope-intercept | none yet | Writes the line through two points, or through a point with a given slope. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. |
+| Table of values | none yet | Gives y for each listed x. | `y = x - 2; x = -3, -2, -1` gives `-5, -4, -3`. |
+| Solve for a variable | none yet | Isolates one variable of a formula that is linear in it. | `r = ba for b` gives `b = r/a`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.

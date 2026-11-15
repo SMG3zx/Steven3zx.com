@@ -416,6 +416,9 @@ func toPoly(e SExpression, steps *[]Step) (Poly, error) {
 	switch n := e.(type) {
 	case SAtom:
 		if unicode.IsDigit(rune(n.Value[0])) {
+			if strings.Contains(n.Value, ".") {
+				return decimalAtom(n.Value)
+			}
 			v, err := strconv.Atoi(n.Value)
 			if err != nil {
 				return nil, fmt.Errorf("%q is not a whole-number coefficient", n.Value)

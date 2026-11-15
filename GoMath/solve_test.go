@@ -442,3 +442,36 @@ func TestSolveClearsFractions(t *testing.T) {
 		}
 	}
 }
+
+func TestLinearUnitOperations(t *testing.T) {
+	cases := []struct {
+		in   string
+		op   Operation
+		want string
+	}{
+		{"x + 1 > x", OpInequality, "all real numbers"},
+		{"x + 1 < x", OpInequality, "no solution"},
+		{"x > 2 > 5", OpInequality, "no solution"},
+		{"2 <= x <= 2", OpInequality, "{2}"},
+		{"x/2 < 3", OpInequality, "(-∞, 6)"},
+		{"(2,1) and (2,5)", OpSlope, "undefined (vertical)"},
+		{"(1,4) and (3,0)", OpSlope, "-2 (falls)"},
+		{"(0,0) and (3,2)", OpSlope, "2/3 (rises)"},
+		{"slope -2/3 through (3,-1)", OpPointSlope, "y + 1 = (-2/3)(x - 3)"},
+		{"slope -2/3 through (3,-1)", OpSlopeIntercept, "y = (-2/3)x + 1"},
+		{"(2,1) and (2,5)", OpSlopeIntercept, "x = 2"},
+		{"P = 2l + 2w for w", OpSolveFor, "w = (P - 2l)/2"},
+		{"d = rt for t", OpSolveFor, "t = d/r"},
+	}
+	for _, c := range cases {
+		rep := Solve(c.in, c.op)
+		if rep.Err != nil || rep.Result != c.want {
+			t.Errorf("Solve(%q, %s) = %q, %v; want %q", c.in, c.op, rep.Result, rep.Err, c.want)
+		}
+	}
+	for _, in := range []string{"x^2 > 4", "x >", "3 = 3"} {
+		if rep := Solve(in, OpInequality); rep.Err == nil {
+			t.Errorf("Solve(%q, OpInequality) returned no error", in)
+		}
+	}
+}

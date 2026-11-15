@@ -30,6 +30,18 @@ const (
 	OpSolve
 	// OpDomain lists the numbers a rational expression must exclude from its domain.
 	OpDomain
+	// OpInequality solves an inequality, answering in interval notation.
+	OpInequality
+	// OpSlope gives the slope through two points and whether the line rises or falls.
+	OpSlope
+	// OpPointSlope writes a line's equation in point-slope form.
+	OpPointSlope
+	// OpSlopeIntercept writes a line's equation in slope-intercept form.
+	OpSlopeIntercept
+	// OpTable gives y for each listed x of an equation y = expression.
+	OpTable
+	// OpSolveFor solves a formula for one of its variables.
+	OpSolveFor
 )
 
 func (o Operation) String() string {
@@ -52,6 +64,18 @@ func (o Operation) String() string {
 		return "solve"
 	case OpDomain:
 		return "excluded numbers"
+	case OpInequality:
+		return "inequality"
+	case OpSlope:
+		return "slope"
+	case OpPointSlope:
+		return "point-slope form"
+	case OpSlopeIntercept:
+		return "slope-intercept form"
+	case OpTable:
+		return "table of values"
+	case OpSolveFor:
+		return "solve for a variable"
 	}
 	return "unknown"
 }
@@ -114,6 +138,21 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 
 	if op == OpDomain {
 		return solveDomain(ascii, &steps)
+	}
+
+	switch op {
+	case OpInequality:
+		return solveInequality(ascii, &steps)
+	case OpSlope:
+		return solveSlope(ascii, &steps)
+	case OpPointSlope:
+		return solveLineForm(ascii, false, &steps)
+	case OpSlopeIntercept:
+		return solveLineForm(ascii, true, &steps)
+	case OpTable:
+		return solveTable(ascii, &steps)
+	case OpSolveFor:
+		return solveFor(ascii, &steps)
 	}
 
 	if op == OpRadicalForm {
@@ -246,6 +285,11 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 	switch op {
 	case OpSimplify:
 		rep.Result = radicalRestore(poly.String(), radicals)
+		if strings.Contains(ascii, ".") {
+			if text, ok := poly.decimalString(); ok {
+				rep.Result = text
+			}
+		}
 		rep.Degree = poly.Degree()
 		steps = append(steps, Step{"Result", "Standard form", rep.Result})
 		if radicals == nil {
