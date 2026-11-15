@@ -329,40 +329,139 @@ func solveLineForm(ascii string, slopeIntercept bool, steps *[]Step) (rep Report
 	return rep
 }
 
-var tablePattern = regexp.MustCompile(`^\s*y\s*=\s*(.+?)\s*;\s*([a-z])\s*=\s*(.+)$`)
+var tablePattern = regexp.MustCompile(`^\s*y\s*=\s*(.+?)\s*(?:;\s*([a-z])\s*=\s*(.+))?$`)
+
+// defaultXs are the x-values used when the input does not list any.
+const defaultXs = "-3, -2, -1, 0, 1, 2, 3"
+
+// readTable reads "y = x - 2; x = -3, -2, -1". The x-values are optional and
+// default to -3 through 3.
+func readTable(ascii string, steps *[]Step) (tree SExpression, name string, xs, ys []float64, err error) {
+	m := tablePattern.FindStringSubmatch(ascii)
+	if m == nil {
+		return nil, "", nil, nil, fmt.Errorf(`needs "y = expression" or "y = expression; x = a, b, c", got %q`, ascii)
+	}
+	name, list := m[2], m[3]
+	if name == "" {
+		name, list = "x", defaultXs
+	}
+	tree, _, err = ParseWithEvents(m[1])
+	if err != nil {
+		return nil, "", nil, nil, err
+	}
+	*steps = append(*steps, Step{"Parse", "Syntax tree", tree.String()})
+	for _, field := range strings.Split(list, ",") {
+		x, err := strconv.ParseFloat(strings.TrimSpace(field), 64)
+		if err != nil {
+			return nil, "", nil, nil, fmt.Errorf("%q is not a number", strings.TrimSpace(field))
+		}
+		y, err := tree.Eval(map[string]float64{name: x})
+		if err != nil {
+			return nil, "", nil, nil, err
+		}
+		xs, ys = append(xs, x), append(ys, y)
+		*steps = append(*steps, Step{"Compute", "Substitute", fmt.Sprintf("%s = %s gives y = %s", name, formatValue(x), formatValue(y))})
+	}
+	return tree, name, xs, ys, nil
+}
 
 // solveTable finds y for each listed x, as in "y = x - 2; x = -3, -2, -1".
 // The answer is the y-values in the order the x-values are given.
 func solveTable(ascii string, steps *[]Step) (rep Report) {
-	m := tablePattern.FindStringSubmatch(ascii)
-	if m == nil {
-		rep.Err = fmt.Errorf(`table needs "y = expression; x = a, b, c", got %q`, ascii)
-		return rep
-	}
-	tree, _, err := ParseWithEvents(m[1])
+	_, _, _, ys, err := readTable(ascii, steps)
 	if err != nil {
 		rep.Err = err
 		return rep
 	}
-	*steps = append(*steps, Step{"Parse", "Syntax tree", tree.String()})
-	var ys []string
-	for _, field := range strings.Split(m[3], ",") {
-		x, err := strconv.ParseFloat(strings.TrimSpace(field), 64)
-		if err != nil {
-			rep.Err = fmt.Errorf("%q is not a number", strings.TrimSpace(field))
-			return rep
-		}
-		y, err := tree.Eval(map[string]float64{m[2]: x})
-		if err != nil {
-			rep.Err = err
-			return rep
-		}
-		ys = append(ys, formatValue(y))
-		*steps = append(*steps, Step{"Compute", "Substitute", fmt.Sprintf("%s = %s gives y = %s", m[2], formatValue(x), formatValue(y))})
+	texts := make([]string, len(ys))
+	for i, y := range ys {
+		texts[i] = formatValue(y)
 	}
-	rep.Result = strings.Join(ys, ", ")
+	rep.Result = strings.Join(texts, ", ")
 	*steps = append(*steps, Step{"Result", "y-values", rep.Result})
 	return rep
+}
+
+// solveGraph lists the points of y = expression and draws them. The answer is
+// the ordered pairs; the last step before it is the drawing.
+func solveGraph(ascii string, steps *[]Step) (rep Report) {
+	tree, name, xs, ys, err := readTable(ascii, steps)
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	pairs := make([]string, len(xs))
+	for i := range xs {
+		pairs[i] = fmt.Sprintf("(%s, %s)", formatValue(xs[i]), formatValue(ys[i]))
+	}
+	rep.Result = strings.Join(pairs, ", ")
+	plot, err := plotGraph(tree, name, xs, ys)
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	*steps = append(*steps, Step{"Compute", "Graph (* are the listed points, . is the line)", plot})
+	*steps = append(*steps, Step{"Result", "Points", rep.Result})
+	return rep
+}
+
+// plotGraph draws the points on axes, three characters per x unit and one row
+// per y unit. The axes always include the origin. The dots between the points
+// follow the equation, so a line shows as a line.
+func plotGraph(tree SExpression, name string, xs, ys []float64) (string, error) {
+	const cell = 3
+	span := func(vals []float64) (lo, hi int) {
+		l, h := 0.0, 0.0
+		for _, v := range vals {
+			l, h = math.Min(l, v), math.Max(h, v)
+		}
+		return int(math.Floor(l)), int(math.Ceil(h))
+	}
+	xmin, xmax := span(xs)
+	ymin, ymax := span(ys)
+	if xmax-xmin > 40 || ymax-ymin > 40 {
+		return "", fmt.Errorf("the graph would be larger than 40 units, x from %d to %d and y from %d to %d", xmin, xmax, ymin, ymax)
+	}
+	width, height := (xmax-xmin+1)*cell, ymax-ymin+1
+	grid := make([][]rune, height)
+	for r := range grid {
+		grid[r] = []rune(strings.Repeat(" ", width))
+	}
+	col := func(x float64) int { return int(math.Round((x-float64(xmin))*cell)) + cell/2 }
+	row := func(y float64) int { return ymax - int(math.Round(y)) }
+
+	for r := range grid {
+		grid[r][col(0)] = '|'
+	}
+	for c := range grid[row(0)] {
+		grid[row(0)][c] = '-'
+	}
+	grid[row(0)][col(0)] = '+'
+
+	for c := 0; c < width; c++ {
+		x := float64(xmin) + float64(c-cell/2)/cell
+		if y, err := tree.Eval(map[string]float64{name: x}); err == nil && !math.IsNaN(y) && !math.IsInf(y, 0) {
+			if r := row(y); r >= 0 && r < height && grid[r][c] == ' ' {
+				grid[r][c] = '.'
+			}
+		}
+	}
+	for i := range xs {
+		if c, r := col(xs[i]), row(ys[i]); c >= 0 && c < width && r >= 0 && r < height {
+			grid[r][c] = '*'
+		}
+	}
+
+	var sb strings.Builder
+	for r := range grid {
+		fmt.Fprintf(&sb, "%3d %s\n", ymax-r, string(grid[r]))
+	}
+	sb.WriteString("    ")
+	for x := xmin; x <= xmax; x++ {
+		fmt.Fprintf(&sb, "%2d ", x)
+	}
+	fmt.Fprintf(&sb, "\n    y runs down the left, %s along the bottom", name)
+	return sb.String(), nil
 }
 
 var solveForPattern = regexp.MustCompile(`^(.*?)\s+for\s+([a-zA-Z])\s*$`)

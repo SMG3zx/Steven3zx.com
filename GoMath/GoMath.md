@@ -58,6 +58,7 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Inequality | none yet | Solves a linear or compound inequality and writes interval notation. | `2x + 4 > 10` gives `(3, ∞)`. `3 < 2x + 1 <= 9` gives `(1, 4]`. |
 | Slope | none yet | Gives the slope through two points and whether the line rises, falls, is horizontal, or is vertical. | `(6,2) and (7,6)` gives `4 (rises)`. |
 | Point-slope / slope-intercept | none yet | Writes the line through two points, or through a point with a given slope. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. |
+| Graph | ctrl+e | Lists the points of `y = expression` and draws them on axes. Without `; x = a, b, c` it uses x from -3 to 3. | `y = x - 2` gives `(-3, -5), ... (3, 1)` and a plot. |
 | Table of values | none yet | Gives y for each listed x. | `y = x - 2; x = -3, -2, -1` gives `-5, -4, -3`. |
 | Solve for a variable | none yet | Isolates one variable of a formula that is linear in it. | `r = ba for b` gives `b = r/a`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |

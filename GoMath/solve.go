@@ -42,6 +42,8 @@ const (
 	OpTable
 	// OpSolveFor solves a formula for one of its variables.
 	OpSolveFor
+	// OpGraph lists the points of y = expression and draws them.
+	OpGraph
 )
 
 func (o Operation) String() string {
@@ -76,6 +78,8 @@ func (o Operation) String() string {
 		return "table of values"
 	case OpSolveFor:
 		return "solve for a variable"
+	case OpGraph:
+		return "graph"
 	}
 	return "unknown"
 }
@@ -153,6 +157,8 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return solveTable(ascii, &steps)
 	case OpSolveFor:
 		return solveFor(ascii, &steps)
+	case OpGraph:
+		return solveGraph(ascii, &steps)
 	}
 
 	if op == OpRadicalForm {

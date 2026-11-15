@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSolveSimplifyReportsResultAndDegree(t *testing.T) {
 	rep := Solve("(x + 4)(x^2 - 4x + 16)", OpSimplify)
@@ -473,5 +476,24 @@ func TestLinearUnitOperations(t *testing.T) {
 		if rep := Solve(in, OpInequality); rep.Err == nil {
 			t.Errorf("Solve(%q, OpInequality) returned no error", in)
 		}
+	}
+}
+
+func TestGraph(t *testing.T) {
+	rep := Solve("y = x - 2", OpGraph)
+	if rep.Err != nil || !strings.HasPrefix(rep.Result, "(-3, -5)") || !strings.HasSuffix(rep.Result, "(3, 1)") {
+		t.Fatalf("got %q, %v", rep.Result, rep.Err)
+	}
+	plot := rep.Steps[len(rep.Steps)-2].Detail
+	for _, want := range []string{"  1 ", "-5 ", "+", "*"} {
+		if !strings.Contains(plot, want) {
+			t.Errorf("plot lacks %q:\n%s", want, plot)
+		}
+	}
+	if got := strings.Count(plot, "*"); got != 7 {
+		t.Errorf("plot has %d points, want 7:\n%s", got, plot)
+	}
+	if rep := Solve("y = x^2; x = -100, 100", OpGraph); rep.Err == nil {
+		t.Error("a 10000-unit graph returned no error")
 	}
 }
