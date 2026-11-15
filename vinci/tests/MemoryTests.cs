@@ -222,6 +222,22 @@ public sealed class MemoryTests
     }
 
     [Fact]
+    public void The_extraction_schema_has_no_null_entries_and_offers_every_vocabulary_value()
+    {
+        static bool HasNull(JsonNode? node) => node switch
+        {
+            null => true,
+            JsonObject o => o.Any(p => HasNull(p.Value)),
+            JsonArray a => a.Any(HasNull),
+            _ => false,
+        };
+        var schema = Consolidation.ExtractionSchema();
+        Assert.False(HasNull(schema));
+        var category = schema["properties"]!["memories"]!["items"]!["properties"]!["category"]!["enum"]!.AsArray().Select(n => n!.GetValue<string>());
+        Assert.Equal(Vocabulary.MemoryCategories, category);
+    }
+
+    [Fact]
     public async Task Provider_status_tells_disabled_ready_and_unreachable_apart()
     {
         Assert.Equal(new ProviderStatus(false, "disabled"), await ProviderStatus.Probe(null));

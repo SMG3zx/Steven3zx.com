@@ -57,6 +57,51 @@ public static partial class Consolidation
         return new SessionReflection(Text(root, "reflection"), Texts(root, "lessons", notEmpty: true), Texts(root, "failures", notEmpty: true));
     }
 
+    private static JsonObject Schema(JsonObject properties, params string[] required) => new()
+    {
+        ["type"] = "object",
+        ["properties"] = properties,
+        ["required"] = new JsonArray([.. required.Select(r => (JsonNode)r)]),
+    };
+
+    private static JsonObject Field(string type, JsonObject? items = null, string[]? allowed = null)
+    {
+        var field = new JsonObject { ["type"] = type };
+        if (items is not null) field["items"] = items.DeepClone();
+        if (allowed is not null) field["enum"] = new JsonArray([.. allowed.Select(a => (JsonNode)a)]);
+        return field;
+    }
+
+    private static JsonObject Array(JsonObject items) => Field("array", items);
+
+    /// The shape Extraction is parsed from, written out so the server can hold the model to it.
+    public static JsonObject ExtractionSchema() => Schema(new JsonObject
+    {
+        ["memories"] = Array(Schema(new JsonObject
+        {
+            ["content"] = Field("string"), ["category"] = Field("string", allowed: Vocabulary.MemoryCategories),
+            ["confidence"] = Field("number"), ["entityNames"] = Array(Field("string")),
+        }, "content", "category", "confidence", "entityNames")),
+        ["entities"] = Array(Schema(new JsonObject
+        {
+            ["name"] = Field("string"), ["type"] = Field("string", allowed: Vocabulary.EntityTypes), ["aliases"] = Array(Field("string")),
+        }, "name", "type", "aliases")),
+        ["claims"] = Array(Schema(new JsonObject
+        {
+            ["statement"] = Field("string"), ["predicate"] = Field("string"), ["subjectName"] = Field("string"),
+            ["objectName"] = Field("string"), ["confidence"] = Field("number"),
+        }, "statement", "predicate", "subjectName", "confidence")),
+        ["procedures"] = Array(Schema(new JsonObject
+        {
+            ["title"] = Field("string"), ["goal"] = Field("string"), ["steps"] = Array(Field("string")), ["confidence"] = Field("number"),
+        }, "title", "goal", "steps", "confidence")),
+    }, "memories", "entities", "claims", "procedures");
+
+    public static JsonObject ReflectionSchema() => Schema(new JsonObject
+    {
+        ["reflection"] = Field("string"), ["lessons"] = Array(Field("string")), ["failures"] = Array(Field("string")),
+    }, "reflection", "lessons", "failures");
+
     /// The JSON inside a model's reply, with any ```json fence removed.
     public static JsonNode? ParseReply(string content) => JsonNode.Parse(Fence().Replace(content, ""));
 
@@ -114,19 +159,20 @@ public sealed class OpenAICompatibleConsolidator(HttpMessageHandler? handler = n
     private readonly HttpClient http = handler is null ? new HttpClient() : new HttpClient(handler);
 
     public async Task<Extraction> Extract(MemoryEvent e) => Consolidation.ParseExtraction(await Ask(
-        "consolidation", "extraction",
-        "Extract only durable, source-grounded knowledge from the event. Return JSON with memories, entities, claims, and procedures. Do not invent facts. Use empty arrays when the event contains no durable information.",
+        "consolidation", "extraction", Consolidation.ExtractionSchema(),
+        "Extract only durable, source-grounded knowledge from the event. Do not invent facts. Use empty arrays when the event contains no durable information.",
         new JsonObject { ["kind"] = e.Kind, ["content"] = e.Content, ["source"] = e.Source, ["occurredAt"] = e.OccurredAt, ["metadata"] = e.Metadata?.DeepClone() }));
 
     public async Task<SessionReflection> Reflect(IReadOnlyList<MemoryEvent> events) => Consolidation.ParseReflection(await Ask(
-        "reflection", "reflection",
-        "Reflect only on the supplied session events. Return JSON with reflection, lessons, and failures. Do not invent facts. Failures must describe actionable lessons from explicit errors or unsuccessful tool results; use empty arrays when absent.",
+        "reflection", "reflection", Consolidation.ReflectionSchema(),
+        "Reflect only on the supplied session events. Do not invent facts. Failures must describe actionable lessons from explicit errors or unsuccessful tool results; use empty arrays when absent.",
         new JsonArray([.. events.Select(e => (JsonNode)new JsonObject
         {
             ["id"] = e.Id, ["kind"] = e.Kind, ["content"] = e.Content, ["occurredAt"] = e.OccurredAt, ["metadata"] = e.Metadata?.DeepClone(),
         })])));
 
-    private async Task<JsonNode?> Ask(string purpose, string wanted, string system, JsonNode user)
+    /// The reply's shape is enforced by the server (json_schema), and checked again by the parsers.
+    private async Task<JsonNode?> Ask(string purpose, string wanted, JsonObject schema, string system, JsonNode user)
     {
         if (baseUrl is null) throw new InvalidOperationException($"MODEL_BASE_URL is required for {purpose}");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/chat/completions")
@@ -135,7 +181,11 @@ public sealed class OpenAICompatibleConsolidator(HttpMessageHandler? handler = n
             {
                 ["model"] = model,
                 ["temperature"] = 0,
-                ["response_format"] = new JsonObject { ["type"] = "json_object" },
+                ["response_format"] = new JsonObject
+                {
+                    ["type"] = "json_schema",
+                    ["json_schema"] = new JsonObject { ["name"] = wanted, ["schema"] = schema.DeepClone(), ["strict"] = true },
+                },
                 ["messages"] = new JsonArray(
                     new JsonObject { ["role"] = "system", ["content"] = system },
                     new JsonObject { ["role"] = "user", ["content"] = user.ToJsonString() }),
