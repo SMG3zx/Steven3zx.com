@@ -213,6 +213,44 @@ public class HarnessTests
     }
 
     [Fact]
+    public void ParseEdits_reads_file_blocks_and_deletes()
+    {
+        var (edits, why) = Improver.ParseEdits(
+            "Read first.\n\n=== guardrails.md ===\n- one\n- two\n=== end ===\n=== delete skills/old.md ===\n=== end ===\n"
+        );
+        Assert.Equal("Read first.", why);
+        Assert.Equal("- one\n- two\n", edits["guardrails.md"]);
+        var baseline = new HarnessFiles().Apply(
+            new Dictionary<string, string?> { ["guardrails.md"] = "- old\n" }
+        );
+        Assert.Equal(
+            "- old\n- one\n- two\n",
+            Improver
+                .ParseEdits("x\n=== guardrails.md ===\n- one\n- two\n=== end ===", baseline)
+                .Edits["guardrails.md"]
+        );
+        Assert.Equal(
+            "- new\n",
+            Improver
+                .ParseEdits("x\n=== replace guardrails.md ===\n- new\n=== end ===", baseline)
+                .Edits["guardrails.md"]
+        );
+        Assert.Null(edits["skills/old.md"]);
+    }
+
+    [Fact]
+    public void Non_harness_paths_are_dropped_but_valid_edits_still_apply()
+    {
+        var h = new HarnessFiles().ApplyValid(
+            new Dictionary<string, string?> { ["acronym.py"] = "x", ["guardrails.md"] = "g" },
+            out var rejected
+        );
+        Assert.Equal(["acronym.py"], rejected);
+        Assert.Equal("g", h.Get("guardrails.md"));
+        Assert.False(h.Files.ContainsKey("acronym.py"));
+    }
+
+    [Fact]
     public void ParseEdits_tolerates_prose_and_garbage()
     {
         var (edits, why) = Improver.ParseEdits(

@@ -11,7 +11,7 @@ static int IntFlag(string[] args, string name, int fallback) =>
 
 const string usage = """
     harness run     <task.json> [--harness DIR] [--allow-scripts] [--trace]
-    harness improve <task.json> [--harness DIR] [--library DIR] [--k N] [--allow-scripts]
+    harness improve <task.json> [--harness DIR] [--library DIR] [--k N] [--samples S] [--allow-scripts]
     harness import-exercism <track-checkout> <out-dir>
     harness scan    <tasks-dir> [--harness DIR] [--limit N] [--samples S] [--seed N] [--turns N] [--out FILE]
 
@@ -139,7 +139,14 @@ if (args[0] == "run")
 
 var library = Flag(args, "--library") ?? "library";
 var k = Math.Clamp(IntFlag(args, "--k", 3), 1, 5);
-var result = await new Improver(model, options).ImproveAsync(harness, task0, library, k);
+var result = await new Improver(model, options, IntFlag(args, "--samples", 3)).ImproveAsync(
+    harness,
+    task0,
+    library,
+    k
+);
+foreach (var n in result.Notes)
+    Console.WriteLine($"  {n}");
 foreach (var a in result.Record)
     Console.WriteLine($"{a.Label, -12} score {a.Evidence.Score:0.00}  turns {a.Run.Turns}");
 result.Final.Save(Flag(args, "--out") ?? Path.Combine(library, "harnesses", task0.Id));

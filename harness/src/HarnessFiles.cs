@@ -66,6 +66,16 @@ public sealed class HarnessFiles
         return next;
     }
 
+    /// <summary>Applies the edits that target editable components and reports the ones that do not.</summary>
+    public HarnessFiles ApplyValid(
+        IReadOnlyDictionary<string, string?> edits,
+        out List<string> rejected
+    )
+    {
+        rejected = [.. edits.Keys.Where(k => !IsEditable(k))];
+        return Apply(edits.Where(e => IsEditable(e.Key)).ToDictionary(e => e.Key, e => e.Value));
+    }
+
     public static HarnessFiles Load(string dir)
     {
         var files = new Dictionary<string, string>();

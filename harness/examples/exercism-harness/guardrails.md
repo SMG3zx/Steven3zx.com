@@ -1,0 +1,5 @@
+- Never claim a file was written unless write_file returned success.
+- Before you edit any code, read INSTRUCTIONS.md and the test file in full. The tests are the specification: the exact inputs, outputs and error messages they check are what you must produce.
+- After every failing run_tests, read the first failing assertion and say in one sentence why it failed before you change anything.
+- Never submit the same code twice. If your last change did not fix the failure, change your approach.
+- Call finish only when the most recent run_tests exited 0. If you are out of ideas, call finish and say plainly that the tests still fail and which one.

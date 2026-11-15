@@ -5,14 +5,18 @@ namespace Harness;
 
 public sealed record Attempt(string Label, HarnessFiles Harness, RunResult Run, Evidence Evidence);
 
-public sealed record Improvement(HarnessFiles Final, IReadOnlyList<Attempt> Record);
+public sealed record Improvement(
+    HarnessFiles Final,
+    IReadOnlyList<Attempt> Record,
+    IReadOnlyList<string> Notes
+);
 
 /// <summary>
 /// The Harness² loop. Level 1 refines the harness for one task: reference, propose k candidates,
 /// probe them, compose a successor, run the final. Level 2 reflects on the record and writes
 /// EXPERIENCE.md into the library, the only thing that survives to the next task.
 /// </summary>
-public sealed class Improver(IModel model, AgentOptions agentOptions)
+public sealed class Improver(IModel model, AgentOptions agentOptions, int samples = 3)
 {
     public async Task<Improvement> ImproveAsync(
         HarnessFiles h0,
@@ -24,6 +28,7 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
     {
         var experience = ReadExperience(libraryDir);
         var record = new List<Attempt>();
+        var notes = new List<string>();
 
         // 1. Reference: run the base harness.
         var reference = await RunAsync("reference", h0, task, ct);
@@ -43,6 +48,7 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         )
             probed.Add(await RunAsync(label, candidate, task, ct));
         record.AddRange(probed);
+        notes.AddRange(proposals.Select(p => $"{p.Label}: {p.Why}"));
 
         // 4. Compose: a successor built from all candidates and their evidence.
         var successor = await ComposeAsync(h0, reference, probed, task, ct) ?? h0;
@@ -60,9 +66,10 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         // 6-7. Reflect and update the library.
         await ReflectAsync(libraryDir, task, record, best, ct);
         new HarnessFiles(best.Harness.Files).Save(Path.Combine(libraryDir, "harnesses", task.Id));
-        return new(best.Harness, record);
+        return new(best.Harness, record, notes);
     }
 
+    /// <summary>Runs the harness several times: the score is the mean, the transcript is the worst run so the proposer sees a failure.</summary>
     private async Task<Attempt> RunAsync(
         string label,
         HarnessFiles h,
@@ -70,25 +77,45 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         CancellationToken ct
     )
     {
-        var ws = task.NewWorkspace();
-        try
+        var runs = new List<(RunResult Run, Evidence Evidence)>();
+        for (var i = 0; i < samples; i++)
         {
-            var run = await new Agent(
-                model,
-                h,
-                ws,
-                agentOptions with
-                {
-                    TestCommand = task.TestCommand,
-                }
-            ).RunAsync(task.Prompt, ct);
-            return new(label, h, run, task.Verify(ws));
+            var ws = task.NewWorkspace();
+            try
+            {
+                var run = await new Agent(
+                    model,
+                    h,
+                    ws,
+                    agentOptions with
+                    {
+                        TestCommand = task.TestCommand,
+                    }
+                ).RunAsync(task.Prompt, ct);
+                runs.Add((run, task.Verify(ws)));
+            }
+            finally
+            {
+                Directory.Delete(ws, true);
+            }
         }
-        finally
-        {
-            Directory.Delete(ws, true);
-        }
+        var worst = runs.OrderBy(r => r.Evidence.Score).First();
+        return new(
+            label,
+            h,
+            worst.Run,
+            new(runs.Average(r => r.Evidence.Score), worst.Evidence.Notes)
+        );
     }
+
+    private static readonly string[] Angles =
+    [
+        "what the agent should read or check BEFORE it acts",
+        "how the agent verifies its work and when it is allowed to call finish",
+        "what the agent should do when its attempts keep failing or repeat",
+        "how the agent should plan and break the task down",
+        "which skill or subagent would help, written as a new skills/*.md or subagents/*.md file",
+    ];
 
     private async Task<(string Label, HarnessFiles? Harness, string Why)> ProposeAsync(
         int i,
@@ -99,28 +126,38 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         CancellationToken ct
     )
     {
+        var angle = Angles[(i - 1) % Angles.Length];
         var prompt = new StringBuilder()
-            .AppendLine($"Task:\n{task.Prompt}")
-            .AppendLine($"\nLibrary lessons from earlier tasks:\n{experience}")
-            .AppendLine($"\nBase harness:\n{Dump(h0)}")
             .AppendLine(
-                $"\nReference run (score {reference.Evidence.Score:0.00}):\n{reference.Evidence.Notes}"
+                "You are NOT solving the task below. A separate AI agent attempted it and you are improving the written instructions that agent works under, its harness, so that it does better next time."
             )
-            .AppendLine($"\nTranscript:\n{Summarize(reference.Run)}")
             .AppendLine(
-                $"\nCandidate {i} of several. Make a different, focused change from the others."
+                "Do not write the task's solution. Do not edit the task's files. Only edit the harness files listed at the end."
+            )
+            .AppendLine($"\nThe task the agent was given:\n{task.Prompt}")
+            .AppendLine($"\nLessons from earlier tasks:\n{experience}")
+            .AppendLine($"\nThe agent's current harness:\n{Dump(h0)}")
+            .AppendLine(
+                $"\nThe agent's attempt scored {reference.Evidence.Score:0.00}. Result:\n{reference.Evidence.Notes}"
+            )
+            .AppendLine($"\nWhat the agent did:\n{Summarize(reference.Run)}")
+            .AppendLine($"\nFocus your change on this one angle: {angle}.")
+            .AppendLine(
+                "Write short, general rules that would help on any task like this, not rules that only fit this exact task."
             )
             .AppendLine(EditFormat)
             .ToString();
-        var (edits, why) = await AskForEditsAsync(prompt, ct);
-        try
-        {
-            return ($"candidate-{i}", KeepDenyRules(h0, h0.Apply(edits)), why);
-        }
-        catch (InvalidOperationException)
-        {
-            return ($"candidate-{i}", null, why);
-        }
+        var (edits, why) = await AskForEditsAsync(prompt, h0, ct);
+        if (edits.Count == 0)
+            return ($"candidate-{i}", null, $"no usable edit ({why})");
+        var candidate = KeepDenyRules(h0, h0.ApplyValid(edits, out var rejected));
+        var note =
+            rejected.Count == 0
+                ? why
+                : $"{why} [dropped non-harness paths: {string.Join(", ", rejected)}]";
+        return candidate.Files.SequenceEqual(h0.Files)
+            ? ($"candidate-{i}", null, $"no change to the harness ({note})")
+            : ($"candidate-{i}", candidate, note);
     }
 
     private async Task<HarnessFiles?> ComposeAsync(
@@ -142,15 +179,8 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
                 "\nCompose one successor from the changes that helped. Drop the ones that did not."
             )
             .AppendLine(EditFormat);
-        var (edits, _) = await AskForEditsAsync(sb.ToString(), ct);
-        try
-        {
-            return KeepDenyRules(h0, h0.Apply(edits));
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
+        var (edits, _) = await AskForEditsAsync(sb.ToString(), h0, ct);
+        return edits.Count == 0 ? null : KeepDenyRules(h0, h0.ApplyValid(edits, out _));
     }
 
     private async Task ReflectAsync(
@@ -185,6 +215,7 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
 
     private async Task<(Dictionary<string, string?> Edits, string Why)> AskForEditsAsync(
         string prompt,
+        HarnessFiles baseline,
         CancellationToken ct
     )
     {
@@ -194,11 +225,44 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
             [],
             ct
         );
-        return ParseEdits(reply.Text);
+        if (Environment.GetEnvironmentVariable("HARNESS_DEBUG") is { Length: > 0 })
+            Console.Error.WriteLine($"--- model reply ---\n{reply.Text}\n---");
+        return ParseEdits(reply.Text, baseline);
     }
 
-    public static (Dictionary<string, string?> Edits, string Why) ParseEdits(string text)
+    private static readonly System.Text.RegularExpressions.Regex Block = new(
+        @"^=== (?<mode>delete |replace )?(?<path>\S+) ===[ \t]*\r?\n(?<body>.*?)(?:\r?\n)?^=== end ===",
+        System.Text.RegularExpressions.RegexOptions.Multiline
+            | System.Text.RegularExpressions.RegexOptions.Singleline
+    );
+
+    /// <summary>
+    /// Reads the proposer's reply. A file block ADDS its text to the end of that file, because a small model
+    /// asked to rewrite a whole file tends to drop the rules already in it; "replace" rewrites, "delete" removes.
+    /// JSON edits are accepted as a fallback and always replace.
+    /// </summary>
+    public static (Dictionary<string, string?> Edits, string Why) ParseEdits(
+        string text,
+        HarnessFiles? baseline = null
+    )
     {
+        var blocks = new Dictionary<string, string?>();
+        foreach (System.Text.RegularExpressions.Match m in Block.Matches(text))
+        {
+            var path = m.Groups["path"].Value;
+            var body = m.Groups["body"].Value.TrimEnd() + "\n";
+            var mode = m.Groups["mode"].Value.Trim();
+            var existing = baseline?.Get(path) ?? "";
+            blocks[path] =
+                mode == "delete" ? null
+                : mode == "replace" || existing.Length == 0 ? body
+                : existing.TrimEnd() + "\n" + body;
+        }
+        if (blocks.Count > 0)
+        {
+            var why = text[..text.IndexOf("===", StringComparison.Ordinal)].Trim();
+            return (blocks, why.Length > 0 ? why : "file blocks");
+        }
         var edits = new Dictionary<string, string?>();
         var start = text.IndexOf('{');
         var end = text.LastIndexOf('}');
@@ -223,8 +287,15 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
     }
 
     private const string EditFormat = """
-        Reply with JSON only: {"rationale": "...", "edits": {"<path>": "<full new content, or null to delete>"}}.
-        Editable paths: systemprompt.md, guardrails.md, memory.md, tool-guidance.md, subagents/*.md, skills/*.md, scripts/*, plugins/deny.txt.
+        Reply with one sentence of reasoning, then one block per harness file you want to change, in this shape:
+
+        === guardrails.md ===
+        - <one short rule you want to add>
+        === end ===
+
+        A block ADDS its lines to the end of that file, or creates the file if it does not exist, so do not repeat rules that are already there.
+        To rewrite a whole file instead, write "=== replace NAME ===". To remove a file, write "=== delete NAME ===" then "=== end ===".
+        The only files you may use: systemprompt.md, guardrails.md, memory.md, tool-guidance.md, subagents/NAME.md, skills/NAME.md, scripts/NAME, plugins/deny.txt.
         """;
 
     private static string ReadExperience(string dir)

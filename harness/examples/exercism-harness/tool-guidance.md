@@ -1,0 +1,2 @@
+- run_tests runs the whole test file and returns its tail. Run it after every edit.
+- write_file replaces the whole file, so always send the complete new file contents.
