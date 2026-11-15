@@ -201,20 +201,24 @@ public sealed class MemoryTests
     }
 
     [Fact]
-    public async Task Embedding_client_sends_an_instruction_wrapped_query_and_reads_both_reply_shapes()
+    public async Task Embedding_client_uses_the_openai_shape_with_an_instruction_only_on_queries()
     {
-        var service = Service.Replying("[[0.1,0.2,0.3]]");
+        var service = Service.Replying("""{"data":[{"index":0,"embedding":[0.1,0.2,0.3]}]}""");
         var client = new EmbeddingClient("http://embedding.test", service);
         Assert.True(client.Enabled);
+        Assert.Equal("qwen3-embedding:4b", client.Model);
         var vector = await client.EmbedQuery("what did we decide?");
         Assert.Equal([0.1, 0.2, 0.3], vector);
-        Assert.Equal("""{"inputs":["Instruct: Retrieve memories and source events relevant to the user's query\nQuery: what did we decide?"]}""", service.LastBody);
+        Assert.Equal("""{"model":"qwen3-embedding:4b","input":["Instruct: Retrieve memories and source events relevant to the user's query\nQuery: what did we decide?"]}""", service.LastBody);
 
-        var shaped = new EmbeddingClient("http://embedding.test", Service.Replying("""{"embeddings":[[1,2]]}"""));
-        var vectors = await shaped.EmbedDocuments(["hello"]);
-        Assert.Equal([1, 2], Assert.Single(vectors));
+        // Documents go in without an instruction, and come back in input order even if the server reorders them.
+        var documents = Service.Replying("""{"data":[{"index":1,"embedding":[3,4]},{"index":0,"embedding":[1,2]}]}""");
+        var vectors = await new EmbeddingClient("http://embedding.test", documents).EmbedDocuments(["first", "second"]);
+        Assert.Equal([[1, 2], [3, 4]], vectors);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new EmbeddingClient("http://embedding.test", Service.Replying("[]")).EmbedDocuments(["hello"]));
+            new EmbeddingClient("http://embedding.test", Service.Replying("""{"data":[]}""")).EmbedDocuments(["hello"]));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EmbeddingClient("http://embedding.test", Service.Replying("""{"data":[{"index":0,"embedding":[1]}]}""")).EmbedDocuments(["a", "b"]));
     }
 
     [Fact]

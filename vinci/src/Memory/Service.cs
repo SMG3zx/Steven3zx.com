@@ -705,7 +705,7 @@ public sealed partial class MemoryService(
                     return Ok(Obj(
                         ("neo4j", Obj(("configured", true), ("database", Env.Get("NEO4J_DATABASE") ?? "neo4j"))),
                         ("consolidation", Probe(0, ("model", Env.Get("MODEL_NAME") ?? "local-model"))),
-                        ("embedding", Probe(1, ("dimensions", Env.Number("EMBEDDING_DIMENSIONS", 1024)))),
+                        ("embedding", Probe(1, ("model", Env.Get("EMBEDDING_MODEL") ?? EmbeddingClient.DefaultModel), ("dimensions", Env.Number("EMBEDDING_DIMENSIONS", EmbeddingClient.DefaultDimensions)))),
                         ("reranker", Probe(2)),
                         ("faithfulnessJudge", Probe(3, ("requiredForStrictBenchmark", Env.Get("FAITHFULNESS_REQUIRE_JUDGE") == "1")))));
                 case "/v1/jobs":

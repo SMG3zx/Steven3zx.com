@@ -22,13 +22,23 @@ public abstract class ProviderClient(string? baseUrl, HttpMessageHandler? handle
     }
 }
 
-/// Text to vectors, by POST /embed. A query is wrapped in an instruction so
-/// the model embeds it as a question rather than as a document.
+/// Text to vectors, by POST /v1/embeddings (the OpenAI shape, which Ollama,
+/// llama.cpp and vLLM all serve). The default model is Qwen3-Embedding-4B.
+/// A query is wrapped in an instruction so the model embeds it as a question
+/// rather than as a document; documents are embedded without one, as Qwen
+/// specifies for that model.
 public sealed class EmbeddingClient(string? baseUrl = null, HttpMessageHandler? handler = null)
     : ProviderClient(baseUrl ?? Env.Get("EMBEDDING_BASE_URL"), handler)
 {
+    public const string DefaultModel = "qwen3-embedding:4b";
+    public const int DefaultDimensions = 2560;
+
     private readonly string instruction = Env.Get("EMBEDDING_QUERY_INSTRUCTION")
         ?? "Retrieve memories and source events relevant to the user's query";
+
+    /// The model whose vectors are stored. Vectors from two models are not comparable,
+    /// so the schema records this name and refuses to mix them.
+    public string Model { get; } = Env.Get("EMBEDDING_MODEL") ?? DefaultModel;
 
     public Task<List<double[]>> EmbedDocuments(IReadOnlyList<string> inputs) => Request(inputs);
 
@@ -38,12 +48,13 @@ public sealed class EmbeddingClient(string? baseUrl = null, HttpMessageHandler? 
     private async Task<List<double[]>> Request(IReadOnlyList<string> inputs)
     {
         if (!Enabled) return [];
-        var payload = await Post("/embed", new { inputs }, "embedding service");
-        var vectors = (payload as JsonArray ?? payload?["embeddings"] as JsonArray)?
-            .Select(v => v is JsonArray numbers ? numbers.Select(n => Json.Num(n, double.NaN)).ToArray() : null).ToList();
-        if (vectors is not { Count: > 0 } || vectors.Any(v => v is not { Length: > 0 }))
+        var payload = await Post("/embeddings", new { model = Model, input = inputs }, "embedding service");
+        var data = payload?["data"] as JsonArray;
+        var rows = data?.Select((item, position) => (Index: (int)Json.Num(item?["index"], position), Vector: item?["embedding"] as JsonArray))
+            .OrderBy(row => row.Index).ToList();
+        if (rows is not { Count: > 0 } || rows.Count != inputs.Count || rows.Any(row => row.Vector is not { Count: > 0 }))
             throw new InvalidOperationException("embedding service returned an invalid vector response");
-        return vectors!;
+        return rows.Select(row => row.Vector!.Select(n => Json.Num(n, double.NaN)).ToArray()).ToList();
     }
 }
 

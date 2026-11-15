@@ -259,9 +259,27 @@ public sealed partial class Neo4jStore : IAsyncDisposable
 
     public async Task EnsureSchema()
     {
-        var dimensions = Env.Number("EMBEDDING_DIMENSIONS", 1024);
+        var dimensions = Env.Number("EMBEDDING_DIMENSIONS", EmbeddingClient.DefaultDimensions);
         if (dimensions != Math.Floor(dimensions) || dimensions < 32 || dimensions > 4096)
             throw new InvalidOperationException("EMBEDDING_DIMENSIONS must be an integer between 32 and 4096");
+        await using (var check = Session())
+        {
+            // A vector index keeps its size for good. Refuse to run against one of another size
+            // instead of failing on the first write.
+            var indexes = await Rows(check, """
+                SHOW INDEXES YIELD name, options
+                WHERE name IN ['memory_embedding', 'chunk_embedding']
+                RETURN name, options.indexConfig['vector.dimensions'] AS dimensions
+                """);
+            foreach (var index in indexes)
+            {
+                var existing = Json.Num(index["dimensions"], -1);
+                if (existing > 0 && existing != dimensions)
+                    throw new InvalidOperationException(
+                        $"vector index {Json.Str(index["name"])} holds {existing} dimensions but EMBEDDING_DIMENSIONS is {dimensions}. " +
+                        "Vectors cannot change size in place: drop the index and re-embed the memories before changing it.");
+            }
+        }
         string[] statements =
         [
             "CREATE CONSTRAINT event_id IF NOT EXISTS FOR (e:Event) REQUIRE e.id IS UNIQUE",
@@ -307,6 +325,21 @@ public sealed partial class Neo4jStore : IAsyncDisposable
             RETURN s.version AS version
             """, P(("version", (long)SchemaVersion), ("migration", SchemaMigrationId)));
         var storedVersion = Json.Num(stored.FirstOrDefault()?["version"]);
+        var recorded = await Rows(session, """
+            MATCH (s:SchemaMetadata {name: 'personal-memory'})
+            RETURN s.embeddingModel AS model
+            """);
+        var recordedModel = Json.Str(recorded.FirstOrDefault()?["model"], "");
+        if (recordedModel.Length > 0 && recordedModel != embeddings.Model)
+            throw new InvalidOperationException(
+                $"the stored vectors were made by {recordedModel} but EMBEDDING_MODEL is {embeddings.Model}. " +
+                "Vectors from two models cannot be compared. Re-embed before changing the model.");
+        if (recordedModel.Length == 0 && embeddings.Enabled)
+            await Rows(session, """
+                MATCH (s:SchemaMetadata {name: 'personal-memory'})
+                SET s.embeddingModel = $model, s.embeddingDimensions = $dimensions
+                """, P(("model", embeddings.Model), ("dimensions", (long)dimensions)));
+
         if (storedVersion > SchemaVersion)
             throw new InvalidOperationException($"database schema version {storedVersion} is newer than supported version {SchemaVersion}");
         if (storedVersion < SchemaVersion)
@@ -588,6 +621,7 @@ public sealed partial class Neo4jStore : IAsyncDisposable
             ["predicate"] = input.Predicate,
             ["object"] = input.Object,
             ["embedding"] = embedding,
+            ["embeddingModel"] = embedding is null ? null : embeddings.Model,
             ["validFrom"] = input.ValidFrom ?? Now(),
             ["validUntil"] = input.ValidUntil,
             ["userId"] = input.UserId,
@@ -1084,6 +1118,7 @@ public sealed partial class Neo4jStore : IAsyncDisposable
             ["content"] = input.Content,
             ["ordinal"] = (long)input.Ordinal,
             ["embedding"] = embedding,
+            ["embeddingModel"] = embedding is null ? null : embeddings.Model,
             ["userId"] = input.UserId,
             ["projectId"] = input.ProjectId,
             ["sessionId"] = input.SessionId,
@@ -1093,7 +1128,7 @@ public sealed partial class Neo4jStore : IAsyncDisposable
             await Rows(tx, """
                 MERGE (c:Chunk {id: $chunk.id})
                 ON CREATE SET c += $chunk
-                ON MATCH SET c.content = $chunk.content, c.ordinal = $chunk.ordinal, c.embedding = $chunk.embedding
+                ON MATCH SET c.content = $chunk.content, c.ordinal = $chunk.ordinal, c.embedding = $chunk.embedding, c.embeddingModel = $chunk.embeddingModel
                 WITH c
                 MATCH (d:Document {id: $documentId})
                 MERGE (d)-[:HAS_CHUNK]->(c)
