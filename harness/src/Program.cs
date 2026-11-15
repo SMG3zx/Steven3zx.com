@@ -8,7 +8,8 @@ const string usage =
     harness run     <task.json> [--harness DIR] [--allow-scripts]
     harness improve <task.json> [--harness DIR] [--library DIR] [--k N] [--allow-scripts]
 
-    Needs ANTHROPIC_API_KEY. HARNESS_MODEL overrides the model (default claude-sonnet-5-5).
+    Uses the local Ollama server (OLLAMA_HOST, default 127.0.0.1:11434) with HARNESS_MODEL (default qwen3:8b)
+    and HARNESS_NUM_CTX (default 16384). Set HARNESS_PROVIDER=anthropic plus ANTHROPIC_API_KEY to use Claude instead.
     Scripts run as bash on this machine, so --allow-scripts is off unless you pass it.
     """;
 
@@ -21,7 +22,9 @@ if (args.Length < 2 || args[0] is not ("run" or "improve"))
 var task = HarnessTask.Load(args[1]);
 var harness = HarnessFiles.Load(Flag(args, "--harness") ?? "examples/default-harness");
 var options = new AgentOptions(AllowScripts: args.Contains("--allow-scripts"));
-var model = AnthropicModel.FromEnvironment();
+IModel model = Environment.GetEnvironmentVariable("HARNESS_PROVIDER") == "anthropic"
+    ? AnthropicModel.FromEnvironment()
+    : OllamaModel.FromEnvironment();
 
 if (args[0] == "run")
 {

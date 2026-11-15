@@ -150,3 +150,42 @@ public class HarnessTests
             h.Any(m => m.Content.OfType<ToolResult>().Any()) ? Text("done") : await inner.CompleteAsync(s, h, t, ct);
     }
 }
+
+public class OllamaModelTests
+{
+    sealed class Capture(string reply) : HttpMessageHandler
+    {
+        public string Body = "";
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        {
+            Body = await r.Content!.ReadAsStringAsync(ct);
+            return new(System.Net.HttpStatusCode.OK) { Content = new StringContent(reply) };
+        }
+    }
+
+    [Fact]
+    public async Task Maps_tool_calls_and_results_to_the_native_api()
+    {
+        var h = new Capture(
+            """{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_file","arguments":{"path":"a"}}}]}}"""
+        );
+        var model = new OllamaModel(new HttpClient(h) { BaseAddress = new("http://x/") }, "qwen3:8b");
+        var history = new List<Message>
+        {
+            new("user", [new TextBlock("go")]),
+            new("assistant", [new ToolUse("c1", "list_dir", new())]),
+            new("user", [new ToolResult("c1", "a.txt", false)]),
+        };
+        var reply = await model.CompleteAsync("sys", history, [new("read_file", "d", new() { ["type"] = "object" })], default);
+
+        var call = Assert.IsType<ToolUse>(Assert.Single(reply.Content));
+        Assert.Equal("read_file", call.Name);
+        Assert.Equal("a", call.Input["path"]!.GetValue<string>());
+
+        var sent = System.Text.Json.Nodes.JsonNode.Parse(h.Body)!;
+        Assert.False(sent["think"]!.GetValue<bool>());
+        Assert.Equal("list_dir", sent["messages"]![3]!["tool_name"]!.GetValue<string>());
+        Assert.Equal("tool", sent["messages"]![3]!["role"]!.GetValue<string>());
+    }
+}
