@@ -8,7 +8,14 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
 {
     /// A tool result is cut to this many characters before the model reads it.
     public const int ResultLimit = 4000;
-    public static readonly string[] Categories = ["fact", "preference", "decision", "procedure", "episode"];
+    public static readonly string[] Categories =
+    [
+        "fact",
+        "preference",
+        "decision",
+        "procedure",
+        "episode",
+    ];
 
     /// The tools as the model is told about them. No square brackets or quoted
     /// JSON inside the description text: the examples are in the actions below.
@@ -46,7 +53,13 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
         {
             return $"error: {e.Message}";
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or InvalidCastException or FormatException)
+        catch (Exception e)
+            when (e
+                    is ArgumentException
+                        or InvalidOperationException
+                        or InvalidCastException
+                        or FormatException
+            )
         {
             return $"error: {e.Message}";
         }
@@ -54,9 +67,14 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
 
     private string Journal(JsonObject arguments)
     {
-        var args = (arguments["args"] as JsonArray ?? throw new ArgumentException("args must be a list of strings"))
-            .Select(a => a?.GetValue<string>() ?? "").ToArray();
-        if (args.Length == 0) args = ["help"];
+        var args = (
+            arguments["args"] as JsonArray
+            ?? throw new ArgumentException("args must be a list of strings")
+        )
+            .Select(a => a?.GetValue<string>() ?? "")
+            .ToArray();
+        if (args.Length == 0)
+            args = ["help"];
         using var output = new StringWriter();
         var exit = journal(args, output);
         var text = output.ToString().TrimEnd();
@@ -65,17 +83,45 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
 
     private string Recall(JsonObject arguments)
     {
-        var query = arguments["query"]?.GetValue<string>() ?? throw new ArgumentException("query is required");
-        var reply = memory.Post("/v1/context", new { query, limit = 8, maxChars = 3000 }).GetAwaiter().GetResult();
+        var query = arguments["query"]?.GetValue<string>()
+            ?? throw new ArgumentException("query is required");
+        var reply = memory
+            .Post(
+                "/v1/context",
+                new
+                {
+                    query,
+                    limit = 8,
+                    maxChars = 3000,
+                }
+            )
+            .GetAwaiter()
+            .GetResult();
         var context = reply?["context"]?.GetValue<string>() ?? "";
         return context.Length > 0 ? context : "No memory matches that.";
     }
 
     private string Remember(JsonObject arguments)
     {
-        var content = arguments["content"]?.GetValue<string>() ?? throw new ArgumentException("content is required");
-        var category = arguments["category"]?.GetValue<string>() is { } c && Categories.Contains(c) ? c : "fact";
-        var reply = memory.Post("/v1/memories", new { content, category, status = "active", source = "vinci-chat" }).GetAwaiter().GetResult();
+        var content = arguments["content"]?.GetValue<string>()
+            ?? throw new ArgumentException("content is required");
+        var category =
+            arguments["category"]?.GetValue<string>() is { } c && Categories.Contains(c)
+                ? c
+                : "fact";
+        var reply = memory
+            .Post(
+                "/v1/memories",
+                new
+                {
+                    content,
+                    category,
+                    status = "active",
+                    source = "vinci-chat",
+                }
+            )
+            .GetAwaiter()
+            .GetResult();
         return $"remembered {reply?["id"]?.GetValue<string>() ?? reply?["memory"]?["id"]?.GetValue<string>() ?? "(saved)"}";
     }
 }

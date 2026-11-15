@@ -10,7 +10,13 @@ namespace Vinci;
 
 /// One card on the portal page. Discovered links were found by asking this
 /// machine what it serves, rather than written down by anyone.
-public sealed record Link(string Title, string Url, string? Description, IReadOnlyList<string> Tags, bool Discovered = false)
+public sealed record Link(
+    string Title,
+    string Url,
+    string? Description,
+    IReadOnlyList<string> Tags,
+    bool Discovered = false
+)
 {
     /// The name of the screenshot. A discovered title is whatever the page
     /// calls itself, so its port names the picture instead.
@@ -24,7 +30,8 @@ public delegate IReadOnlyList<string> PortalFiles(string repository);
 public static partial class Portal
 {
     /// File-safe name from a title: "Qwik Docs" becomes "qwik-docs".
-    public static string Slug(string title) => NotSlug().Replace(title.ToLowerInvariant(), "-").Trim('-');
+    public static string Slug(string title) =>
+        NotSlug().Replace(title.ToLowerInvariant(), "-").Trim('-');
 
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NotSlug();
@@ -44,16 +51,23 @@ public static partial class Portal
         try
         {
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return links;
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return links;
             foreach (var e in doc.RootElement.EnumerateArray())
             {
-                if (e.ValueKind != JsonValueKind.Object) continue;
+                if (e.ValueKind != JsonValueKind.Object)
+                    continue;
                 var title = Text(e, "title")?.Trim();
                 var url = Text(e, "url");
-                if (string.IsNullOrEmpty(title) || !IsWebAddress(url)) continue;
-                var tags = e.TryGetProperty("tags", out var t) && t.ValueKind == JsonValueKind.Array
-                    ? t.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
-                    : [];
+                if (string.IsNullOrEmpty(title) || !IsWebAddress(url))
+                    continue;
+                var tags =
+                    e.TryGetProperty("tags", out var t) && t.ValueKind == JsonValueKind.Array
+                        ? t.EnumerateArray()
+                            .Where(x => x.ValueKind == JsonValueKind.String)
+                            .Select(x => x.GetString()!)
+                            .ToList()
+                        : [];
                 links.Add(new Link(title, url!, Text(e, "description"), tags));
             }
         }
@@ -64,7 +78,9 @@ public static partial class Portal
         return links;
 
         static string? Text(JsonElement e, string name) =>
-            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
     }
 
     public static bool IsWebAddress(string? url) =>
@@ -77,11 +93,18 @@ public static partial class Portal
     public static IReadOnlyList<Link> Saved(State s, PortalFiles files)
     {
         var links = s.Bookmarks.Select(b => new Link(b.Title, b.Url, b.Why, b.Tags)).ToList();
-        var repositories = s.Ideas.Where(i => i.Home is not null && i.Stage != Stage.Retired)
-            .Select(i => Tracker.RepositoryOf(i.Home!)).OfType<string>().Distinct();
+        var repositories = s
+            .Ideas.Where(i => i.Home is not null && i.Stage != Stage.Retired)
+            .Select(i => Tracker.RepositoryOf(i.Home!))
+            .OfType<string>()
+            .Distinct();
         foreach (var file in repositories.SelectMany(r => files(r)).Order(StringComparer.Ordinal))
         {
-            if (file.Split(Path.DirectorySeparatorChar).Contains("cold-storage") || !File.Exists(file)) continue;
+            if (
+                file.Split(Path.DirectorySeparatorChar).Contains("cold-storage")
+                || !File.Exists(file)
+            )
+                continue;
             links.AddRange(Parse(File.ReadAllText(file)));
         }
         return [.. links.DistinctBy(l => l.Url)];
@@ -91,15 +114,31 @@ public static partial class Portal
     public static IReadOnlyList<int> ListeningPorts(string procNetTcp)
     {
         // Loopback and "any", for IPv4 and IPv6: what a browser here reaches as localhost.
-        string[] local = ["0100007F", "00000000", "00000000000000000000000001000000", "00000000000000000000000000000000"];
+        string[] local =
+        [
+            "0100007F",
+            "00000000",
+            "00000000000000000000000001000000",
+            "00000000000000000000000000000000",
+        ];
         var ports = new SortedSet<int>();
         foreach (var line in procNetTcp.Split('\n').Skip(1))
         {
             var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             // 0A is the socket state "listening".
-            if (fields.Length < 4 || fields[3] != "0A") continue;
+            if (fields.Length < 4 || fields[3] != "0A")
+                continue;
             var address = fields[1].Split(':');
-            if (address.Length == 2 && local.Contains(address[0]) && int.TryParse(address[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var port))
+            if (
+                address.Length == 2
+                && local.Contains(address[0])
+                && int.TryParse(
+                    address[1],
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out var port
+                )
+            )
                 ports.Add(port);
         }
         return [.. ports];
@@ -109,21 +148,31 @@ public static partial class Portal
     public static string? TitleOf(string html)
     {
         var match = TitleTag().Match(html);
-        if (!match.Success) return null;
+        if (!match.Success)
+            return null;
         var title = Spaces().Replace(WebUtility.HtmlDecode(match.Groups[1].Value), " ").Trim();
         return title.Length > 0 ? title : null;
     }
 
     /// The port a link points at on this machine, if it points here at all.
     public static int? LocalPortOf(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.Host is "localhost" or "127.0.0.1" or "[::1]"
+        Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+        && parsed.Host is "localhost" or "127.0.0.1" or "[::1]"
             ? parsed.Port
             : null;
 
     /// Saved links, then the discovered ones that no saved link already covers.
-    public static IReadOnlyList<Link> Merge(IReadOnlyList<Link> saved, IReadOnlyList<Link> discovered, int ownPort)
+    public static IReadOnlyList<Link> Merge(
+        IReadOnlyList<Link> saved,
+        IReadOnlyList<Link> discovered,
+        int ownPort
+    )
     {
-        var covered = saved.Select(l => LocalPortOf(l.Url)).OfType<int>().Append(ownPort).ToHashSet();
+        var covered = saved
+            .Select(l => LocalPortOf(l.Url))
+            .OfType<int>()
+            .Append(ownPort)
+            .ToHashSet();
         return [.. saved, .. discovered.Where(l => !covered.Contains(LocalPortOf(l.Url)!.Value))];
     }
 
@@ -131,7 +180,9 @@ public static partial class Portal
     {
         static string H(string? s) => WebUtility.HtmlEncode(s ?? "");
         var html = new StringBuilder();
-        html.Append(CultureInfo.InvariantCulture, $"""
+        html.Append(
+            CultureInfo.InvariantCulture,
+            $"""
             <!doctype html>
             <html lang="en">
             <head>
@@ -146,30 +197,70 @@ public static partial class Portal
             <header><h1>Portal</h1><p class="count"><span id="shown">{links.Count}</span> of {links.Count} links</p></header>
             <input class="search" id="search" type="search" placeholder="Search links, tags, descriptions…" aria-label="Search links">
             <nav class="tags" aria-label="Filter by tag"><button type="button" class="tag active" data-tag="">all</button>
-            """);
-        foreach (var tag in links.SelectMany(l => l.Tags).Distinct().Order(StringComparer.OrdinalIgnoreCase))
-            html.Append(CultureInfo.InvariantCulture, $"""<button type="button" class="tag" data-tag="{H(tag)}">{H(tag)}</button>""");
-        html.Append("""</nav><p class="empty" id="empty" hidden>No links match.</p><ul class="links">""");
+            """
+        );
+        foreach (
+            var tag in links
+                .SelectMany(l => l.Tags)
+                .Distinct()
+                .Order(StringComparer.OrdinalIgnoreCase)
+        )
+            html.Append(
+                CultureInfo.InvariantCulture,
+                $"""<button type="button" class="tag" data-tag="{H(tag)}">{H(tag)}</button>"""
+            );
+        html.Append(
+            """</nav><p class="empty" id="empty" hidden>No links match.</p><ul class="links">"""
+        );
         foreach (var link in links)
         {
-            var words = string.Join(' ', [link.Title, link.Url, link.Description ?? "", .. link.Tags]).ToLowerInvariant();
-            html.Append(CultureInfo.InvariantCulture, $"""
-                <li class="card" data-text="{H(words)}" data-tags="{H(string.Join('\n', link.Tags))}">
-                <a href="{H(link.Url)}" target="_blank" rel="noopener noreferrer"><span class="title">{H(link.Title)}</span><span class="host">{H(HostOf(link.Url))}</span></a>
-                <img class="preview" src="/previews/{H(link.Preview)}.png" alt="Screenshot of {H(link.Title)}" width="1200" height="750" loading="lazy">
-                """);
-            if (link.Description is { Length: > 0 }) html.Append(CultureInfo.InvariantCulture, $"""<p class="description">{H(link.Description)}</p>""");
+            var words = string.Join(
+                    ' ',
+                    [link.Title, link.Url, link.Description ?? "", .. link.Tags]
+                )
+                .ToLowerInvariant();
+            html.Append(
+                CultureInfo.InvariantCulture,
+                $"""
+                <li class="card" data-text="{H(words)}" data-tags="{H(
+                    string.Join('\n', link.Tags)
+                )}">
+                <a href="{H(
+                    link.Url
+                )}" target="_blank" rel="noopener noreferrer"><span class="title">{H(
+                    link.Title
+                )}</span><span class="host">{H(HostOf(link.Url))}</span></a>
+                <img class="preview" src="/previews/{H(link.Preview)}.png" alt="Screenshot of {H(
+                    link.Title
+                )}" width="1200" height="750" loading="lazy">
+                """
+            );
+            if (link.Description is { Length: > 0 })
+                html.Append(
+                    CultureInfo.InvariantCulture,
+                    $"""<p class="description">{H(link.Description)}</p>"""
+                );
             if (link.Tags.Count > 0)
-                html.Append(CultureInfo.InvariantCulture, $"""<ul class="card-tags">{string.Concat(link.Tags.Select(t => $"<li>{H(t)}</li>"))}</ul>""");
+                html.Append(
+                    CultureInfo.InvariantCulture,
+                    $"""<ul class="card-tags">{string.Concat(link.Tags.Select(t => $"<li>{H(t)}</li>"))}</ul>"""
+                );
             html.Append("</li>");
         }
-        html.Append(CultureInfo.InvariantCulture, $"</ul></main><script>{Script}</script></body></html>\n");
+        html.Append(
+            CultureInfo.InvariantCulture,
+            $"</ul></main><script>{Script}</script></body></html>\n"
+        );
         return html.ToString();
     }
 
     private static string HostOf(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var parsed)
-            ? (parsed.Host.StartsWith("www.", StringComparison.Ordinal) ? parsed.Host[4..] : parsed.Host)
+            ? (
+                parsed.Host.StartsWith("www.", StringComparison.Ordinal)
+                    ? parsed.Host[4..]
+                    : parsed.Host
+            )
             : url;
 
     /// Shown until a link has a screenshot.
@@ -243,12 +334,17 @@ public sealed class PortalServer(Journal journal, int port)
 {
     /// How long one scan of local ports is reused before a request starts the next.
     private static readonly TimeSpan ScanEvery = TimeSpan.FromSeconds(30);
+
     /// A page that could not be photographed is tried again after this long.
     private static readonly TimeSpan RetryCapture = TimeSpan.FromHours(1);
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
-    private readonly string previews = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(journal.Path))!, "previews");
-    private readonly string chromium = Environment.GetEnvironmentVariable("CHROMIUM") ?? "/usr/bin/chromium";
+    private readonly string previews = Path.Combine(
+        Path.GetDirectoryName(Path.GetFullPath(journal.Path))!,
+        "previews"
+    );
+    private readonly string chromium = Environment.GetEnvironmentVariable("CHROMIUM")
+        ?? "/usr/bin/chromium";
     private readonly ConcurrentDictionary<string, string> addressOf = new();
     private readonly ConcurrentDictionary<string, DateTimeOffset> tried = new();
     private readonly SemaphoreSlim oneCapture = new(1);
@@ -260,7 +356,8 @@ public sealed class PortalServer(Journal journal, int port)
         Directory.CreateDirectory(previews);
         using var listener = new HttpListener();
         // A browser sends either name in its Host header, and the listener answers only those it knows.
-        foreach (var name in (string[])["127.0.0.1", "localhost"]) listener.Prefixes.Add($"http://{name}:{port}/");
+        foreach (var name in (string[])["127.0.0.1", "localhost"])
+            listener.Prefixes.Add($"http://{name}:{port}/");
         listener.Start();
         Console.WriteLine($"Portal is at http://127.0.0.1:{port}/");
         while (true)
@@ -268,9 +365,16 @@ public sealed class PortalServer(Journal journal, int port)
             var context = await listener.GetContextAsync();
             _ = Task.Run(async () =>
             {
-                try { await Answer(context); }
-                catch (Exception e) when (e is HttpListenerException or IOException or ObjectDisposedException) { }
-                finally { context.Response.Close(); }
+                try
+                {
+                    await Answer(context);
+                }
+                catch (Exception e)
+                    when (e is HttpListenerException or IOException or ObjectDisposedException) { }
+                finally
+                {
+                    context.Response.Close();
+                }
             });
         }
     }
@@ -282,10 +386,18 @@ public sealed class PortalServer(Journal journal, int port)
         {
             var saved = Portal.Saved(State.From(journal.Read()), Git.PortalFiles);
             var links = Portal.Merge(saved, await Discovered(), port);
-            foreach (var link in links) addressOf[link.Preview] = link.Url;
-            await Send(context, "text/html; charset=utf-8", Encoding.UTF8.GetBytes(Portal.Page(links)));
+            foreach (var link in links)
+                addressOf[link.Preview] = link.Url;
+            await Send(
+                context,
+                "text/html; charset=utf-8",
+                Encoding.UTF8.GetBytes(Portal.Page(links))
+            );
         }
-        else if (path.StartsWith("/previews/", StringComparison.Ordinal) && path.EndsWith(".png", StringComparison.Ordinal))
+        else if (
+            path.StartsWith("/previews/", StringComparison.Ordinal)
+            && path.EndsWith(".png", StringComparison.Ordinal)
+        )
         {
             var slug = Portal.Slug(path["/previews/".Length..^4]);
             var file = Path.Combine(previews, slug + ".png");
@@ -295,7 +407,8 @@ public sealed class PortalServer(Journal journal, int port)
                 return;
             }
             // Take the picture in the background; the next reload shows it.
-            if (addressOf.TryGetValue(slug, out var url)) _ = Capture(slug, url, file);
+            if (addressOf.TryGetValue(slug, out var url))
+                _ = Capture(slug, url, file);
             context.Response.Headers["Cache-Control"] = "no-store";
             await Send(context, "image/svg+xml", Encoding.UTF8.GetBytes(Portal.Placeholder));
         }
@@ -330,7 +443,11 @@ public sealed class PortalServer(Journal journal, int port)
     private async Task<IReadOnlyList<Link>> Scan()
     {
         var ports = new[] { "/proc/net/tcp", "/proc/net/tcp6" }
-            .SelectMany(file => File.Exists(file) ? Portal.ListeningPorts(File.ReadAllText(file)) : []).Distinct().Order();
+            .SelectMany(file =>
+                File.Exists(file) ? Portal.ListeningPorts(File.ReadAllText(file)) : []
+            )
+            .Distinct()
+            .Order();
         var found = await Task.WhenAll(ports.Select(Probe));
         IReadOnlyList<Link> links = [.. found.OfType<Link>()];
         lock (this)
@@ -347,12 +464,27 @@ public sealed class PortalServer(Journal journal, int port)
         try
         {
             using var patience = new CancellationTokenSource(TimeSpan.FromMilliseconds(1500));
-            using var reply = await Http.GetAsync($"http://127.0.0.1:{port}/", HttpCompletionOption.ResponseHeadersRead, patience.Token);
-            if (!reply.IsSuccessStatusCode || reply.Content.Headers.ContentType?.MediaType != "text/html") return null;
+            using var reply = await Http.GetAsync(
+                $"http://127.0.0.1:{port}/",
+                HttpCompletionOption.ResponseHeadersRead,
+                patience.Token
+            );
+            if (
+                !reply.IsSuccessStatusCode
+                || reply.Content.Headers.ContentType?.MediaType != "text/html"
+            )
+                return null;
             var html = await reply.Content.ReadAsStringAsync(patience.Token);
-            return new Link(Portal.TitleOf(html) ?? $"localhost:{port}", $"http://localhost:{port}", $"Found running on port {port}.", ["local"], Discovered: true);
+            return new Link(
+                Portal.TitleOf(html) ?? $"localhost:{port}",
+                $"http://localhost:{port}",
+                $"Found running on port {port}.",
+                ["local"],
+                Discovered: true
+            );
         }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
+        catch (Exception e)
+            when (e is HttpRequestException or OperationCanceledException or IOException)
         {
             return null;
         }
@@ -362,30 +494,61 @@ public sealed class PortalServer(Journal journal, int port)
     private async Task Capture(string slug, string url, string file)
     {
         var now = DateTimeOffset.UtcNow;
-        if (!File.Exists(chromium) || (tried.TryGetValue(slug, out var last) && now - last < RetryCapture)) return;
+        if (
+            !File.Exists(chromium)
+            || (tried.TryGetValue(slug, out var last) && now - last < RetryCapture)
+        )
+            return;
         tried[slug] = now;
         await oneCapture.WaitAsync();
         try
         {
             // An error page gets no screenshot.
             using (var reply = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-                if (!reply.IsSuccessStatusCode) return;
+                if (!reply.IsSuccessStatusCode)
+                    return;
             var draft = Path.ChangeExtension(file, ".tmp.png");
-            var start = new ProcessStartInfo(chromium) { RedirectStandardOutput = true, RedirectStandardError = true };
-            string[] args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--window-size=1200,750",
-                "--virtual-time-budget=8000", $"--screenshot={draft}", url];
-            foreach (var arg in args) start.ArgumentList.Add(arg);
+            var start = new ProcessStartInfo(chromium)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            string[] args =
+            [
+                "--headless=new",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--window-size=1200,750",
+                "--virtual-time-budget=8000",
+                $"--screenshot={draft}",
+                url,
+            ];
+            foreach (var arg in args)
+                start.ArgumentList.Add(arg);
             using var browser = Process.Start(start)!;
             browser.OutputDataReceived += (_, _) => { };
             browser.ErrorDataReceived += (_, _) => { };
             browser.BeginOutputReadLine();
             browser.BeginErrorReadLine();
             using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-            try { await browser.WaitForExitAsync(patience.Token); }
-            catch (OperationCanceledException) { browser.Kill(entireProcessTree: true); }
-            if (File.Exists(draft)) File.Move(draft, file, overwrite: true);
+            try
+            {
+                await browser.WaitForExitAsync(patience.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                browser.Kill(entireProcessTree: true);
+            }
+            if (File.Exists(draft))
+                File.Move(draft, file, overwrite: true);
         }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException or System.ComponentModel.Win32Exception)
+        catch (Exception e)
+            when (e
+                    is HttpRequestException
+                        or OperationCanceledException
+                        or IOException
+                        or System.ComponentModel.Win32Exception
+            )
         {
             // No picture this time; the placeholder stays.
         }

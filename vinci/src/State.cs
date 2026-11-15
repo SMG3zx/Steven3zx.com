@@ -3,7 +3,15 @@ namespace Vinci;
 /// The life of an idea. It moves forward one stage at a time and each move
 /// has a gate (see Session.Advance). Tend has no exit: a grown idea is kept
 /// up, or retired on purpose with a reason. It is never just dropped.
-public enum Stage { Seed, Prepare, Incubate, Build, Tend, Retired }
+public enum Stage
+{
+    Seed,
+    Prepare,
+    Incubate,
+    Build,
+    Tend,
+    Retired,
+}
 
 public sealed class Idea(string id, string title, DateTimeOffset born)
 {
@@ -11,23 +19,28 @@ public sealed class Idea(string id, string title, DateTimeOffset born)
     public string Title => title;
     public DateTimeOffset Born { get; } = born;
     public Stage Stage { get; private set; } = Stage.Seed;
+
     /// Who will use it. The person whose experience decides whether it is good.
     public string? For { get; set; }
     public string? Goal { get; set; }
+
     /// The goal is met when the latest measurement of this metric is in range.
     public string? GoalMetric { get; set; }
     public double? GoalMin { get; set; }
     public double? GoalMax { get; set; }
     public DateTimeOffset LastTouched { get; set; } = born;
     public DateTimeOffset? IncubateUntil { get; set; }
+
     /// Time actually spent working on the idea.
     public TimeSpan Touch { get; private set; }
     public Dictionary<Stage, TimeSpan> TouchIn { get; } = [];
     public List<(Stage Stage, DateTimeOffset At)> StageLog { get; } = [(Stage.Seed, born)];
     public List<(DateTimeOffset At, string What)> Ships { get; } = [];
     public List<DateTimeOffset> Uses { get; } = [];
+
     /// The folder the idea lives in. Its window titles and its commits count as work.
     public string? Home { get; set; }
+
     /// Commits under Home: proof that work happened, read from git.
     public List<(DateTimeOffset At, string What)> Work { get; } = [];
     public string? RetiredWhy { get; set; }
@@ -39,7 +52,8 @@ public sealed class Idea(string id, string title, DateTimeOffset born)
 
     public void Enter(Stage stage, DateTimeOffset at)
     {
-        if (stage == Stage) return;
+        if (stage == Stage)
+            return;
         Stage = stage;
         StageLog.Add((stage, at));
     }
@@ -59,7 +73,8 @@ public sealed class Idea(string id, string title, DateTimeOffset born)
         var total = TimeSpan.Zero;
         for (var i = 0; i < StageLog.Count; i++)
         {
-            if (StageLog[i].Stage != stage) continue;
+            if (StageLog[i].Stage != stage)
+                continue;
             total += (i + 1 < StageLog.Count ? StageLog[i + 1].At : now) - StageLog[i].At;
         }
         return total;
@@ -71,6 +86,7 @@ public sealed class Requirement(string id, string ideaId, string text, string wh
     public string Id => id;
     public string IdeaId => ideaId;
     public string Text => text;
+
     /// The person who asked for it. A name, never a department.
     public string Who => who;
     public string Why => why;
@@ -79,19 +95,36 @@ public sealed class Requirement(string id, string ideaId, string text, string wh
 }
 
 /// Where is the place inside the source: a page, a chapter, a timestamp.
-public sealed record Note(string Id, DateTimeOffset At, string Text, List<string> Refs, List<string> Tags, string? Where);
+public sealed record Note(
+    string Id,
+    DateTimeOffset At,
+    string Text,
+    List<string> Refs,
+    List<string> Tags,
+    string? Where
+);
 
 public sealed record Source(string Id, DateTimeOffset At, string Citation, string? Url);
 
-public sealed class Issue(string id, DateTimeOffset at, string text, string? ideaId, Stage? stage, bool big, string? brokeId)
+public sealed class Issue(
+    string id,
+    DateTimeOffset at,
+    string text,
+    string? ideaId,
+    Stage? stage,
+    bool big,
+    string? brokeId
+)
 {
     public string Id => id;
     public DateTimeOffset At => at;
     public string Text => text;
     public string? IdeaId => ideaId;
+
     /// The stage the idea was in when this went wrong.
     public Stage? Stage => stage;
     public bool Big => big;
+
     /// A principle that was supposed to prevent this and did not.
     public string? BrokeId => brokeId;
     public string? RootCause { get; set; }
@@ -100,11 +133,23 @@ public sealed class Issue(string id, DateTimeOffset at, string text, string? ide
 
 /// Stage is where the issue behind it happened, so the principle can be
 /// shown again when another idea reaches that stage.
-public sealed record Principle(string Id, DateTimeOffset At, string Text, string? IssueId, Stage? Stage);
+public sealed record Principle(
+    string Id,
+    DateTimeOffset At,
+    string Text,
+    string? IssueId,
+    Stage? Stage
+);
 
 /// A claim about what will happen, with a confidence, written down before
 /// the test. Right stays null until the result is in.
-public sealed class Prediction(string id, DateTimeOffset at, string text, double confidence, string? ideaId)
+public sealed class Prediction(
+    string id,
+    DateTimeOffset at,
+    string text,
+    double confidence,
+    string? ideaId
+)
 {
     public string Id => id;
     public DateTimeOffset At => at;
@@ -125,7 +170,14 @@ public sealed class Commitment(DateTimeOffset at, string text, string? ideaId)
 }
 
 /// A link worth keeping. Why is what it is for.
-public sealed record Bookmark(string Id, DateTimeOffset At, string Title, string Url, string? Why, List<string> Tags);
+public sealed record Bookmark(
+    string Id,
+    DateTimeOffset At,
+    string Title,
+    string Url,
+    string? Why,
+    List<string> Tags
+);
 
 /// Time in a window whose app or title contains Pattern is work on the idea,
 /// or, when Use is set, is the idea being used: the shipped thing on screen.
@@ -154,18 +206,22 @@ public sealed class State
     public List<Prediction> Predictions { get; } = [];
     public List<Commitment> Commitments { get; } = [];
     public List<Bookmark> Bookmarks { get; } = [];
+
     /// Bookmarks ever made, kept or not, so an id is never used twice.
     private int bookmarksMade;
     public List<Watch> Watches { get; } = [];
+
     /// When the first watch was set: where window tracking begins.
     public DateTimeOffset? WatchingSince { get; private set; }
+
     /// Window activity up to here has already been credited.
     public DateTimeOffset? SyncedTo { get; private set; }
 
     public static State From(IEnumerable<Event> events)
     {
         var state = new State();
-        foreach (var e in events) state.Apply(e);
+        foreach (var e in events)
+            state.Apply(e);
         return state;
     }
 
@@ -174,7 +230,8 @@ public sealed class State
     public HashSet<(string IdeaId, string Hash)> Commits { get; } = [];
 
     /// True when work on the idea is counted without anyone recording it.
-    public bool Watched(Idea idea) => idea.Home is not null || Watches.Exists(w => w.IdeaId == idea.Id && !w.Use);
+    public bool Watched(Idea idea) =>
+        idea.Home is not null || Watches.Exists(w => w.IdeaId == idea.Id && !w.Use);
 
     /// What a home folder watches for: its name as an editor shows it,
     /// "App.cs - vinci - Visual Studio Code".
@@ -182,32 +239,51 @@ public sealed class State
 
     /// Every watch in force: the ones recorded, and one implied by each home.
     public IEnumerable<Watch> AllWatches =>
-        Watches.Concat(Ideas.Where(i => i.Home is not null).Select(i => new Watch(i.Id, HomePattern(i.Home!))))
+        Watches
+            .Concat(
+                Ideas
+                    .Where(i => i.Home is not null)
+                    .Select(i => new Watch(i.Id, HomePattern(i.Home!)))
+            )
             .Where(w => Idea(w.IdeaId)!.Stage != Stage.Retired);
 
     public Idea? Idea(string id) => Ideas.Find(i => i.Id == id);
+
     public Requirement? Requirement(string id) => Requirements.Find(r => r.Id == id);
+
     public Note? Note(string id) => Notes.Find(n => n.Id == id);
+
     public Source? Source(string id) => Sources.Find(s => s.Id == id);
+
     public Issue? Issue(string id) => Issues.Find(x => x.Id == id);
+
     public Metric? Metric(string name) => Metrics.Find(m => m.Name == name);
+
     public Prediction? Prediction(string id) => Predictions.Find(h => h.Id == id);
+
     public Principle? Principle(string id) => Principles.Find(p => p.Id == id);
+
     public Commitment? OpenCommitment => Commitments.Find(c => c.Kept is null);
 
     /// Null when the goal's metric has never been measured.
     public bool? GoalMet(Idea idea)
     {
-        if (idea.GoalMetric is null || Metric(idea.GoalMetric) is not { Points.Count: > 0 } metric) return null;
+        if (idea.GoalMetric is null || Metric(idea.GoalMetric) is not { Points.Count: > 0 } metric)
+            return null;
         var latest = metric.Points[^1].Value;
-        return (idea.GoalMin is not { } min || latest >= min) && (idea.GoalMax is not { } max || latest <= max);
+        return (idea.GoalMin is not { } min || latest >= min)
+            && (idea.GoalMax is not { } max || latest <= max);
     }
 
     public int Breaks(Principle p) => Issues.Count(x => x.BrokeId == p.Id);
 
     public bool Has(string id) =>
-        Idea(id) is not null || Note(id) is not null || Source(id) is not null
-        || Issue(id) is not null || Requirement(id) is not null || Principle(id) is not null
+        Idea(id) is not null
+        || Note(id) is not null
+        || Source(id) is not null
+        || Issue(id) is not null
+        || Requirement(id) is not null
+        || Principle(id) is not null
         || Prediction(id) is not null;
 
     public string NextId(char prefix)
@@ -232,7 +308,8 @@ public sealed class State
     private Metric MetricOrNew(string name)
     {
         var metric = Metric(name);
-        if (metric is null) Metrics.Add(metric = new Metric(name));
+        if (metric is null)
+            Metrics.Add(metric = new Metric(name));
         return metric;
     }
 
@@ -249,7 +326,12 @@ public sealed class State
                 break;
             case "goal":
                 var aimed = Idea(e.Id!)!;
-                (aimed.Goal, aimed.GoalMetric, aimed.GoalMin, aimed.GoalMax) = (e.Text, e.Metric, e.Value, e.Hi);
+                (aimed.Goal, aimed.GoalMetric, aimed.GoalMin, aimed.GoalMax) = (
+                    e.Text,
+                    e.Metric,
+                    e.Value,
+                    e.Hi
+                );
                 break;
             case "req":
                 Requirements.Add(new Requirement(e.Id!, refs[0], e.Text!, e.Who!, e.Why!));
@@ -260,14 +342,17 @@ public sealed class State
             case "stage":
                 var staged = Idea(e.Id!)!;
                 staged.Enter(Enum.Parse<Stage>(e.Text!), e.At);
-                if (staged.Stage == Stage.Incubate) staged.IncubateUntil = e.At.AddDays(e.Value ?? 1);
+                if (staged.Stage == Stage.Incubate)
+                    staged.IncubateUntil = e.At.AddDays(e.Value ?? 1);
                 break;
             case "watch":
                 WatchingSince ??= e.At;
                 Watches.Add(new Watch(e.Id!, e.Text!, Use: e.Value == 1));
                 break;
             case "unwatch":
-                Watches.RemoveAll(w => w.IdeaId == e.Id && w.Pattern.Equals(e.Text, StringComparison.OrdinalIgnoreCase));
+                Watches.RemoveAll(w =>
+                    w.IdeaId == e.Id && w.Pattern.Equals(e.Text, StringComparison.OrdinalIgnoreCase)
+                );
                 break;
             case "bookmark":
                 bookmarksMade++;
@@ -320,8 +405,17 @@ public sealed class State
                 break;
             case "issue":
                 var about = refs.FirstOrDefault(r => r[0] == 'i');
-                Issues.Add(new Issue(e.Id!, e.At, e.Text!, about, about is null ? null : Idea(about)!.Stage,
-                    big: e.Value == 1, brokeId: refs.FirstOrDefault(r => r[0] == 'p')));
+                Issues.Add(
+                    new Issue(
+                        e.Id!,
+                        e.At,
+                        e.Text!,
+                        about,
+                        about is null ? null : Idea(about)!.Stage,
+                        big: e.Value == 1,
+                        brokeId: refs.FirstOrDefault(r => r[0] == 'p')
+                    )
+                );
                 break;
             case "diagnose":
                 Issue(e.Id!)!.RootCause = e.Text;
@@ -329,10 +423,13 @@ public sealed class State
             case "principle":
                 var issue = refs.FirstOrDefault() is { } issueId ? Issue(issueId) : null;
                 Principles.Add(new Principle(e.Id!, e.At, e.Text!, issue?.Id, issue?.Stage));
-                if (issue is not null) issue.PrincipleId = e.Id;
+                if (issue is not null)
+                    issue.PrincipleId = e.Id;
                 break;
             case "predict":
-                Predictions.Add(new Prediction(e.Id!, e.At, e.Text!, e.Value!.Value, refs.FirstOrDefault()));
+                Predictions.Add(
+                    new Prediction(e.Id!, e.At, e.Text!, e.Value!.Value, refs.FirstOrDefault())
+                );
                 break;
             case "result":
                 var settled = Prediction(e.Id!)!;
@@ -352,15 +449,19 @@ public sealed class State
         }
 
         // Metric names are free text, so they must not be read as ids.
-        if (e.Kind is "log" or "spec") return;
+        if (e.Kind is "log" or "spec")
+            return;
         Touched(e.Id, e.At);
-        foreach (var r in refs) Touched(r, e.At);
+        foreach (var r in refs)
+            Touched(r, e.At);
     }
 
     private void Touched(string? id, DateTimeOffset at)
     {
-        if (id is null) return;
+        if (id is null)
+            return;
         var idea = Idea(id) ?? (Requirement(id) is { } r ? Idea(r.IdeaId) : null);
-        if (idea is not null) idea.LastTouched = at;
+        if (idea is not null)
+            idea.LastTouched = at;
     }
 }

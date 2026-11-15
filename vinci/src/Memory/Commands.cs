@@ -35,39 +35,77 @@ public static class MemoryCommands
         The database is set by NEO4J_URI, NEO4J_USERNAME and NEO4J_PASSWORD.
         """;
 
-    public static async Task<int> Run(string[] args, TextReader input, TextWriter output, TextWriter errors)
+    public static async Task<int> Run(
+        string[] args,
+        TextReader input,
+        TextWriter output,
+        TextWriter errors
+    )
     {
         using var stop = new CancellationTokenSource();
         // Ctrl-C and a stop from systemd both end the long-running commands cleanly.
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
-        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => { context.Cancel = true; stop.Cancel(); });
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            stop.Cancel();
+        };
+        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+        {
+            context.Cancel = true;
+            stop.Cancel();
+        });
         try
         {
             switch (args)
             {
                 case ["mcp"]:
-                    await new McpServer(new HttpClient(), Env.Get("MEMORY_API_URL") ?? "http://127.0.0.1:4781", Env.Get("MEMORY_API_KEY"))
-                        .Run(input, output, stop.Token);
+                    await new McpServer(
+                        new HttpClient(),
+                        Env.Get("MEMORY_API_URL") ?? "http://127.0.0.1:4781",
+                        Env.Get("MEMORY_API_KEY")
+                    ).Run(input, output, stop.Token);
                     return 0;
                 case ["serve"]:
                     if (MemoryServer.Production && Env.Get("MEMORY_API_KEY") is null)
-                        throw new InvalidOperationException("MEMORY_API_KEY is required in production");
+                        throw new InvalidOperationException(
+                            "MEMORY_API_KEY is required in production"
+                        );
                     await using (var store = new Neo4jStore())
                     {
                         var audit = new AuditRegistry();
                         audit.Load();
                         using var codex = new CodexAppServerClient();
                         await store.EnsureSchema();
-                        await new MemoryServer(new MemoryService(store, audit, new MetricsRegistry(), codex, Consolidation.Create())).Run(stop.Token, output);
+                        await new MemoryServer(
+                            new MemoryService(
+                                store,
+                                audit,
+                                new MetricsRegistry(),
+                                codex,
+                                Consolidation.Create()
+                            )
+                        ).Run(stop.Token, output);
                     }
                     return 0;
                 case ["worker"]:
                     await using (var store = new Neo4jStore())
-                        await new ConsolidationWorker(store, Consolidation.Create()).Run(stop.Token, output);
+                        await new ConsolidationWorker(store, Consolidation.Create()).Run(
+                            stop.Token,
+                            output
+                        );
                     return 0;
                 case ["hook"]:
-                    await CodexHook.FromEnvironment(Environment.GetEnvironmentVariable("VINCI_HOME")
-                        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".vinci")).Run(input);
+                    await CodexHook
+                        .FromEnvironment(
+                            Environment.GetEnvironmentVariable("VINCI_HOME")
+                                ?? Path.Combine(
+                                    Environment.GetFolderPath(
+                                        Environment.SpecialFolder.UserProfile
+                                    ),
+                                    ".vinci"
+                                )
+                        )
+                        .Run(input);
                     return 0;
                 case ["seed" or "benchmark" or "ablation" or "simulate" or "longmemeval"]:
                     return await Evaluate(args[0], output);
@@ -78,50 +116,107 @@ public static class MemoryCommands
                         var snapshot = await store.ExportSnapshot();
                         var directory = Env.Get("BACKUP_DIR") ?? "./backups";
                         Directory.CreateDirectory(directory);
-                        var path = Path.Combine(directory, $"personal-memory-{snapshot.ExportedAt.Replace(':', '-').Replace('.', '-')}.json");
-                        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(snapshot, new JsonSerializerOptions(Json.Options) { WriteIndented = true }));
-                        await output.WriteLineAsync(JsonSerializer.Serialize(new { path, nodes = snapshot.Nodes.Count, relationships = snapshot.Relationships.Count }));
+                        var path = Path.Combine(
+                            directory,
+                            $"personal-memory-{snapshot.ExportedAt.Replace(':', '-').Replace('.', '-')}.json"
+                        );
+                        await File.WriteAllTextAsync(
+                            path,
+                            JsonSerializer.Serialize(
+                                snapshot,
+                                new JsonSerializerOptions(Json.Options) { WriteIndented = true }
+                            )
+                        );
+                        await output.WriteLineAsync(
+                            JsonSerializer.Serialize(
+                                new
+                                {
+                                    path,
+                                    nodes = snapshot.Nodes.Count,
+                                    relationships = snapshot.Relationships.Count,
+                                }
+                            )
+                        );
                     }
                     return 0;
                 case ["restore", var file]:
-                    var restoring = JsonSerializer.Deserialize<MemorySnapshot>(await File.ReadAllTextAsync(file), Json.Options)
-                        ?? throw new FormatException("snapshot is empty");
+                    var restoring = JsonSerializer.Deserialize<MemorySnapshot>(
+                        await File.ReadAllTextAsync(file),
+                        Json.Options
+                    ) ?? throw new FormatException("snapshot is empty");
                     var (nodes, relationships) = restoring.Validate();
                     if (Env.Get("RESTORE_DRY_RUN") == "1")
                     {
-                        await output.WriteLineAsync(JsonSerializer.Serialize(new { dryRun = true, file, nodes, relationships }));
+                        await output.WriteLineAsync(
+                            JsonSerializer.Serialize(
+                                new
+                                {
+                                    dryRun = true,
+                                    file,
+                                    nodes,
+                                    relationships,
+                                }
+                            )
+                        );
                         return 0;
                     }
                     if (Env.Get("RESTORE_CONFIRM") != "RESTORE_PERSONAL_MEMORY")
-                        throw new InvalidOperationException("Restore is disabled without RESTORE_CONFIRM=RESTORE_PERSONAL_MEMORY");
+                        throw new InvalidOperationException(
+                            "Restore is disabled without RESTORE_CONFIRM=RESTORE_PERSONAL_MEMORY"
+                        );
                     await using (var store = new Neo4jStore())
                     {
                         await store.Verify();
                         await store.Restore(restoring);
                     }
-                    await output.WriteLineAsync(JsonSerializer.Serialize(new { restoredNodes = nodes, restoredRelationships = relationships, file }));
+                    await output.WriteLineAsync(
+                        JsonSerializer.Serialize(
+                            new
+                            {
+                                restoredNodes = nodes,
+                                restoredRelationships = relationships,
+                                file,
+                            }
+                        )
+                    );
                     return 0;
                 case [] or ["help"] or ["--help"]:
                     await output.WriteAsync(Help);
                     return 0;
                 default:
-                    await errors.WriteLineAsync($"vinci: unknown memory command '{string.Join(' ', args)}'. Try: vinci memory help");
+                    await errors.WriteLineAsync(
+                        $"vinci: unknown memory command '{string.Join(' ', args)}'. Try: vinci memory help"
+                    );
                     return 1;
             }
         }
-        catch (Exception e) when (e is InvalidOperationException or FormatException or IOException or JsonException or Neo4j.Driver.Neo4jException or HttpRequestException)
+        catch (Exception e)
+            when (e
+                    is InvalidOperationException
+                        or FormatException
+                        or IOException
+                        or JsonException
+                        or Neo4j.Driver.Neo4jException
+                        or HttpRequestException
+            )
         {
             await errors.WriteLineAsync($"vinci: {e.Message}");
             return 1;
         }
     }
 
-    private static readonly JsonSerializerOptions Pretty = new(Json.Options) { WriteIndented = true };
+    private static readonly JsonSerializerOptions Pretty = new(Json.Options)
+    {
+        WriteIndented = true,
+    };
 
     private static async Task<int> Evaluate(string what, TextWriter output)
     {
         using var http = new HttpClient();
-        var (api, key) = (Env.BaseUrl("MEMORY_API_URL") ?? "http://127.0.0.1:4781", Env.Get("MEMORY_API_KEY"));
+        var (api, key) = (
+            Env.BaseUrl("MEMORY_API_URL") ?? "http://127.0.0.1:4781",
+            Env.Get("MEMORY_API_KEY")
+        );
         switch (what)
         {
             case "seed":
@@ -129,28 +224,96 @@ public static class MemoryCommands
                 await output.WriteLineAsync("Seeded project benchmark-suite.");
                 return 0;
             case "benchmark":
-                await output.WriteLineAsync((await Evaluation.Benchmark.Run(http, api, key, Env.Get("BENCHMARK_CASES_FILE"))).ToJsonString(Pretty));
+                await output.WriteLineAsync(
+                    (
+                        await Evaluation.Benchmark.Run(
+                            http,
+                            api,
+                            key,
+                            Env.Get("BENCHMARK_CASES_FILE")
+                        )
+                    ).ToJsonString(Pretty)
+                );
                 return 0;
             case "ablation":
-                await output.WriteLineAsync((await Evaluation.Benchmark.Ablate(http, api, key, Env.Get("BENCHMARK_CASES_FILE"))).ToJsonString(Pretty));
+                await output.WriteLineAsync(
+                    (
+                        await Evaluation.Benchmark.Ablate(
+                            http,
+                            api,
+                            key,
+                            Env.Get("BENCHMARK_CASES_FILE")
+                        )
+                    ).ToJsonString(Pretty)
+                );
                 return 0;
             case "longmemeval":
-                var file = Env.Get("LONGMEMEVAL_FILE") ?? throw new InvalidOperationException(
-                    "LONGMEMEVAL_FILE must point to a local LongMemEval JSON file. Download an authorized release from https://github.com/xiaowu0162/LongMemEval-V2 and set it.");
-                await output.WriteLineAsync((await Evaluation.LongMemEval.Run(http, api, key, file)).ToJsonString(Pretty));
+                var file = Env.Get("LONGMEMEVAL_FILE")
+                    ?? throw new InvalidOperationException(
+                        "LONGMEMEVAL_FILE must point to a local LongMemEval JSON file. Download an authorized release from https://github.com/xiaowu0162/LongMemEval-V2 and set it."
+                    );
+                await output.WriteLineAsync(
+                    (await Evaluation.LongMemEval.Run(http, api, key, file)).ToJsonString(Pretty)
+                );
                 return 0;
             default:
                 var seed = (int)Env.Number("SIMULATION_SEED", 42);
                 var live = Env.Get("SIMULATION_LIVE") == "1";
-                var world = Evaluation.Simulator.Create(seed, live ? $"live-{Guid.NewGuid().ToString()[..12]}" : null);
-                var seeds = (Env.Get("SIMULATION_SEEDS") ?? seed.ToString(System.Globalization.CultureInfo.InvariantCulture)).Split(',')
-                    .Select(s => int.TryParse(s, out var n) ? n : (int?)null).OfType<int>().ToList();
-                var report = live ? await Evaluation.Simulator.RunAgainstApi(world, http, api, key) : null;
-                object shown = report is not null ? report : seeds.Count > 1 ? new { datasetVersion = world.DatasetVersion, seeds, reports = Evaluation.Simulator.OfflineMatrix(seeds) } : Evaluation.Simulator.SelfTest(seed);
-                if (Env.Get("SIMULATION_OUTPUT_FILE") is { } outFile) await File.WriteAllTextAsync(outFile, JsonSerializer.Serialize(new { world, report = shown }, Pretty));
-                if (Env.Get("SIMULATION_TRACE_FILE") is { } traceFile && report?.Traces is { } traces)
-                    await File.WriteAllTextAsync(traceFile, Evaluation.Simulator.ToOpenTelemetry(traces).ToJsonString(Pretty));
-                await output.WriteLineAsync(JsonSerializer.Serialize(new { world = new { world.Seed, world.UserId, world.ProjectId, events = world.Events.Count, probes = world.Probes.Count }, report = shown }, Pretty));
+                var world = Evaluation.Simulator.Create(
+                    seed,
+                    live ? $"live-{Guid.NewGuid().ToString()[..12]}" : null
+                );
+                var seeds = (
+                    Env.Get("SIMULATION_SEEDS")
+                    ?? seed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                )
+                    .Split(',')
+                    .Select(s => int.TryParse(s, out var n) ? n : (int?)null)
+                    .OfType<int>()
+                    .ToList();
+                var report = live
+                    ? await Evaluation.Simulator.RunAgainstApi(world, http, api, key)
+                    : null;
+                object shown =
+                    report is not null ? report
+                    : seeds.Count > 1
+                        ? new
+                        {
+                            datasetVersion = world.DatasetVersion,
+                            seeds,
+                            reports = Evaluation.Simulator.OfflineMatrix(seeds),
+                        }
+                    : Evaluation.Simulator.SelfTest(seed);
+                if (Env.Get("SIMULATION_OUTPUT_FILE") is { } outFile)
+                    await File.WriteAllTextAsync(
+                        outFile,
+                        JsonSerializer.Serialize(new { world, report = shown }, Pretty)
+                    );
+                if (
+                    Env.Get("SIMULATION_TRACE_FILE") is { } traceFile
+                    && report?.Traces is { } traces
+                )
+                    await File.WriteAllTextAsync(
+                        traceFile,
+                        Evaluation.Simulator.ToOpenTelemetry(traces).ToJsonString(Pretty)
+                    );
+                await output.WriteLineAsync(
+                    JsonSerializer.Serialize(
+                        new
+                        {
+                            world = new
+                            {
+                                world.Seed,
+                                world.UserId,
+                                world.ProjectId,
+                                events = world.Events.Count,
+                                probes = world.Probes.Count,
+                            },
+                            report = shown,
+                        },
+                        Pretty
+                    )
+                );
                 return 0;
         }
     }

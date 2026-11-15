@@ -11,61 +11,104 @@ public static class JournalSync
     public const int BatchSize = 50;
 
     private static readonly HashSet<string> Decisions =
-        ["predict", "result", "principle", "commit", "kept", "missed", "cut", "diagnose", "goal", "req", "advance"];
+    [
+        "predict",
+        "result",
+        "principle",
+        "commit",
+        "kept",
+        "missed",
+        "cut",
+        "diagnose",
+        "goal",
+        "req",
+        "advance",
+    ];
 
-    public static string Kind(Event e) => e.Kind switch
-    {
-        "issue" => "error",
-        var k when Decisions.Contains(k) => "decision",
-        _ => "artifact",
-    };
+    public static string Kind(Event e) =>
+        e.Kind switch
+        {
+            "issue" => "error",
+            var k when Decisions.Contains(k) => "decision",
+            _ => "artifact",
+        };
 
     /// One line that says what the fact is, with its id, so a recalled line can be looked up with the journal.
     public static string Describe(Event e)
     {
         var parts = new List<string> { e.Id is null ? e.Kind : $"{e.Kind} {e.Id}" };
-        if (e.Text is { Length: > 0 } text) parts.Add(text);
-        if (e.Metric is not null) parts.Add($"metric {e.Metric} = {e.Value}{(e.Hi is null ? "" : $" to {e.Hi}")}");
-        else if (e.Value is not null) parts.Add($"value {e.Value}");
-        if (e.Refs is { Length: > 0 } refs) parts.Add($"refs {string.Join(", ", refs)}");
-        if (e.Who is not null) parts.Add($"who {e.Who}");
-        if (e.Why is not null) parts.Add($"why {e.Why}");
-        if (e.Url is not null) parts.Add(e.Url);
-        if (e.Where is not null) parts.Add($"where {e.Where}");
-        if (e.Tags is { Length: > 0 } tags) parts.Add(string.Join(" ", tags.Select(t => t.StartsWith('+') ? t : "+" + t)));
+        if (e.Text is { Length: > 0 } text)
+            parts.Add(text);
+        if (e.Metric is not null)
+            parts.Add($"metric {e.Metric} = {e.Value}{(e.Hi is null ? "" : $" to {e.Hi}")}");
+        else if (e.Value is not null)
+            parts.Add($"value {e.Value}");
+        if (e.Refs is { Length: > 0 } refs)
+            parts.Add($"refs {string.Join(", ", refs)}");
+        if (e.Who is not null)
+            parts.Add($"who {e.Who}");
+        if (e.Why is not null)
+            parts.Add($"why {e.Why}");
+        if (e.Url is not null)
+            parts.Add(e.Url);
+        if (e.Where is not null)
+            parts.Add($"where {e.Where}");
+        if (e.Tags is { Length: > 0 } tags)
+            parts.Add(string.Join(" ", tags.Select(t => t.StartsWith('+') ? t : "+" + t)));
         return string.Join(" | ", parts);
     }
 
-    public static JsonObject ToMemoryEvent(Event e, int index) => new()
-    {
-        ["kind"] = Kind(e),
-        ["content"] = Describe(e),
-        ["source"] = "vinci-journal",
-        ["occurredAt"] = e.At.ToString("o"),
-        ["idempotencyKey"] = $"vinci-journal:{index}",
-        ["metadata"] = new JsonObject { ["journalKind"] = e.Kind, ["journalId"] = e.Id, ["journalIndex"] = index },
-    };
+    public static JsonObject ToMemoryEvent(Event e, int index) =>
+        new()
+        {
+            ["kind"] = Kind(e),
+            ["content"] = Describe(e),
+            ["source"] = "vinci-journal",
+            ["occurredAt"] = e.At.ToString("o"),
+            ["idempotencyKey"] = $"vinci-journal:{index}",
+            ["metadata"] = new JsonObject
+            {
+                ["journalKind"] = e.Kind,
+                ["journalId"] = e.Id,
+                ["journalIndex"] = index,
+            },
+        };
 
     /// Sends what is new since the cursor. Returns how many facts were sent.
     public static async Task<int> Run(Journal journal, MemoryApi memory)
     {
         var events = journal.Read();
-        var cursorPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(journal.Path))!, "memory-sync.txt");
+        var cursorPath = Path.Combine(
+            Path.GetDirectoryName(Path.GetFullPath(journal.Path))!,
+            "memory-sync.txt"
+        );
         var cursor = ReadCursor(cursorPath);
-        if (cursor > events.Count) cursor = 0; // the journal was replaced: send it again, the keys make that safe
+        if (cursor > events.Count)
+            cursor = 0; // the journal was replaced: send it again, the keys make that safe
         var sent = 0;
         while (cursor < events.Count)
         {
             var count = Math.Min(BatchSize, events.Count - cursor);
-            var batch = Enumerable.Range(cursor, count).Select(i => (JsonNode)ToMemoryEvent(events[i], i)).ToArray();
-            await memory.Post("/v1/events/batch", new JsonObject { ["events"] = new JsonArray(batch) });
+            var batch = Enumerable
+                .Range(cursor, count)
+                .Select(i => (JsonNode)ToMemoryEvent(events[i], i))
+                .ToArray();
+            await memory.Post(
+                "/v1/events/batch",
+                new JsonObject { ["events"] = new JsonArray(batch) }
+            );
             cursor += count;
             sent += count;
-            File.WriteAllText(cursorPath, cursor.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            File.WriteAllText(
+                cursorPath,
+                cursor.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            );
         }
         return sent;
     }
 
     private static int ReadCursor(string path) =>
-        File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var n) && n >= 0 ? n : 0;
+        File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var n) && n >= 0
+            ? n
+            : 0;
 }

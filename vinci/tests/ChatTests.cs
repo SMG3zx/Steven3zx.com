@@ -15,21 +15,37 @@ public class ChatTests
         private int next;
         public List<(string Path, string Body)> Requests { get; } = [];
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken stop)
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken stop
+        )
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(stop);
             Requests.Add((request.RequestUri!.AbsolutePath, body));
-            var (path, json) = next < replies.Length ? replies[next++] : throw new InvalidOperationException($"unexpected request {request.RequestUri}");
-            if (request.RequestUri!.AbsolutePath != path) throw new InvalidOperationException($"expected {path}, got {request.RequestUri.AbsolutePath}");
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            var (path, json) =
+                next < replies.Length
+                    ? replies[next++]
+                    : throw new InvalidOperationException(
+                        $"unexpected request {request.RequestUri}"
+                    );
+            if (request.RequestUri!.AbsolutePath != path)
+                throw new InvalidOperationException(
+                    $"expected {path}, got {request.RequestUri.AbsolutePath}"
+                );
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
         }
     }
 
     /// A service that is not running: every request fails to connect.
     private sealed class Refused : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken stop) =>
-            throw new HttpRequestException("connection refused");
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken stop
+        ) => throw new HttpRequestException("connection refused");
     }
 
     private static readonly DateTimeOffset Now = new(2026, 11, 15, 9, 0, 0, TimeSpan.Zero);
@@ -41,8 +57,12 @@ public class ChatTests
     public async Task Chat_client_asks_for_no_thinking_and_returns_the_content()
     {
         var script = new Script(("/api/chat", Reply("""{"tool": "pipeline"}""")));
-        var content = await new OllamaChat("http://chat.test", "qwen3-8b-vinci", think: false, script)
-            .Send([new JsonObject { ["role"] = "user", ["content"] = "hi" }]);
+        var content = await new OllamaChat(
+            "http://chat.test",
+            "qwen3-8b-vinci",
+            think: false,
+            script
+        ).Send([new JsonObject { ["role"] = "user", ["content"] = "hi" }]);
         Assert.Equal("""{"tool": "pipeline"}""", content);
         var sent = JsonNode.Parse(script.Requests[0].Body)!;
         Assert.Equal("qwen3-8b-vinci", sent["model"]!.GetValue<string>());
@@ -54,12 +74,24 @@ public class ChatTests
     [Fact]
     public void A_json_action_is_read_from_plain_or_fenced_replies_and_prose_is_an_answer()
     {
-        Assert.True(Conversation.TryAction("""{"tool": "journal", "args": ["idea", "Flying machine"]}""", out var name, out var args));
+        Assert.True(
+            Conversation.TryAction(
+                """{"tool": "journal", "args": ["idea", "Flying machine"]}""",
+                out var name,
+                out var args
+            )
+        );
         Assert.Equal("journal", name);
         Assert.Equal("Flying machine", args["args"]![1]!.GetValue<string>());
         Assert.False(args.ContainsKey("tool"));
 
-        Assert.True(Conversation.TryAction("```json\n{\"tool\": \"recall\", \"query\": \"gliders\"}\n```", out name, out args));
+        Assert.True(
+            Conversation.TryAction(
+                "```json\n{\"tool\": \"recall\", \"query\": \"gliders\"}\n```",
+                out name,
+                out args
+            )
+        );
         Assert.Equal("recall", name);
         Assert.Equal("gliders", args["query"]!.GetValue<string>());
 
@@ -74,10 +106,24 @@ public class ChatTests
         var script = new Script(
             ("/api/chat", Reply("""{"tool": "journal", "args": ["pipeline"]}""")),
             ("/api/chat", Reply("Seed has 1 idea [event:e1].")),
-            ("/v1/conversations", """{"ok":true}"""));
+            ("/v1/conversations", """{"ok":true}""")
+        );
         var memory = new MemoryApi("http://memory.test", null, script);
-        var tools = new ChatTools((args, output) => { output.Write("Seed 1"); return 0; }, memory);
-        var conversation = new Conversation(new OllamaChat("http://chat.test", "m", false, script), tools, memory, "s1", () => Now);
+        var tools = new ChatTools(
+            (args, output) =>
+            {
+                output.Write("Seed 1");
+                return 0;
+            },
+            memory
+        );
+        var conversation = new Conversation(
+            new OllamaChat("http://chat.test", "m", false, script),
+            tools,
+            memory,
+            "s1",
+            () => Now
+        );
 
         using var console = new StringWriter();
         var answer = await conversation.Turn("what is in the pipeline?", console);
@@ -103,11 +149,21 @@ public class ChatTests
             ("/api/chat", Reply("""{"tool": "recall", "query": "gliders"}""")),
             ("/v1/context", """{"context":"[event:e1] A glider wing tore | sources: s1"}"""),
             ("/api/chat", Reply("A wing tore [event:e1].")),
-            ("/v1/conversations", """{"ok":true}"""));
+            ("/v1/conversations", """{"ok":true}""")
+        );
         var memory = new MemoryApi("http://memory.test", null, script);
-        var conversation = new Conversation(new OllamaChat("http://chat.test", "m", false, script), new ChatTools((a, o) => 0, memory), memory, "s3", () => Now);
+        var conversation = new Conversation(
+            new OllamaChat("http://chat.test", "m", false, script),
+            new ChatTools((a, o) => 0, memory),
+            memory,
+            "s3",
+            () => Now
+        );
         using var console = new StringWriter();
-        Assert.Equal("A wing tore [event:e1].", await conversation.Turn("what happened to the wing?", console));
+        Assert.Equal(
+            "A wing tore [event:e1].",
+            await conversation.Turn("what happened to the wing?", console)
+        );
         Assert.DoesNotContain("did not return", console.ToString());
         // A grounded answer is kept: the exchange has both the question and the answer.
         var recorded = JsonNode.Parse(script.Requests[3].Body)!;
@@ -119,7 +175,13 @@ public class ChatTests
     {
         var script = new Script(("/api/chat", Reply("Noted.")));
         var memory = new MemoryApi("http://127.0.0.1:1", null, new Refused());
-        var conversation = new Conversation(new OllamaChat("http://chat.test", "m", false, script), new ChatTools((a, o) => 0, memory), memory, "s2", () => Now);
+        var conversation = new Conversation(
+            new OllamaChat("http://chat.test", "m", false, script),
+            new ChatTools((a, o) => 0, memory),
+            memory,
+            "s2",
+            () => Now
+        );
         using var console = new StringWriter();
         Assert.Equal("Noted.", await conversation.Turn("remember that I like wings", console));
         Assert.Contains("memory is not running", console.ToString());
@@ -139,28 +201,69 @@ public class ChatTests
     public void Journal_tool_runs_the_same_commands_and_returns_their_errors()
     {
         var calls = new List<string[]>();
-        var tools = new ChatTools((args, output) =>
-        {
-            calls.Add(args);
-            if (args[0] == "bad") { output.Write("vinci: no such idea"); return 1; }
-            output.Write("ok");
-            return 0;
-        }, new MemoryApi("http://127.0.0.1:1", null));
-        Assert.Equal("ok", tools.Run("journal", new JsonObject { ["args"] = new JsonArray("note", "x") }));
-        Assert.Equal("error: vinci: no such idea", tools.Run("journal", new JsonObject { ["args"] = new JsonArray("bad") }));
+        var tools = new ChatTools(
+            (args, output) =>
+            {
+                calls.Add(args);
+                if (args[0] == "bad")
+                {
+                    output.Write("vinci: no such idea");
+                    return 1;
+                }
+                output.Write("ok");
+                return 0;
+            },
+            new MemoryApi("http://127.0.0.1:1", null)
+        );
+        Assert.Equal(
+            "ok",
+            tools.Run("journal", new JsonObject { ["args"] = new JsonArray("note", "x") })
+        );
+        Assert.Equal(
+            "error: vinci: no such idea",
+            tools.Run("journal", new JsonObject { ["args"] = new JsonArray("bad") })
+        );
         Assert.Equal(["note", "x"], calls[0]);
-        Assert.StartsWith("error: there is no tool named delete_everything", tools.Run("delete_everything", new JsonObject()));
+        Assert.StartsWith(
+            "error: there is no tool named delete_everything",
+            tools.Run("delete_everything", new JsonObject())
+        );
     }
 
     [Fact]
     public void Journal_facts_become_memory_events_that_name_their_ids_and_repeat_safely()
     {
-        var note = new Event(Now, "note", "n1", Text: "A bird steers by shifting its weight", Tags: ["flight"]);
-        var prediction = new Event(Now, "predict", "h1", Text: "A 10 m wing lifts 80 kg", Value: 70, Refs: ["i1"]);
-        var issue = new Event(Now, "issue", "x1", Text: "Wing tore", Why: "cloth never load-tested");
+        var note = new Event(
+            Now,
+            "note",
+            "n1",
+            Text: "A bird steers by shifting its weight",
+            Tags: ["flight"]
+        );
+        var prediction = new Event(
+            Now,
+            "predict",
+            "h1",
+            Text: "A 10 m wing lifts 80 kg",
+            Value: 70,
+            Refs: ["i1"]
+        );
+        var issue = new Event(
+            Now,
+            "issue",
+            "x1",
+            Text: "Wing tore",
+            Why: "cloth never load-tested"
+        );
 
-        Assert.Equal("note n1 | A bird steers by shifting its weight | +flight", JournalSync.Describe(note));
-        Assert.Equal("predict h1 | A 10 m wing lifts 80 kg | value 70 | refs i1", JournalSync.Describe(prediction));
+        Assert.Equal(
+            "note n1 | A bird steers by shifting its weight | +flight",
+            JournalSync.Describe(note)
+        );
+        Assert.Equal(
+            "predict h1 | A 10 m wing lifts 80 kg | value 70 | refs i1",
+            JournalSync.Describe(prediction)
+        );
         Assert.Equal("artifact", JournalSync.Kind(note));
         Assert.Equal("decision", JournalSync.Kind(prediction));
         Assert.Equal("error", JournalSync.Kind(issue));
@@ -181,14 +284,20 @@ public class ChatTests
             journal.Append(new Event(Now, "note", "n1", Text: "first"));
             journal.Append(new Event(Now, "note", "n2", Text: "second"));
 
-            var script = new Script(("/v1/events/batch", """{"ok":true}"""), ("/v1/events/batch", """{"ok":true}"""));
+            var script = new Script(
+                ("/v1/events/batch", """{"ok":true}"""),
+                ("/v1/events/batch", """{"ok":true}""")
+            );
             var memory = new MemoryApi("http://memory.test", null, script);
             Assert.Equal(2, await JournalSync.Run(journal, memory));
             Assert.Equal(0, await JournalSync.Run(journal, memory));
 
             journal.Append(new Event(Now, "note", "n3", Text: "third"));
             var again = new Script(("/v1/events/batch", """{"ok":true}"""));
-            Assert.Equal(1, await JournalSync.Run(journal, new MemoryApi("http://memory.test", null, again)));
+            Assert.Equal(
+                1,
+                await JournalSync.Run(journal, new MemoryApi("http://memory.test", null, again))
+            );
             var body = JsonNode.Parse(again.Requests[0].Body)!["events"]!.AsArray();
             Assert.Single(body);
             Assert.Equal("vinci-journal:2", body[0]!["idempotencyKey"]!.GetValue<string>());

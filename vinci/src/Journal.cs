@@ -23,7 +23,8 @@ public sealed record Event(
     string? Url = null,
     string? Metric = null,
     string[]? Tags = null,
-    string? Where = null);
+    string? Where = null
+);
 
 /// The append-only file of events: one JSON object per line.
 public sealed class Journal(string path)
@@ -37,14 +38,19 @@ public sealed class Journal(string path)
 
     public IReadOnlyList<Event> Read() =>
         File.Exists(path)
-            ? [.. File.ReadLines(path)
-                .Where(line => line.Length > 0)
-                .Select(line => JsonSerializer.Deserialize<Event>(line, Json)!)]
+            ?
+            [
+                .. File.ReadLines(path)
+                    .Where(line => line.Length > 0)
+                    .Select(line => JsonSerializer.Deserialize<Event>(line, Json)!),
+            ]
             : [];
 
     public void Append(Event e)
     {
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
+        Directory.CreateDirectory(
+            System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!
+        );
         File.AppendAllText(path, JsonSerializer.Serialize(e, Json) + "\n");
     }
 }

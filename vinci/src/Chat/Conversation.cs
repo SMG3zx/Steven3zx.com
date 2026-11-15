@@ -9,9 +9,16 @@ namespace Vinci.Chat;
 /// answers. The answer's citations are checked against the evidence the tools
 /// returned this turn, and the exchange is written to memory so later
 /// questions can recall it.
-public sealed partial class Conversation(OllamaChat model, ChatTools tools, MemoryApi memory, string sessionId, Func<DateTimeOffset> now)
+public sealed partial class Conversation(
+    OllamaChat model,
+    ChatTools tools,
+    MemoryApi memory,
+    string sessionId,
+    Func<DateTimeOffset> now
+)
 {
     public const int MaxRounds = 6;
+
     /// The part of the history sent each turn. Qwen3-8B runs with an 8k window, so older turns go first.
     public const int HistoryChars = 9000;
 
@@ -19,22 +26,23 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
     private int turn;
     private bool warnedMemoryOff;
 
-    public static string SystemPrompt(DateTimeOffset today) => $"""
-        You are the assistant inside vinci, a personal system for ideas, notes, predictions, measurements and time.
-        The person you are talking to keeps their knowledge, goals and work in it.
+    public static string SystemPrompt(DateTimeOffset today) =>
+        $"""
+            You are the assistant inside vinci, a personal system for ideas, notes, predictions, measurements and time.
+            The person you are talking to keeps their knowledge, goals and work in it.
 
-        {ChatTools.Instructions}
+            {ChatTools.Instructions}
 
-        How to work:
-        - For anything about their ideas, notes, sources, goals, predictions, metrics, commits or time, use the journal. Never guess what it holds.
-        - For questions about the past, use recall first. Answer only from what recall returned, and cite each fact as [type:id] exactly as it appears there.
-        - If recall finds nothing relevant, say you do not know. Do not fill the gap.
-        - When the person states a durable fact or preference, save it with remember.
-        - When asked to record or change something, do it with the journal, then say in one line what you recorded.
-        - Be brief. Plain sentences. No headings unless asked.
+            How to work:
+            - For anything about their ideas, notes, sources, goals, predictions, metrics, commits or time, use the journal. Never guess what it holds.
+            - For questions about the past, use recall first. Answer only from what recall returned, and cite each fact as [type:id] exactly as it appears there.
+            - If recall finds nothing relevant, say you do not know. Do not fill the gap.
+            - When the person states a durable fact or preference, save it with remember.
+            - When asked to record or change something, do it with the journal, then say in one line what you recorded.
+            - Be brief. Plain sentences. No headings unless asked.
 
-        Today is {today:yyyy-MM-dd}.
-        """;
+            Today is {today:yyyy-MM-dd}.
+            """;
 
     public async Task<string> Turn(string userText, TextWriter output)
     {
@@ -44,7 +52,9 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         string? answer = null;
         for (var round = 0; round < MaxRounds && answer is null; round++)
         {
-            var reply = (await model.Send([Message("system", SystemPrompt(now())), .. Recent()])).Trim();
+            var reply = (
+                await model.Send([Message("system", SystemPrompt(now())), .. Recent()])
+            ).Trim();
             if (!TryAction(reply, out var name, out var arguments))
             {
                 answer = reply;
@@ -59,20 +69,31 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         }
         answer ??= "I could not reach an answer in the steps I had. Ask it more narrowly.";
 
-        var citations = Citation().Matches(answer).Select(m => m.Groups[1].Value).Distinct().ToList();
-        var unsourced = citations.Where(c => !evidence.ToString().Contains($"[{c}]", StringComparison.Ordinal)).ToList();
+        var citations = Citation()
+            .Matches(answer)
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .ToList();
+        var unsourced = citations
+            .Where(c => !evidence.ToString().Contains($"[{c}]", StringComparison.Ordinal))
+            .ToList();
         foreach (var cited in unsourced)
-            await output.WriteLineAsync($"  ! cites [{cited}], which recall did not return this turn");
+            await output.WriteLineAsync(
+                $"  ! cites [{cited}], which recall did not return this turn"
+            );
 
         // An answer is stored only when it rests on recalled evidence. Otherwise the chat's own
         // "I do not know" or wrong answer would be recalled later as if it were a fact.
         var keepAnswer = citations.Count > 0 && unsourced.Count == 0;
         var saved = await Record(userText, keepAnswer ? answer : null);
-        if (!keepAnswer && saved) await output.WriteLineAsync("  · answer not saved: it cites no recalled evidence");
+        if (!keepAnswer && saved)
+            await output.WriteLineAsync("  · answer not saved: it cites no recalled evidence");
         if (!saved && !warnedMemoryOff)
         {
             warnedMemoryOff = true;
-            await output.WriteLineAsync("  ! memory is not running, so exchanges are not saved (this is the only time it is said)");
+            await output.WriteLineAsync(
+                "  ! memory is not running, so exchanges are not saved (this is the only time it is said)"
+            );
         }
         return answer;
     }
@@ -86,12 +107,18 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         if (text.StartsWith("```", StringComparison.Ordinal))
         {
             text = text.Trim('`').Trim();
-            if (text.StartsWith("json", StringComparison.OrdinalIgnoreCase)) text = text[4..].Trim();
+            if (text.StartsWith("json", StringComparison.OrdinalIgnoreCase))
+                text = text[4..].Trim();
         }
-        if (!text.StartsWith('{')) return false;
+        if (!text.StartsWith('{'))
+            return false;
         try
         {
-            if (JsonNode.Parse(text) is not JsonObject obj || obj["tool"] is not JsonValue tool || !tool.TryGetValue<string>(out var toolName))
+            if (
+                JsonNode.Parse(text) is not JsonObject obj
+                || obj["tool"] is not JsonValue tool
+                || !tool.TryGetValue<string>(out var toolName)
+            )
                 return false;
             name = toolName;
             obj.Remove("tool");
@@ -110,10 +137,26 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         var at = now().ToString("o");
         var messages = new List<object>
         {
-            new { idempotencyKey = $"{sessionId}:{turn}:user", kind = "user_message", content = userText, source = "vinci-chat", occurredAt = at },
+            new
+            {
+                idempotencyKey = $"{sessionId}:{turn}:user",
+                kind = "user_message",
+                content = userText,
+                source = "vinci-chat",
+                occurredAt = at,
+            },
         };
         if (answer is not null)
-            messages.Add(new { idempotencyKey = $"{sessionId}:{turn}:agent", kind = "agent_message", content = answer, source = "vinci-chat", occurredAt = at });
+            messages.Add(
+                new
+                {
+                    idempotencyKey = $"{sessionId}:{turn}:agent",
+                    kind = "agent_message",
+                    content = answer,
+                    source = "vinci-chat",
+                    occurredAt = at,
+                }
+            );
         try
         {
             await memory.Post("/v1/conversations", new { sessionId, messages });
@@ -133,15 +176,18 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         for (var i = history.Count - 1; i >= 0; i--)
         {
             var length = (history[i]["content"]?.GetValue<string>().Length ?? 0) + 40;
-            if (size + length > HistoryChars) break;
+            if (size + length > HistoryChars)
+                break;
             size += length;
             kept.Insert(0, history[i]);
         }
-        while (kept.Count > 0 && kept[0]["role"]?.GetValue<string>() != "user") kept.RemoveAt(0);
+        while (kept.Count > 0 && kept[0]["role"]?.GetValue<string>() != "user")
+            kept.RemoveAt(0);
         return kept;
     }
 
-    private static JsonObject Message(string role, string content) => new() { ["role"] = role, ["content"] = content };
+    private static JsonObject Message(string role, string content) =>
+        new() { ["role"] = role, ["content"] = content };
 
     private static string Summary(JsonObject arguments)
     {

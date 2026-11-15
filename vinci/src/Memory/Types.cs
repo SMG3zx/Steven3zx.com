@@ -12,6 +12,7 @@ public record MemoryScope
     public string? SessionId { get; init; }
     public bool? IncludeHistorical { get; init; }
     public bool? IncludeTestData { get; init; }
+
     /// Any of "lexical", "vector", "graph". Null means all three.
     public IReadOnlyList<string>? RetrievalMethods { get; init; }
 }
@@ -62,7 +63,11 @@ public record SessionReflectionInput : MemoryScope
     public string? IdempotencyKey { get; init; }
 }
 
-public sealed record SessionReflection(string Reflection, IReadOnlyList<string> Lessons, IReadOnlyList<string> Failures);
+public sealed record SessionReflection(
+    string Reflection,
+    IReadOnlyList<string> Lessons,
+    IReadOnlyList<string> Failures
+);
 
 /// Work the worker does later: consolidate an event, reflect on a session,
 /// embed a document, extract a graph, or reconsolidate a memory.
@@ -151,6 +156,7 @@ public record ProcedureInput : MemoryScope
     public bool? Executable { get; init; }
     public string? Command { get; init; }
     public JsonObject? Parameters { get; init; }
+
     /// "read-only", "approval-required" or "trusted".
     public string? Safety { get; init; }
 }
@@ -158,12 +164,59 @@ public record ProcedureInput : MemoryScope
 /// The names the memory service accepts, so a typo is rejected at the door.
 public static class Vocabulary
 {
-    public static readonly string[] EventKinds = ["user_message", "agent_message", "tool_call", "tool_result", "decision", "artifact", "error"];
-    public static readonly string[] JobKinds = ["consolidate_event", "reflect_session", "embed_document", "extract_graph", "reconsolidate_memory"];
-    public static readonly string[] MemoryCategories = ["working", "profile", "fact", "preference", "decision", "episode", "belief", "reflection", "failure", "semantic", "procedure", "summary", "claim"];
-    public static readonly string[] MemoryStatuses = ["active", "superseded", "archived", "retracted"];
+    public static readonly string[] EventKinds =
+    [
+        "user_message",
+        "agent_message",
+        "tool_call",
+        "tool_result",
+        "decision",
+        "artifact",
+        "error",
+    ];
+    public static readonly string[] JobKinds =
+    [
+        "consolidate_event",
+        "reflect_session",
+        "embed_document",
+        "extract_graph",
+        "reconsolidate_memory",
+    ];
+    public static readonly string[] MemoryCategories =
+    [
+        "working",
+        "profile",
+        "fact",
+        "preference",
+        "decision",
+        "episode",
+        "belief",
+        "reflection",
+        "failure",
+        "semantic",
+        "procedure",
+        "summary",
+        "claim",
+    ];
+    public static readonly string[] MemoryStatuses =
+    [
+        "active",
+        "superseded",
+        "archived",
+        "retracted",
+    ];
     public static readonly string[] RetrievalMethods = ["lexical", "vector", "graph"];
-    public static readonly string[] EntityTypes = ["person", "project", "organization", "technology", "file", "tool", "concept", "other"];
+    public static readonly string[] EntityTypes =
+    [
+        "person",
+        "project",
+        "organization",
+        "technology",
+        "file",
+        "tool",
+        "concept",
+        "other",
+    ];
 }
 
 /// Reading loosely typed JSON the way the stored rows need it: a missing or
@@ -180,22 +233,34 @@ public static class Json
     /// The number in a node. Null is the fallback; text that is not a number is NaN.
     public static double Num(JsonNode? node, double fallback = 0)
     {
-        if (node is null) return fallback;
+        if (node is null)
+            return fallback;
         // A value's kind is asked for, not its type: a number may be held as
         // an int, a long or a double depending on who made the node.
         switch (node.GetValueKind())
         {
-            case JsonValueKind.Number: return Parse(node.ToJsonString());
-            case JsonValueKind.True: return 1;
-            case JsonValueKind.False: return 0;
+            case JsonValueKind.Number:
+                return Parse(node.ToJsonString());
+            case JsonValueKind.True:
+                return 1;
+            case JsonValueKind.False:
+                return 0;
             case JsonValueKind.String:
                 var text = node.GetValue<string>().Trim();
                 return text.Length == 0 ? 0 : Parse(text);
-            default: return double.NaN;
+            default:
+                return double.NaN;
         }
 
         static double Parse(string text) =>
-            double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN;
+            double.TryParse(
+                text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed
+            )
+                ? parsed
+                : double.NaN;
     }
 
     /// True only for a JSON true.
@@ -204,8 +269,11 @@ public static class Json
     /// The text of a node. Null is the fallback; a number or flag is written out.
     public static string Str(JsonNode? node, string fallback = "")
     {
-        if (node is null) return fallback;
-        return node.GetValueKind() == JsonValueKind.String ? node.GetValue<string>() : node.ToJsonString();
+        if (node is null)
+            return fallback;
+        return node.GetValueKind() == JsonValueKind.String
+            ? node.GetValue<string>()
+            : node.ToJsonString();
     }
 
     /// The strings in an array node, or nothing when it is not an array.
@@ -222,10 +290,18 @@ public static class Env
         Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value : null;
 
     public static double Number(string name, double fallback) =>
-        Get(name) is { } raw && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+        Get(name) is { } raw
+        && double.TryParse(
+            raw,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var value
+        )
             ? value
-            : Get(name) is null ? fallback : double.NaN;
+        : Get(name) is null ? fallback
+        : double.NaN;
 
     /// A base URL with no trailing slash, or null when the setting is empty.
-    public static string? BaseUrl(string name) => Get(name)?.TrimEnd('/') is { Length: > 0 } url ? url : null;
+    public static string? BaseUrl(string name) =>
+        Get(name)?.TrimEnd('/') is { Length: > 0 } url ? url : null;
 }

@@ -31,7 +31,10 @@ public sealed class AuditRun
 /// anything that looks like a credential removed before it is kept.
 public sealed partial class AuditRegistry
 {
-    [GeneratedRegex("(authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|token|password|secret|credential)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(
+        "(authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|token|password|secret|credential)",
+        RegexOptions.IgnoreCase
+    )]
     private static partial Regex SecretKey();
 
     [GeneratedRegex(@"\b(?:sk|sess|tok|key|auth)[-_a-z0-9]{12,}\b", RegexOptions.IgnoreCase)]
@@ -45,22 +48,38 @@ public sealed partial class AuditRegistry
 
     public AuditRegistry(int? maxRuns = null, double? retentionHours = null)
     {
-        this.maxRuns = (int)Math.Min(100_000, Math.Max(100, Math.Floor(maxRuns ?? Env.Number("AUDIT_MAX_RUNS", 5_000))));
-        retention = TimeSpan.FromHours(Math.Max(0, retentionHours ?? Env.Number("AUDIT_RETENTION_HOURS", 24)));
+        this.maxRuns = (int)
+            Math.Min(
+                100_000,
+                Math.Max(100, Math.Floor(maxRuns ?? Env.Number("AUDIT_MAX_RUNS", 5_000)))
+            );
+        retention = TimeSpan.FromHours(
+            Math.Max(0, retentionHours ?? Env.Number("AUDIT_RETENTION_HOURS", 24))
+        );
     }
 
     /// A copy with every secret-looking key blanked and every secret-looking
     /// value inside text replaced.
     public static JsonNode? Redact(JsonNode? value, int depth = 0)
     {
-        if (depth > 8) return "[redacted-depth]";
+        if (depth > 8)
+            return "[redacted-depth]";
         return value switch
         {
             null => null,
             JsonArray list => new JsonArray([.. list.Select(item => Redact(item, depth + 1))]),
-            JsonObject map => new JsonObject(map.Select(entry =>
-                KeyValuePair.Create(entry.Key, SecretKey().IsMatch(entry.Key) ? "[REDACTED]" : Redact(entry.Value, depth + 1)))),
-            _ when value.GetValueKind() == JsonValueKind.String => SecretValue().Replace(value.GetValue<string>(), "[REDACTED]"),
+            JsonObject map => new JsonObject(
+                map.Select(entry =>
+                    KeyValuePair.Create(
+                        entry.Key,
+                        SecretKey().IsMatch(entry.Key)
+                            ? "[REDACTED]"
+                            : Redact(entry.Value, depth + 1)
+                    )
+                )
+            ),
+            _ when value.GetValueKind() == JsonValueKind.String => SecretValue()
+                .Replace(value.GetValue<string>(), "[REDACTED]"),
             _ => value.DeepClone(),
         };
     }
@@ -69,10 +88,14 @@ public sealed partial class AuditRegistry
     /// file is not a reason for the service to fail to start.
     public void Load()
     {
-        if (filePath is null) return;
+        if (filePath is null)
+            return;
         try
         {
-            var kept = JsonSerializer.Deserialize<List<AuditRun>>(File.ReadAllText(filePath), Json.Options) ?? [];
+            var kept = JsonSerializer.Deserialize<List<AuditRun>>(
+                File.ReadAllText(filePath),
+                Json.Options
+            ) ?? [];
             lock (gate)
             {
                 runs.Clear();
@@ -81,14 +104,17 @@ public sealed partial class AuditRegistry
             }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
-        {
-        }
+        { }
     }
 
     private void Persist()
     {
-        if (filePath is null) return;
-        try { File.WriteAllText(filePath, JsonSerializer.Serialize(runs, Json.Options)); }
+        if (filePath is null)
+            return;
+        try
+        {
+            File.WriteAllText(filePath, JsonSerializer.Serialize(runs, Json.Options));
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
@@ -99,15 +125,25 @@ public sealed partial class AuditRegistry
             var cutoff = DateTimeOffset.UtcNow - retention;
             runs.RemoveAll(run => Time(run.StartedAt) < cutoff);
         }
-        if (runs.Count > maxRuns) runs.RemoveRange(0, runs.Count - maxRuns);
+        if (runs.Count > maxRuns)
+            runs.RemoveRange(0, runs.Count - maxRuns);
     }
 
-    private static DateTimeOffset Time(string iso) => DateTimeOffset.Parse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+    private static DateTimeOffset Time(string iso) =>
+        DateTimeOffset.Parse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
 
-    private static string Now() => DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+    private static string Now() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
-    public AuditRun Start(string name, string kind, JsonNode? input = null, JsonObject? metadata = null, IReadOnlyList<string>? tags = null,
-        string? traceId = null, string? parentRunId = null)
+    public AuditRun Start(
+        string name,
+        string kind,
+        JsonNode? input = null,
+        JsonObject? metadata = null,
+        IReadOnlyList<string>? tags = null,
+        string? traceId = null,
+        string? parentRunId = null
+    )
     {
         var run = new AuditRun
         {
@@ -130,7 +166,8 @@ public sealed partial class AuditRegistry
         return run;
     }
 
-    public AuditRun Finish(AuditRun run, JsonNode? output = null, JsonObject? metadata = null) => End(run, "success", metadata, () => run.Output = Redact(output));
+    public AuditRun Finish(AuditRun run, JsonNode? output = null, JsonObject? metadata = null) =>
+        End(run, "success", metadata, () => run.Output = Redact(output));
 
     public AuditRun Fail(AuditRun run, string error, JsonObject? metadata = null) =>
         End(run, "error", metadata, () => run.Error = SecretValue().Replace(error, "[REDACTED]"));
@@ -141,17 +178,27 @@ public sealed partial class AuditRegistry
         {
             run.Status = status;
             run.EndedAt = Now();
-            run.DurationMs = Math.Max(0, (Time(run.EndedAt) - Time(run.StartedAt)).TotalMilliseconds);
+            run.DurationMs = Math.Max(
+                0,
+                (Time(run.EndedAt) - Time(run.StartedAt)).TotalMilliseconds
+            );
             record();
             if (metadata is not null)
-                foreach (var (key, value) in (JsonObject)Redact(metadata)!) run.Metadata[key] = value?.DeepClone();
+                foreach (var (key, value) in (JsonObject)Redact(metadata)!)
+                    run.Metadata[key] = value?.DeepClone();
             Persist();
         }
         return run;
     }
 
     /// The most recent runs first. Name also matches against the trace id.
-    public List<AuditRun> Query(string? traceId = null, string? status = null, string? kind = null, string? name = null, int limit = 50)
+    public List<AuditRun> Query(
+        string? traceId = null,
+        string? status = null,
+        string? kind = null,
+        string? name = null,
+        int limit = 50
+    )
     {
         lock (gate)
         {
@@ -160,7 +207,12 @@ public sealed partial class AuditRegistry
                 (string.IsNullOrEmpty(traceId) || run.TraceId == traceId)
                 && (string.IsNullOrEmpty(status) || run.Status == status)
                 && (string.IsNullOrEmpty(kind) || run.Kind == kind)
-                && (string.IsNullOrEmpty(name) || run.Name.Contains(name, StringComparison.OrdinalIgnoreCase) || run.TraceId.Contains(name, StringComparison.OrdinalIgnoreCase)));
+                && (
+                    string.IsNullOrEmpty(name)
+                    || run.Name.Contains(name, StringComparison.OrdinalIgnoreCase)
+                    || run.TraceId.Contains(name, StringComparison.OrdinalIgnoreCase)
+                )
+            );
             return [.. matching.TakeLast(Math.Min(200, Math.Max(1, limit))).Reverse()];
         }
     }
@@ -171,7 +223,10 @@ public sealed partial class AuditRegistry
         lock (gate)
         {
             Prune();
-            return [.. runs.Where(run => run.TraceId == traceId).OrderBy(run => Time(run.StartedAt))];
+            return
+            [
+                .. runs.Where(run => run.TraceId == traceId).OrderBy(run => Time(run.StartedAt)),
+            ];
         }
     }
 

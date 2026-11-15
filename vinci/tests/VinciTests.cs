@@ -9,6 +9,7 @@ public sealed class VinciTests : IDisposable
     private readonly string dir = Directory.CreateTempSubdirectory("vinci-test").FullName;
     private DateTimeOffset now = new(2026, 1, 1, 9, 0, 0, TimeSpan.Zero);
     private string stdin = "";
+
     /// What the window watcher has seen, how far its record reaches, and whether it answers.
     private readonly List<Activity> windows = [];
     private DateTimeOffset? known;
@@ -37,11 +38,29 @@ public sealed class VinciTests : IDisposable
     private (int Code, string Out) Try(params string[] args)
     {
         var output = new StringWriter();
-        var code = App.Run(args, new Journal(JournalPath), new StringReader(stdin), output, output, now,
+        var code = App.Run(
+            args,
+            new Journal(JournalPath),
+            new StringReader(stdin),
+            output,
+            output,
+            now,
             (from, to) => reachable ? new Seen(windows, known ?? to) : null,
-            (folder, after) => after is { } a
-                ? [.. commits.Where(c => c.At > a && c.Files.Any(f => f.StartsWith(folder + "/")))]
-                : [.. commits.Where(c => c.Files.Any(f => f.StartsWith(folder + "/"))).TakeLast(1)]);
+            (folder, after) =>
+                after is { } a
+                    ?
+                    [
+                        .. commits.Where(c =>
+                            c.At > a && c.Files.Any(f => f.StartsWith(folder + "/"))
+                        ),
+                    ]
+                    :
+                    [
+                        .. commits
+                            .Where(c => c.Files.Any(f => f.StartsWith(folder + "/")))
+                            .TakeLast(1),
+                    ]
+        );
         return (code, output.ToString());
     }
 
@@ -123,8 +142,14 @@ public sealed class VinciTests : IDisposable
     {
         Run("idea", "Flying machine");
         Assert.Contains("needs a number", Fail("goal", "i1", "Fly well"));
-        Assert.Contains("not at-least, at-most or between", Fail("goal", "i1", "Fly well", "distance", "around", "100"));
-        Assert.Contains("low must not be above high", Fail("goal", "i1", "Fly well", "distance", "between", "9", "2"));
+        Assert.Contains(
+            "not at-least, at-most or between",
+            Fail("goal", "i1", "Fly well", "distance", "around", "100")
+        );
+        Assert.Contains(
+            "low must not be above high",
+            Fail("goal", "i1", "Fly well", "distance", "between", "9", "2")
+        );
     }
 
     [Fact]
@@ -134,7 +159,10 @@ public sealed class VinciTests : IDisposable
         Run("advance", "i1");
         Run("note", "Birds gain lift from the shape of the wing", "i1");
         Run("req", "i1", "Flaps like a bird", "Leonardo", "Birds do");
-        Assert.Contains("deleted 1 of 1", Run("cut", "r1", "Fixed wings glide; flapping is not the goal"));
+        Assert.Contains(
+            "deleted 1 of 1",
+            Run("cut", "r1", "Fixed wings glide; flapping is not the goal")
+        );
 
         Assert.Contains("no requirements", Fail("advance", "i1"));
         Assert.Contains("CUT Flaps like a bird", Run("show", "i1"));
@@ -143,7 +171,8 @@ public sealed class VinciTests : IDisposable
     [Fact]
     public void Only_three_ideas_may_be_in_Build_at_once()
     {
-        foreach (var n in new[] { 1, 2, 3 }) GrowToBuild($"i{n}", $"Machine {n}");
+        foreach (var n in new[] { 1, 2, 3 })
+            GrowToBuild($"i{n}", $"Machine {n}");
         Prepare("i4", "Machine 4");
         Run("advance", "i4", "0");
 
@@ -169,7 +198,10 @@ public sealed class VinciTests : IDisposable
 
         Assert.Contains("i1 goal not met: needs ≥ 100", Run("log", "distance-i1", "60"));
         Assert.Contains("not met, distance-i1 60 needs ≥ 100", Run("show", "i1"));
-        Assert.Contains("i1 has not met its goal", Run("commit", "Fly further", "i1") + Run("next"));
+        Assert.Contains(
+            "i1 has not met its goal",
+            Run("commit", "Fly further", "i1") + Run("next")
+        );
 
         Wait(TimeSpan.FromHours(5));
         Assert.Contains("Cycle time 5h0m since the last ship", Run("ship", "i1", "Bigger wing"));
@@ -371,7 +403,10 @@ public sealed class VinciTests : IDisposable
         Run("spent", "i1", "90");
         Wait(TimeSpan.FromDays(5));
 
-        Assert.Contains("stages  Seed 3d0h (touch 30m), Prepare 5d0h (touch 1h30m)", Run("show", "i1"));
+        Assert.Contains(
+            "stages  Seed 3d0h (touch 30m), Prepare 5d0h (touch 1h30m)",
+            Run("show", "i1")
+        );
     }
 
     // ---- the portal ----
@@ -380,24 +415,35 @@ public sealed class VinciTests : IDisposable
     public void A_bookmark_is_kept_in_the_journal_until_it_is_dropped()
     {
         Assert.Contains("No bookmarks yet", Run("bookmarks"));
-        Assert.StartsWith("b1 saved", Run("bookmark", "Qwik Docs", "https://qwik.dev/", "Official docs", "+docs", "+qwik"));
+        Assert.StartsWith(
+            "b1 saved",
+            Run("bookmark", "Qwik Docs", "https://qwik.dev/", "Official docs", "+docs", "+qwik")
+        );
         Assert.Contains("not an http", Fail("bookmark", "Files", "file:///etc"));
         Assert.Contains("b1 already points there", Fail("bookmark", "Again", "https://qwik.dev/"));
         Run("bookmark", "Bun", "https://bun.sh/docs");
-        Assert.Contains("b1   Qwik Docs  https://qwik.dev/ +docs +qwik  (Official docs)", Run("bookmarks"));
+        Assert.Contains(
+            "b1   Qwik Docs  https://qwik.dev/ +docs +qwik  (Official docs)",
+            Run("bookmarks")
+        );
 
         Run("unbookmark", "b1");
         Assert.Contains("no bookmark b1", Fail("unbookmark", "b1"));
         Assert.DoesNotContain("Qwik", Run("bookmarks"));
         // A dropped bookmark's id is not handed out again.
-        Assert.StartsWith("b3 saved", Run("bookmark", "TypeScript", "https://www.typescriptlang.org/docs/"));
+        Assert.StartsWith(
+            "b3 saved",
+            Run("bookmark", "TypeScript", "https://www.typescriptlang.org/docs/")
+        );
     }
 
     [Fact]
     public void The_portal_lists_bookmarks_and_each_projects_own_links()
     {
         var glider = Folder("glider");
-        File.WriteAllText(Path.Combine(glider, "portal.json"), """
+        File.WriteAllText(
+            Path.Combine(glider, "portal.json"),
+            """
             [
               { "title": "Glider", "url": "https://glider.example", "description": "The site.", "tags": ["live"] },
               { "title": "Docs again", "url": "https://qwik.dev/" },
@@ -405,13 +451,18 @@ public sealed class VinciTests : IDisposable
               { "title": "Not the web", "url": "ftp://files.example" },
               "nonsense"
             ]
-            """);
+            """
+        );
         var hidden = Directory.CreateDirectory(Path.Combine(dir, "repo", "cold-storage")).FullName;
-        File.WriteAllText(Path.Combine(hidden, "portal.json"), """[{ "title": "Later", "url": "https://later.example" }]""");
+        File.WriteAllText(
+            Path.Combine(hidden, "portal.json"),
+            """[{ "title": "Later", "url": "https://later.example" }]"""
+        );
         File.WriteAllText(Path.Combine(Folder("broken"), "portal.json"), "{ not json");
         Run("bookmark", "Qwik Docs", "https://qwik.dev/", "+docs");
 
-        PortalFiles tracked = repository => Directory.GetFiles(repository, "portal.json", SearchOption.AllDirectories);
+        PortalFiles tracked = repository =>
+            Directory.GetFiles(repository, "portal.json", SearchOption.AllDirectories);
         // No idea lives anywhere yet, so no repository is read.
         Assert.Single(Portal.Saved(State.From(new Journal(JournalPath).Read()), tracked));
 
@@ -434,12 +485,18 @@ public sealed class VinciTests : IDisposable
             """;
         // Loopback and every-address listeners only: not the resolver on 127.0.0.53, not an open connection.
         Assert.Equal([631, 3000, 5600], Portal.ListeningPorts(proc));
-        Assert.Equal("Home & Away - CUPS", Portal.TitleOf("<html><head><TITLE>\n Home &amp; Away -\n CUPS </TITLE>"));
+        Assert.Equal(
+            "Home & Away - CUPS",
+            Portal.TitleOf("<html><head><TITLE>\n Home &amp; Away -\n CUPS </TITLE>")
+        );
         Assert.Null(Portal.TitleOf("<p>no title</p>"));
         Assert.Equal(5600, Portal.LocalPortOf("http://localhost:5600/#/home"));
         Assert.Null(Portal.LocalPortOf("https://qwik.dev/"));
 
-        var saved = new[] { new Link("ActivityWatch", "http://localhost:5600", "Where the time went.", ["tools"]) };
+        var saved = new[]
+        {
+            new Link("ActivityWatch", "http://localhost:5600", "Where the time went.", ["tools"]),
+        };
         var found = new[]
         {
             new Link("ActivityWatch", "http://localhost:5600", null, ["local"], Discovered: true),
@@ -456,11 +513,19 @@ public sealed class VinciTests : IDisposable
     public void The_page_shows_every_link_and_cannot_be_broken_by_its_text()
     {
         var page = Portal.Page([
-            new Link("Qwik <Docs>", "https://www.qwik.dev/a?b=1&c=2", "Fast \"apps\"", ["docs", "qwik"]),
+            new Link(
+                "Qwik <Docs>",
+                "https://www.qwik.dev/a?b=1&c=2",
+                "Fast \"apps\"",
+                ["docs", "qwik"]
+            ),
             new Link("Gitea", "http://localhost:3000", null, ["local"], Discovered: true),
         ]);
         Assert.Contains("<span id=\"shown\">2</span> of 2 links", page);
-        Assert.Contains("<span class=\"title\">Qwik &lt;Docs&gt;</span><span class=\"host\">qwik.dev</span>", page);
+        Assert.Contains(
+            "<span class=\"title\">Qwik &lt;Docs&gt;</span><span class=\"host\">qwik.dev</span>",
+            page
+        );
         Assert.Contains("href=\"https://www.qwik.dev/a?b=1&amp;c=2\"", page);
         Assert.Contains("src=\"/previews/qwik-docs.png\"", page);
         Assert.Contains("src=\"/previews/local-3000.png\"", page);
@@ -483,7 +548,10 @@ public sealed class VinciTests : IDisposable
         Assert.StartsWith("Seed       i2   Bridge  (4d0h here)", lines[0]);
         Assert.StartsWith("Prepare    -", lines[1]);
         Assert.StartsWith("Incubate   -", lines[2]);
-        Assert.StartsWith("Build 1/3  i1   Flying machine  (4d0h here, touch 0m; goal distance-i1 not measured", lines[3]);
+        Assert.StartsWith(
+            "Build 1/3  i1   Flying machine  (4d0h here, touch 0m; goal distance-i1 not measured",
+            lines[3]
+        );
         Assert.StartsWith("Tend       -", lines[4]);
         // i1: Seed 0d, Build 4d. i2: Seed 4d. So Build averages 4d, Seed 2d.
         Assert.StartsWith("Slowest stage: Build, 4d0h on average", lines[5]);
@@ -515,15 +583,25 @@ public sealed class VinciTests : IDisposable
     public void A_note_keeps_where_it_came_from_down_to_the_page()
     {
         Run("idea", "Flying machine");
-        Run("source", "Leonardo da Vinci, Codex on the Flight of Birds, 1505", "https://example.org/codex");
+        Run(
+            "source",
+            "Leonardo da Vinci, Codex on the Flight of Birds, 1505",
+            "https://example.org/codex"
+        );
         Run("note", "A bird steers by shifting its centre of gravity", "s1:f.7v", "i1");
         Assert.Contains("your own thought", Run("note", "So a pilot could steer by leaning", "n1"));
 
-        Assert.Contains("is not a note, idea, source or prediction", Fail("note", "Unfounded claim", "s9"));
+        Assert.Contains(
+            "is not a note, idea, source or prediction",
+            Fail("note", "Unfounded claim", "s9")
+        );
         Assert.Contains("only a source has a place", Fail("note", "Misplaced", "i1:p.3"));
 
         var cited = Run("show", "n1");
-        Assert.Contains("origin   s1 Leonardo da Vinci, Codex on the Flight of Birds, 1505, f.7v <https://example.org/codex>", cited);
+        Assert.Contains(
+            "origin   s1 Leonardo da Vinci, Codex on the Flight of Birds, 1505, f.7v <https://example.org/codex>",
+            cited
+        );
         Assert.Contains("n2", cited); // linked from
         Assert.Contains("origin   your own thought", Run("show", "n2"));
 
@@ -586,7 +664,10 @@ public sealed class VinciTests : IDisposable
             Run("predict", $"Claim {n}", "90");
             Run("result", $"h{n}", n <= 6 ? "right" : "wrong", "Tested");
         }
-        Assert.Contains("Settled 10: right 60%, average confidence 90%. You are overconfident by 30 points.", Run("predictions"));
+        Assert.Contains(
+            "Settled 10: right 60%, average confidence 90%. You are overconfident by 30 points.",
+            Run("predictions")
+        );
     }
 
     [Fact]
@@ -650,12 +731,18 @@ public sealed class VinciTests : IDisposable
     {
         Run("issue", "Wing tore on the first test");
         Assert.Contains("no root cause yet", Run("review"));
-        Assert.Contains("Diagnose before you design", Fail("principle", "Use stronger cloth", "x1"));
+        Assert.Contains(
+            "Diagnose before you design",
+            Fail("principle", "Use stronger cloth", "x1")
+        );
 
         Run("diagnose", "x1", "Never load-tested the cloth before building");
         Assert.Contains("diagnosed but nothing changed", Run("review"));
 
-        Assert.Contains("x1 is closed", Run("principle", "Test each material alone before building with it", "x1"));
+        Assert.Contains(
+            "x1 is closed",
+            Run("principle", "Test each material alone before building with it", "x1")
+        );
         Assert.Contains("Nothing to fix. Last review: 1.", Run("review"));
         Assert.Contains("(from x1)", Run("principles"));
     }
@@ -726,7 +813,10 @@ public sealed class VinciTests : IDisposable
         Assert.Contains("Nothing to fix", Run("review"));
 
         Wait(TimeSpan.FromDays(7));
-        Assert.Contains("week   commitment from 2026-01-01 is due: Build the wing frame", Run("review"));
+        Assert.Contains(
+            "week   commitment from 2026-01-01 is due: Build the wing frame",
+            Run("review")
+        );
         Assert.Contains("1 of 1 commitments kept", Run("kept"));
         Assert.Contains("no open commitment", Fail("kept"));
     }
@@ -738,8 +828,14 @@ public sealed class VinciTests : IDisposable
         Run("commit", "Build the wing frame", "i1");
         Wait(TimeSpan.FromDays(7));
 
-        Assert.Contains("0 of 1 commitments kept. Logged as x1", Run("missed", "Spent the week on the bridge"));
-        Assert.Contains("Missed commitment \"Build the wing frame\": Spent the week on the bridge", Run("show", "x1"));
+        Assert.Contains(
+            "0 of 1 commitments kept. Logged as x1",
+            Run("missed", "Spent the week on the bridge")
+        );
+        Assert.Contains(
+            "Missed commitment \"Build the wing frame\": Spent the week on the bridge",
+            Run("show", "x1")
+        );
         Assert.Contains("0 of 1 commitments kept", Run("review"));
     }
 
@@ -775,8 +871,12 @@ public sealed class VinciTests : IDisposable
     public void A_sigma_level_is_only_given_once_there_is_enough_data()
     {
         Run("spec", "sleep", "7", "9");
-        for (var n = 0; n < 29; n++) Run("log", "sleep", n < 3 ? "5" : "8");
-        Assert.Contains("3 of 29 outside, too few to give a sigma level (29 of 30)", Run("stats", "sleep"));
+        for (var n = 0; n < 29; n++)
+            Run("log", "sleep", n < 3 ? "5" : "8");
+        Assert.Contains(
+            "3 of 29 outside, too few to give a sigma level (29 of 30)",
+            Run("stats", "sleep")
+        );
 
         Run("log", "sleep", "8");
         // 3 of 30 is a 90% yield: 1.28 sigma, plus the 1.5 shift.

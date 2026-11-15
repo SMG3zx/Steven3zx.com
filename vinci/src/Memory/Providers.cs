@@ -10,14 +10,16 @@ namespace Vinci.Memory;
 public abstract class ProviderClient(string? baseUrl, HttpMessageHandler? handler)
 {
     protected string? BaseUrl { get; } = baseUrl?.TrimEnd('/') is { Length: > 0 } url ? url : null;
-    protected HttpClient Http { get; } = handler is null ? new HttpClient() : new HttpClient(handler);
+    protected HttpClient Http { get; } =
+        handler is null ? new HttpClient() : new HttpClient(handler);
 
     public bool Enabled => BaseUrl is not null;
 
     protected async Task<JsonNode?> Post(string path, object body, string service)
     {
         using var reply = await Http.PostAsJsonAsync($"{BaseUrl}{path}", body, Json.Options);
-        if (!reply.IsSuccessStatusCode) throw new InvalidOperationException($"{service} returned {(int)reply.StatusCode}");
+        if (!reply.IsSuccessStatusCode)
+            throw new InvalidOperationException($"{service} returned {(int)reply.StatusCode}");
         return await reply.Content.ReadFromJsonAsync<JsonNode>(Json.Options);
     }
 }
@@ -47,14 +49,34 @@ public sealed class EmbeddingClient(string? baseUrl = null, HttpMessageHandler? 
 
     private async Task<List<double[]>> Request(IReadOnlyList<string> inputs)
     {
-        if (!Enabled) return [];
-        var payload = await Post("/embeddings", new { model = Model, input = inputs }, "embedding service");
+        if (!Enabled)
+            return [];
+        var payload = await Post(
+            "/embeddings",
+            new { model = Model, input = inputs },
+            "embedding service"
+        );
         var data = payload?["data"] as JsonArray;
-        var rows = data?.Select((item, position) => (Index: (int)Json.Num(item?["index"], position), Vector: item?["embedding"] as JsonArray))
-            .OrderBy(row => row.Index).ToList();
-        if (rows is not { Count: > 0 } || rows.Count != inputs.Count || rows.Any(row => row.Vector is not { Count: > 0 }))
-            throw new InvalidOperationException("embedding service returned an invalid vector response");
-        return rows.Select(row => row.Vector!.Select(n => Json.Num(n, double.NaN)).ToArray()).ToList();
+        var rows = data
+            ?.Select(
+                (item, position) =>
+                    (
+                        Index: (int)Json.Num(item?["index"], position),
+                        Vector: item?["embedding"] as JsonArray
+                    )
+            )
+            .OrderBy(row => row.Index)
+            .ToList();
+        if (
+            rows is not { Count: > 0 }
+            || rows.Count != inputs.Count
+            || rows.Any(row => row.Vector is not { Count: > 0 })
+        )
+            throw new InvalidOperationException(
+                "embedding service returned an invalid vector response"
+            );
+        return rows.Select(row => row.Vector!.Select(n => Json.Num(n, double.NaN)).ToArray())
+            .ToList();
     }
 }
 
@@ -64,49 +86,111 @@ public sealed record RerankCandidate(string Id, string Content, double Score = 0
 public sealed class RerankerClient(string? baseUrl = null, HttpMessageHandler? handler = null)
     : ProviderClient(baseUrl ?? Env.Get("RERANKER_BASE_URL"), handler)
 {
-    public async Task<IReadOnlyList<RerankCandidate>> Rerank(string query, IReadOnlyList<RerankCandidate> candidates)
+    public async Task<IReadOnlyList<RerankCandidate>> Rerank(
+        string query,
+        IReadOnlyList<RerankCandidate> candidates
+    )
     {
-        if (!Enabled || candidates.Count == 0) return candidates;
-        var payload = await Post("/rerank", new { query, texts = candidates.Select(c => c.Content), top_n = candidates.Count }, "reranker service");
-        if ((payload as JsonArray ?? payload?["results"] as JsonArray) is not { } results) throw Invalid();
+        if (!Enabled || candidates.Count == 0)
+            return candidates;
+        var payload = await Post(
+            "/rerank",
+            new
+            {
+                query,
+                texts = candidates.Select(c => c.Content),
+                top_n = candidates.Count,
+            },
+            "reranker service"
+        );
+        if ((payload as JsonArray ?? payload?["results"] as JsonArray) is not { } results)
+            throw Invalid();
         var ranked = new List<RerankCandidate>();
         foreach (var item in results)
         {
-            var (index, score) = (Json.Num(item?["index"], double.NaN), Json.Num(item?["score"], double.NaN));
-            if (index != Math.Floor(index) || !double.IsFinite(score)) throw Invalid();
-            if (index >= 0 && index < candidates.Count) ranked.Add(candidates[(int)index] with { Score = score });
+            var (index, score) = (
+                Json.Num(item?["index"], double.NaN),
+                Json.Num(item?["score"], double.NaN)
+            );
+            if (index != Math.Floor(index) || !double.IsFinite(score))
+                throw Invalid();
+            if (index >= 0 && index < candidates.Count)
+                ranked.Add(candidates[(int)index] with { Score = score });
         }
         return ranked;
 
-        static InvalidOperationException Invalid() => new("reranker service returned an invalid response");
+        static InvalidOperationException Invalid() =>
+            new("reranker service returned an invalid response");
     }
 }
 
-public sealed record FaithfulnessVerdict(bool Faithful, string JudgedBy, double? Score = null, string? Rationale = null);
+public sealed record FaithfulnessVerdict(
+    bool Faithful,
+    string JudgedBy,
+    double? Score = null,
+    string? Rationale = null
+);
 
 /// An optional independent judge of whether an answer follows from its
 /// evidence, by POST /judge.
 public sealed class FaithfulnessJudge(string? baseUrl = null, HttpMessageHandler? handler = null)
     : ProviderClient(baseUrl ?? Env.Get("FAITHFULNESS_JUDGE_BASE_URL"), handler)
 {
-    public async Task<FaithfulnessVerdict?> Judge(string query, string answer, IReadOnlyList<string> evidence)
+    public async Task<FaithfulnessVerdict?> Judge(
+        string query,
+        string answer,
+        IReadOnlyList<string> evidence
+    )
     {
-        if (!Enabled) return null;
-        var payload = await Post("/judge", new { query, answer, evidence }, "faithfulness judge");
-        bool? verdict = payload?["faithful"]?.GetValueKind() is JsonValueKind.True or JsonValueKind.False ? Json.Flag(payload["faithful"])
-            : Json.Str(payload?["verdict"]) switch { "supported" => true, "unsupported" => false, _ => null };
-        if (verdict is null) throw new InvalidOperationException("faithfulness judge returned an invalid verdict");
-        return new FaithfulnessVerdict(verdict.Value, "external",
-            payload?["score"]?.GetValueKind() == JsonValueKind.Number ? Json.Num(payload["score"]) : null,
-            payload?["rationale"]?.GetValueKind() == JsonValueKind.String ? Json.Str(payload["rationale"]) : null);
+        if (!Enabled)
+            return null;
+        var payload = await Post(
+            "/judge",
+            new
+            {
+                query,
+                answer,
+                evidence,
+            },
+            "faithfulness judge"
+        );
+        bool? verdict = payload?["faithful"]?.GetValueKind()
+            is JsonValueKind.True
+                or JsonValueKind.False
+            ? Json.Flag(payload["faithful"])
+            : Json.Str(payload?["verdict"]) switch
+            {
+                "supported" => true,
+                "unsupported" => false,
+                _ => null,
+            };
+        if (verdict is null)
+            throw new InvalidOperationException("faithfulness judge returned an invalid verdict");
+        return new FaithfulnessVerdict(
+            verdict.Value,
+            "external",
+            payload?["score"]?.GetValueKind() == JsonValueKind.Number
+                ? Json.Num(payload["score"])
+                : null,
+            payload?["rationale"]?.GetValueKind() == JsonValueKind.String
+                ? Json.Str(payload["rationale"])
+                : null
+        );
     }
 
     /// The fallback with no judge: the answer is not empty and the evidence
     /// contains every term the answer was expected to rest on.
-    public static bool Lexical(string answer, IReadOnlyList<string> evidence, IReadOnlyList<string> expectedTerms)
+    public static bool Lexical(
+        string answer,
+        IReadOnlyList<string> evidence,
+        IReadOnlyList<string> expectedTerms
+    )
     {
         var text = string.Join(' ', evidence).ToLowerInvariant();
-        return answer.Trim().Length > 0 && expectedTerms.All(term => text.Contains(term.ToLowerInvariant(), StringComparison.Ordinal));
+        return answer.Trim().Length > 0
+            && expectedTerms.All(term =>
+                text.Contains(term.ToLowerInvariant(), StringComparison.Ordinal)
+            );
     }
 }
 
@@ -114,15 +198,27 @@ public sealed class FaithfulnessJudge(string? baseUrl = null, HttpMessageHandler
 public sealed record ProviderStatus(bool Configured, string State, int? HttpStatus = null)
 {
     /// `path` is what the service answers on. Ollama serves its OpenAI routes under /v1 and has no /health.
-    public static async Task<ProviderStatus> Probe(string? baseUrl, int timeoutMs = 1500, HttpMessageHandler? handler = null, string path = "/health")
+    public static async Task<ProviderStatus> Probe(
+        string? baseUrl,
+        int timeoutMs = 1500,
+        HttpMessageHandler? handler = null,
+        string path = "/health"
+    )
     {
-        if (baseUrl?.TrimEnd('/') is not { Length: > 0 } normalized) return new(false, "disabled");
-        using var http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
+        if (baseUrl?.TrimEnd('/') is not { Length: > 0 } normalized)
+            return new(false, "disabled");
+        using var http = handler is null
+            ? new HttpClient()
+            : new HttpClient(handler, disposeHandler: false);
         using var patience = new CancellationTokenSource(timeoutMs);
         try
         {
             using var reply = await http.GetAsync($"{normalized}{path}", patience.Token);
-            return new(true, reply.IsSuccessStatusCode ? "ready" : "reachable", (int)reply.StatusCode);
+            return new(
+                true,
+                reply.IsSuccessStatusCode ? "ready" : "reachable",
+                (int)reply.StatusCode
+            );
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
         {
