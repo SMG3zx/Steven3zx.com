@@ -113,14 +113,15 @@ public sealed class FaithfulnessJudge(string? baseUrl = null, HttpMessageHandler
 /// State is "disabled", "ready", "reachable" (answers, but not healthy) or "unreachable".
 public sealed record ProviderStatus(bool Configured, string State, int? HttpStatus = null)
 {
-    public static async Task<ProviderStatus> Probe(string? baseUrl, int timeoutMs = 1500, HttpMessageHandler? handler = null)
+    /// `path` is what the service answers on. Ollama serves its OpenAI routes under /v1 and has no /health.
+    public static async Task<ProviderStatus> Probe(string? baseUrl, int timeoutMs = 1500, HttpMessageHandler? handler = null, string path = "/health")
     {
         if (baseUrl?.TrimEnd('/') is not { Length: > 0 } normalized) return new(false, "disabled");
         using var http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
         using var patience = new CancellationTokenSource(timeoutMs);
         try
         {
-            using var reply = await http.GetAsync($"{normalized}/health", patience.Token);
+            using var reply = await http.GetAsync($"{normalized}{path}", patience.Token);
             return new(true, reply.IsSuccessStatusCode ? "ready" : "reachable", (int)reply.StatusCode);
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException)

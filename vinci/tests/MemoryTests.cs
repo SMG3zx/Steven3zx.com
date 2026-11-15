@@ -248,10 +248,18 @@ public sealed class MemoryTests
     }
 
     [Fact]
+    public void Keyword_search_looks_for_content_words_not_the_function_words_of_a_question()
+    {
+        Assert.Equal("bread culture refresh weekend", Retrieval.LexicalQuery("What bread culture did we refresh over the weekend?"));
+        Assert.Equal("the do", Retrieval.LexicalQuery("the do"));
+    }
+
+    [Fact]
     public async Task Provider_status_tells_disabled_ready_and_unreachable_apart()
     {
         Assert.Equal(new ProviderStatus(false, "disabled"), await ProviderStatus.Probe(null));
         Assert.Equal(new ProviderStatus(true, "ready", 200), await ProviderStatus.Probe("http://provider.test", handler: Service.Replying("{}")));
+        Assert.Equal(new ProviderStatus(true, "ready", 200), await ProviderStatus.Probe("http://provider.test", handler: Service.Replying("{}"), path: "/v1/models"));
         Assert.Equal(new ProviderStatus(true, "reachable", 503),
             await ProviderStatus.Probe("http://provider.test", handler: Service.Replying("{}", HttpStatusCode.ServiceUnavailable)));
         var never = new Service(_ => new TaskCompletionSource<HttpResponseMessage>().Task);

@@ -34,7 +34,7 @@ public static partial class Retrieval
     private static partial Regex Distinctive();
 
     private static readonly HashSet<string> StopWords =
-        [.. "a an and are about before can did do does for from how i in is it me of on or the this to used we what when where which who why with".Split(' ')];
+        [.. "a an and are about after again all any at be been before between by can did do does during for from had has have how i if in into is it its me my no not of on or our out over so some than that the their then there these this those to under up used we what when where which while who why with your also".Split(' ')];
 
     /// "semantic", "graph", "temporal" or "procedural".
     public static string RouteQuery(string query)
@@ -79,6 +79,10 @@ public static partial class Retrieval
         return confident * Math.Pow(0.5, ageDays / (halfLifeDays * reinforcement));
     }
 
+    /// The lowest cosine similarity at which a vector hit counts as evidence. Calibrated on the
+    /// paraphrase suite: unanswerable questions top out at 0.41, and answerable ones start at 0.40.
+    public const double VectorEvidenceCosine = 0.41;
+
     public static Abstention ShouldAbstain(IReadOnlyList<JsonObject> results, string? query = null)
     {
         if (results.Count == 0) return new(true, "No relevant evidence was retrieved.");
@@ -89,8 +93,13 @@ public static partial class Retrieval
 
         var meaningful = Terms(query);
         bool Mentions(JsonObject result, string term) => Json.Str(result["content"]).ToLowerInvariant().Contains(term, StringComparison.Ordinal);
-        var hasLexicalEvidence = results.Any(r =>
-            Json.Str(r["retrievalMethod"]) is "vector" or "graph" || meaningful.Any(term => Mentions(r, term)));
+        // A vector hit is evidence only when it is close enough in meaning. Nearest neighbours always
+        // exist, so counting every one of them would make the store never abstain.
+        bool Close(JsonObject result) => result["vectorCosine"] is { } && Json.Num(result["vectorCosine"]) >= VectorEvidenceCosine;
+        // One shared word ("library", "Tuesday") is not evidence for a question with several content
+        // words: the results together must cover at least half of them.
+        var covered = meaningful.Count(term => results.Any(r => Mentions(r, term)));
+        var hasLexicalEvidence = covered * 2 >= meaningful.Count && covered > 0 || results.Any(Close);
         var distinctive = meaningful.Where(term => Distinctive().IsMatch(term) || term.Length >= 14).ToList();
         if (!distinctive.All(term => results.Any(r => Mentions(r, term))))
             return new(true, "No retrieved evidence contains the query's distinctive identifiers.");
@@ -118,7 +127,7 @@ public static partial class Retrieval
 
     /// How a candidate ranks for a route: its fused score, a boost for the
     /// kind of evidence the route wants, then retention and proven usefulness.
-    public static double RouteScore(JsonObject item, string route, DateTimeOffset? now = null)
+    public static double RouteScore(JsonObject item, string route, DateTimeOffset? now = null, double scale = 1)
     {
         var type = Json.Str(item["type"]);
         var method = Json.Str(item["retrievalMethod"]);
@@ -129,11 +138,17 @@ public static partial class Retrieval
             : 0;
         var retention = RetentionScore(item["occurredAt"], item["confidence"], item["kind"], item["reinforcementCount"], now);
         var utility = Math.Min(1, Math.Max(0, OrZero(Json.Num(item["utilityScore"]))));
-        return Json.Num(item["score"]) + boost + retention * (route == "temporal" ? 0.08 : 0.025) + utility * 0.08;
+        return Json.Num(item["score"]) / scale + boost + retention * (route == "temporal" ? 0.08 : 0.025) + utility * 0.08;
     }
 
     private static List<string> Terms(string query) =>
         [.. Term().Matches(query.ToLowerInvariant()).Select(m => m.Value).Where(term => !StopWords.Contains(term))];
+
+    /// The words a keyword search should look for. Full-text search matches any word, so the
+    /// question's function words ("did", "we", "over") would match most of the store. Falls back to
+    /// the whole question when nothing but function words is left.
+    public static string LexicalQuery(string query) =>
+        Terms(query) is { Count: > 0 } terms ? string.Join(' ', terms) : query;
 
     private static double OrZero(double value) => double.IsNaN(value) ? 0 : value;
 }
@@ -151,8 +166,21 @@ public static class RankFusion
             "graph" => new(0.25, 0.2, 0.55),
             "temporal" => new(0.45, 0.2, 0.35),
             "procedural" => new(0.5, 0.2, 0.3),
-            _ => new(0.4, 0.4, 0.2),
+            _ => Semantic,
         };
+
+        /// Lexical, vector and graph weights for questions that are not about time, procedure or
+        /// relations. Set FUSION_SEMANTIC to "lexical,vector,graph" to try another mix.
+        public static Weights Semantic
+        {
+            get
+            {
+                var parts = (Env.Get("FUSION_SEMANTIC") ?? "0.4,0.4,0.2").Split(',');
+                return parts.Length == 3 && parts.All(p => double.TryParse(p, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+                    ? new(double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture), double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture), double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture))
+                    : new(0.4, 0.4, 0.2);
+            }
+        }
     }
 
     public static List<JsonObject> Fuse(IReadOnlyDictionary<string, IReadOnlyList<JsonObject>> sources, Weights weights, int k = 60)

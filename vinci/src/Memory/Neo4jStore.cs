@@ -422,9 +422,12 @@ public sealed partial class Neo4jStore : IAsyncDisposable
                                 r.userId = e.userId, r.projectId = e.projectId
                   MERGE (r)-[:DERIVED_FROM]->(e))
                 MERGE (j:Job {id: 'consolidate-event:' + e.id})
-                ON CREATE SET j.kind = 'consolidate_event', j.targetId = e.id, j.status = 'queued',
+                // The chat's own answers are recallable events, but consolidating them only turns the
+                // assistant's commentary into beliefs about itself. The person's messages are still consolidated.
+                ON CREATE SET j.kind = 'consolidate_event', j.targetId = e.id,
+                              j.status = CASE WHEN e.source = 'vinci-chat' AND e.kind = 'agent_message' THEN 'skipped' ELSE 'queued' END,
                               j.approvalStatus = $approvalStatus, j.attempts = 0, j.availableAt = e.occurredAt, j.createdAt = datetime()
-                FOREACH (_ IN CASE WHEN e.sessionId IS NULL THEN [] ELSE [1] END |
+                FOREACH (_ IN CASE WHEN e.sessionId IS NULL OR e.source = 'vinci-chat' THEN [] ELSE [1] END |
                   MERGE (rj:Job {id: 'reflect-session:' + e.sessionId})
                   ON CREATE SET rj.kind = 'reflect_session', rj.targetId = e.sessionId, rj.attempts = 0, rj.createdAt = datetime(), rj.approvalStatus = $approvalStatus
                   SET rj.status = 'queued', rj.availableAt = datetime() + duration({seconds: $reflectionDelaySeconds}))
@@ -839,7 +842,7 @@ public sealed partial class Neo4jStore : IAsyncDisposable
         var plan = Retrieval.Plan(query, route);
         var methods = (scope?.RetrievalMethods ?? Vocabulary.RetrievalMethods).ToHashSet();
         var candidateLimit = (long)Math.Max(limit * plan.CandidateMultiplier, 20);
-        var parameters = With(ScopeOf(scope), ("query", query), ("limit", candidateLimit));
+        var parameters = With(ScopeOf(scope), ("query", Retrieval.LexicalQuery(query)), ("limit", candidateLimit));
 
         await using var session = Session();
         var lexical = new List<JsonObject>();
@@ -938,20 +941,65 @@ public sealed partial class Neo4jStore : IAsyncDisposable
                   AND ($includeTestData OR NOT EXISTS {"{ MATCH (node)<-[:HAS_CHUNK]-(:Document {source: 'test'}) }"})
                 {ChunkRow}
                 """, nearest));
-            foreach (var candidate in vector) candidate["retrievalMethod"] = "vector";
+            foreach (var candidate in vector)
+            {
+                candidate["retrievalMethod"] = "vector";
+                // Neo4j scores cosine as (1 + cos) / 2. Kept so abstention can judge meaning, not rank.
+                candidate["vectorCosine"] = 2 * Json.Num(candidate["score"]) - 1;
+            }
         }
 
         static bool Identified(JsonObject candidate) =>
             candidate["type"]?.GetValueKind() == System.Text.Json.JsonValueKind.String && candidate["id"]?.GetValueKind() == System.Text.Json.JsonValueKind.String;
         IReadOnlyList<JsonObject> Use(string method, List<JsonObject> found) => methods.Contains(method) ? [.. found.Where(Identified)] : [];
 
-        var candidates = RankFusion.Fuse(new Dictionary<string, IReadOnlyList<JsonObject>>
+        var fused = RankFusion.Fuse(new Dictionary<string, IReadOnlyList<JsonObject>>
             {
                 ["lexical"] = Use("lexical", lexical), ["vector"] = Use("vector", vector), ["graph"] = Use("graph", graph),
-            }, RankFusion.Weights.For(route))
-            .OrderByDescending(candidate => Retrieval.RouteScore(candidate, route))
+            }, RankFusion.Weights.For(route));
+        // A fused item keeps the cosine of its best vector hit, whichever leg it was first found by.
+        var cosines = vector.Where(Identified).GroupBy(c => $"{Json.Str(c["type"])}:{Json.Str(c["id"])}")
+            .ToDictionary(g => g.Key, g => g.Max(c => Json.Num(c["vectorCosine"], double.NegativeInfinity)));
+        foreach (var candidate in fused)
+            if (cosines.TryGetValue($"{Json.Str(candidate["type"])}:{Json.Str(candidate["id"])}", out var cosine) && double.IsFinite(cosine))
+                candidate["vectorCosine"] = cosine;
+        // Reciprocal-rank scores are about 0.01, far below the route boosts (0.1). Ordering scales them
+        // to 0-1 first, so the method weights decide the order and a boost only breaks near-ties.
+        var peak = fused.Count == 0 ? 0 : fused.Max(candidate => Json.Num(candidate["score"]));
+        var candidates = fused
+            .OrderByDescending(candidate => Retrieval.RouteScore(candidate, route, scale: peak > 0 ? peak : 1))
             .Take(limit * 4)
             .ToList();
+
+        // A question about the past is answered by what a current memory replaced. Those
+        // predecessors are reached through the SUPERSEDES chain, not by matching words, so they
+        // are added directly after the memory they replaced, where the final cut keeps them.
+        if (route == "temporal" && scope?.IncludeHistorical == true)
+        {
+            var currentIds = candidates.Take(limit).Where(c => Json.Str(c["type"]) == "memory").Select(c => Json.Str(c["id"])).ToList();
+            var predecessors = currentIds.Count == 0 ? new List<JsonObject>() : await Rows(session, $"""
+                MATCH (current:Memory)-[:SUPERSEDES]->(node:Memory)
+                WHERE current.id IN $ids
+                  AND ($userId IS NULL OR node.userId = $userId)
+                  AND ($projectId IS NULL OR node.projectId = $projectId)
+                  AND ($sessionId IS NULL OR node.sessionId = $sessionId)
+                WITH current, node, 0.0 AS score
+                RETURN 'memory' AS type, node.id AS id, node.content AS content, node.category AS kind,
+                       node.validFrom AS occurredAt, 'curated' AS source, node.projectId AS projectId,
+                       node.status AS status, node.confidence AS confidence, current.id AS supersedes,
+                       {MemoryRow}
+                """, P(("ids", currentIds), ("userId", scope.UserId), ("projectId", scope.ProjectId), ("sessionId", scope.SessionId)));
+            if (predecessors.Count > 0)
+            {
+                var byReplacement = predecessors.GroupBy(p => Json.Str(p["supersedes"])).ToDictionary(g => g.Key, g => g.ToList());
+                candidates = [.. candidates.SelectMany(c =>
+                {
+                    if (Json.Str(c["type"]) != "memory" || !byReplacement.TryGetValue(Json.Str(c["id"]), out var older)) return [c];
+                    foreach (var old in older) old["retrievalMethod"] = "supersession";
+                    return new[] { c }.Concat(older);
+                })];
+            }
+        }
 
         // Benchmark data never leaks into a recall that did not ask for it.
         var benchmarkProjectId = Env.Get("BENCHMARK_PROJECT_ID") ?? "benchmark-suite";

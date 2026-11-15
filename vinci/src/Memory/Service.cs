@@ -694,7 +694,7 @@ public sealed partial class MemoryService(
                         ("exportedAt", DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture)), ("runs", Node(audit.Query(limit: 200)))));
                 case "/v1/admin/providers":
                     var probes = await Task.WhenAll(
-                        ProviderStatus.Probe(Env.Get("MODEL_BASE_URL")), ProviderStatus.Probe(Env.Get("EMBEDDING_BASE_URL")),
+                        ProviderStatus.Probe(Env.Get("MODEL_BASE_URL"), path: "/models"), ProviderStatus.Probe(Env.Get("EMBEDDING_BASE_URL"), path: "/models"),
                         ProviderStatus.Probe(Env.Get("RERANKER_BASE_URL")), ProviderStatus.Probe(Env.Get("FAITHFULNESS_JUDGE_BASE_URL")));
                     JsonObject Probe(int index, params (string Key, JsonNode? Value)[] more)
                     {
