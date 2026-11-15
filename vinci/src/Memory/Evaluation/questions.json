@@ -1,0 +1,17 @@
+[
+  { "id": "fact-001", "category": "fact", "query": "What decision did Benchmark Project make about embeddings?", "expectedContains": ["qwen3", "embedding"], "shouldAbstain": false },
+  { "id": "temporal-001", "category": "temporal", "query": "What did Benchmark Project use before the current embedding model?", "expectedContains": ["before", "hosted"], "shouldAbstain": false },
+  { "id": "multi-hop-001", "category": "multi-hop", "query": "Which project is connected to the Qwen3 embedding decision?", "expectedContains": ["benchmark project"], "reasoningIntensive": true, "shouldAbstain": false },
+  { "id": "multi-session-001", "category": "multi-session", "query": "What did the benchmark project confirm across multiple sessions?", "expectedContains": ["multiple sessions", "qwen3"], "shouldAbstain": false },
+  { "id": "procedural-001", "category": "procedural", "query": "How do I recover the memory worker?", "expectedContains": ["worker", "restart"], "shouldAbstain": false },
+  { "id": "contradiction-001", "category": "contradiction", "query": "What is the current embedding provider?", "expectedContains": ["qwen3"], "shouldAbstain": false },
+  { "id": "attribution-001", "category": "attribution", "query": "What source supports the Qwen3 embedding decision?", "expectedContains": ["qwen3"], "requiresProvenance": true, "shouldAbstain": false },
+  { "id": "faithfulness-001", "category": "faithfulness", "query": "What does the benchmark source say about Qwen3?", "expectedContains": ["qwen3"], "requiresProvenance": true, "shouldAbstain": false },
+  { "id": "reflection-001", "category": "reflection", "query": "What lesson did the benchmark reflection record about retrieval quality?", "expectedContains": ["reflection", "graph", "citations"], "requiresProvenance": true, "shouldAbstain": false },
+  { "id": "failure-001", "category": "failure", "query": "What failure lesson should guide memory worker recovery?", "expectedContains": ["invalid model endpoint", "consolidating"], "requiresProvenance": true, "shouldAbstain": false },
+  { "id": "skill-001", "category": "procedural", "query": "How can I inspect memory health safely?", "expectedContains": ["health", "neo4j"], "shouldAbstain": false },
+  { "id": "extraction-001", "category": "information-extraction", "query": "What embedding provider did the benchmark project decide to use for local semantic retrieval?", "expectedContains": ["qwen3", "embedding"], "requiresProvenance": true, "shouldAbstain": false },
+  { "id": "supersession-001", "category": "knowledge-update", "query": "Which provider replaced the hosted embedding API?", "expectedContains": ["qwen3"], "requiresProvenance": true, "shouldAbstain": false },
+  { "id": "forgetting-001", "category": "selective-forgetting", "query": "What is the archived benchmark-only secret retired provider token alpha-991?", "expectedContains": [], "requiresProvenance": true, "shouldAbstain": true },
+  { "id": "abstention-001", "category": "abstention", "query": "What is the relationship between Zyx-Not-Real-991 and Qqv-Unknown-882?", "expectedContains": [], "shouldAbstain": true }
+]

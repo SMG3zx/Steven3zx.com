@@ -12,6 +12,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Memory/Pages/*.html" LogicalName="Vinci.Memory.Pages.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Memory/Evaluation/questions.json" LogicalName="Vinci.Memory.Evaluation.questions.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Neo4j.Driver" Version="6.5.1" />
   </ItemGroup>
 

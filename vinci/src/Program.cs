@@ -19,4 +19,8 @@ if (args is ["serve", ..])
     return 0;
 }
 
+// vinci memory serve | worker | mcp | backup | restore
+if (args is ["memory", ..])
+    return await Vinci.Memory.MemoryCommands.Run(args[1..], Console.In, Console.Out, Console.Error);
+
 return App.Run(args, journal, Console.In, Console.Out, Console.Error, DateTimeOffset.Now, ActivityWatch.At(activityWatch), Git.Log);
