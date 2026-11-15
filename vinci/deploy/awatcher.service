@@ -1,0 +1,13 @@
+[Unit]
+Description=awatcher (ActivityWatch server, window and idle watchers, tray)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+# The bundle serves the ActivityWatch API and web UI on http://127.0.0.1:5600.
+ExecStart=/usr/bin/awatcher
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

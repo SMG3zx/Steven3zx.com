@@ -21,11 +21,15 @@ public static class Text
 
 public static class App
 {
-    public static int Run(string[] args, Journal journal, TextReader input, TextWriter output, TextWriter errors, DateTimeOffset now)
+    /// Window time is credited before the command runs, so every command
+    /// sees current totals and nobody has to start or stop a timer.
+    public static int Run(string[] args, Journal journal, TextReader input, TextWriter output, TextWriter errors, DateTimeOffset now,
+        ActivitySource? activity = null)
     {
         try
         {
-            new Session(journal, input, output, now).Dispatch(args);
+            var tracked = Tracker.Sync(journal, activity, now);
+            new Session(journal, input, output, now, tracked).Dispatch(args);
             return 0;
         }
         catch (UserError e)
@@ -37,9 +41,9 @@ public static class App
 }
 
 /// One command: read the journal, check the request, append at most a few facts.
-public sealed class Session(Journal journal, TextReader input, TextWriter o, DateTimeOffset now)
+public sealed class Session(Journal journal, TextReader input, TextWriter o, DateTimeOffset now, IReadOnlyList<string> tracked)
 {
-    private readonly State s = State.From(journal.Read(), now);
+    private readonly State s = State.From(journal.Read());
 
     public void Dispatch(string[] args)
     {
@@ -57,8 +61,10 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
             case "req": Req(IdeaArg(a), Arg(a, 1, "requirement"), Arg(a, 2, "who asked, by name"), Arg(a, 3, "why")); break;
             case "cut": Cut(Arg(a, 0, "requirement id"), Arg(a, 1, "why")); break;
             case "advance": Advance(IdeaArg(a), a.Length > 1 ? Number(a[1], "days") : 1); break;
-            case "start": Start(IdeaArg(a)); break;
-            case "stop": Stop(a.Length > 0 ? Number(a[0], "minutes") : null); break;
+            case "watch": Watch(IdeaArg(a), Arg(a, 1, "text in its window titles")); break;
+            case "unwatch": Unwatch(IdeaArg(a), Arg(a, 1, "watched text")); break;
+            case "watches": Watches(); break;
+            case "sync": foreach (var line in tracked) o.WriteLine(line); break;
             case "spent": Spent(IdeaArg(a), Number(Arg(a, 1, "minutes"), "minutes")); break;
             case "ship": Ship(IdeaArg(a), Arg(a, 1, "what shipped")); break;
             case "used": Used(IdeaArg(a), a.Length > 1 ? Arg(a, 1, "how it went") : null); break;
@@ -182,7 +188,9 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
                 if (building.Count >= Review.BuildLimit)
                     throw new UserError($"{Review.BuildLimit} ideas are already in Build ({string.Join(", ", building)}). Ship or retire one first.");
                 MoveTo(idea, Stage.Build);
-                o.WriteLine($"Next: vinci start {idea.Id}, then ship the smallest thing that works.");
+                o.WriteLine(s.Watched(idea)
+                    ? "Next: ship the smallest thing that works."
+                    : $"Next: vinci watch {idea.Id} \"text in its window titles\", then ship the smallest thing that works.");
                 break;
 
             case Stage.Build:
@@ -244,7 +252,6 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
     private void Retire(Idea idea, string why)
     {
         if (idea.Stage == Stage.Retired) throw new UserError($"{idea.Id} is already retired");
-        if (s.Running?.IdeaId == idea.Id) Record(new(now, "stop"));
         Record(new(now, "retire", idea.Id, why));
         o.WriteLine($"{idea.Id} retired on purpose. Its notes stay.");
     }
@@ -266,8 +273,7 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
         if (s.Ideas.Count == 0) { o.WriteLine("No ideas yet. vinci idea \"title\""); return; }
         foreach (var i in s.Ideas)
         {
-            var running = s.Running?.IdeaId == i.Id ? " ●" : "";
-            o.WriteLine($"{i.Id,-4} {i.Stage,-8} touch {Text.Span(i.Touch),-7} age {Text.Span(now - i.Born),-7} flow {Flow(i),-6} {i.Title}{running}");
+            o.WriteLine($"{i.Id,-4} {i.Stage,-8} touch {Text.Span(i.Touch),-7} age {Text.Span(now - i.Born),-7} flow {Flow(i),-6} {i.Title}");
         }
     }
 
@@ -296,8 +302,7 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
                     Stage.Tend => $"shipped {i.Ships.Count}, used {i.Uses.Count}; goal {GoalStatus(i)}",
                     _ => $"{Text.Span(i.TimeIn(stage, now))} here",
                 };
-                var running = s.Running?.IdeaId == i.Id ? " ●" : "";
-                o.WriteLine($"{(i == here[0] ? label : ""),-10} {i.Id,-4} {i.Title}{running}  ({detail})");
+                o.WriteLine($"{(i == here[0] ? label : ""),-10} {i.Id,-4} {i.Title}  ({detail})");
             }
         }
 
@@ -315,22 +320,27 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
 
     // ---- time ----
 
-    private void Start(Idea idea)
+    private void Watch(Idea idea, string pattern)
     {
         if (idea.Stage == Stage.Retired) throw new UserError($"{idea.Id} is retired");
-        if (s.Running?.IdeaId == idea.Id) throw new UserError($"already timing {idea.Id}");
-        if (s.Running is var (other, since)) o.WriteLine($"Stopped {other} after {Text.Span(now - since)}.");
-        Record(new(now, "start", idea.Id));
-        o.WriteLine($"Timing {idea.Id}: {idea.Title}");
+        if (s.Watches.Find(w => w.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)) is { } taken)
+            throw new UserError($"\"{pattern}\" is already watched for {taken.IdeaId}");
+        Record(new(now, "watch", idea.Id, pattern));
+        o.WriteLine($"Time in a window whose app or title contains \"{pattern}\" now counts for {idea.Id}.");
     }
 
-    private void Stop(double? minutes)
+    private void Unwatch(Idea idea, string pattern)
     {
-        if (s.Running is not var (ideaId, since)) throw new UserError("no timer is running");
-        if (minutes < 0) throw new UserError("minutes cannot be negative");
-        Record(new(now, "stop", ideaId, Value: minutes));
-        var spent = minutes is { } m ? TimeSpan.FromMinutes(m) : now - since;
-        o.WriteLine($"Stopped {ideaId} after {Text.Span(spent)}.");
+        if (!s.Watches.Exists(w => w.IdeaId == idea.Id && w.Pattern.Equals(pattern, StringComparison.OrdinalIgnoreCase)))
+            throw new UserError($"{idea.Id} does not watch \"{pattern}\"");
+        Record(new(now, "unwatch", idea.Id, pattern));
+        o.WriteLine($"{idea.Id} no longer watches \"{pattern}\".");
+    }
+
+    private void Watches()
+    {
+        if (s.Watches.Count == 0) { o.WriteLine("Nothing is watched. vinci watch <idea> \"text in its window titles\""); return; }
+        foreach (var w in s.Watches) o.WriteLine($"{w.IdeaId,-4} \"{w.Pattern}\"  {s.Idea(w.IdeaId)!.Title}");
     }
 
     private void Spent(Idea idea, double minutes)
@@ -454,6 +464,7 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
         o.WriteLine($"for     {i.For ?? "(nobody yet)"}");
         o.WriteLine($"goal    {i.Goal ?? "(none)"}{(i.Goal is null ? "" : $"  [{GoalStatus(i)}]")}");
         o.WriteLine($"time    born {Text.Day(i.Born)}, age {Text.Span(now - i.Born)}, touch {Text.Span(i.Touch)}, flow {Flow(i)}");
+        if (s.Watched(i)) o.WriteLine($"watch   {string.Join(", ", s.Watches.Where(w => w.IdeaId == i.Id).Select(w => $"\"{w.Pattern}\""))}");
         var stages = Enum.GetValues<Stage>().Where(st => st != Stage.Retired && i.Entered(st)).Select(st =>
             $"{st} {Text.Span(i.TimeIn(st, now))}{(i.TouchIn.TryGetValue(st, out var t) ? $" (touch {Text.Span(t)})" : "")}");
         o.WriteLine($"stages  {string.Join(", ", stages)}");
@@ -762,9 +773,11 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
           pipeline   next   ideas   show <id>
 
         Time
-          start <idea>                        start the timer (stops any other)
-          stop [minutes]                      stop it; minutes corrects a timer left running
-          spent <idea> <minutes>              add time after the fact
+          watch <idea> "text"                 count time in windows whose app or title contains the text
+          unwatch <idea> "text"               stop counting it
+          watches                             what is watched
+          sync                                show the window time just credited (every command credits it)
+          spent <idea> <minutes>              add time spent away from the screen
 
         Knowledge
           source "citation" [url]             where knowledge came from
@@ -798,6 +811,7 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
             jq -r 'select(.kind=="ship") | .text' "$(vinci path)"
 
         Data lives in $VINCI_HOME/journal.jsonl (default ~/.vinci).
+        Window time comes from ActivityWatch at $VINCI_ACTIVITYWATCH (default http://127.0.0.1:5600).
 
         """;
 }

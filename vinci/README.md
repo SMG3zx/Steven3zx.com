@@ -2,7 +2,7 @@
 
 A command-line tool that takes an idea from first thought to shipped work and keeps it alive afterwards. It also records what you know and where you learned it, what you predicted and whether you were right, how long you spend on each idea, and anything else about your life you choose to measure.
 
-It is written in C# on .NET 10 and has no dependencies. All data is one file.
+It is written in C# on .NET 10 and has no dependencies. All data is one file. Time on each idea is counted for you from the windows you work in, using [ActivityWatch](https://activitywatch.net/).
 
 ## Install
 
@@ -19,7 +19,7 @@ Every fact is written once, with the time, to an append-only journal (`~/.vinci/
 That one decision gives you several things without building them separately:
 
 - **Provenance.** Every fact has a date, and a note points at the source it came from.
-- **Time tracking.** Starting and stopping a timer are just two more facts.
+- **Time tracking.** Time in a watched window is one more fact, written for you.
 - **Life tracking.** A measurement is a fact with a number in it.
 - **Self-measurement.** The system's own defects are facts too, so it can chart them.
 - **A tool that fits in a pipe.** The journal is plain JSON lines, so `jq` and `grep` work on it.
@@ -50,7 +50,7 @@ Build 1/3  i1   Flying machine  (4d0h here, touch 6h10m; goal not met, distance 
 Tend       -
 Slowest stage: Build, 4d0h on average. Speed that one up first.
 Next: build i1: Flying machine
-      vinci start i1
+      vinci ship i1 "what shipped"
 ```
 
 `Next` is the worst thing `review` would find. If there is nothing to fix, it is the idea in Build that has waited longest.
@@ -71,8 +71,8 @@ vinci advance i1 3                                 # incubate for 3 days
 
 vinci advance i1                                   # 3 days later: -> Build
 vinci commit "Build the wing frame" i1             # this week's one thing
-vinci start i1                                     # ... work ...
-vinci stop
+vinci watch i1 "- glider -"                        # once: windows with this in the title are i1
+                                                   # ... work; the time is counted for you ...
 vinci ship i1 "Glider model"                       # -> Tend
 
 vinci used i1 "Flew 20 m off the hill"
@@ -87,6 +87,39 @@ vinci principle "Test each material alone before building with it" x1
 vinci review                                       # weekly
 vinci kept                                         # or: vinci missed "why"
 ```
+
+## Time counts itself
+
+There is no timer to start or stop. You say once which windows belong to an idea:
+
+```sh
+vinci watch i1 "- vinci -"      # VS Code titles look like "App.cs - vinci - Visual Studio Code"
+vinci watch i1 "vinci/README"   # an idea can watch for several texts
+vinci watches                   # what is watched
+vinci unwatch i1 "vinci/README"
+```
+
+The text is matched, ignoring case, against the app name and the window title together. Open `http://localhost:5600` and look at the Timeline to see what your titles look like.
+
+Every time vinci runs, it first asks ActivityWatch which windows had the focus since the last time, drops the time you were away from the keyboard, and writes a `spent` fact for each idea whose text matched. So every command shows current totals. `vinci sync` prints what was just added.
+
+- **It lags a few minutes while you work.** The watcher only confirms you were present after its idle timeout (3 minutes), so vinci counts up to the last confirmed moment and picks up the rest next time. Nothing is lost.
+- **If ActivityWatch is not running**, vinci works as before and adds no time. ActivityWatch keeps its own record, so the time is added the next time both are up.
+- **Time away from the screen** is `vinci spent i1 <minutes>`.
+- **When two watches match one window**, the one recorded first gets the time.
+- **A Build idea with no watch** is a finding in `vinci review`.
+
+### Setting up ActivityWatch
+
+On Wayland (Hyprland, Sway) use [awatcher](https://github.com/2e3s/awatcher), which bundles the ActivityWatch server with a window and idle watcher that work there:
+
+```sh
+yay -S awatcher-bundle-bin
+cp deploy/awatcher.service ~/.config/systemd/user/
+systemctl --user enable --now awatcher
+```
+
+vinci reads `http://127.0.0.1:5600`. Set `VINCI_ACTIVITYWATCH` to point it somewhere else.
 
 ## In a pipe
 
@@ -150,7 +183,8 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 
 - **A database, a server, a web page.** One file and a command line do the job.
 - **Editing and deleting facts.** Correct a fact by recording a new one.
-- **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers.
+- **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
+- **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time is the one source that earned it.
 
 ## Privacy
 
@@ -167,5 +201,7 @@ dotnet test tests
 | `src/Journal.cs` | The event record and the append-only file |
 | `src/State.cs` | Rebuilding the current state from events |
 | `src/App.cs` | The commands and the stage gates |
+| `src/Tracker.cs` | Crediting window time to ideas, and reading it from ActivityWatch |
+| `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch |
 | `src/Review.cs` | The findings, the limits, and what to do next |
 | `src/Stats.cs` | Control limits and sigma level |

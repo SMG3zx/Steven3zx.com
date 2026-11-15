@@ -120,6 +120,9 @@ public sealed class Commitment(DateTimeOffset at, string text, string? ideaId)
     public bool? Kept { get; set; }
 }
 
+/// Time in a window whose app or title contains Pattern is work on the idea.
+public sealed record Watch(string IdeaId, string Pattern);
+
 public sealed class Metric(string name)
 {
     public string Name => name;
@@ -142,16 +145,20 @@ public sealed class State
     public List<Metric> Metrics { get; } = [];
     public List<Prediction> Predictions { get; } = [];
     public List<Commitment> Commitments { get; } = [];
-    public (string IdeaId, DateTimeOffset Since)? Running { get; private set; }
+    public List<Watch> Watches { get; } = [];
+    /// When the first watch was set: where window tracking begins.
+    public DateTimeOffset? WatchingSince { get; private set; }
+    /// Window activity up to here has already been credited.
+    public DateTimeOffset? SyncedTo { get; private set; }
 
-    public static State From(IEnumerable<Event> events, DateTimeOffset now)
+    public static State From(IEnumerable<Event> events)
     {
         var state = new State();
         foreach (var e in events) state.Apply(e);
-        // Count the running timer so far, so totals are current while working.
-        if (state.Running is var (ideaId, since)) state.Idea(ideaId)!.AddTouch(now - since);
         return state;
     }
+
+    public bool Watched(Idea idea) => Watches.Exists(w => w.IdeaId == idea.Id);
 
     public Idea? Idea(string id) => Ideas.Find(i => i.Id == id);
     public Requirement? Requirement(string id) => Requirements.Find(r => r.Id == id);
@@ -229,12 +236,15 @@ public sealed class State
                 staged.Enter(Enum.Parse<Stage>(e.Text!), e.At);
                 if (staged.Stage == Stage.Incubate) staged.IncubateUntil = e.At.AddDays(e.Value ?? 1);
                 break;
-            case "start":
-                StopTimer(e.At, null);
-                Running = (e.Id!, e.At);
+            case "watch":
+                WatchingSince ??= e.At;
+                Watches.Add(new Watch(e.Id!, e.Text!));
                 break;
-            case "stop":
-                StopTimer(e.At, e.Value);
+            case "unwatch":
+                Watches.RemoveAll(w => w.IdeaId == e.Id && w.Pattern.Equals(e.Text, StringComparison.OrdinalIgnoreCase));
+                break;
+            case "sync":
+                SyncedTo = e.At;
                 break;
             case "spent":
                 Idea(e.Id!)!.AddTouch(TimeSpan.FromMinutes(e.Value!.Value));
@@ -304,14 +314,6 @@ public sealed class State
         if (e.Kind is "log" or "spec") return;
         Touched(e.Id, e.At);
         foreach (var r in refs) Touched(r, e.At);
-    }
-
-    /// A stop with minutes replaces the measured time: the fix for a timer left running.
-    private void StopTimer(DateTimeOffset at, double? minutes)
-    {
-        if (Running is not var (ideaId, since)) return;
-        Idea(ideaId)!.AddTouch(minutes is { } m ? TimeSpan.FromMinutes(m) : at - since);
-        Running = null;
     }
 
     private void Touched(string? id, DateTimeOffset at)

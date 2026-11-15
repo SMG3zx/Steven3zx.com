@@ -9,6 +9,13 @@ public sealed class VinciTests : IDisposable
     private readonly string dir = Directory.CreateTempSubdirectory("vinci-test").FullName;
     private DateTimeOffset now = new(2026, 1, 1, 9, 0, 0, TimeSpan.Zero);
     private string stdin = "";
+    /// What the window watcher has seen, how far its record reaches, and whether it answers.
+    private readonly List<Activity> windows = [];
+    private DateTimeOffset? known;
+    private bool reachable = true;
+
+    private void Window(DateTimeOffset start, double minutes, string window) =>
+        windows.Add(new Activity(start, TimeSpan.FromMinutes(minutes), window));
 
     public void Dispose() => Directory.Delete(dir, recursive: true);
 
@@ -17,7 +24,8 @@ public sealed class VinciTests : IDisposable
     private (int Code, string Out) Try(params string[] args)
     {
         var output = new StringWriter();
-        var code = App.Run(args, new Journal(JournalPath), new StringReader(stdin), output, output, now);
+        var code = App.Run(args, new Journal(JournalPath), new StringReader(stdin), output, output, now,
+            (from, to) => reachable ? new Seen(windows, known ?? to) : null);
         return (code, output.ToString());
     }
 
@@ -157,34 +165,80 @@ public sealed class VinciTests : IDisposable
     // ---- time ----
 
     [Fact]
-    public void Time_is_tracked_per_idea()
+    public void Time_in_a_watched_window_is_counted_without_starting_or_stopping_anything()
     {
         Run("idea", "Flying machine");
         Run("idea", "Bridge");
+        Assert.Contains("Nothing is watched", Run("sync"));
+        Run("watch", "i1", "wing");
+        Run("watch", "i2", "- bridge -");
+        Assert.Contains("already watched for i1", Fail("watch", "i2", "WING"));
 
-        Run("start", "i1");
-        Wait(TimeSpan.FromMinutes(90));
-        Assert.Contains("Stopped i1 after 1h30m", Run("start", "i2"));
-        Wait(TimeSpan.FromMinutes(20));
-        Run("stop");
+        Window(now, 90, "code Wing.cs - glider - Visual Studio Code");
+        Window(now.AddMinutes(90), 20, "code arch.md - bridge - Visual Studio Code");
+        Window(now.AddMinutes(110), 30, "brave-browser YouTube");
+        Wait(TimeSpan.FromMinutes(140));
         Run("spent", "i2", "10");
-        Assert.Contains("no timer", Fail("stop"));
 
         var ideas = Run("ideas").Split('\n');
         Assert.Contains("touch 1h30m", ideas[0]);
         Assert.Contains("touch 30m", ideas[1]);
+        // Asking again adds nothing: each stretch is counted once.
+        Assert.Contains("No watched window since", Run("sync"));
+        Assert.Contains("touch 1h30m", Run("ideas"));
+        Assert.Contains("watch   \"wing\"", Run("show", "i1"));
     }
 
     [Fact]
-    public void A_timer_left_running_is_corrected_by_stopping_with_minutes()
+    public void Only_time_inside_the_known_record_is_counted_and_the_rest_waits()
     {
         Run("idea", "Flying machine");
-        Run("start", "i1");
-        Wait(TimeSpan.FromHours(20));
-        Assert.StartsWith("i1     timer has run 20h0m", Run("review"));
+        Wait(TimeSpan.FromHours(1));
+        Run("watch", "i1", "wing");
+        // Before the watch existed, and past where the record reaches: neither counts yet.
+        Window(now.AddMinutes(-30), 40, "code Wing.cs");
+        Window(now.AddMinutes(20), 40, "code Wing.cs");
+        Wait(TimeSpan.FromMinutes(60));
+        known = now.AddMinutes(-10);
 
-        Run("stop", "45");
-        Assert.Contains("touch 45m", Run("ideas"));
+        Assert.StartsWith("i1   +40m", Run("sync"));
+        known = null;
+        Assert.StartsWith("i1   +10m", Run("sync"));
+        Assert.Contains("touch 50m", Run("ideas"));
+    }
+
+    [Fact]
+    public void A_missing_activity_record_loses_nothing()
+    {
+        Run("idea", "Flying machine");
+        Run("watch", "i1", "wing");
+        Window(now, 30, "code Wing.cs");
+        Wait(TimeSpan.FromHours(1));
+
+        reachable = false;
+        Assert.Contains("did not answer", Run("sync"));
+        Assert.Contains("touch 0m", Run("ideas"));
+        reachable = true;
+        Assert.Contains("touch 30m", Run("ideas"));
+    }
+
+    [Fact]
+    public void A_watch_can_be_dropped_and_a_retired_idea_is_no_longer_credited()
+    {
+        Run("idea", "Flying machine");
+        Run("idea", "Bridge");
+        Run("watch", "i1", "wing");
+        Run("watch", "i2", "bridge");
+        Assert.Contains("i1   \"wing\"  Flying machine", Run("watches"));
+        Run("unwatch", "i1", "wing");
+        Assert.Contains("does not watch", Fail("unwatch", "i1", "wing"));
+        Run("retire", "i2", "The river moved");
+
+        Window(now, 30, "code Wing.cs - bridge");
+        Wait(TimeSpan.FromHours(1));
+        var ideas = Run("ideas").Split('\n');
+        Assert.Contains("touch 0m", ideas[0]);
+        Assert.Contains("touch 0m", ideas[1]);
     }
 
     [Fact]
@@ -206,6 +260,7 @@ public sealed class VinciTests : IDisposable
     public void The_pipeline_shows_every_stage_the_slowest_one_and_what_to_do_next()
     {
         GrowToBuild();
+        Run("watch", "i1", "wing");
         Run("idea", "Bridge");
         Run("commit", "Glue the first wing rib", "i1");
         Wait(TimeSpan.FromDays(4));
@@ -219,7 +274,7 @@ public sealed class VinciTests : IDisposable
         // i1: Seed 0d, Build 4d. i2: Seed 4d. So Build averages 4d, Seed 2d.
         Assert.StartsWith("Slowest stage: Build, 4d0h on average", lines[5]);
         Assert.StartsWith("Next: build i1: Flying machine", lines[6]);
-        Assert.Contains("vinci start i1", lines[7]);
+        Assert.Contains("vinci ship i1", lines[7]);
     }
 
     [Fact]

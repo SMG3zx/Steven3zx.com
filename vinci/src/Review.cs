@@ -16,7 +16,6 @@ public static class Review
     public static readonly TimeSpan UnusedLimit = TimeSpan.FromDays(14);
     public static readonly TimeSpan PredictionLimit = TimeSpan.FromDays(30);
     public static readonly TimeSpan CommitmentLength = TimeSpan.FromDays(7);
-    public static readonly TimeSpan TimerLimit = TimeSpan.FromHours(12);
     public const int MinPointsForControl = 5;
     public const int BreaksBeforeRethink = 2;
     /// How many ideas may be in Build at once. More than this and none of them ships.
@@ -25,10 +24,6 @@ public static class Review
     public static List<Finding> Run(State s, DateTimeOffset now)
     {
         var found = new List<Finding>();
-
-        if (s.Running is var (runningId, since) && now - since > TimerLimit)
-            found.Add(new(0, runningId, $"timer has run {Text.Span(now - since)}; nobody works that long",
-                "vinci stop <minutes you really worked>"));
 
         var live = s.Ideas.Where(i => i.Stage != Stage.Retired).ToList();
 
@@ -53,6 +48,10 @@ public static class Review
             if (idea.Stage == Stage.Tend && idea.Uses.Count == 0 && now - idea.Ships[0].At > UnusedLimit)
                 found.Add(new(4, idea.Id, $"shipped {Text.Span(now - idea.Ships[0].At)} ago and never used: {idea.Title}",
                     $"use it and vinci used {idea.Id}, or vinci retire {idea.Id} \"why\""));
+
+            if (idea.Stage == Stage.Build && !s.Watched(idea))
+                found.Add(new(3, idea.Id, $"no window is watched, so its time is not counted: {idea.Title}",
+                    $"vinci watch {idea.Id} \"text in its window titles\""));
 
             var idle = now - idea.LastTouched;
             var limit = idea.Stage == Stage.Tend ? TendingIdleLimit : BuildingIdleLimit;
@@ -109,11 +108,11 @@ public static class Review
 
         var live = s.Ideas.Where(i => i.Stage != Stage.Retired).OrderBy(i => i.LastTouched).ToList();
         if (live.Find(i => i.Stage == Stage.Build) is { } building)
-            return ($"build {building.Id}: {building.Title}", $"vinci start {building.Id}");
+            return ($"build {building.Id}: {building.Title}", $"vinci ship {building.Id} \"what shipped\"");
         if (live.Find(i => i.Stage is Stage.Prepare or Stage.Seed) is { } early)
             return ($"move {early.Id} forward: {early.Title}", $"vinci advance {early.Id}");
         if (live.Find(i => i.Stage == Stage.Tend && s.GoalMet(i) != true) is { } unmet)
-            return ($"{unmet.Id} has not met its goal: {unmet.Title}", $"vinci start {unmet.Id}");
+            return ($"{unmet.Id} has not met its goal: {unmet.Title}", $"vinci log {unmet.GoalMetric} <value>");
         return ("nothing is waiting on you", "vinci idea \"title\"");
     }
 
