@@ -88,11 +88,12 @@ public class ChatTests
         Assert.Contains("· journal", console.ToString());
         // The answer cites an id that recall never returned, so the turn says so.
         Assert.Contains("cites [event:e1], which recall did not return", console.ToString());
-        // The exchange is written to memory under the session, with idempotency keys.
+        // The question is written to memory under the session. The answer cites an unsourced id, so it is not kept.
         var recorded = JsonNode.Parse(script.Requests[2].Body)!;
         Assert.Equal("s1", recorded["sessionId"]!.GetValue<string>());
         Assert.Equal("user_message", recorded["messages"]![0]!["kind"]!.GetValue<string>());
-        Assert.Equal("s1:1:agent", recorded["messages"]![1]!["idempotencyKey"]!.GetValue<string>());
+        Assert.Single(recorded["messages"]!.AsArray());
+        Assert.Contains("answer not saved", console.ToString());
     }
 
     [Fact]
@@ -108,6 +109,9 @@ public class ChatTests
         using var console = new StringWriter();
         Assert.Equal("A wing tore [event:e1].", await conversation.Turn("what happened to the wing?", console));
         Assert.DoesNotContain("did not return", console.ToString());
+        // A grounded answer is kept: the exchange has both the question and the answer.
+        var recorded = JsonNode.Parse(script.Requests[3].Body)!;
+        Assert.Equal(2, recorded["messages"]!.AsArray().Count);
     }
 
     [Fact]

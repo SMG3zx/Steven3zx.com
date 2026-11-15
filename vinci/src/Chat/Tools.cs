@@ -19,6 +19,7 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
         {"tool": "remember", "content": "The person prefers short answers", "category": "preference"}
 
         journal runs one vinci command. Its args are the command word, then its arguments, one item each.
+        To list things, use the plural word: ideas, notes, sources, predictions, issues, principles. show takes one id, such as i1.
         The command words are: idea, for, goal, req, cut, advance, ideas, pipeline, next, show, commit, kept, missed, ship, used, tend, retire,
         note, link, notes, tags, source, sources, bookmark, bookmarks, unbookmark, predict, result, predictions, log, spec, stats,
         issue, diagnose, principle, issues, principles, review, adopt, home, watch, unwatch, watches, sync, spent, path.

@@ -59,11 +59,16 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         }
         answer ??= "I could not reach an answer in the steps I had. Ask it more narrowly.";
 
-        foreach (var cited in Citation().Matches(answer).Select(m => m.Groups[1].Value).Distinct())
-            if (!evidence.ToString().Contains($"[{cited}]", StringComparison.Ordinal))
-                await output.WriteLineAsync($"  ! cites [{cited}], which recall did not return this turn");
+        var citations = Citation().Matches(answer).Select(m => m.Groups[1].Value).Distinct().ToList();
+        var unsourced = citations.Where(c => !evidence.ToString().Contains($"[{c}]", StringComparison.Ordinal)).ToList();
+        foreach (var cited in unsourced)
+            await output.WriteLineAsync($"  ! cites [{cited}], which recall did not return this turn");
 
-        var saved = await Record(userText, answer);
+        // An answer is stored only when it rests on recalled evidence. Otherwise the chat's own
+        // "I do not know" or wrong answer would be recalled later as if it were a fact.
+        var keepAnswer = citations.Count > 0 && unsourced.Count == 0;
+        var saved = await Record(userText, keepAnswer ? answer : null);
+        if (!keepAnswer && saved) await output.WriteLineAsync("  · answer not saved: it cites no recalled evidence");
         if (!saved && !warnedMemoryOff)
         {
             warnedMemoryOff = true;
@@ -99,21 +104,19 @@ public sealed partial class Conversation(OllamaChat model, ChatTools tools, Memo
         }
     }
 
-    /// Writes the exchange to memory. Returns false when the memory service is down.
-    private async Task<bool> Record(string userText, string answer)
+    /// Writes the question, and the answer when it is kept, to memory. Returns false when the memory service is down.
+    private async Task<bool> Record(string userText, string? answer)
     {
         var at = now().ToString("o");
+        var messages = new List<object>
+        {
+            new { idempotencyKey = $"{sessionId}:{turn}:user", kind = "user_message", content = userText, source = "vinci-chat", occurredAt = at },
+        };
+        if (answer is not null)
+            messages.Add(new { idempotencyKey = $"{sessionId}:{turn}:agent", kind = "agent_message", content = answer, source = "vinci-chat", occurredAt = at });
         try
         {
-            await memory.Post("/v1/conversations", new
-            {
-                sessionId,
-                messages = new object[]
-                {
-                    new { idempotencyKey = $"{sessionId}:{turn}:user", kind = "user_message", content = userText, source = "vinci-chat", occurredAt = at },
-                    new { idempotencyKey = $"{sessionId}:{turn}:agent", kind = "agent_message", content = answer, source = "vinci-chat", occurredAt = at },
-                },
-            });
+            await memory.Post("/v1/conversations", new { sessionId, messages });
             return true;
         }
         catch (MemoryUnavailable)
