@@ -409,7 +409,7 @@ public sealed partial class Neo4jStore : IAsyncDisposable
                 check,
                 """
                 SHOW INDEXES YIELD name, options
-                WHERE name IN ['memory_embedding', 'chunk_embedding']
+                WHERE name IN ['memory_embedding', 'chunk_embedding', 'event_embedding']
                 RETURN name, options.indexConfig['vector.dimensions'] AS dimensions
                 """
             );
@@ -458,6 +458,7 @@ public sealed partial class Neo4jStore : IAsyncDisposable
             "CREATE FULLTEXT INDEX chunk_fulltext IF NOT EXISTS FOR (c:Chunk) ON EACH [c.content]",
             $"CREATE VECTOR INDEX memory_embedding IF NOT EXISTS FOR (m:Memory) ON m.embedding OPTIONS {{ indexConfig: {{ `vector.dimensions`: {(int)dimensions}, `vector.similarity_function`: 'cosine' }} }}",
             $"CREATE VECTOR INDEX chunk_embedding IF NOT EXISTS FOR (c:Chunk) ON c.embedding OPTIONS {{ indexConfig: {{ `vector.dimensions`: {(int)dimensions}, `vector.similarity_function`: 'cosine' }} }}",
+            $"CREATE VECTOR INDEX event_embedding IF NOT EXISTS FOR (e:Event) ON e.embedding OPTIONS {{ indexConfig: {{ `vector.dimensions`: {(int)dimensions}, `vector.similarity_function`: 'cosine' }} }}",
         ];
         await using var session = Session();
         foreach (var statement in statements)
@@ -525,19 +526,44 @@ public sealed partial class Neo4jStore : IAsyncDisposable
     {
         foreach (var input in inputs)
             ContentLimits.Validate(input.Content);
-        var events = inputs
-            .Select(input => new Dictionary<string, object?>
+        // An event is embedded when it is written, so a question about what the person recorded can
+        // find it by meaning. If the embedding service is down the event is still kept: events are the
+        // source of truth, and their vectors can be filled in later.
+        List<double[]>? vectors = null;
+        if (embeddings.Enabled)
+            try
             {
-                ["id"] = input.Id ?? input.IdempotencyKey ?? NewId(),
-                ["kind"] = input.Kind,
-                ["content"] = input.Content,
-                ["source"] = input.Source ?? "unknown",
-                ["metadata"] = Metadata(input.Metadata),
-                ["occurredAt"] = input.OccurredAt ?? Now(),
-                ["userId"] = input.UserId,
-                ["projectId"] = input.ProjectId,
-                ["sessionId"] = input.SessionId,
-            })
+                vectors = await embeddings.EmbedDocuments(
+                    inputs.Select(input => input.Content).ToList()
+                );
+            }
+            catch (Exception e)
+                when (e
+                        is InvalidOperationException
+                            or HttpRequestException
+                            or TaskCanceledException
+                )
+            {
+                vectors = null;
+            }
+        var events = inputs
+            .Select(
+                (input, index) =>
+                    new Dictionary<string, object?>
+                    {
+                        ["id"] = input.Id ?? input.IdempotencyKey ?? NewId(),
+                        ["kind"] = input.Kind,
+                        ["content"] = input.Content,
+                        ["source"] = input.Source ?? "unknown",
+                        ["metadata"] = Metadata(input.Metadata),
+                        ["occurredAt"] = input.OccurredAt ?? Now(),
+                        ["userId"] = input.UserId,
+                        ["projectId"] = input.ProjectId,
+                        ["sessionId"] = input.SessionId,
+                        ["embedding"] = vectors is null ? null : vectors[index].ToList(),
+                        ["embeddingModel"] = vectors is null ? null : embeddings.Model,
+                    }
+            )
             .ToList();
 
         var stored = await Write(async tx =>
@@ -1178,6 +1204,9 @@ public sealed partial class Neo4jStore : IAsyncDisposable
         [(node)-[:SUPPORTED_BY]->(source:Event) | {id: source.id, content: source.content}][0..10] AS evidence, score
         """;
 
+    private const string EventEvidence =
+        "[{id: node.id, content: node.content}] AS evidence, score";
+
     private const string ChunkRow = """
         RETURN 'chunk' AS type, node.id AS id, node.content AS content,
                'source_chunk' AS kind, null AS occurredAt, 'document' AS source,
@@ -1356,6 +1385,23 @@ public sealed partial class Neo4jStore : IAsyncDisposable
                     nearest
                 )
             );
+            vector.AddRange(
+                await Rows(
+                    session,
+                    $"""
+                    {Nearest("Event", "event_embedding")} ($userId IS NULL OR node.userId = $userId)
+                      AND ($projectId IS NULL OR node.projectId = $projectId)
+                      AND ($sessionId IS NULL OR node.sessionId = $sessionId)
+                      AND ($includeTestData OR coalesce(node.source, '') <> 'test')
+                    RETURN 'event' AS type, node.id AS id, node.content AS content, node.kind AS kind,
+                           node.occurredAt AS occurredAt, node.source AS source, node.projectId AS projectId,
+                           null AS status, null AS confidence,
+                           {EventEvidence}
+                    ORDER BY score DESC LIMIT $limit
+                    """,
+                    nearest
+                )
+            );
             foreach (var candidate in vector)
             {
                 candidate["retrievalMethod"] = "vector";
@@ -1408,6 +1454,45 @@ public sealed partial class Neo4jStore : IAsyncDisposable
         // A question about the past is answered by what a current memory replaced. Those
         // predecessors are reached through the SUPERSEDES chain, not by matching words, so they
         // are added directly after the memory they replaced, where the final cut keeps them.
+        // Every memory and chunk in the answer gets its cosine to the question, whichever leg found it,
+        // so abstention judges meaning and not the route that happened to return it.
+        if (
+            embeddings.Enabled
+            && candidates.Any(c =>
+                c["vectorCosine"] is null && Json.Str(c["type"]) is "memory" or "chunk" or "event"
+            )
+        )
+        {
+            var queryVector = (await embeddings.EmbedQuery(query)).ToList();
+            var unscored = candidates
+                .Where(c =>
+                    c["vectorCosine"] is null
+                    && Json.Str(c["type"]) is "memory" or "chunk" or "event"
+                )
+                .Select(c => Json.Str(c["id"]))
+                .Distinct()
+                .ToList();
+            var scoredRows = await Rows(
+                session,
+                """
+                MATCH (n) WHERE n.id IN $ids AND (n:Memory OR n:Chunk OR n:Event) AND n.embedding IS NOT NULL
+                RETURN n.id AS id, vector.similarity.cosine(n.embedding, $embedding) AS cosine
+                """,
+                P(("ids", unscored), ("embedding", queryVector))
+            );
+            var byId = scoredRows.ToDictionary(
+                r => Json.Str(r["id"]),
+                r => Json.Num(r["cosine"], double.NaN)
+            );
+            foreach (var candidate in candidates)
+                if (
+                    candidate["vectorCosine"] is null
+                    && byId.TryGetValue(Json.Str(candidate["id"]), out var cosine)
+                    && double.IsFinite(cosine)
+                )
+                    candidate["vectorCosine"] = cosine;
+        }
+
         if (route == "temporal" && scope?.IncludeHistorical == true)
         {
             var currentIds = candidates
@@ -1461,15 +1546,40 @@ public sealed partial class Neo4jStore : IAsyncDisposable
             }
         }
 
-        // Benchmark data never leaks into a recall that did not ask for it.
-        var benchmarkProjectId = Env.Get("BENCHMARK_PROJECT_ID") ?? "benchmark-suite";
+        // Evaluation data never leaks into a recall that did not ask for it: an unscoped question
+        // about the person must not be answered from a benchmark fixture.
         if (scope?.IncludeTestData != true && scope?.ProjectId is null)
+        {
+            var evaluationProjects = (
+                Env.Get("EVALUATION_PROJECT_IDS") ?? "benchmark-suite,paraphrase-suite"
+            )
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Append(Env.Get("BENCHMARK_PROJECT_ID") ?? "benchmark-suite")
+                .ToHashSet();
             candidates =
             [
                 .. candidates.Where(candidate =>
-                    Json.Str(candidate["projectId"]) != benchmarkProjectId
+                    !evaluationProjects.Contains(Json.Str(candidate["projectId"]))
                 ),
             ];
+        }
+        // The same statement can be held as an event and as a memory built from it. Showing both fills
+        // the answer with one fact twice, so each statement appears once, at its best rank.
+        candidates =
+        [
+            .. candidates
+                .GroupBy(
+                    candidate =>
+                        string.Join(
+                            ' ',
+                            Json.Str(candidate["content"], Json.Str(candidate["id"]))
+                                .ToLowerInvariant()
+                                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                        ),
+                    StringComparer.Ordinal
+                )
+                .Select(group => group.First()),
+        ];
         if (!reranker.Enabled)
             return [.. candidates.Take(limit)];
 

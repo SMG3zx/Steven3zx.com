@@ -269,7 +269,11 @@ public class ChatTests
         Assert.Equal("error", JournalSync.Kind(issue));
 
         var sent = JournalSync.ToMemoryEvent(note, 7);
-        Assert.Equal("vinci-journal:7", sent["idempotencyKey"]!.GetValue<string>());
+        Assert.Equal(JournalSync.IdempotencyKey(note), sent["idempotencyKey"]!.GetValue<string>());
+        Assert.NotEqual(
+            JournalSync.IdempotencyKey(note),
+            JournalSync.IdempotencyKey(note with { Text = "different" })
+        );
         Assert.Equal("n1", sent["metadata"]!["journalId"]!.GetValue<string>());
     }
 
@@ -300,7 +304,10 @@ public class ChatTests
             );
             var body = JsonNode.Parse(again.Requests[0].Body)!["events"]!.AsArray();
             Assert.Single(body);
-            Assert.Equal("vinci-journal:2", body[0]!["idempotencyKey"]!.GetValue<string>());
+            Assert.Equal(
+                JournalSync.IdempotencyKey(new Event(Now, "note", "n3", Text: "third")),
+                body[0]!["idempotencyKey"]!.GetValue<string>()
+            );
         }
         finally
         {

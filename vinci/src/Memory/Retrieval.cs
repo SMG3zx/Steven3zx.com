@@ -146,8 +146,13 @@ public static partial class Retrieval
             return scored.Count > 0 && scored.Max() < 0.18 ? new(true, Weak) : new(false);
 
         var meaningful = Terms(query);
-        bool Mentions(JsonObject result, string term) =>
-            Json.Str(result["content"]).ToLowerInvariant().Contains(term, StringComparison.Ordinal);
+        // A term matches its own text or its first five letters, so "correction" finds "Correct".
+        bool Mentions(JsonObject result, string term)
+        {
+            var content = Json.Str(result["content"]).ToLowerInvariant();
+            return content.Contains(term, StringComparison.Ordinal)
+                || (term.Length >= 6 && content.Contains(term[..5], StringComparison.Ordinal));
+        }
         // A vector hit is evidence only when it is close enough in meaning. Nearest neighbours always
         // exist, so counting every one of them would make the store never abstain.
         bool Close(JsonObject result) =>

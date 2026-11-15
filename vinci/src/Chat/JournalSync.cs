@@ -58,6 +58,17 @@ public static class JournalSync
         return string.Join(" | ", parts);
     }
 
+    /// The key is a hash of what the fact says, not its position. A position is unique only within
+    /// one journal file: two journals (or a test journal) would send different facts under one key,
+    /// and memory refuses the whole batch when a key is reused with different content.
+    public static string IdempotencyKey(Event e) =>
+        "vinci-journal:"
+        + Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(e))
+            )
+        )[..32];
+
     public static JsonObject ToMemoryEvent(Event e, int index) =>
         new()
         {
@@ -65,7 +76,7 @@ public static class JournalSync
             ["content"] = Describe(e),
             ["source"] = "vinci-journal",
             ["occurredAt"] = e.At.ToString("o"),
-            ["idempotencyKey"] = $"vinci-journal:{index}",
+            ["idempotencyKey"] = IdempotencyKey(e),
             ["metadata"] = new JsonObject
             {
                 ["journalKind"] = e.Kind,
