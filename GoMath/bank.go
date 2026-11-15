@@ -186,9 +186,9 @@ var Worksheet = []WorksheetEntry{
 	{"unit5_7", "r = ba for b", OpSolveFor, "b = r/a", 0, nil},
 	{"unit5_8", "y = x - 2; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-5, -4, -3, -2, -1, 0, 1", 0, nil},
 	{"unit5_9", "y = (3/2)x; x = -6, -4, -2, 0, 2, 4, 6", OpTable, "-9, -6, -3, 0, 3, 6, 9", 0, nil},
-	// Problem 10 is read off a phone screenshot of Graph_1: the line y = -3x + 4.
-	{"unit5_10a", "-3x + 4 = 0", OpSolve, "{4/3}", 0, nil},
-	{"unit5_10b", "y = -3x + 4; x = 0", OpTable, "4", 0, nil},
+	// Problem 10 is read off a phone screenshot of Graph_1: the line y = -3x + 3, through (-1, 6), (0, 3), (1, 0) and (3, -6).
+	{"unit5_10a", "-3x + 3 = 0", OpSolve, "{1}", 0, nil},
+	{"unit5_10b", "y = -3x + 3; x = 0", OpTable, "3", 0, nil},
 	{"unit5_11", "y = 2x - 4; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-10, -8, -6, -4, -2, 0, 2", 0, nil},
 	{"unit5_12", "y = -1; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-1, -1, -1, -1, -1, -1, -1", 0, nil},
 	{"unit5_8g", "y = x - 2", OpGraph, "(-3, -5), (-2, -4), (-1, -3), (0, -2), (1, -1), (2, 0), (3, 1)", 0, nil},
