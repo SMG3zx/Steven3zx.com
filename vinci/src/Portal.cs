@@ -259,7 +259,8 @@ public sealed class PortalServer(Journal journal, int port)
     {
         Directory.CreateDirectory(previews);
         using var listener = new HttpListener();
-        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        // A browser sends either name in its Host header, and the listener answers only those it knows.
+        foreach (var name in (string[])["127.0.0.1", "localhost"]) listener.Prefixes.Add($"http://{name}:{port}/");
         listener.Start();
         Console.WriteLine($"Portal is at http://127.0.0.1:{port}/");
         while (true)
