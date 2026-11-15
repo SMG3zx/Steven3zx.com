@@ -295,6 +295,24 @@ public sealed class VinciTests : IDisposable
     }
 
     [Fact]
+    public void One_commit_is_work_on_every_idea_whose_folder_it_changed()
+    {
+        var (glider, bridge) = (Folder("glider"), Folder("bridge"));
+        Committed("Start both", glider + "/a.md", bridge + "/a.md");
+        Run("adopt", glider);
+        Run("adopt", bridge);
+        Run("sync");
+        Assert.Contains("(1 commit, last", Run("show", "i1"));
+        Assert.Contains("(1 commit, last", Run("show", "i2"));
+
+        Wait(TimeSpan.FromDays(1));
+        Committed("Change both", glider + "/a.md", bridge + "/a.md");
+        Run("sync");
+        Assert.Contains("(2 commits, last", Run("show", "i1"));
+        Assert.Contains("(2 commits, last", Run("show", "i2"));
+    }
+
+    [Fact]
     public void The_most_specific_watch_wins_a_window()
     {
         Run("idea", "Flying machine");

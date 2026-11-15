@@ -163,8 +163,9 @@ public sealed class State
         return state;
     }
 
-    /// Commit hashes already recorded as work, so none is counted twice.
-    public HashSet<string> Commits { get; } = [];
+    /// Commits already recorded as work on an idea, so none is counted twice.
+    /// One commit can be work on several ideas.
+    public HashSet<(string IdeaId, string Hash)> Commits { get; } = [];
 
     /// True when work on the idea is counted without anyone recording it.
     public bool Watched(Idea idea) => idea.Home is not null || Watches.Exists(w => w.IdeaId == idea.Id && !w.Use);
@@ -267,7 +268,7 @@ public sealed class State
                 break;
             case "work":
                 Idea(e.Id!)!.Work.Add((e.At, e.Text!));
-                Commits.Add(e.Where!);
+                Commits.Add((e.Id!, e.Where!));
                 break;
             case "sync":
                 SyncedTo = e.At;

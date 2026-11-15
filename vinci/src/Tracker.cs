@@ -114,7 +114,7 @@ public static class Tracker
                         found.Add((idea, commit));
 
         var lines = new List<string>();
-        foreach (var group in found.Where(f => !s.Commits.Contains(f.Commit.Hash)).GroupBy(f => f.Idea))
+        foreach (var group in found.Where(f => !s.Commits.Contains((f.Idea.Id, f.Commit.Hash))).GroupBy(f => f.Idea))
         {
             foreach (var (idea, commit) in group.OrderBy(f => f.Commit.At))
                 journal.Append(new(commit.At, "work", idea.Id, commit.Subject, Where: commit.Hash));
