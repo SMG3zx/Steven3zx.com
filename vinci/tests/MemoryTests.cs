@@ -288,6 +288,25 @@ public sealed class MemoryTests
         Assert.Equal("Explicitly remembered 1 event(s).", (await consolidator.Reflect([plain, marked])).Reflection);
     }
 
+    [Fact]
+    public void Failure_events_become_episode_memories_that_point_at_their_event()
+    {
+        var memory = ConsolidationWorker.FailureMemoryFromEvent(new MemoryEvent
+        {
+            Id = "event-1", Kind = "tool_result", Content = "Deployment timed out after 30 seconds",
+            ProjectId = "project-1", SessionId = "session-1", Metadata = Item("""{"command":"deploy","status":"failed"}"""),
+        });
+        Assert.Equal("episode", memory!.Category);
+        Assert.Equal(["event-1"], memory.SourceEventIds);
+        Assert.Equal("reflexion_failure", Json.Str(memory.Metadata!["memoryKind"]));
+        Assert.Equal("deploy", Json.Str(memory.Metadata["originalMetadata"]!["command"]));
+
+        Assert.Null(ConsolidationWorker.FailureMemoryFromEvent(new MemoryEvent
+        {
+            Kind = "tool_result", Content = "Deployment completed", Metadata = Item("""{"status":"success"}"""),
+        }));
+    }
+
     // ---- snapshots ----
 
     private static SnapshotNode Node(string key) => new(key, ["Event"], Item($$"""{"id":"{{key}}"}"""));
