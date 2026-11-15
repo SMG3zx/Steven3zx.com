@@ -55,7 +55,9 @@ public sealed class HarnessFiles
         foreach (var (path, content) in edits)
         {
             if (!IsEditable(path))
-                throw new InvalidOperationException($"'{path}' is not an editable harness component.");
+                throw new InvalidOperationException(
+                    $"'{path}' is not an editable harness component."
+                );
             if (content is null)
                 next._files.Remove(path);
             else
@@ -108,7 +110,9 @@ public sealed class HarnessFiles
             parts.Add("# Skills\nCall load_skill to read one: " + string.Join(", ", skills));
         var agents = Names("subagents").ToList();
         if (agents.Count > 0)
-            parts.Add("# Subagents\nCall delegate to hand off a task: " + string.Join(", ", agents));
+            parts.Add(
+                "# Subagents\nCall delegate to hand off a task: " + string.Join(", ", agents)
+            );
         var scripts = Names("scripts").ToList();
         if (scripts.Count > 0)
             parts.Add("# Scripts\nCall run_script to run one: " + string.Join(", ", scripts));

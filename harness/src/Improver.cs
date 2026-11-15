@@ -36,7 +36,11 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
 
         // 3. Probe: execute each candidate to collect evidence.
         var probed = new List<Attempt>();
-        foreach (var (label, candidate, _) in proposals.Where(p => p.Harness is not null).Select(p => (p.Label, p.Harness!, p.Why)))
+        foreach (
+            var (label, candidate, _) in proposals
+                .Where(p => p.Harness is not null)
+                .Select(p => (p.Label, p.Harness!, p.Why))
+        )
             probed.Add(await RunAsync(label, candidate, task, ct));
         record.AddRange(probed);
 
@@ -48,7 +52,10 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         record.Add(final);
 
         // Never ship a regression: keep the best-scoring harness, preferring the base on ties.
-        var best = record.OrderByDescending(a => a.Evidence.Score).ThenBy(a => a.Label == "reference" ? 0 : 1).First();
+        var best = record
+            .OrderByDescending(a => a.Evidence.Score)
+            .ThenBy(a => a.Label == "reference" ? 0 : 1)
+            .First();
 
         // 6-7. Reflect and update the library.
         await ReflectAsync(libraryDir, task, record, best, ct);
@@ -56,7 +63,12 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         return new(best.Harness, record);
     }
 
-    private async Task<Attempt> RunAsync(string label, HarnessFiles h, HarnessTask task, CancellationToken ct)
+    private async Task<Attempt> RunAsync(
+        string label,
+        HarnessFiles h,
+        HarnessTask task,
+        CancellationToken ct
+    )
     {
         var ws = task.NewWorkspace();
         try
@@ -83,9 +95,13 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
             .AppendLine($"Task:\n{task.Prompt}")
             .AppendLine($"\nLibrary lessons from earlier tasks:\n{experience}")
             .AppendLine($"\nBase harness:\n{Dump(h0)}")
-            .AppendLine($"\nReference run (score {reference.Evidence.Score:0.00}):\n{reference.Evidence.Notes}")
+            .AppendLine(
+                $"\nReference run (score {reference.Evidence.Score:0.00}):\n{reference.Evidence.Notes}"
+            )
             .AppendLine($"\nTranscript:\n{Summarize(reference.Run)}")
-            .AppendLine($"\nCandidate {i} of several. Make a different, focused change from the others.")
+            .AppendLine(
+                $"\nCandidate {i} of several. Make a different, focused change from the others."
+            )
             .AppendLine(EditFormat)
             .ToString();
         var (edits, why) = await AskForEditsAsync(prompt, ct);
@@ -111,8 +127,12 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
             .AppendLine($"Task:\n{task.Prompt}")
             .AppendLine($"\nBase harness (score {reference.Evidence.Score:0.00}):\n{Dump(h0)}");
         foreach (var c in candidates)
-            sb.AppendLine($"\n## {c.Label} score {c.Evidence.Score:0.00}\nChanged files:\n{Diff(h0, c.Harness)}\nEvidence:\n{c.Evidence.Notes}");
-        sb.AppendLine("\nCompose one successor from the changes that helped. Drop the ones that did not.")
+            sb.AppendLine(
+                $"\n## {c.Label} score {c.Evidence.Score:0.00}\nChanged files:\n{Diff(h0, c.Harness)}\nEvidence:\n{c.Evidence.Notes}"
+            );
+        sb.AppendLine(
+                "\nCompose one successor from the changes that helped. Drop the ones that did not."
+            )
             .AppendLine(EditFormat);
         var (edits, _) = await AskForEditsAsync(sb.ToString(), ct);
         try
@@ -125,19 +145,40 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
         }
     }
 
-    private async Task ReflectAsync(string libraryDir, HarnessTask task, List<Attempt> record, Attempt best, CancellationToken ct)
+    private async Task ReflectAsync(
+        string libraryDir,
+        HarnessTask task,
+        List<Attempt> record,
+        Attempt best,
+        CancellationToken ct
+    )
     {
         var sb = new StringBuilder($"Task {task.Id}\n");
         foreach (var a in record)
-            sb.AppendLine($"- {a.Label}: score {a.Evidence.Score:0.00}, {a.Run.Turns} turns\n{Diff(record[0].Harness, a.Harness)}");
+            sb.AppendLine(
+                $"- {a.Label}: score {a.Evidence.Score:0.00}, {a.Run.Turns} turns\n{Diff(record[0].Harness, a.Harness)}"
+            );
         sb.AppendLine($"Winner: {best.Label}.")
-            .AppendLine("Write 3 to 6 short bullet lessons for future tasks. Mark each [general] if it should help any task, or [specific] if it only helps this kind of task. Bullets only.");
-        var reply = await model.CompleteAsync("You distill lessons from harness experiments.", [new("user", [new TextBlock(sb.ToString())])], [], ct);
+            .AppendLine(
+                "Write 3 to 6 short bullet lessons for future tasks. Mark each [general] if it should help any task, or [specific] if it only helps this kind of task. Bullets only."
+            );
+        var reply = await model.CompleteAsync(
+            "You distill lessons from harness experiments.",
+            [new("user", [new TextBlock(sb.ToString())])],
+            [],
+            ct
+        );
         Directory.CreateDirectory(libraryDir);
-        File.AppendAllText(Path.Combine(libraryDir, "EXPERIENCE.md"), $"\n## {task.Id}\n{reply.Text.Trim()}\n");
+        File.AppendAllText(
+            Path.Combine(libraryDir, "EXPERIENCE.md"),
+            $"\n## {task.Id}\n{reply.Text.Trim()}\n"
+        );
     }
 
-    private async Task<(Dictionary<string, string?> Edits, string Why)> AskForEditsAsync(string prompt, CancellationToken ct)
+    private async Task<(Dictionary<string, string?> Edits, string Why)> AskForEditsAsync(
+        string prompt,
+        CancellationToken ct
+    )
     {
         var reply = await model.CompleteAsync(
             "You improve an agent harness by editing its files. Reply with JSON only.",
@@ -162,14 +203,18 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
                 edits[path] = content?.GetValue<string>();
             return (edits, json["rationale"]?.GetValue<string>() ?? "");
         }
-        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException or FormatException)
+        catch (Exception e)
+            when (e
+                    is System.Text.Json.JsonException
+                        or InvalidOperationException
+                        or FormatException
+            )
         {
             return (new(), "unparseable reply");
         }
     }
 
-    private const string EditFormat =
-        """
+    private const string EditFormat = """
         Reply with JSON only: {"rationale": "...", "edits": {"<path>": "<full new content, or null to delete>"}}.
         Editable paths: systemprompt.md, guardrails.md, memory.md, tool-guidance.md, subagents/*.md, skills/*.md, scripts/*, plugins/deny.txt.
         """;
@@ -185,20 +230,34 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
     {
         const string path = "plugins/deny.txt";
         var have = candidate.Get(path).Split('\n').Select(l => l.Trim()).ToHashSet();
-        var missing = baseline.Get(path).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !have.Contains(l)).ToList();
+        var missing = baseline
+            .Get(path)
+            .Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0 && !have.Contains(l))
+            .ToList();
         if (missing.Count == 0)
             return candidate;
         var text = candidate.Get(path).TrimEnd();
-        return candidate.Apply(new Dictionary<string, string?> { [path] = (text.Length > 0 ? text + "\n" : "") + string.Join("\n", missing) + "\n" });
+        return candidate.Apply(
+            new Dictionary<string, string?>
+            {
+                [path] = (text.Length > 0 ? text + "\n" : "") + string.Join("\n", missing) + "\n",
+            }
+        );
     }
 
     private static string Dump(HarnessFiles h) =>
-        h.Files.Count == 0 ? "(empty)" : string.Join("\n", h.Files.Select(f => $"--- {f.Key}\n{f.Value}"));
+        h.Files.Count == 0
+            ? "(empty)"
+            : string.Join("\n", h.Files.Select(f => $"--- {f.Key}\n{f.Value}"));
 
     private static string Diff(HarnessFiles a, HarnessFiles b)
     {
         var paths = a.Files.Keys.Union(b.Files.Keys).Order();
-        var changed = paths.Where(p => a.Get(p) != b.Get(p)).Select(p => b.Files.ContainsKey(p) ? $"--- {p}\n{b.Get(p)}" : $"--- {p} (deleted)");
+        var changed = paths
+            .Where(p => a.Get(p) != b.Get(p))
+            .Select(p => b.Files.ContainsKey(p) ? $"--- {p}\n{b.Get(p)}" : $"--- {p} (deleted)");
         var text = string.Join("\n", changed);
         return text.Length == 0 ? "(no change)" : text;
     }
@@ -207,16 +266,16 @@ public sealed class Improver(IModel model, AgentOptions agentOptions)
     {
         var sb = new StringBuilder();
         foreach (var m in run.Transcript)
-            foreach (var b in m.Content)
-                sb.AppendLine(
-                    b switch
-                    {
-                        TextBlock t => $"{m.Role}: {t.Text}",
-                        ToolUse u => $"call {u.Name} {u.Input.ToJsonString()}",
-                        ToolResult r => $"result{(r.IsError ? " (error)" : "")}: {r.Content}",
-                        _ => "",
-                    }
-                );
+        foreach (var b in m.Content)
+            sb.AppendLine(
+                b switch
+                {
+                    TextBlock t => $"{m.Role}: {t.Text}",
+                    ToolUse u => $"call {u.Name} {u.Input.ToJsonString()}",
+                    ToolResult r => $"result{(r.IsError ? " (error)" : "")}: {r.Content}",
+                    _ => "",
+                }
+            );
         var s = sb.ToString();
         return s.Length <= 6000 ? s : s[..6000] + "\n…(truncated)";
     }

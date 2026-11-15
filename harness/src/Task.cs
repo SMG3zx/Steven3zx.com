@@ -6,15 +6,19 @@ namespace Harness;
 public sealed record Check(string File, string Contains);
 
 /// <summary>A task is a prompt, an optional fixture directory copied into a fresh workspace, and file checks that score the result.</summary>
-public sealed record HarnessTask(string Id, string Prompt, string? Fixture, IReadOnlyList<Check> Checks)
+public sealed record HarnessTask(
+    string Id,
+    string Prompt,
+    string? Fixture,
+    IReadOnlyList<Check> Checks
+)
 {
     public static HarnessTask Load(string path)
     {
-        var t =
-            JsonSerializer.Deserialize<HarnessTask>(
-                File.ReadAllText(path),
-                new JsonSerializerOptions(JsonSerializerDefaults.Web)
-            ) ?? throw new InvalidDataException("Empty task file.");
+        var t = JsonSerializer.Deserialize<HarnessTask>(
+            File.ReadAllText(path),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        ) ?? throw new InvalidDataException("Empty task file.");
         var fixture = t.Fixture is null
             ? null
             : Path.GetFullPath(t.Fixture, Path.GetDirectoryName(Path.GetFullPath(path))!);

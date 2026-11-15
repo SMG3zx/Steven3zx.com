@@ -8,7 +8,12 @@ namespace Harness;
 /// <c>think: false</c>, and because it takes tool definitions directly. Ollama has no tool-call ids, so
 /// they are made up here and tool results are matched to their call by position.
 /// </summary>
-public sealed class OllamaModel(HttpClient http, string model, int numCtx = 16384, bool think = false) : IModel
+public sealed class OllamaModel(
+    HttpClient http,
+    string model,
+    int numCtx = 16384,
+    bool think = false
+) : IModel
 {
     public static OllamaModel FromEnvironment() =>
         new(
@@ -22,7 +27,9 @@ public sealed class OllamaModel(HttpClient http, string model, int numCtx = 1638
                 Timeout = TimeSpan.FromMinutes(10),
             },
             Environment.GetEnvironmentVariable("HARNESS_MODEL") ?? "qwen3:8b",
-            int.TryParse(Environment.GetEnvironmentVariable("HARNESS_NUM_CTX"), out var n) ? n : 16384
+            int.TryParse(Environment.GetEnvironmentVariable("HARNESS_NUM_CTX"), out var n)
+                ? n
+                : 16384
         );
 
     public async Task<Message> CompleteAsync(
@@ -32,7 +39,10 @@ public sealed class OllamaModel(HttpClient http, string model, int numCtx = 1638
         CancellationToken ct
     )
     {
-        var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = system } };
+        var messages = new JsonArray
+        {
+            new JsonObject { ["role"] = "system", ["content"] = system },
+        };
         var toolNames = new Dictionary<string, string>();
         foreach (var m in history)
         {
@@ -120,7 +130,9 @@ public sealed class OllamaModel(HttpClient http, string model, int numCtx = 1638
                 JsonValue v when v.TryGetValue<string>(out var s) => JsonNode.Parse(s)!.AsObject(),
                 _ => new JsonObject(),
             };
-            blocks.Add(new ToolUse($"call_{Guid.NewGuid():N}_{n++}", fn["name"]!.GetValue<string>(), args));
+            blocks.Add(
+                new ToolUse($"call_{Guid.NewGuid():N}_{n++}", fn["name"]!.GetValue<string>(), args)
+            );
         }
         return new Message("assistant", blocks);
     }

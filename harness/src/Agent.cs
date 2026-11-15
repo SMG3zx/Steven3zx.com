@@ -4,12 +4,27 @@ using System.Text.RegularExpressions;
 
 namespace Harness;
 
-public sealed record AgentOptions(int MaxTurns = 20, bool AllowScripts = false, int MaxDepth = 1);
+public sealed record AgentOptions(
+    int MaxTurns = 20,
+    bool AllowScripts = false,
+    int MaxDepth = 1,
+    int MaxNudges = 2
+);
 
-public sealed record RunResult(string Final, IReadOnlyList<Message> Transcript, int Turns, bool Completed);
+public sealed record RunResult(
+    string Final,
+    IReadOnlyList<Message> Transcript,
+    int Turns,
+    bool Completed
+);
 
 /// <summary>Agent = frozen model + harness. The loop only calls the model, runs the tools it asks for, and repeats.</summary>
-public sealed class Agent(IModel model, HarnessFiles harness, string workspace, AgentOptions? options = null)
+public sealed class Agent(
+    IModel model,
+    HarnessFiles harness,
+    string workspace,
+    AgentOptions? options = null
+)
 {
     private readonly AgentOptions _o = options ?? new();
     private readonly string _root = Path.GetFullPath(workspace);
@@ -17,38 +32,80 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
     public Task<RunResult> RunAsync(string prompt, CancellationToken ct = default) =>
         RunAsync(harness.SystemPrompt(), prompt, 0, ct);
 
-    private async Task<RunResult> RunAsync(string system, string prompt, int depth, CancellationToken ct)
+    public const string FinishNote =
+        "# Paths\nAll paths are relative to the workspace root. Use \".\" for the root itself and never an absolute path.\n\n# Finishing\nYou finish only by calling the finish tool with a short summary. Replying with text alone does not finish the task, and does not do the work you describe: to act, call a tool.";
+
+    public const string Nudge =
+        "You replied without calling a tool, so nothing happened. If the task is complete, call finish with a summary. Otherwise call the tool you need now.";
+
+    private async Task<RunResult> RunAsync(
+        string system,
+        string prompt,
+        int depth,
+        CancellationToken ct
+    )
     {
+        system = system.TrimEnd() + "\n\n" + FinishNote;
         var history = new List<Message> { new("user", [new TextBlock(prompt)]) };
         var tools = Tools(depth);
+        var nudges = 0;
+        var repeats = new Dictionary<string, int>();
         for (var turn = 1; turn <= _o.MaxTurns; turn++)
         {
             var reply = await model.CompleteAsync(system, history, tools, ct);
             history.Add(reply);
             var calls = reply.Content.OfType<ToolUse>().ToList();
+            if (calls.FirstOrDefault(c => c.Name == "finish") is { } done)
+                return new(
+                    done.Input["summary"]?.GetValue<string>() ?? reply.Text,
+                    history,
+                    turn,
+                    true
+                );
             if (calls.Count == 0)
-                return new(reply.Text, history, turn, true);
+            {
+                // Silence is ambiguous: done, or an action described but never taken. Ask, a bounded number of times.
+                if (nudges++ >= _o.MaxNudges)
+                    return new(reply.Text, history, turn, false);
+                history.Add(new("user", [new TextBlock(Nudge)]));
+                continue;
+            }
+            nudges = 0;
 
             var results = new List<Block>();
             foreach (var call in calls)
             {
                 var (output, error) = await ExecuteAsync(call, depth, ct);
+                var key = call.Name + call.Input.ToJsonString() + output;
+                var seen = repeats[key] = repeats.GetValueOrDefault(key) + 1;
+                if (seen >= 3)
+                    output +=
+                        $"\n(You have made this identical call {seen} times with the same result. Change your approach, or call finish.)";
                 results.Add(new ToolResult(call.Id, output, error));
             }
             history.Add(new("user", results));
         }
-        return new(history.LastOrDefault(m => m.Role == "assistant")?.Text ?? "", history, _o.MaxTurns, false);
+        return new(
+            history.LastOrDefault(m => m.Role == "assistant")?.Text ?? "",
+            history,
+            _o.MaxTurns,
+            false
+        );
     }
 
     private async Task<(string, bool)> ExecuteAsync(ToolUse call, int depth, CancellationToken ct)
     {
         // C8: plugins sit between the model and the tools. Here: declarative deny rules.
-        foreach (var rule in harness.Get("plugins/deny.txt").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (
+            var rule in harness
+                .Get("plugins/deny.txt")
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        )
         {
             var pattern = rule.Trim();
             if (pattern.Length == 0 || pattern.StartsWith('#'))
                 continue;
-            if (Denies(pattern, call.Name + " " + call.Input.ToJsonString()))
+            if (Denies(pattern, RuleTarget(call)))
                 return ($"Blocked by plugin rule: {pattern}", true);
         }
         try
@@ -60,6 +117,22 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
             return ($"{e.GetType().Name}: {e.Message}", true);
         }
     }
+
+    private static readonly HashSet<string> FreeText = ["content", "summary", "task"];
+
+    /// <summary>
+    /// What deny rules are matched against: the tool name and its target arguments (paths, names, args).
+    /// Free text the model writes, such as file content, is excluded: a rule against "../" is about where a
+    /// call points, not about a sentence that happens to mention it.
+    /// </summary>
+    public static string RuleTarget(ToolUse call) =>
+        call.Name
+        + " "
+        + string.Join(
+            " ",
+            call.Input.Where(p => !FreeText.Contains(p.Key))
+                .Select(p => p.Value?.ToJsonString() ?? "")
+        );
 
     /// <summary>A rule that is not a valid regex still denies, as a literal substring.</summary>
     public static bool Denies(string pattern, string text)
@@ -92,7 +165,9 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
                     "\n",
                     Directory
                         .EnumerateFileSystemEntries(dir)
-                        .Select(p => Path.GetRelativePath(_root, p) + (Directory.Exists(p) ? "/" : ""))
+                        .Select(p =>
+                            Path.GetRelativePath(_root, p) + (Directory.Exists(p) ? "/" : "")
+                        )
                         .Order()
                 );
             }
@@ -108,7 +183,9 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
             case "load_skill":
             {
                 var p = harness.Path_("skills", S("name"));
-                return p.Length > 0 ? harness.Get(p) : throw new ArgumentException("No such skill.");
+                return p.Length > 0
+                    ? harness.Get(p)
+                    : throw new ArgumentException("No such skill.");
             }
             case "delegate" when depth < _o.MaxDepth:
             {
@@ -171,7 +248,9 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
     {
         var full = Path.GetFullPath(Path.Combine(_root, rel));
         if (full != _root && !full.StartsWith(_root + Path.DirectorySeparatorChar))
-            throw new UnauthorizedAccessException("Path escapes the workspace.");
+            throw new UnauthorizedAccessException(
+                $"'{rel}' is outside the workspace. Use a path relative to the workspace root, such as '.' or 'notes.md'."
+            );
         return full;
     }
 
@@ -184,12 +263,18 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
             {
                 ["type"] = "object",
                 ["properties"] = new JsonObject(
-                    props.Select(p => KeyValuePair.Create<string, JsonNode?>(p, new JsonObject { ["type"] = "string" }))
+                    props.Select(p =>
+                        KeyValuePair.Create<string, JsonNode?>(
+                            p,
+                            new JsonObject { ["type"] = "string" }
+                        )
+                    )
                 ),
             };
 
         var tools = new List<ToolSpec>
         {
+            new("finish", "Declare the task complete and give a short summary.", Schema("summary")),
             new("list_dir", "List a workspace directory.", Schema("path")),
             new("read_file", "Read a workspace file.", Schema("path")),
             new("write_file", "Write a workspace file.", Schema("path", "content")),
@@ -199,7 +284,9 @@ public sealed class Agent(IModel model, HarnessFiles harness, string workspace, 
         if (depth < _o.MaxDepth && harness.Names("subagents").Any())
             tools.Add(new("delegate", "Hand a task to a named subagent.", Schema("name", "task")));
         if (_o.AllowScripts && harness.Names("scripts").Any())
-            tools.Add(new("run_script", "Run a harness script in the workspace.", Schema("name", "args")));
+            tools.Add(
+                new("run_script", "Run a harness script in the workspace.", Schema("name", "args"))
+            );
         return tools;
     }
 }

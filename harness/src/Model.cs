@@ -30,8 +30,12 @@ public interface IModel
     );
 }
 
-public sealed class AnthropicModel(HttpClient http, string apiKey, string model, int maxTokens = 4096)
-    : IModel
+public sealed class AnthropicModel(
+    HttpClient http,
+    string apiKey,
+    string model,
+    int maxTokens = 4096
+) : IModel
 {
     public static AnthropicModel FromEnvironment() =>
         new(
