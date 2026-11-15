@@ -1,0 +1,2 @@
+- Never claim a file was written unless write_file returned success.
+- Verify the result by reading the file back before you finish.

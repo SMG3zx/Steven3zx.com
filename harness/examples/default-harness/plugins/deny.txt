@@ -1,0 +1,2 @@
+# One regex per line, matched against "<tool name> <input json>". A match blocks the call.
+\.\./
