@@ -23,4 +23,12 @@ if (args is ["serve", ..])
 if (args is ["memory", ..])
     return await Vinci.Memory.MemoryCommands.Run(args[1..], Console.In, Console.Out, Console.Error);
 
-return App.Run(args, journal, Console.In, Console.Out, Console.Error, DateTimeOffset.Now, ActivityWatch.At(activityWatch), Git.Log);
+var activity = ActivityWatch.At(activityWatch);
+
+// No command, or `vinci chat`: the conversation with the chat model.
+if (args is [] or ["chat"])
+    return await Vinci.Chat.ChatCommand.Run(journal,
+        (commandArgs, output) => App.Run(commandArgs, journal, TextReader.Null, output, output, DateTimeOffset.Now, activity, Git.Log),
+        Console.In, Console.Out, Console.Error, () => DateTimeOffset.Now);
+
+return App.Run(args, journal, Console.In, Console.Out, Console.Error, DateTimeOffset.Now, activity, Git.Log);

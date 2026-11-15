@@ -819,7 +819,9 @@ public sealed class Session(Journal journal, TextReader input, TextWriter o, Dat
 
     private const string Help = """
         vinci: one journal for ideas, knowledge, time and measurements.
-        Run it with no command to see the pipeline and the one thing to do next.
+        Run it with no command, or as "vinci chat", to talk to the chat model, which does
+        everything below through its tools. "vinci pipeline" shows the stages and the one
+        thing to do next. Everything below also works as a plain command.
 
         An idea grows through five stages, and each move has a gate:
           Seed -> Prepare      needs who it is for, and a goal tied to a number
