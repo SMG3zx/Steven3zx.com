@@ -14,7 +14,7 @@
 | Big issues first; issues counted by stage | Dalio, 2.2e and 2.6a "identify at which step you typically fail" |
 | A principle is shown again at its stage; a rule broken twice is flagged | Six Sigma's Control step |
 | `predict` with a confidence, then `result`; your record against your confidence | The scientific method; Dalio's believability, applied to yourself |
-| `log`, `spec`, `stats`: control limits, defects, sigma level | Six Sigma (DMAIC); Shewhart's control charts |
+| `log`, `spec`, `stats`: control limits and defects against a spec | Shewhart's control charts; Six Sigma (DMAIC) |
 | `note`, `source`, `link`, `tags`; one thought per note; unlinked notes are flagged | Zettelkasten: slips, cross-references, a subject index |
 | The Prepare and Incubate stages | Graham Wallas, *The Art of Thought* (1926) |
 | Tend has no exit | Your brief: grown ideas are not abandoned |
@@ -26,7 +26,6 @@ Sources:
 - "Six Sigma", Wikipedia, https://en.wikipedia.org/wiki/Six_Sigma
 - "Zettelkasten", Wikipedia, https://en.wikipedia.org/wiki/Zettelkasten
 - "Leonardo da Vinci", Wikipedia, https://en.wikipedia.org/wiki/Leonardo_da_Vinci
-- Peter J. Acklam's algorithm for the inverse normal distribution, used for the sigma level.
 
 ## How it improves itself
 
@@ -37,7 +36,7 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 ## Known weak points
 
 - **The limits are guesses.** 14 days idle for an idea in Build, 30 days for a grown idea, 14 days unused for a shipped idea, 30 days for an unchecked prediction, 3 ideas in Build, a 7-day commitment: none has been tested by use. They sit together at the top of `src/Review.cs`. Change one when a logged issue says to.
-- **The sigma level uses the 1.5 shift**, which the Six Sigma article itself reports as criticised for being arbitrary. vinci gives no sigma level below 30 measurements (`MinForSigmaLevel` in `src/Stats.cs`). Trust the control limits over the sigma level.
+- **Control limits are a guess at the noise.** 2.66 average steps is the textbook factor for single measurements, but the limit is only as good as the data behind it. Read a special cause as a prompt to look, not a verdict.
 - **Six Sigma is for the steady parts.** It reduces variation, which helps a habit or a shipped thing and hurts early exploration. Apply `spec` to what you tend, not to what you are still inventing.
 
 ## What was left out on purpose

@@ -16,7 +16,7 @@ The only NuGet package in the program is `Neo4j.Driver`, used by `vinci memory`.
 | `src/Memory/` | `vinci memory`: the Neo4j store (`Neo4jStore.cs`), recall and ranking (`Retrieval.cs`), the API (`Service.cs`), the worker (`Worker.cs`), the MCP server (`Mcp.cs`), the Codex hook (`Hook.cs`), the audit log (`Audit.cs`), the web pages (`Pages/`), and the benchmarks (`Evaluation/`) |
 | `src/Chat/` | `vinci` and `vinci chat`: the conversation (`Conversation.cs`), the model client (`OpenAiChat.cs`), the tools (`Tools.cs`), the memory API (`MemoryApi.cs`), and the journal-to-memory sync (`JournalSync.cs`) |
 | `src/Review.cs` | The findings, the limits, and what to do next |
-| `src/Stats.cs` | Control limits and sigma level |
+| `src/Stats.cs` | Control limits |
 | `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch |
 | `deploy/portal.service` | The systemd user unit that runs `vinci serve` |
 | `deploy/memory.service`, `deploy/memory-worker.service` | The systemd user units for `vinci memory serve` and `worker` |

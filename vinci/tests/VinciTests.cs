@@ -868,19 +868,12 @@ public sealed class VinciTests : IDisposable
     }
 
     [Fact]
-    public void A_sigma_level_is_only_given_once_there_is_enough_data()
+    public void A_spec_counts_the_measurements_outside_it()
     {
         Run("spec", "sleep", "7", "9");
-        for (var n = 0; n < 29; n++)
-            Run("log", "sleep", n < 3 ? "5" : "8");
-        Assert.Contains(
-            "3 of 29 outside, too few to give a sigma level (29 of 30)",
-            Run("stats", "sleep")
-        );
-
+        Run("log", "sleep", "5");
         Run("log", "sleep", "8");
-        // 3 of 30 is a 90% yield: 1.28 sigma, plus the 1.5 shift.
-        Assert.Contains("3 of 30 outside, sigma level 2.8", Run("stats", "sleep"));
+        Assert.Contains("spec     7 .. 9: 1 of 2 outside", Run("stats", "sleep"));
     }
 
     [Fact]
@@ -890,17 +883,6 @@ public sealed class VinciTests : IDisposable
         Wait(TimeSpan.FromDays(20));
         Run("log", "i1", "3");
         Assert.Contains("i1     untouched for 20d0h", Run("review"));
-    }
-
-    [Theory]
-    [InlineData(3.4, 6.0)]
-    [InlineData(233, 5.0)]
-    [InlineData(6210, 4.0)]
-    [InlineData(66807, 3.0)]
-    [InlineData(308538, 2.0)]
-    public void Sigma_levels_match_the_published_table(double defectsPerMillion, double sigma)
-    {
-        Assert.Equal(sigma, Stats.NormalQuantile(1 - defectsPerMillion / 1e6) + 1.5, 2);
     }
 
     [Fact]

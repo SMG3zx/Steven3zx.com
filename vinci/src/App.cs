@@ -1079,14 +1079,8 @@ public sealed class Session(
         if (m.Spec is var (lo, hi))
         {
             var defects = values.Count(v => v < lo || v > hi);
-            var sigma = Stats.SigmaLevel(defects, values.Count);
-            var level =
-                values.Count < Stats.MinForSigmaLevel
-                    ? $"too few to give a sigma level ({values.Count} of {Stats.MinForSigmaLevel})"
-                : double.IsPositiveInfinity(sigma) ? "no defects yet"
-                : $"sigma level {sigma:0.0}";
             o.WriteLine(
-                $"spec     {Text.Num(lo)} .. {Text.Num(hi)}: {defects} of {values.Count} outside, {level}"
+                $"spec     {Text.Num(lo)} .. {Text.Num(hi)}: {defects} of {values.Count} outside"
             );
         }
         else
@@ -1341,7 +1335,7 @@ public sealed class Session(
         Measurement
           log <metric> <value> ["comment"]    measure anything
           spec <metric> <low> <high>          what counts as good
-          stats [metric]                      control limits, defects, sigma level
+          stats [metric]                      control limits, and defects against a spec
 
         Improvement
           issue "what went wrong" [idea] [big] [principle that failed]
