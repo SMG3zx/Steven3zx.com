@@ -286,6 +286,26 @@ public static class Json
 /// Settings come from the environment, as they did before the port.
 public static class Env
 {
+    /// Reads KEY=VALUE lines from a settings file into the process environment, for
+    /// names that are not set already. The file is optional; comments and blank lines are skipped.
+    public static void LoadFile(string path)
+    {
+        if (!File.Exists(path))
+            return;
+        foreach (var raw in File.ReadLines(path))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+            var at = line.IndexOf('=');
+            if (at <= 0)
+                continue;
+            var name = line[..at].Trim();
+            if (Environment.GetEnvironmentVariable(name) is null)
+                Environment.SetEnvironmentVariable(name, line[(at + 1)..].Trim());
+        }
+    }
+
     public static string? Get(string name) =>
         Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value : null;
 

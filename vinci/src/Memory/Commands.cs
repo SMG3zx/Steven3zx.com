@@ -9,6 +9,28 @@ namespace Vinci.Memory;
 /// database and run for a long time instead of answering and exiting.
 public static class MemoryCommands
 {
+    /// The REST API and web pages, until `stop` is cancelled.
+    public static async Task ServeAsync(CancellationToken stop, TextWriter output)
+    {
+        if (MemoryServer.Production && Env.Get("MEMORY_API_KEY") is null)
+            throw new InvalidOperationException("MEMORY_API_KEY is required in production");
+        await using var store = new Neo4jStore();
+        var audit = new AuditRegistry();
+        audit.Load();
+        using var codex = new CodexAppServerClient();
+        await store.EnsureSchema();
+        await new MemoryServer(
+            new MemoryService(store, audit, new MetricsRegistry(), codex, Consolidation.Create())
+        ).Run(stop, output);
+    }
+
+    /// The consolidation worker, until `stop` is cancelled.
+    public static async Task WorkAsync(CancellationToken stop, TextWriter output)
+    {
+        await using var store = new Neo4jStore();
+        await new ConsolidationWorker(store, Consolidation.Create()).Run(stop, output);
+    }
+
     public const string Help = """
         vinci memory: durable memory for agents, kept in Neo4j.
 
@@ -66,33 +88,10 @@ public static class MemoryCommands
                     ).Run(input, output, stop.Token);
                     return 0;
                 case ["serve"]:
-                    if (MemoryServer.Production && Env.Get("MEMORY_API_KEY") is null)
-                        throw new InvalidOperationException(
-                            "MEMORY_API_KEY is required in production"
-                        );
-                    await using (var store = new Neo4jStore())
-                    {
-                        var audit = new AuditRegistry();
-                        audit.Load();
-                        using var codex = new CodexAppServerClient();
-                        await store.EnsureSchema();
-                        await new MemoryServer(
-                            new MemoryService(
-                                store,
-                                audit,
-                                new MetricsRegistry(),
-                                codex,
-                                Consolidation.Create()
-                            )
-                        ).Run(stop.Token, output);
-                    }
+                    await ServeAsync(stop.Token, output);
                     return 0;
                 case ["worker"]:
-                    await using (var store = new Neo4jStore())
-                        await new ConsolidationWorker(store, Consolidation.Create()).Run(
-                            stop.Token,
-                            output
-                        );
+                    await WorkAsync(stop.Token, output);
                     return 0;
                 case ["hook"]:
                     await CodexHook

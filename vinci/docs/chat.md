@@ -44,6 +44,7 @@ Settings, all optional:
 - `CHAT_MODEL`: default `swift-qwen3.8-27b` (the `--alias` of the chat unit)
 - `CHAT_THINK=1`: let the model reason before it answers (slower, and not needed for journal work)
 - `CHAT_HISTORY_CHARS`: how much recent conversation is sent each turn (default 24000 characters)
-- `MEMORY_API_URL` and `MEMORY_API_KEY`: the memory service
+- `MEMORY_API_URL` and `MEMORY_API_KEY`: the memory service. If nothing answers at `MEMORY_API_URL` (default `http://127.0.0.1:4781`), `vinci` runs the memory API and its worker itself for as long as the chat runs. `MEMORY_EMBEDDED=0` turns that off.
+- `VINCI_ENV_FILE`: the settings file `vinci` reads at startup (default `~/.config/vinci/memory.env`). Variables already set in the environment win over it.
 
 See also `deploy/models/README.md`.

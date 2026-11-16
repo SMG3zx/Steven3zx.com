@@ -22,6 +22,8 @@ public static class ChatCommand
             Environment.GetEnvironmentVariable("CHAT_MODEL") ?? DefaultModel,
             think: Environment.GetEnvironmentVariable("CHAT_THINK") == "1"
         );
+        var memoryUrl = Environment.GetEnvironmentVariable("MEMORY_API_URL") ?? "http://127.0.0.1:4781";
+        await using var embeddedMemory = await Vinci.Memory.EmbeddedMemory.StartIfNeeded(memoryUrl, output, errors);
         var memory = MemoryApi.FromEnvironment();
         var tools = new ChatTools(runJournal, memory);
         var conversation = new Conversation(

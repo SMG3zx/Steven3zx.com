@@ -1,6 +1,16 @@
 using System.Globalization;
 using Vinci;
 
+// Settings for the memory system and the chat model. The same file the memory
+// service reads, so `vinci` and the service see the same configuration.
+Vinci.Memory.Env.LoadFile(
+    Environment.GetEnvironmentVariable("VINCI_ENV_FILE")
+        ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".config", "vinci", "memory.env"
+        )
+);
+
 var home = Environment.GetEnvironmentVariable("VINCI_HOME")
     ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".vinci");
 var activityWatch = Environment.GetEnvironmentVariable("VINCI_ACTIVITYWATCH")
