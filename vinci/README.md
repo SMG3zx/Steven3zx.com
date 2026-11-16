@@ -1,22 +1,22 @@
 # vinci
 
-A command-line tool that takes an idea from first thought to shipped work and keeps it alive afterwards. It also records what you know and where you learned it, what you predicted and whether you were right, how long you spend on each idea, and anything else about your life you choose to measure.
+Takes an idea from first thought to shipped work, and keeps it alive afterwards. It also records what you know and where you learned it, what you predicted and whether you were right, how long you spend on each idea, and anything else you choose to measure.
 
-It is written in C# on .NET 10. The journal commands need nothing else and keep all their data in one file; `vinci memory` is the one part that needs a database (Neo4j) and the one package, its driver. `vinci serve` shows your saved links, your projects' links and every local web page on one page. Time on each idea is counted for you from the windows you work in, using [ActivityWatch](https://activitywatch.net/).
+Written in C# on .NET 10. The journal commands need nothing else and keep all their data in one file. Only `vinci memory` needs a database (Neo4j).
 
 ## Install
 
 ```sh
 ./install.sh        # runs the tests, builds, and links ~/.local/bin/vinci
-vinci               # the pipeline and the one thing to do next
+vinci               # the pipeline and the one thing to do next (opens the chat)
 vinci help          # every command
 ```
 
 ## The one idea underneath
 
-Every fact is written once, with the time, to an append-only journal (`~/.vinci/journal.jsonl`). Nothing is edited or deleted. Everything vinci shows you is computed from that file each time it runs.
+Every fact is written once, with the time, to an append-only journal (`~/.vinci/journal.jsonl`). Nothing is edited or deleted. Everything vinci shows you is computed from that file each time it runs. Correct a fact by recording a new one.
 
-That one decision gives you several things without building them separately:
+That gives you, without separate features:
 
 - **Provenance.** Every fact has a date, and a note points at the source it came from.
 - **Time tracking.** Time in an idea's windows and each commit in its folder are facts too, written for you.
@@ -88,151 +88,7 @@ vinci review                                       # weekly
 vinci kept                                         # or: vinci missed "why"
 ```
 
-## Talking to vinci
-
-`vinci` with no command opens the chat. It is the way to do everything: the chat model (Qwen3-8B, run by Ollama) is in the conversation, and the journal, memory and recall are its tools. `vinci chat` does the same. `vinci pipeline` prints the stages on their own.
-
-```text
-you> Make an idea called Flying machine for one pilot.
-  · journal {"args":["idea","Flying machine"]}
-Created the idea "Flying machine" for one pilot.
-```
-
-The model replies with one JSON action when it needs a tool, and the harness runs it:
-
-| Tool | Does |
-| --- | --- |
-| `journal` | runs any journal command, the same code the command line runs |
-| `recall` | searches memory for lines about the question; the model cites them as `[type:id]` |
-| `remember` | saves a durable fact or preference |
-
-Each turn is checked. A citation that recall did not return this turn is flagged on the line below the answer. Each exchange is saved to memory, and each new journal fact is sent to memory once, under its journal id, so recall can find a note or a prediction by what it says.
-
-If the memory service is not running, the chat still works on the journal and says once that exchanges are not being saved.
-
-Setup, once:
-
-```sh
-ollama pull qwen3:8b && ollama pull qwen3-embedding:4b
-ollama create qwen3-8b-vinci -f deploy/models/qwen3-8b-vinci.Modelfile
-```
-
-Settings, all optional: `CHAT_BASE_URL` (default `http://127.0.0.1:11434`), `CHAT_MODEL` (default `qwen3-8b-vinci`), `CHAT_THINK=1` to let the model reason before it answers (slower, and not needed for journal work), `MEMORY_API_URL` and `MEMORY_API_KEY` for the memory service.
-
-## The machine writes down what it already knows
-
-There is no timer to start or stop, and you do not report that you worked. You say once where an idea lives:
-
-```sh
-vinci adopt ~/code/glider       # a folder that already exists becomes an idea, named after it
-vinci home i1 ~/code/glider     # or give an idea you already have a home
-```
-
-A home does two things.
-
-- **Editor windows count as time.** VS Code titles look like `Wing.cs - glider - Visual Studio Code`, so a home watches for `- glider -`. This works when the folder itself is what you opened. If you open a parent folder, the title names the parent, and you need a `watch` for a text that does appear.
-- **Commits count as work.** Each new commit that changes a file under the home is recorded as a `work` fact with its subject and hash. That keeps the idea from being flagged as untouched. A newly homed idea takes only its latest commit, so the journal learns when it was last worked on without copying its history. A commit goes to the deepest home that holds one of its files.
-
-For anything a home does not cover, watch for a text yourself:
-
-```sh
-vinci watch i1 "glider/README"         # work: time in this window counts for i1
-vinci watch i1 "Glider Simulator" use  # use: this window is the shipped thing on screen
-vinci watches                          # every watch in force
-vinci unwatch i1 "glider/README"
-```
-
-The text is matched, ignoring case, against the app name and the window title together. Open `http://localhost:5600` and look at the Timeline to see what your titles look like.
-
-A `use` watch records that you used what you shipped: at most one `used` fact a day, and only after a minute on screen and only once the idea has shipped. It never adds to the time worked.
-
-Every time vinci runs, it first asks ActivityWatch which windows had the focus since the last time, drops the time you were away from the keyboard, asks git for new commits, and writes the facts. So every command shows current totals. `vinci sync` prints what was just written.
-
-- **It lags a few minutes while you work.** The watcher only confirms you were present after its idle timeout (3 minutes), so vinci counts up to the last confirmed moment and picks up the rest next time. Nothing is lost.
-- **If ActivityWatch is not running**, vinci works as before and adds no time. ActivityWatch keeps its own record, so the time is added the next time both are up.
-- **Time away from the screen** is `vinci spent i1 <minutes>`.
-- **When several watches match one window**, the longest text wins, since it is the most specific.
-- **A Build idea with no home and no watch** is a finding in `vinci review`.
-
-### Setting up ActivityWatch
-
-On Wayland (Hyprland, Sway) use [awatcher](https://github.com/2e3s/awatcher), which bundles the ActivityWatch server with a window and idle watcher that work there:
-
-```sh
-yay -S awatcher-bundle-bin
-cp deploy/awatcher.service ~/.config/systemd/user/
-systemctl --user enable --now awatcher
-```
-
-vinci reads `http://127.0.0.1:5600`. Set `VINCI_ACTIVITYWATCH` to point it somewhere else.
-
-## The portal
-
-`vinci serve` is a page of your saved links on `http://127.0.0.1:4000`, with search, tag filters and a screenshot of each one. Three kinds of link appear on it.
-
-- **Bookmarks** are facts in the journal:
-
-  ```sh
-  vinci bookmark "Qwik Docs" https://qwik.dev/ "Official documentation" +docs +qwik
-  vinci bookmarks
-  vinci unbookmark b1
-  ```
-
-- **Project links.** A project lists its own links in a `portal.json` at its root, an array of `{ "title", "url", "description"?, "tags"? }`. vinci reads every tracked `portal.json` in each repository an idea lives in, so a new project's links appear once the file is committed. Entries without a title or an http address are skipped, and `cold-storage/` folders are never read.
-- **Local pages.** Any web page this machine is serving appears by itself, tagged `local`. vinci reads the listening ports from `/proc/net/tcp`, asks each one for its front page, and keeps those that answer with HTML. A scan is reused for 30 seconds, so a tool shows up within about a minute of starting. A saved link to the same port replaces the discovered one, and the portal does not list itself.
-
-The first link to a URL wins. Screenshots are taken in the background with headless Chromium the first time a link is shown, and kept in `previews/` beside the journal; until then a placeholder is shown. Delete a picture to have it taken again. Set `CHROMIUM` if the browser is not at `/usr/bin/chromium`.
-
-The page reads the journal on every request, so nothing needs restarting when a bookmark is added. To keep it running:
-
-```sh
-cp deploy/portal.service ~/.config/systemd/user/
-systemctl --user enable --now portal
-```
-
-`./install.sh` restarts that service so it runs the new build.
-
-## Memory for agents
-
-`vinci memory` is a durable memory for AI agents, kept apart from the journal because it needs a database and runs as long-lived processes. Agents save what happened as **events**, and a worker turns events into **memories**, **entities**, **claims** and **procedures** that all point back at the events they came from. Nothing is deleted: a memory is superseded, archived or retracted, and recall hides it. It was the separate `personal-memory` project, rewritten in C#.
-
-```sh
-docker compose -f deploy/memory/docker-compose.yml up -d    # Neo4j
-export NEO4J_URI=neo4j://127.0.0.1:7687 NEO4J_USERNAME=neo4j NEO4J_PASSWORD=change-me
-
-vinci memory serve        # REST API and web pages on http://127.0.0.1:4781
-vinci memory worker       # turns queued events into memories
-vinci memory mcp          # the tools for an agent, over standard input and output
-vinci memory hook         # what Codex runs on each prompt, tool use and reply
-vinci memory backup       # a snapshot of the whole graph
-vinci memory restore <snapshot.json>
-```
-
-`vinci memory help` lists the rest, and `deploy/memory/memory.env.example` lists every setting.
-
-**Recall** looks a question up three ways at once (words, meaning through an embedding service if you run one, and the graph around the entities it names), lets each vote by rank, and orders the result for the kind of question it is: *when* questions favour recent and historical memories, *how* questions favour procedures, *who* and *which* questions favour the graph. It answers `abstain` when the evidence does not contain the question's distinctive words, instead of guessing. `build_context` packs the evidence into a text block with a `[type:id]` marker on every line, and `/v1/answers/validate` checks that an answer cites only what was retrieved.
-
-**Connecting an agent.** The MCP server offers 15 tools (`remember_event`, `recall_memory`, `build_context`, `create_memory`, `retract_memory`, and so on). For Claude Code:
-
-```sh
-claude mcp add vinci-memory -- vinci memory mcp
-```
-
-To record every Codex prompt, tool use and reply, point Codex's `UserPromptSubmit`, `PostToolUse` and `Stop` hooks at `vinci memory hook`. If the API is down, the hook keeps what it could not send in `~/.vinci/codex-hook-spool.jsonl` and sends it with the next event.
-
-**Keeping it running:**
-
-```sh
-cp deploy/memory.service deploy/memory-worker.service ~/.config/systemd/user/
-mkdir -p ~/.config/vinci && cp deploy/memory/memory.env.example ~/.config/vinci/memory.env
-systemctl --user enable --now memory memory-worker
-```
-
-**Measuring it.** `vinci memory seed` writes a small fixed world and `vinci memory benchmark` asks it 15 questions (`BENCHMARK_STRICT=1` fails on any miss, so it can gate a change). `ablation` repeats that with each way of retrieving on its own, `simulate` plays an invented history that includes a deleted secret and an instruction hidden in an untrusted document, and `longmemeval` runs a LongMemEval file you have downloaded. All of them talk to the running API.
-
-**What changed in the port.** Cypher and routes are as they were. A clash with an earlier event of the same id now answers 409 instead of 500. The Codex hook sends the API key when one is set. The web pages are the originals, embedded in the program.
-
-## In a pipe
+## Using it from a shell
 
 Any quoted text can be `-`, which reads it from standard input:
 
@@ -250,76 +106,17 @@ jq -r 'select(.kind=="ship") | "\(.at[:10]) \(.text)"' "$(vinci path)"
 
 Errors go to standard error and the exit code is 1.
 
-## Where each part comes from
+## Where to read more
 
-| Part of vinci | Taken from |
+| Topic | Document |
 | --- | --- |
-| A requirement needs the name of who asked and a reason; `cut` deletes it | McNeill, *The Algorithm*, steps 1 and 2 |
-| Cycle time, touch time, `flow`, time per stage, and the slowest stage | McNeill, step 4: "a process can go only as quickly as its slowest step" |
-| At most 3 ideas in Build | McNeill's weekly meeting on "the two or three most pressing problems"; Dalio, "you can't have everything you want" |
-| `commit`, then `kept` or `missed` a week later | McNeill, ch. 8: "set an action plan and goal, and meet in a week" |
-| `for` and `used` | McNeill, ch. 7 (the customer's whole experience) and ch. 9 (eat your own dog food) |
-| A goal tied to a metric, checked on every measurement | Dalio, 2.5c "establish clear metrics"; Six Sigma's Verify step |
-| `issue`, then `diagnose`, then `principle`, in that order | Dalio, the 5-Step Process |
-| Big issues first; issues counted by stage | Dalio, 2.2e and 2.6a "identify at which step you typically fail" |
-| A principle is shown again at its stage; a rule broken twice is flagged | Six Sigma's Control step |
-| `predict` with a confidence, then `result`; your record against your confidence | The scientific method; Dalio's believability, applied to yourself |
-| `log`, `spec`, `stats`: control limits, defects, sigma level | Six Sigma (DMAIC); Shewhart's control charts |
-| `note`, `source`, `link`, `tags`; one thought per note; unlinked notes are flagged | Zettelkasten: slips, cross-references, a subject index |
-| The Prepare and Incubate stages | Graham Wallas, *The Art of Thought* (1926) |
-| Tend has no exit | Your brief: grown ideas are not abandoned |
-
-Sources:
-
-- Jon McNeill, *The Algorithm: The Hypergrowth Formula That Transformed Tesla, Lululemon, General Motors, and SpaceX*, Portfolio/Penguin, 2026.
-- Ray Dalio, *Principles: Life and Work*, Simon & Schuster, 2017.
-- "Six Sigma", Wikipedia, https://en.wikipedia.org/wiki/Six_Sigma
-- "Zettelkasten", Wikipedia, https://en.wikipedia.org/wiki/Zettelkasten
-- "Leonardo da Vinci", Wikipedia, https://en.wikipedia.org/wiki/Leonardo_da_Vinci
-- Peter J. Acklam's algorithm for the inverse normal distribution, used for the sigma level.
-
-## How it improves itself
-
-`vinci review` counts what is wrong and records the count as the metric `vinci.findings`. `vinci stats vinci.findings` then shows whether the system is getting healthier, using the same control chart as any other measurement.
-
-The software does not rewrite itself. Improvement is a loop you run: a finding becomes an issue, an issue gets a root cause, a root cause becomes a principle or a change to this code. Track vinci as an idea inside vinci and log its problems there.
-
-## Known weak points
-
-- **The limits are guesses.** 14 days idle, 30 days for a grown idea, 3 ideas in Build, a 7-day commitment: none has been tested by use. They sit together at the top of `src/Review.cs`. Change one when a logged issue says to.
-- **The sigma level uses the 1.5 shift**, which the Six Sigma article itself reports as criticised for being arbitrary. vinci gives no sigma level below 30 measurements. Trust the control limits over the sigma level.
-- **Six Sigma is for the steady parts.** It reduces variation, which helps a habit or a shipped thing and hurts early exploration. Apply `spec` to what you tend, not to what you are still inventing.
-
-## What was left out on purpose
-
-- **A database for the journal.** One file does the job. The journal never touches Neo4j; only `vinci memory` does.
-- **Editing and deleting facts.** Correct a fact by recording a new one.
-- **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
-- **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.
+| Talking to vinci in the chat, and its model setup | [docs/chat.md](docs/chat.md) |
+| Time and commits counted from your windows and folders; ActivityWatch setup | [docs/time-tracking.md](docs/time-tracking.md) |
+| The portal of saved, project and local links (`vinci serve`) | [docs/portal.md](docs/portal.md) |
+| Durable memory for AI agents (`vinci memory`) | [docs/memory.md](docs/memory.md) |
+| Where each part of the method comes from, how vinci improves itself, known weak points, what was left out on purpose | [docs/method.md](docs/method.md) |
+| Code map and tests | [docs/development.md](docs/development.md) |
 
 ## Privacy
 
 The journal holds personal data and lives outside this repository. Set `VINCI_HOME` to move it. Back it up yourself; it is plain text and works well in a private git repository.
-
-## Development
-
-```sh
-dotnet test tests
-```
-
-| File | Holds |
-| --- | --- |
-| `src/Journal.cs` | The event record and the append-only file |
-| `src/State.cs` | Rebuilding the current state from events |
-| `src/App.cs` | The commands and the stage gates |
-| `src/Tracker.cs` | Recording window time, commits and use, read from ActivityWatch and git |
-| `src/Portal.cs` | The portal: which links go on the page, how it is drawn, and the server |
-| `src/Memory/` | `vinci memory`: the Neo4j store (`Neo4jStore.cs`), recall and ranking (`Retrieval.cs`), the API (`Service.cs`), the worker (`Worker.cs`), the MCP server (`Mcp.cs`), the Codex hook (`Hook.cs`), the audit log (`Audit.cs`), the web pages (`Pages/`), and the benchmarks (`Evaluation/`) |
-| `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch |
-| `deploy/portal.service` | The systemd user unit that runs `vinci serve` |
-| `deploy/memory.service`, `deploy/memory-worker.service` | The systemd user units for `vinci memory serve` and `worker` |
-| `deploy/memory/` | The Neo4j compose file and the settings example |
-| `src/Chat/` | `vinci` and `vinci chat`: the conversation (`Conversation.cs`), the model client (`OllamaChat.cs`), the tools (`Tools.cs`), the memory API (`MemoryApi.cs`), and the journal-to-memory sync (`JournalSync.cs`) |
-| `deploy/models/` | The Modelfile that builds the chat model, and how to set up both models |
-| `src/Review.cs` | The findings, the limits, and what to do next |
-| `src/Stats.cs` | Control limits and sigma level |
