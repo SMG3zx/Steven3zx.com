@@ -1,6 +1,6 @@
 # vinci
 
-Takes an idea from first thought to shipped work, and keeps it alive afterwards. It also records what you know and where you learned it, what you predicted and whether you were right, how long you spend on each idea, and anything else you choose to measure.
+vinci is a general-purpose knowledge partner. It helps you learn, remember and act on what you know. Every fact it keeps has a date and a source, and every answer points to the evidence it used. It also records your predictions and how they turned out, and it helps turn ideas into shipped work when you want that.
 
 Written in C# on .NET 10. The journal commands need nothing else and keep all their data in one file. Only `vinci memory` needs a database (Neo4j).
 
@@ -38,7 +38,7 @@ Seed ──► Prepare ──► Incubate ──► Build ──► Tend
 | Build → Tend | You ship | |
 | Tend | No exit | Ship again, use it, tend it, or retire it with a reason |
 
-`vinci advance <idea>` moves an idea one stage and refuses if the gate is not met.
+`vinci advance <idea>` moves an idea one stage. If the gate is not met it says what is missing, and still moves: the gates are advice, and the choice is yours.
 
 `vinci` with no command prints the pipeline:
 

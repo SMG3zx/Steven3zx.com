@@ -109,32 +109,25 @@ public sealed class VinciTests : IDisposable
     // ---- the gates ----
 
     [Fact]
-    public void An_idea_cannot_skip_a_gate()
+    public void A_gate_advises_when_it_is_not_met_and_still_moves()
     {
         Run("idea", "Flying machine");
-        Assert.Contains("for nobody", Fail("advance", "i1"));
         Assert.Contains("ships from Build or Tend", Fail("ship", "i1", "a sketch"));
 
-        Run("for", "i1", "Leonardo");
-        Assert.Contains("no goal", Fail("advance", "i1"));
+        var seed = Run("advance", "i1");
+        Assert.Contains("Not ready: i1 is for nobody yet", seed);
+        Assert.Contains("Not ready: i1 has no goal", seed);
+        Assert.Contains("now in Prepare", seed);
 
-        Run("goal", "i1", "Carry one person 100 m", "distance", "at-least", "100");
-        Run("advance", "i1");
-        Assert.Contains("no notes", Fail("advance", "i1"));
+        var prepare = Run("advance", "i1");
+        Assert.Contains("Not ready: i1 has no notes", prepare);
+        Assert.Contains("Not ready: i1 has no requirements", prepare);
+        Assert.Contains("Not ready: i1 has no prediction", prepare);
+        Assert.Contains("i1 is incubating until", prepare);
 
-        Run("note", "Birds gain lift from the shape of the wing", "i1");
-        Assert.Contains("no requirements", Fail("advance", "i1"));
-
-        Run("req", "i1", "Lifts 80 kg", "Leonardo", "A person has to be on it");
-        Assert.Contains("no prediction", Fail("advance", "i1"));
-
-        Run("predict", "A 10 m wing lifts 80 kg", "70", "i1");
-        Run("advance", "i1", "2");
-        Wait(TimeSpan.FromDays(1));
-        Assert.Contains("Leave it alone", Fail("advance", "i1"));
-
-        Wait(TimeSpan.FromDays(1));
-        Assert.Contains("now in Build", Run("advance", "i1"));
+        var incubate = Run("advance", "i1");
+        Assert.Contains("Not ready: i1 is incubating until", incubate);
+        Assert.Contains("now in Build", incubate);
     }
 
     [Fact]
@@ -164,22 +157,21 @@ public sealed class VinciTests : IDisposable
             Run("cut", "r1", "Fixed wings glide; flapping is not the goal")
         );
 
-        Assert.Contains("no requirements", Fail("advance", "i1"));
+        Assert.Contains("Not ready: i1 has no requirements", Run("advance", "i1"));
         Assert.Contains("CUT Flaps like a bird", Run("show", "i1"));
     }
 
     [Fact]
-    public void Only_three_ideas_may_be_in_Build_at_once()
+    public void The_limit_of_three_ideas_in_Build_is_advice()
     {
         foreach (var n in new[] { 1, 2, 3 })
             GrowToBuild($"i{n}", $"Machine {n}");
         Prepare("i4", "Machine 4");
         Run("advance", "i4", "0");
 
-        Assert.Contains("3 ideas are already in Build (i1, i2, i3)", Fail("advance", "i4"));
-
-        Run("ship", "i2", "First model");
-        Assert.Contains("now in Build", Run("advance", "i4"));
+        var moved = Run("advance", "i4");
+        Assert.Contains("Not ready: 3 ideas are already in Build (i1, i2, i3)", moved);
+        Assert.Contains("i4 is now in Build", moved);
     }
 
     // ---- the goal ----

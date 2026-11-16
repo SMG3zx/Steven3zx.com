@@ -319,11 +319,11 @@ public sealed class Session(
         {
             case Stage.Seed:
                 if (idea.For is null)
-                    throw new UserError(
+                    Advise(
                         $"{idea.Id} is for nobody yet. Name who will use it: vinci for {idea.Id} \"...\""
                     );
                 if (idea.Goal is null)
-                    throw new UserError(
+                    Advise(
                         $"{idea.Id} has no goal. Set one with a number: vinci goal {idea.Id} \"...\" <metric> at-least <n>"
                     );
                 MoveTo(idea, Stage.Prepare);
@@ -334,15 +334,15 @@ public sealed class Session(
 
             case Stage.Prepare:
                 if (!s.NotesAbout(idea.Id).Any())
-                    throw new UserError(
+                    Advise(
                         $"{idea.Id} has no notes. Preparation is gathering what is known: vinci note \"...\" <source> {idea.Id}"
                     );
                 if (!s.Requirements.Exists(r => r.IdeaId == idea.Id && r.Live))
-                    throw new UserError(
+                    Advise(
                         $"{idea.Id} has no requirements. State what it must do, who says so, and why: vinci req {idea.Id} \"...\" \"name\" \"why\""
                     );
                 if (!s.Predictions.Exists(h => h.IdeaId == idea.Id))
-                    throw new UserError(
+                    Advise(
                         $"{idea.Id} has no prediction. Write down what you expect before you test it: vinci predict \"...\" <percent> {idea.Id}"
                     );
                 if (days < 0)
@@ -355,7 +355,7 @@ public sealed class Session(
 
             case Stage.Incubate:
                 if (now < idea.IncubateUntil)
-                    throw new UserError(
+                    Advise(
                         $"{idea.Id} is incubating until {Text.Day(idea.IncubateUntil.Value)}. Leave it alone."
                     );
                 var building = s
@@ -363,7 +363,7 @@ public sealed class Session(
                     .Select(i => i.Id)
                     .ToList();
                 if (building.Count >= Review.BuildLimit)
-                    throw new UserError(
+                    Advise(
                         $"{Review.BuildLimit} ideas are already in Build ({string.Join(", ", building)}). Ship or retire one first."
                     );
                 MoveTo(idea, Stage.Build);
@@ -386,6 +386,9 @@ public sealed class Session(
                 throw new UserError($"{idea.Id} is retired: {idea.RetiredWhy}");
         }
     }
+
+    /// A gate is advice, not a lock. The move still happens, and the reason is shown.
+    private void Advise(string text) => o.WriteLine($"Not ready: {text}");
 
     private void MoveTo(Idea idea, Stage stage)
     {
@@ -1297,7 +1300,7 @@ public sealed class Session(
           goal <idea> "goal" <metric> at-least <n> | at-most <n> | between <a> <b>
           req <idea> "text" "who" "why"       a requirement, who asked, the reason
           cut <req> "why"                     delete a requirement
-          advance <idea> [days]               pass the next gate (days: incubation, default 1)
+          advance <idea> [days]               pass the next gate, or say why not (days: incubation, default 1)
           ship <idea> "what"                  record something shipped
           used <idea> ["how it went"]         record that you used what you shipped
           tend <idea> "what"                  record upkeep on a grown idea
