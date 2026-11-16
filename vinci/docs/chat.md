@@ -15,6 +15,9 @@ The model replies with one JSON action when it needs a tool, and the harness run
 | `journal` | runs any journal command, the same code the command line runs |
 | `recall` | searches memory for lines about the question; the model cites them as `[type:id]` |
 | `remember` | saves a durable fact or preference |
+| `read` | saves a text file (`.txt`, `.md`) or a web page the person named, as a document with its passages, so recall can find them |
+
+Sources are attributed. A passage from a document is cited as `[chunk:id]` and carries the title and the path or address it was read from, with the date it was read. vinci lists those sources under the answer itself; the model never writes that list. A cited passage with no source is flagged, and the answer is not saved.
 
 Each turn is checked. A citation that recall did not return this turn is flagged on the line below the answer. Each exchange is saved to memory, and each new journal fact is sent to memory once, under its journal id, so recall can find a note or a prediction by what it says.
 

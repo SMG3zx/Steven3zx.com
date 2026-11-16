@@ -50,7 +50,11 @@ public static class ContextBuilder
             ];
             var sources =
                 provenance.Count > 0 ? $" | sources: {string.Join(", ", provenance)}" : "";
-            var line = $"[{Key(result)}] {Json.Str(result["content"])}{sources}";
+            var origin =
+                Json.Str(result["documentSource"]) is { Length: > 0 } place
+                    ? $" | from: \"{Json.Str(result["documentTitle"])}\" <{place}>"
+                    : "";
+            var line = $"[{Key(result)}] {Json.Str(result["content"])}{sources}{origin}";
             var separator = lines.Count > 0 ? 1 : 0;
             if (used + separator + line.Length > maxChars)
                 continue;

@@ -38,6 +38,7 @@ public sealed partial class Conversation(
             How to work:
             - For anything about their ideas, notes, sources, goals, predictions, metrics, commits or time, use the journal. Never guess what it holds.
             - For questions about the past, use recall first. Answer only from what recall returned, and cite each fact as [type:id] exactly as it appears there.
+            - Passages from documents carry a from field with their title and source. Cite them like any other fact. Do not write a sources list: vinci adds one from the from fields.
             - If recall finds nothing relevant, say you do not know. Do not fill the gap.
             - When the person states a durable fact or preference, save it with remember.
             - When asked to record or change something, do it with the journal, then say in one line what you recorded.
@@ -84,9 +85,28 @@ public sealed partial class Conversation(
                 $"  ! cites [{cited}], which recall did not return this turn"
             );
 
-        // An answer is stored only when it rests on recalled evidence. Otherwise the chat's own
-        // "I do not know" or wrong answer would be recalled later as if it were a fact.
-        var keepAnswer = citations.Count > 0 && unsourced.Count == 0;
+        // A passage from a document is cited with where it came from. The sources are read from
+        // the evidence the model saw and listed by vinci, never written by the model.
+        var origins = Origins(evidence.ToString());
+        var unattributed = citations
+            .Where(c => c.StartsWith("chunk:", StringComparison.Ordinal) && !origins.ContainsKey(c))
+            .ToList();
+        foreach (var cited in unattributed)
+            await output.WriteLineAsync(
+                $"  ! cites [{cited}], a passage with no source. The answer is not saved."
+            );
+        var listed = citations
+            .Where(origins.ContainsKey)
+            .Select(c => origins[c])
+            .Distinct()
+            .ToList();
+        if (listed.Count > 0)
+            answer += "\n\nSources:\n" + string.Join("\n", listed.Select(l => $"- {l}"));
+
+        // An answer is stored only when it rests on recalled evidence, and every passage it cites
+        // has a source. Otherwise the chat's own "I do not know" or wrong answer would be recalled
+        // later as if it were a fact.
+        var keepAnswer = citations.Count > 0 && unsourced.Count == 0 && unattributed.Count == 0;
         var saved = await Record(userText, keepAnswer ? answer : null);
         if (!keepAnswer && saved)
             await output.WriteLineAsync("  · answer not saved: it cites no recalled evidence");
@@ -199,4 +219,16 @@ public sealed partial class Conversation(
 
     [GeneratedRegex(@"\[([a-z_]+:[^\]\s]+)\]")]
     private static partial Regex Citation();
+
+    [GeneratedRegex("""\[(chunk:[^\]\s]+)\][^\n]*?\| from: "([^"\n]*)" <([^>\n]*)>""")]
+    private static partial Regex Origin();
+
+    /// Each passage the model was shown, with its title and source, by its citation.
+    public static Dictionary<string, string> Origins(string evidence)
+    {
+        var found = new Dictionary<string, string>();
+        foreach (Match m in Origin().Matches(evidence))
+            found.TryAdd(m.Groups[1].Value, $"\"{m.Groups[2].Value}\", {m.Groups[3].Value}");
+        return found;
+    }
 }

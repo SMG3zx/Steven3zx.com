@@ -314,4 +314,103 @@ public class ChatTests
             Directory.Delete(home, recursive: true);
         }
     }
+
+    [Fact]
+    public void Passages_keep_paragraphs_whole_and_cut_long_ones()
+    {
+        var passages = Reading.Passages("First paragraph.\n\n\nSecond one.\n\n" + new string('x', 2500));
+        Assert.Equal("First paragraph.\n\nSecond one.", passages[0]);
+        Assert.All(passages, p => Assert.True(p.Length <= Reading.PassageChars));
+        Assert.Equal(2500, passages.Skip(1).Sum(p => p.Length));
+        Assert.Empty(Reading.Passages("  \n\n  "));
+    }
+
+    [Fact]
+    public void A_web_page_becomes_its_text_and_its_title()
+    {
+        const string Html = "<html><head><title> Glider &amp; wing </title><style>p{}</style></head>"
+            + "<body><script>var x = 1;</script><p>Birds &quot;steer&quot; by shape.</p></body></html>";
+        Assert.Equal("Glider & wing", Reading.HtmlTitle(Html));
+        var text = Reading.FromHtml(Html);
+        Assert.DoesNotContain("var x", text);
+        Assert.DoesNotContain("p{}", text);
+        Assert.Contains("Birds \"steer\" by shape.", text);
+    }
+
+    [Fact]
+    public void The_origin_of_each_passage_is_read_from_the_evidence()
+    {
+        var origins = Conversation.Origins(
+            "[chunk:c1] Wings flap. | from: \"Notes\" <C:/notes.md (read 2026-11-15)>\n"
+                + "[event:e2] Something said.\n"
+        );
+        Assert.Equal(["chunk:c1"], origins.Keys);
+        Assert.Equal("\"Notes\", C:/notes.md (read 2026-11-15)", origins["chunk:c1"]);
+    }
+
+    [Fact]
+    public async Task A_cited_passage_is_listed_with_its_source_and_an_uncited_source_is_refused()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"vinci-read-{Guid.NewGuid():N}.md");
+        File.WriteAllText(path, "Birds steer by shifting weight.");
+        try
+        {
+            var script = new Script(
+                ("/chat/completions", Reply($$"""{"tool": "read", "path": "{{path.Replace("\\", "\\\\")}}"}""")),
+                ("/v1/documents", """{"id":"d1"}"""),
+                ("/v1/chunks", """{"id":"c1"}"""),
+                ("/chat/completions", Reply("""{"tool": "recall", "query": "birds steer"}""")),
+                ("/v1/context", $$"""{"context":"[chunk:c1] Birds steer by shifting weight. | from: \"{{Path.GetFileNameWithoutExtension(path)}}\" <{{path}} (read 2026-11-15)>"}"""),
+                ("/chat/completions", Reply("Birds steer by weight [chunk:c1].")),
+                ("/v1/conversations", """{"ok":true}""")
+            );
+            var memory = new MemoryApi("http://memory.test", null, script);
+            var conversation = new Conversation(
+                new OpenAiChat("http://chat.test", "m", false, script),
+                new ChatTools((args, output) => 0, memory),
+                memory,
+                "s1",
+                () => Now
+            );
+            using var console = new StringWriter();
+            var answer = await conversation.Turn("how do birds steer?", console);
+            Assert.Contains("Sources:\n- \"" + Path.GetFileNameWithoutExtension(path), answer);
+            Assert.Contains(", " + path + " (read 2026-11-15)", answer);
+            // The document was saved with its title and its source, and each passage with its order.
+            var document = JsonNode.Parse(script.Requests[1].Body)!;
+            Assert.Equal(path, Path.GetFullPath(document["source"]!.GetValue<string>()).Split(" (read")[0]);
+            Assert.Equal(0, JsonNode.Parse(script.Requests[2].Body)!["ordinal"]!.GetValue<int>());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task An_answer_that_cites_a_passage_with_no_source_is_not_kept()
+    {
+        var script = new Script(
+            ("/chat/completions", Reply("""{"tool": "recall", "query": "birds"}""")),
+            ("/v1/context", """{"context":"[chunk:c9] Birds steer by weight."}"""),
+            ("/chat/completions", Reply("Birds steer by weight [chunk:c9].")),
+            ("/v1/conversations", """{"ok":true}""")
+        );
+        var memory = new MemoryApi("http://memory.test", null, script);
+        var conversation = new Conversation(
+            new OpenAiChat("http://chat.test", "m", false, script),
+            new ChatTools((args, output) => 0, memory),
+            memory,
+            "s1",
+            () => Now
+        );
+        using var console = new StringWriter();
+        var answer = await conversation.Turn("how do birds steer?", console);
+        Assert.DoesNotContain("Sources:", answer);
+        Assert.Contains("cites [chunk:c9], a passage with no source. The answer is not saved.", console.ToString());
+        // The question is recorded, but the answer is not: it would be remembered as a fact.
+        var recorded = JsonNode.Parse(script.Requests[3].Body)!["messages"]!.ToJsonString();
+        Assert.Contains("how do birds steer?", recorded);
+        Assert.DoesNotContain("Birds steer by weight", recorded);
+    }
 }

@@ -20,10 +20,12 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
     /// The tools as the model is told about them. No square brackets or quoted
     /// JSON inside the description text: the examples are in the actions below.
     public const string Instructions = """
-        You have three tools. To use one, reply with only a JSON object and nothing else:
+        You have four tools. To use one, reply with only a JSON object and nothing else:
         {"tool": "journal", "args": ["idea", "Flying machine"]}
         {"tool": "recall", "query": "what did I say about gliders"}
         {"tool": "remember", "content": "The person prefers short answers", "category": "preference"}
+        {"tool": "read", "path": "notes/glider.md"}
+        {"tool": "read", "url": "https://example.org/article"}
 
         journal runs one vinci command. Its args are the command word, then its arguments, one item each.
         To list things, use the plural word: ideas, notes, sources, predictions, issues, principles. show takes one id, such as i1.
@@ -33,6 +35,7 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
         issue, diagnose, principle, issues, principles, review, adopt, home, watch, unwatch, watches, sync, spent, path.
         recall searches memory of past conversations, notes and sources, and returns lines that each start with a type and an id.
         remember saves a durable fact about the person. Its category is one of fact, preference, decision, procedure, episode.
+        read saves a text file (.txt, .md) or a web page that the person named, so recall can find its passages. Use it only when the person gives you the path or the address. Each passage from recall comes with the title and source it came from, and vinci lists those sources under your answer.
         After a tool runs you will see its result. When you have what you need, reply in plain sentences instead of JSON.
         """;
 
@@ -45,7 +48,8 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
                 "journal" => Journal(arguments),
                 "recall" => Recall(arguments),
                 "remember" => Remember(arguments),
-                _ => $"error: there is no tool named {name}. Use journal, recall or remember.",
+                "read" => Read(arguments),
+                _ => $"error: there is no tool named {name}. Use journal, recall, remember or read.",
             };
             return text.Length <= ResultLimit ? text : text[..ResultLimit] + "\n…(cut)";
         }
@@ -99,6 +103,71 @@ public sealed class ChatTools(Func<string[], TextWriter, int> journal, MemoryApi
             .GetResult();
         var context = reply?["context"]?.GetValue<string>() ?? "";
         return context.Length > 0 ? context : "No memory matches that.";
+    }
+
+    private static readonly HttpClient Web = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    /// Saves a text file or a web page as a document, with its passages, so recall can find
+    /// them. The document keeps its title, its path or address, and the date it was read.
+    private string Read(JsonObject arguments)
+    {
+        var path = arguments["path"]?.GetValue<string>();
+        var url = arguments["url"]?.GetValue<string>();
+        if ((path is null) == (url is null))
+            throw new ArgumentException("read needs either a path or a url, not both");
+
+        string title,
+            locator,
+            text;
+        if (path is not null)
+        {
+            var full = Path.GetFullPath(path);
+            if (!Reading.IsTextFile(full))
+                throw new ArgumentException("only .txt, .md and .markdown files can be read for now");
+            if (!File.Exists(full))
+                throw new ArgumentException($"there is no file at {full}");
+            if (new FileInfo(full).Length > Reading.MaxBytes)
+                throw new ArgumentException("the file is larger than 1 MB");
+            (title, text, locator) = (Path.GetFileNameWithoutExtension(full), File.ReadAllText(full), full);
+        }
+        else
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+                throw new ArgumentException("the address must start with http:// or https://");
+            using var response = Web.GetAsync(uri).GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode)
+                throw new ArgumentException($"the page answered {(int)response.StatusCode}");
+            var media = response.Content.Headers.ContentType?.MediaType ?? "";
+            if (!media.StartsWith("text/", StringComparison.Ordinal))
+                throw new ArgumentException($"the page is {media}, not text");
+            var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (body.Length > Reading.MaxBytes)
+                throw new ArgumentException("the page is larger than 1 MB");
+            var isHtml = media == "text/html";
+            text = isHtml ? Reading.FromHtml(body) : body;
+            title = (isHtml ? Reading.HtmlTitle(body) : null) ?? uri.Host + uri.AbsolutePath;
+            locator = uri.AbsoluteUri;
+        }
+
+        var passages = Reading.Passages(text);
+        if (passages.Count == 0)
+            throw new ArgumentException("there is no text in it");
+        if (passages.Count > Reading.MaxPassages)
+            throw new ArgumentException($"it has {passages.Count} passages; the limit is {Reading.MaxPassages}");
+
+        var read = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var document = memory
+            .Post("/v1/documents", new { title, source = $"{locator} (read {read})" })
+            .GetAwaiter()
+            .GetResult();
+        var id = document?["id"]?.GetValue<string>()
+            ?? throw new MemoryUnavailable("memory did not return the document id");
+        for (var i = 0; i < passages.Count; i++)
+            memory
+                .Post("/v1/chunks", new { documentId = id, content = passages[i], ordinal = i })
+                .GetAwaiter()
+                .GetResult();
+        return $"read \"{title}\" from {locator} on {read}: {passages.Count} passages saved as document {id}. Ask recall about it to get the passages.";
     }
 
     private string Remember(JsonObject arguments)

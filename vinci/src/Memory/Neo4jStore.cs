@@ -1208,8 +1208,10 @@ public sealed partial class Neo4jStore : IAsyncDisposable
         "[{id: node.id, content: node.content}] AS evidence, score";
 
     private const string ChunkRow = """
+        OPTIONAL MATCH (document:Document)-[:HAS_CHUNK]->(node)
         RETURN 'chunk' AS type, node.id AS id, node.content AS content,
                'source_chunk' AS kind, null AS occurredAt, 'document' AS source,
+               document.title AS documentTitle, document.source AS documentSource,
                node.projectId AS projectId, 'active' AS status, null AS confidence,
                node.id AS sourceChunkId, [{id: node.id, content: node.content}] AS evidence, score
         ORDER BY score DESC LIMIT $limit
