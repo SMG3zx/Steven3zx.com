@@ -35,14 +35,12 @@ public sealed partial class MemoryService(
     Neo4jStore store,
     AuditRegistry audit,
     MetricsRegistry metrics,
-    CodexAppServerClient codex,
     IConsolidator consolidator
 )
 {
     private static readonly string[] Pages =
     [
         "/",
-        "/chat",
         "/ingest",
         "/sessions",
         "/imports",
@@ -55,8 +53,6 @@ public sealed partial class MemoryService(
 
     private readonly long maxBodyBytes = (long)Env.Number("MEMORY_MAX_BODY_BYTES", 4 * 1024 * 1024);
 
-    [GeneratedRegex("(tool|command|mcp|shell|function)", RegexOptions.IgnoreCase)]
-    private static partial Regex ToolWords();
 
     // ---- small helpers ----
 
@@ -406,8 +402,6 @@ public sealed partial class MemoryService(
                 || path.StartsWith("/v1/jobs", StringComparison.Ordinal)
             )
                 return AdminAuthorized(call) ? await Admin(call) : AdminAuthorizationFailure(call);
-            if (path.StartsWith("/v1/chat", StringComparison.Ordinal))
-                return await Chat(call);
             if (path.StartsWith("/v1/memories", StringComparison.Ordinal))
                 return await Memories(call);
 
@@ -1410,299 +1404,6 @@ public sealed partial class MemoryService(
         audit.Finish(run, Json.Clone(result));
         return Ok(With(result, "traceId", run.TraceId));
     }
-
-    // ---- chat ----
-
-    private async Task<Reply> Chat(Call call)
-    {
-        var (path, disabled) = (call.Path, Env.Get("CODEX_APP_SERVER_DISABLED") == "1");
-        const string Off = "Codex App Server integration is disabled";
-        if (path == "/v1/chat/auth" && call.Method == "GET")
-        {
-            if (disabled)
-                return Ok(Obj(("connected", false), ("disabled", true)));
-            try
-            {
-                return Ok(Obj(("connected", true), ("account", await codex.Account())));
-            }
-            catch (Exception e) when (e is not OutOfMemoryException)
-            {
-                return Ok(Obj(("connected", false), ("error", e.Message)), 503);
-            }
-        }
-        if (path == "/v1/chat/auth/start" && call.Method == "POST")
-        {
-            var login = audit.Start(
-                "auth.chatgpt_login",
-                "security",
-                Obj(("action", "begin_device_login")),
-                tags: ["auth", "chatgpt"]
-            );
-            if (disabled)
-            {
-                audit.Fail(login, Off);
-                return Error(503, Off, login.TraceId);
-            }
-            try
-            {
-                var result = await codex.BeginChatGPTLogin() as JsonObject ?? [];
-                audit.Finish(
-                    login,
-                    Obj(
-                        (
-                            "fields",
-                            new JsonArray([
-                                .. result
-                                    .Select(field => (JsonNode)field.Key)
-                                    .OrderBy(key => key.GetValue<string>(), StringComparer.Ordinal),
-                            ])
-                        )
-                    )
-                );
-                return Ok(With(result, "traceId", login.TraceId));
-            }
-            catch (Exception e) when (e is not OutOfMemoryException)
-            {
-                audit.Fail(login, e.Message);
-                return Error(503, e.Message, login.TraceId);
-            }
-        }
-        if (path != "/v1/chat" || call.Method != "POST")
-            return Error(404, "not found");
-        if (disabled)
-        {
-            var off = audit.Start(
-                "chat.turn",
-                "chain",
-                Obj(("integration", "codex"), ("disabled", true)),
-                tags: ["chat", "codex", "error"]
-            );
-            audit.Fail(off, Off);
-            return Error(503, Off, off.TraceId);
-        }
-
-        var body = Body(call);
-        var sessionId = Text(body, "sessionId") ?? "web-chat";
-        var memoryScope = Text(body, "memoryScope") ?? "session";
-        var captureTurn = body["captureTurn"]?.GetValueKind() != JsonValueKind.False;
-        var (userId, projectId, model) = (
-            Text(body, "userId"),
-            Text(body, "projectId"),
-            Text(body, "model") ?? Env.Get("CODEX_MODEL")
-        );
-        var trace = audit.Start(
-            "chat.turn",
-            "chain",
-            Obj(
-                ("messageChars", Json.Str(body["message"]).Length),
-                ("threadId", Copy(body["threadId"])),
-                ("sessionId", sessionId),
-                ("memoryScope", memoryScope),
-                ("captureTurn", captureTurn),
-                ("projectId", memoryScope == "project" ? projectId : null)
-            ),
-            Obj(("provider", "openai-codex"), ("model", model ?? "default")),
-            ["chat", "codex", "memory"]
-        );
-        string? problem =
-            Text(body, "message") is null ? "message is required"
-            : memoryScope is not ("session" or "project" or "global")
-                ? "memoryScope must be session, project, or global"
-            : memoryScope == "project" && projectId is null
-                ? "projectId is required for project memory scope"
-            : null;
-        if (problem is not null)
-        {
-            audit.Fail(trace, problem);
-            return Error(400, problem, trace.TraceId);
-        }
-        var message = Text(body, "message")!;
-        try
-        {
-            var question = Obj(("query", message), ("userId", userId), ("limit", 12));
-            if (memoryScope == "project")
-                question["projectId"] = projectId;
-            if (memoryScope == "session")
-                question["sessionId"] = sessionId;
-            var retrieval = await Retrieve(question, trace);
-            var context = ContextBuilder.Build(Results(retrieval["results"]), 12_000);
-            var modelRun = audit.Start(
-                "codex.turn",
-                "llm",
-                Obj(
-                    ("messageChars", message.Length),
-                    ("contextChars", context.Context.Length),
-                    ("evidenceCount", context.Results.Count)
-                ),
-                Obj(
-                    ("provider", "openai-codex"),
-                    ("model", model ?? "default"),
-                    ("citationLocked", context.CitationLocked)
-                ),
-                traceId: trace.TraceId,
-                parentRunId: trace.Id
-            );
-            var prompt = string.Join(
-                "\n\n",
-                "You are the private assistant for Personal Memory. Use the retrieved memory only when it is relevant. Do not invent facts. Cite retrieved claims using the exact [type:id] markers. If the evidence is insufficient, say so.",
-                "Retrieved memory:\n"
-                    + (context.Context.Length > 0 ? context.Context : "(no relevant memory found)"),
-                "User message:\n" + message
-            );
-            ChatResult result;
-            try
-            {
-                result = await codex.Chat(prompt, Text(body, "threadId"), model);
-            }
-            catch (Exception e)
-            {
-                audit.Fail(modelRun, e.Message);
-                throw;
-            }
-            RecordCodexToolRuns(result.Events, trace.TraceId, modelRun.Id);
-            audit.Finish(
-                modelRun,
-                Obj(("textChars", result.Text.Length)),
-                Obj(
-                    ("turnId", result.TurnId),
-                    ("eventCount", result.Events.Count),
-                    ("usage", Copy(result.Usage))
-                )
-            );
-
-            var validation = audit.Start(
-                "answers.validate",
-                "validation",
-                Obj(("answerChars", result.Text.Length), ("evidenceCount", context.Results.Count)),
-                traceId: trace.TraceId,
-                parentRunId: trace.Id
-            );
-            var citation =
-                context.Results.Count > 0
-                    ? Citations.Validate(result.Text, context.Results)
-                    : new CitationValidation(
-                        true,
-                        [],
-                        "No retrieved evidence was available; the response must not claim private-memory facts."
-                    );
-            audit.Finish(
-                validation,
-                Node(citation),
-                Obj(("citationLocked", context.CitationLocked))
-            );
-
-            var saved = captureTurn
-                ? await store.AppendEvents([
-                    new MemoryEvent
-                    {
-                        Kind = "user_message",
-                        Content = message,
-                        Source = "web-chat",
-                        UserId = userId,
-                        ProjectId = projectId,
-                        SessionId = sessionId,
-                    },
-                    new MemoryEvent
-                    {
-                        Kind = "agent_message",
-                        Content = result.Text,
-                        Source = "openai-codex",
-                        UserId = userId,
-                        ProjectId = projectId,
-                        SessionId = sessionId,
-                        Metadata = Obj(
-                            ("traceId", trace.TraceId),
-                            ("threadId", result.ThreadId),
-                            ("turnId", result.TurnId)
-                        ),
-                    },
-                ])
-                : [];
-            audit.Finish(
-                trace,
-                Obj(
-                    ("textChars", result.Text.Length),
-                    ("threadId", result.ThreadId),
-                    ("turnId", result.TurnId)
-                ),
-                Obj(
-                    (
-                        "citations",
-                        new JsonArray([
-                            .. context.Results.Select(item =>
-                                (JsonNode)Obj(
-                                    ("type", Copy(item["type"])),
-                                    ("id", Copy(item["id"])),
-                                    ("sourceEventIds", Copy(item["sourceEventIds"]))
-                                )
-                            ),
-                        ])
-                    ),
-                    ("citationValidation", Node(citation)),
-                    ("usage", Copy(result.Usage))
-                )
-            );
-            return Ok(
-                Obj(
-                    ("threadId", result.ThreadId),
-                    ("turnId", result.TurnId),
-                    ("text", result.Text),
-                    (
-                        "events",
-                        new JsonArray([.. result.Events.Select(e => (JsonNode)Json.Clone(e))])
-                    ),
-                    ("usage", Copy(result.Usage)),
-                    ("traceId", trace.TraceId),
-                    ("memory", Node(context)),
-                    ("citation", Node(citation)),
-                    ("captureTurn", captureTurn),
-                    ("savedEventIds", new JsonArray([.. saved.Select(e => Copy(e["id"]))]))
-                )
-            );
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            audit.Fail(trace, e.Message);
-            return Error(502, e.Message, trace.TraceId);
-        }
-    }
-
-    /// Each tool the model used during a turn gets its own run in the trace.
-    /// Only the names of its parameters are kept, never their values.
-    private void RecordCodexToolRuns(
-        IEnumerable<JsonObject> events,
-        string traceId,
-        string parentRunId
-    )
-    {
-        foreach (var e in events)
-        {
-            var method = Json.Str(e["method"]);
-            var parameters = e["params"] as JsonObject ?? [];
-            var itemType = Json.Str(
-                (parameters["item"] as JsonObject)?["type"] ?? parameters["type"]
-            );
-            if (!ToolWords().IsMatch($"{method} {itemType}"))
-                continue;
-            JsonArray Keys() =>
-                new([
-                    .. parameters
-                        .Select(field => field.Key)
-                        .Order(StringComparer.Ordinal)
-                        .Select(key => (JsonNode)key),
-                ]);
-            var run = audit.Start(
-                $"codex.{(itemType.Length > 0 ? itemType : method.Replace('/', '.'))}",
-                "tool",
-                Obj(("method", method), ("itemType", itemType), ("parameterKeys", Keys())),
-                Obj(("provider", "openai-codex"), ("event", method)),
-                ["codex", "tool"],
-                traceId,
-                parentRunId
-            );
-            audit.Finish(run, Obj(("parameterKeys", Keys()), ("itemType", itemType)));
-        }
-    }
 }
 
 /// The web pages, kept inside the program.
@@ -1711,7 +1412,6 @@ public static class MemoryPages
     private static readonly Dictionary<string, string> Files = new()
     {
         ["/"] = "audit",
-        ["/chat"] = "chat",
         ["/ingest"] = "ingest",
         ["/sessions"] = "sessions",
         ["/imports"] = "imports",

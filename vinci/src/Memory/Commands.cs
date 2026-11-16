@@ -17,10 +17,9 @@ public static class MemoryCommands
         await using var store = new Neo4jStore();
         var audit = new AuditRegistry();
         audit.Load();
-        using var codex = new CodexAppServerClient();
         await store.EnsureSchema();
         await new MemoryServer(
-            new MemoryService(store, audit, new MetricsRegistry(), codex, Consolidation.Create())
+            new MemoryService(store, audit, new MetricsRegistry(), Consolidation.Create())
         ).Run(stop, output);
     }
 

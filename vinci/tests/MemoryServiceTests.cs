@@ -228,7 +228,6 @@ public sealed class MemoryServiceTests : IAsyncLifetime
             store,
             audit,
             metrics,
-            new CodexAppServerClient(),
             new HeuristicConsolidator()
         );
     }
@@ -875,7 +874,6 @@ public sealed class MemoryServiceTests : IAsyncLifetime
             var page in new[]
             {
                 "/",
-                "/chat",
                 "/ingest",
                 "/sessions",
                 "/imports",
@@ -899,7 +897,6 @@ public sealed class MemoryServiceTests : IAsyncLifetime
             store,
             audit,
             metrics,
-            new CodexAppServerClient(),
             new HeuristicConsolidator()
         );
         var big = await tiny.Handle(
@@ -914,9 +911,6 @@ public sealed class MemoryServiceTests : IAsyncLifetime
             )
         );
         Assert.Equal(413, big.Status);
-        using var off = new Setting("CODEX_APP_SERVER_DISABLED", "1");
-        Assert.Equal(503, (await Send("POST", "/v1/chat", new { message = "hi" })).Status);
-        Assert.True((await Send("GET", "/v1/chat/auth")).Json!["disabled"]!.GetValue<bool>());
     }
 
     private sealed class Setting : IDisposable
