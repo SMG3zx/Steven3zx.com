@@ -9,7 +9,6 @@ export NEO4J_URI=neo4j://127.0.0.1:7687 NEO4J_USERNAME=neo4j NEO4J_PASSWORD=chan
 vinci memory serve        # REST API and status pages on http://127.0.0.1:4781
 vinci memory worker       # turns queued events into memories
 vinci memory mcp          # the tools for an agent, over standard input and output
-vinci memory hook         # what Codex runs on each prompt, tool use and reply
 vinci memory backup       # a snapshot of the whole graph
 vinci memory restore <snapshot.json>
 ```
@@ -24,8 +23,6 @@ vinci memory restore <snapshot.json>
 claude mcp add vinci-memory -- vinci memory mcp
 ```
 
-To record every Codex prompt, tool use and reply, point Codex's `UserPromptSubmit`, `PostToolUse` and `Stop` hooks at `vinci memory hook`. If the API is down, the hook keeps what it could not send in `~/.vinci/codex-hook-spool.jsonl` and sends it with the next event.
-
 **Keeping it running:**
 
 ```sh
@@ -36,4 +33,4 @@ systemctl --user enable --now memory memory-worker
 
 **Measuring it.** `vinci memory seed` writes a small fixed world and `vinci memory benchmark` asks it 15 questions (`BENCHMARK_STRICT=1` fails on any miss, so it can gate a change). `ablation` repeats that with each way of retrieving on its own, `simulate` plays an invented history that includes a deleted secret and an instruction hidden in an untrusted document, and `longmemeval` runs a LongMemEval file you have downloaded. All of them talk to the running API.
 
-**What changed in the port.** Cypher and routes are as they were. A clash with an earlier event of the same id now answers 409 instead of 500. The Codex hook sends the API key when one is set. The status pages are the originals, embedded in the program. Chat is the terminal `vinci` command, which talks to the llama-server model; the memory service no longer runs a web chat.
+**What changed in the port.** Cypher and routes are as they were. A clash with an earlier event of the same id now answers 409 instead of 500. The status pages are the originals, embedded in the program. Chat is the terminal `vinci` command, which talks to the llama-server model; the memory service no longer runs a web chat.

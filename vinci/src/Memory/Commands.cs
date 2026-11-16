@@ -37,8 +37,6 @@ public static class MemoryCommands
           worker     consolidates queued events into memories, reflects on sessions
           mcp        the tools for an agent, over standard input and output
                      (MEMORY_API_URL, MEMORY_API_KEY)
-          hook       what Codex runs on each prompt, tool use and reply: reads the event
-                     from standard input and saves it; failures never reach Codex
           backup     writes a snapshot of the whole graph to BACKUP_DIR (default ./backups)
           restore <snapshot.json>
                      writes a snapshot back. RESTORE_DRY_RUN=1 only checks it;
@@ -91,19 +89,6 @@ public static class MemoryCommands
                     return 0;
                 case ["worker"]:
                     await WorkAsync(stop.Token, output);
-                    return 0;
-                case ["hook"]:
-                    await CodexHook
-                        .FromEnvironment(
-                            Environment.GetEnvironmentVariable("VINCI_HOME")
-                                ?? Path.Combine(
-                                    Environment.GetFolderPath(
-                                        Environment.SpecialFolder.UserProfile
-                                    ),
-                                    ".vinci"
-                                )
-                        )
-                        .Run(input);
                     return 0;
                 case ["seed" or "benchmark" or "ablation" or "simulate" or "longmemeval"]:
                     return await Evaluate(args[0], output);

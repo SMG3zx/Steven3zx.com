@@ -112,7 +112,7 @@ public sealed class McpServer(HttpClient http, string apiUrl, string? apiKey)
         ),
         new(
             "remember_conversation",
-            "Persist an ordered Codex conversation with durable session and project provenance. Use this for real user, agent, and tool messages; it is separate from test or benchmark data. The result includes a traceId receipt.",
+            "Persist an ordered agent conversation with durable session and project provenance. Use this for real user, agent, and tool messages; it is separate from test or benchmark data. The result includes a traceId receipt.",
             Schema(
                 ["sessionId", "messages"],
                 ("sessionId", Prop("string")),
