@@ -325,7 +325,7 @@ public class OllamaModelTests
     public async Task Maps_tool_calls_and_results_to_the_native_api()
     {
         var h = new Capture(
-            """{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_file","arguments":{"path":"a"}}}]}}"""
+            """{"prompt_eval_count":42,"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_file","arguments":{"path":"a"}}}]}}"""
         );
         var model = new OllamaModel(
             new HttpClient(h) { BaseAddress = new("http://x/") },
@@ -348,6 +348,7 @@ public class OllamaModelTests
         Assert.Equal("read_file", call.Name);
         Assert.Equal("a", call.Input["path"]!.GetValue<string>());
 
+        Assert.Equal(42, reply.PromptTokens);
         var sent = System.Text.Json.Nodes.JsonNode.Parse(h.Body)!;
         Assert.False(sent["think"]!.GetValue<bool>());
         Assert.Equal("list_dir", sent["messages"]![3]!["tool_name"]!.GetValue<string>());

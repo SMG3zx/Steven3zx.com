@@ -17,7 +17,11 @@ public sealed record RunResult(
     IReadOnlyList<Message> Transcript,
     int Turns,
     bool Completed
-);
+)
+{
+    /// <summary>The largest prompt the model was given in this run, to spot context overflow.</summary>
+    public int MaxPromptTokens => Transcript.Max(m => m.PromptTokens);
+}
 
 /// <summary>Agent = frozen model + harness. The loop only calls the model, runs the tools it asks for, and repeats.</summary>
 public sealed class Agent(

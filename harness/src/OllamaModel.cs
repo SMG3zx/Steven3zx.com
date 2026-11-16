@@ -134,6 +134,10 @@ public sealed class OllamaModel(
                 new ToolUse($"call_{Guid.NewGuid():N}_{n++}", fn["name"]!.GetValue<string>(), args)
             );
         }
-        return new Message("assistant", blocks);
+        return new Message(
+            "assistant",
+            blocks,
+            JsonNode.Parse(text)!["prompt_eval_count"]?.GetValue<int>() ?? 0
+        );
     }
 }

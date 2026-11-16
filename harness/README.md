@@ -1,6 +1,6 @@
 # harness
 
-A C# agent harness modeled on [Harness²](https://harness2.github.io/): an agent is a frozen model plus an editable harness, and the harness can be improved by running the agent.
+A C# agent harness modeled on [Harness²](https://harness2.github.io/) and informed by [prime-agent](https://github.com/PrimeIntellect-ai/prime-agent): an agent is a frozen model plus an editable harness, and the harness can be improved by running the agent.
 
 ## Design
 
@@ -47,3 +47,11 @@ Measured with `qwen3:8b` on 40 random exercises, 3 samples each:
 The hand-written harness moved individual tasks a lot in both directions (7 better, 4 worse), so the benchmark does react to harness changes. But generic guardrails were a wash overall. Tasks the base harness never passes (about half) look bound by the model, so test harness changes on a random sample, never on those.
 
 The improver with an 8B proposer produced near-identical generic rules from every angle and did not beat the base harness. A stronger proposer model is the next thing to try.
+
+Context check: `scan` prints each run's peak prompt tokens and flags `OVERFLOW` near `HARNESS_NUM_CTX`. On 12 long runs of failing tasks, 11 peaked at 3k to 11k tokens and one reached 16.2k of 16.4k. Overflow does not explain the failures, so there is no compaction step.
+
+## Sources
+
+- [Harness²](https://harness2.github.io/) ([paper](https://arxiv.org/abs/2610.14224), [code](https://github.com/google-research/harness2)): the model-plus-editable-harness split, the eight components, and the two-level improvement loop (reference, propose, probe, compose, final, reflect, update the library).
+- [prime-agent](https://github.com/PrimeIntellect-ai/prime-agent) (Prime Intellect): the discipline of small, evidence-backed, reversible harness edits that leave the base prompt alone; context compaction; run budgets. Only the ideas are used here. Its recursive-language-model REPL, daemon sessions and integrations were deliberately left out.
+- [Exercism](https://github.com/exercism/python) (MIT): the Python practice exercises used as the benchmark.

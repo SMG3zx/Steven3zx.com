@@ -12,7 +12,8 @@ public sealed record ToolUse(string Id, string Name, JsonObject Input) : Block;
 
 public sealed record ToolResult(string ToolUseId, string Content, bool IsError) : Block;
 
-public sealed record Message(string Role, IReadOnlyList<Block> Content)
+/// <summary>PromptTokens is how many tokens the model read for this reply (0 when the provider does not say).</summary>
+public sealed record Message(string Role, IReadOnlyList<Block> Content, int PromptTokens = 0)
 {
     public string Text => string.Concat(Content.OfType<TextBlock>().Select(b => b.Text));
 }

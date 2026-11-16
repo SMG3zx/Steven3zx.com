@@ -34,6 +34,9 @@ if (args[0] == "import-exercism")
     return 0;
 }
 
+var NumCtx = int.TryParse(Environment.GetEnvironmentVariable("HARNESS_NUM_CTX"), out var ctxSize)
+    ? ctxSize
+    : 16384;
 IModel model =
     Environment.GetEnvironmentVariable("HARNESS_PROVIDER") == "anthropic"
         ? AnthropicModel.FromEnvironment()
@@ -60,6 +63,7 @@ if (args[0] == "scan")
         var task = HarnessTask.Load(f);
         var scores = new List<double>();
         var turns = new List<int>();
+        var peaks = new List<int>();
         var clock = Stopwatch.StartNew();
         for (var i = 0; i < samples; i++)
         {
@@ -77,11 +81,13 @@ if (args[0] == "scan")
                 ).RunAsync(task.Prompt);
                 scores.Add(task.Verify(ws).Score);
                 turns.Add(run.Turns);
+                peaks.Add(run.MaxPromptTokens);
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
             {
                 scores.Add(0);
                 turns.Add(0);
+                peaks.Add(0);
             }
             finally
             {
@@ -98,10 +104,11 @@ if (args[0] == "scan")
                 ["rate"] = rate,
                 ["scores"] = JsonSerializer.SerializeToNode(scores),
                 ["turns"] = JsonSerializer.SerializeToNode(turns),
+                ["peakTokens"] = JsonSerializer.SerializeToNode(peaks),
             }.ToJsonString() + "\n"
         );
         Console.WriteLine(
-            $"{task.Id, -34} {string.Join(" ", scores.Select(s => s >= 1 ? "P" : "."))}  turns {string.Join("/", turns)}  {clock.Elapsed.TotalSeconds:0}s"
+            $"{task.Id, -34} {string.Join(" ", scores.Select(s => s >= 1 ? "P" : "."))}  turns {string.Join("/", turns)}  ctx {string.Join("/", peaks)}{(peaks.Any(p => p >= NumCtx * 0.9) ? " OVERFLOW" : "")}  {clock.Elapsed.TotalSeconds:0}s"
         );
     }
     var always = rates.Count(r => r >= 1);
