@@ -1,6 +1,6 @@
 # Talking to vinci
 
-`vinci` with no command opens the chat. It is the way to do everything: the chat model (Qwen3-8B, run by Ollama) is in the conversation, and the journal, memory and recall are its tools. `vinci chat` does the same. `vinci pipeline` prints the stages on their own.
+`vinci` with no command opens the chat. It is the way to do everything: the chat model (Swift-Qwen3.8-27B, IQ3_XXS, served by llama-server) is in the conversation, and the journal, memory and recall are its tools. `vinci chat` does the same. `vinci pipeline` prints the stages on their own.
 
 ```text
 you> Make an idea called Flying machine for one pilot.
@@ -22,16 +22,28 @@ If the memory service is not running, the chat still works on the journal and sa
 
 ## Setup, once
 
+Two llama-server processes, both started by systemd user units in `deploy/llm/`:
+
+| Unit | Serves | Where | Port |
+| --- | --- | --- | --- |
+| `llama-chat.service` | Swift-Qwen3.8-27B IQ3_XXS, 32k context, `-ngl 60` | GPU (12 GB) | 8080 |
+| `llama-embed.service` | Qwen3-Embedding-4B, 2560 dimensions | CPU only (`-dev none`) | 8081 |
+
 ```sh
-ollama pull qwen3:8b && ollama pull qwen3-embedding:4b
-ollama create qwen3-8b-vinci -f deploy/models/qwen3-8b-vinci.Modelfile
+cp deploy/llm/*.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now llama-chat llama-embed
 ```
+
+The GGUF files live in `models/`. The chat settings are the ones `Swift-Qwen3.8-27B_GGUF.py` picked
+(see `tune_results/`). Re-tune there and update `ExecStart` if the hardware or the model changes.
 
 Settings, all optional:
 
-- `CHAT_BASE_URL`: default `http://127.0.0.1:11434`
-- `CHAT_MODEL`: default `qwen3-8b-vinci`
+- `CHAT_BASE_URL`: default `http://127.0.0.1:8080/v1`
+- `CHAT_MODEL`: default `swift-qwen3.8-27b` (the `--alias` of the chat unit)
 - `CHAT_THINK=1`: let the model reason before it answers (slower, and not needed for journal work)
+- `CHAT_HISTORY_CHARS`: how much recent conversation is sent each turn (default 24000 characters)
 - `MEMORY_API_URL` and `MEMORY_API_KEY`: the memory service
 
 See also `deploy/models/README.md`.

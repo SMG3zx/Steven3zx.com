@@ -4,15 +4,15 @@ using System.Text.Json.Nodes;
 
 namespace Vinci.Chat;
 
-/// The chat model, spoken through Ollama's native /api/chat. The native route
-/// is used because only it honours `think: false`, which keeps Qwen3 from
-/// reasoning on every turn.
+/// The chat model, spoken through the OpenAI-compatible /v1/chat/completions.
+/// llama-server (llama.cpp) serves this route, which is how the chat model runs
+/// now. The thinking switch goes in `chat_template_kwargs`, the llama.cpp way of
+/// passing `enable_thinking` to the Qwen3 chat template, so Qwen3 does not reason
+/// on every turn unless CHAT_THINK=1.
 ///
-/// Tools are not sent as native tool definitions: with Qwen3 on this Ollama
-/// build the model's tool calls were often dropped by the server's parser and
-/// the turn came back empty. The model writes its action as a JSON object in
-/// plain text instead, and the conversation reads it. See Conversation.
-public sealed class OllamaChat(
+/// Tools are not sent as native tool definitions. The model writes its action as
+/// a JSON object in plain text and the conversation reads it. See Conversation.
+public sealed class OpenAiChat(
     string baseUrl,
     string model,
     bool think,
@@ -33,10 +33,10 @@ public sealed class OllamaChat(
             ["model"] = model,
             ["messages"] = new JsonArray([.. messages.Select(m => (JsonNode)m.DeepClone())]),
             ["stream"] = false,
-            ["think"] = think,
+            ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = think },
         };
         using var reply = await http.PostAsJsonAsync(
-            $"{baseUrl.TrimEnd('/')}/api/chat",
+            $"{baseUrl.TrimEnd('/')}/chat/completions",
             body,
             Options
         );
@@ -46,6 +46,6 @@ public sealed class OllamaChat(
             );
         var root = await reply.Content.ReadFromJsonAsync<JsonObject>(Options)
             ?? throw new InvalidOperationException("chat model returned an empty reply");
-        return root["message"]?["content"]?.GetValue<string>() ?? "";
+        return root["choices"]?[0]?["message"]?["content"]?.GetValue<string>() ?? "";
     }
 }

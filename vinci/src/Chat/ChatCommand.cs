@@ -4,8 +4,8 @@ namespace Vinci.Chat;
 /// how everything else is done. The journal, memory and the rest are tools it calls.
 public static class ChatCommand
 {
-    public const string DefaultModel = "qwen3-8b-vinci";
-    public const string DefaultBaseUrl = "http://127.0.0.1:11434";
+    public const string DefaultModel = "swift-qwen3.8-27b";
+    public const string DefaultBaseUrl = "http://127.0.0.1:8080/v1";
 
     public static async Task<int> Run(
         Journal journal,
@@ -17,7 +17,7 @@ public static class ChatCommand
     )
     {
         var baseUrl = Environment.GetEnvironmentVariable("CHAT_BASE_URL") ?? DefaultBaseUrl;
-        var model = new OllamaChat(
+        var model = new OpenAiChat(
             baseUrl,
             Environment.GetEnvironmentVariable("CHAT_MODEL") ?? DefaultModel,
             think: Environment.GetEnvironmentVariable("CHAT_THINK") == "1"
@@ -86,7 +86,7 @@ public static class ChatCommand
             {
                 await errors.WriteLineAsync($"vinci: {e.Message}");
                 await errors.WriteLineAsync(
-                    $"The chat model is at {baseUrl}. Start it with: ollama serve, or set CHAT_BASE_URL."
+                    $"The chat model is at {baseUrl}. Start it with: systemctl --user start llama-chat, or set CHAT_BASE_URL."
                 );
                 return 1;
             }

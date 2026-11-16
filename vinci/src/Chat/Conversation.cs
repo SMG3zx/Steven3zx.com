@@ -10,7 +10,7 @@ namespace Vinci.Chat;
 /// returned this turn, and the exchange is written to memory so later
 /// questions can recall it.
 public sealed partial class Conversation(
-    OllamaChat model,
+    OpenAiChat model,
     ChatTools tools,
     MemoryApi memory,
     string sessionId,
@@ -19,8 +19,10 @@ public sealed partial class Conversation(
 {
     public const int MaxRounds = 6;
 
-    /// The part of the history sent each turn. Qwen3-8B runs with an 8k window, so older turns go first.
-    public const int HistoryChars = 9000;
+    /// The part of the history sent each turn, in characters. The chat model runs with a 32k
+    /// window (deploy/llm/llama-chat.service); the prefix that stays the same is cached by the
+    /// server, so a longer history costs little per turn. Older turns go first.
+    public static int HistoryChars => (int)Memory.Env.Number("CHAT_HISTORY_CHARS", 24_000);
 
     private readonly List<JsonObject> history = [];
     private int turn;

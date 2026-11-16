@@ -1,6 +1,0 @@
-# The chat and consolidation model for vinci.
-# Built from the stock qwen3:8b with a context window the memory pack fits in:
-# Ollama's default is far smaller, and the OpenAI-compatible endpoint cannot set it per request.
-FROM qwen3:8b
-PARAMETER num_ctx 8192
-PARAMETER temperature 0.4

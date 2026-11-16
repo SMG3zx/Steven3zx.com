@@ -1,0 +1,13 @@
+[Unit]
+Description=vinci chat model (Swift-Qwen3.8-27B IQ3_XXS, GPU, 32k context)
+After=network-online.target
+
+[Service]
+# The settings are the ones tune_swift picked; see tune_results/. Re-tune with
+# Swift-Qwen3.8-27B_GGUF.py and update ExecStart if the hardware or model changes.
+ExecStart=%h/src/llama.cpp/build/bin/llama-server -m %h/Steven3zx.com/vinci/models/Swift-Qwen3.8-27B-IQ3_XXS.gguf -ngl 60 -c 32768 -ctk q8_0 -ctv q8_0 -t 6 -b 2048 -ub 512 -np 1 --alias swift-qwen3.8-27b -lm none -fa on --host 127.0.0.1 --port 8080 --jinja --chat-template-kwargs '{"enable_thinking":false}' --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0 --presence-penalty 0 --repeat-penalty 1.0
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

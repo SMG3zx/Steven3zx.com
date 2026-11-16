@@ -24,8 +24,9 @@ public abstract class ProviderClient(string? baseUrl, HttpMessageHandler? handle
     }
 }
 
-/// Text to vectors, by POST /v1/embeddings (the OpenAI shape, which Ollama,
-/// llama.cpp and vLLM all serve). The default model is Qwen3-Embedding-4B.
+/// Text to vectors, by POST /v1/embeddings (the OpenAI shape, which llama-server,
+/// Ollama and vLLM all serve). The default model is Qwen3-Embedding-4B, served by
+/// llama-server on CPU (deploy/llm/llama-embed.service).
 /// A query is wrapped in an instruction so the model embeds it as a question
 /// rather than as a document; documents are embedded without one, as Qwen
 /// specifies for that model.
@@ -197,7 +198,7 @@ public sealed class FaithfulnessJudge(string? baseUrl = null, HttpMessageHandler
 /// State is "disabled", "ready", "reachable" (answers, but not healthy) or "unreachable".
 public sealed record ProviderStatus(bool Configured, string State, int? HttpStatus = null)
 {
-    /// `path` is what the service answers on. Ollama serves its OpenAI routes under /v1 and has no /health.
+    /// `path` is what the service answers on: llama-server and most others answer /health.
     public static async Task<ProviderStatus> Probe(
         string? baseUrl,
         int timeoutMs = 1500,

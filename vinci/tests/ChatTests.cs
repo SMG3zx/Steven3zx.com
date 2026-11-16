@@ -51,22 +51,22 @@ public class ChatTests
     private static readonly DateTimeOffset Now = new(2026, 11, 15, 9, 0, 0, TimeSpan.Zero);
 
     private static string Reply(string content) =>
-        JsonSerializer.Serialize(new { message = new { role = "assistant", content } });
+        JsonSerializer.Serialize(new { choices = new[] { new { message = new { role = "assistant", content } } } });
 
     [Fact]
     public async Task Chat_client_asks_for_no_thinking_and_returns_the_content()
     {
-        var script = new Script(("/api/chat", Reply("""{"tool": "pipeline"}""")));
-        var content = await new OllamaChat(
+        var script = new Script(("/chat/completions", Reply("""{"tool": "pipeline"}""")));
+        var content = await new OpenAiChat(
             "http://chat.test",
-            "qwen3-8b-vinci",
+            "swift-qwen3.8-27b",
             think: false,
             script
         ).Send([new JsonObject { ["role"] = "user", ["content"] = "hi" }]);
         Assert.Equal("""{"tool": "pipeline"}""", content);
         var sent = JsonNode.Parse(script.Requests[0].Body)!;
-        Assert.Equal("qwen3-8b-vinci", sent["model"]!.GetValue<string>());
-        Assert.False(sent["think"]!.GetValue<bool>());
+        Assert.Equal("swift-qwen3.8-27b", sent["model"]!.GetValue<string>());
+        Assert.False(sent["chat_template_kwargs"]!["enable_thinking"]!.GetValue<bool>());
         Assert.False(sent["stream"]!.GetValue<bool>());
         Assert.Null(sent["tools"]);
     }
@@ -104,8 +104,8 @@ public class ChatTests
     public async Task Conversation_runs_a_tool_then_answers_and_records_the_exchange()
     {
         var script = new Script(
-            ("/api/chat", Reply("""{"tool": "journal", "args": ["pipeline"]}""")),
-            ("/api/chat", Reply("Seed has 1 idea [event:e1].")),
+            ("/chat/completions", Reply("""{"tool": "journal", "args": ["pipeline"]}""")),
+            ("/chat/completions", Reply("Seed has 1 idea [event:e1].")),
             ("/v1/conversations", """{"ok":true}""")
         );
         var memory = new MemoryApi("http://memory.test", null, script);
@@ -118,7 +118,7 @@ public class ChatTests
             memory
         );
         var conversation = new Conversation(
-            new OllamaChat("http://chat.test", "m", false, script),
+            new OpenAiChat("http://chat.test", "m", false, script),
             tools,
             memory,
             "s1",
@@ -146,14 +146,14 @@ public class ChatTests
     public async Task A_citation_recall_returned_is_not_flagged()
     {
         var script = new Script(
-            ("/api/chat", Reply("""{"tool": "recall", "query": "gliders"}""")),
+            ("/chat/completions", Reply("""{"tool": "recall", "query": "gliders"}""")),
             ("/v1/context", """{"context":"[event:e1] A glider wing tore | sources: s1"}"""),
-            ("/api/chat", Reply("A wing tore [event:e1].")),
+            ("/chat/completions", Reply("A wing tore [event:e1].")),
             ("/v1/conversations", """{"ok":true}""")
         );
         var memory = new MemoryApi("http://memory.test", null, script);
         var conversation = new Conversation(
-            new OllamaChat("http://chat.test", "m", false, script),
+            new OpenAiChat("http://chat.test", "m", false, script),
             new ChatTools((a, o) => 0, memory),
             memory,
             "s3",
@@ -173,10 +173,10 @@ public class ChatTests
     [Fact]
     public async Task Conversation_keeps_answering_when_memory_is_down_and_says_so()
     {
-        var script = new Script(("/api/chat", Reply("Noted.")));
+        var script = new Script(("/chat/completions", Reply("Noted.")));
         var memory = new MemoryApi("http://127.0.0.1:1", null, new Refused());
         var conversation = new Conversation(
-            new OllamaChat("http://chat.test", "m", false, script),
+            new OpenAiChat("http://chat.test", "m", false, script),
             new ChatTools((a, o) => 0, memory),
             memory,
             "s2",
