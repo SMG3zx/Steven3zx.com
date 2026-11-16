@@ -26,3 +26,24 @@ dotnet test tests
 ## Not here
 
 The paper's benchmarks, sequential recursion, and per-component domain-invariant versus domain-specific scoping. Candidates see the library's lessons in prose; nothing merges them automatically.
+
+## Benchmark: Exercism (Python)
+
+`import-exercism` turns an Exercism track checkout into tasks (stub and tests in the workspace, instructions in `INSTRUCTIONS.md`, reference solution never copied). The score is whether the tests pass. Tests run under bubblewrap with no network, and the agent gets a `run_tests` tool.
+
+```
+git clone --depth 1 https://github.com/exercism/python /tmp/exercism-python
+dotnet run --project src -- import-exercism /tmp/exercism-python /tmp/ex-py     # 141 tasks
+dotnet run --project src -- scan /tmp/ex-py/tasks --limit 40 --samples 3 --turns 25
+```
+
+Measured with `qwen3:8b` on 40 random exercises, 3 samples each:
+
+| Harness | Mean pass | Notes |
+|---|---|---|
+| `examples/default-harness` | 42.5% | 14 tasks always pass, 19 never, 7 sometimes |
+| `examples/exercism-harness` (hand-written guardrails) | 45.0% | +2.5 points, SE 4.7: not significant |
+
+The hand-written harness moved individual tasks a lot in both directions (7 better, 4 worse), so the benchmark does react to harness changes. But generic guardrails were a wash overall. Tasks the base harness never passes (about half) look bound by the model, so test harness changes on a random sample, never on those.
+
+The improver with an 8B proposer produced near-identical generic rules from every angle and did not beat the base harness. A stronger proposer model is the next thing to try.
