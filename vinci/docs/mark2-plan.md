@@ -1,6 +1,6 @@
 # vinci mark 2
 
-Status: M0, M1 and M2 done (2026-11-16): continue in Mojo; the core runs in Mojo and matches the C# binary ([m2-results.md](m2-results.md)). M3 is next.
+Status: M0, M1 and M2 done (2026-11-16): continue in Mojo; the core runs in Mojo and matches the C# binary ([m2-results.md](m2-results.md)). M3 done (2026-11-17): the journal is the store of record and the Mojo index answers recall, with budgets ([m3-results.md](m3-results.md)). M4 is next.
 
 Mark 2 is three decisions and one direction:
 

@@ -397,3 +397,22 @@ Exact counts were checked on four questions at budgets 40, 100 and 180: llama-se
 - `open` on an id that names many facts (`i1` has 30) prints every one, each up to the cap. The total is not capped. The chat tool will need a cap across the whole output.
 - A pointer for a record over 100 characters can hide an expected string past character 100. `open <id>` reads it. The sweep scores the packed text as it is, so this costs a hit when it happens.
 - The handles are not used yet. Nothing writes to the table, and the C# tool still cuts at 4,000 characters.
+
+### Budget sweep (M3 step 3b)
+
+Step 3b of [the one-journal plan](plan-one-journal-one-index.md), phase 3, item 3: does budgeted recall keep **answer** accuracy while spending fewer tokens? Recall numbers (3a) do not answer that. The sweep sends each packed context and the question to the chat model, and judges the reply. This section is the method; the results are in [m3-results.md](m3-results.md).
+
+```sh
+cd mojo/py
+uv run python -m vinci_eval.budget_sweep --limit-questions 3 --out SCRATCH.jsonl   # smoke test
+uv run python -m vinci_eval.budget_sweep --set both                                # full run, resumable
+uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/budget-sweep-<date>.jsonl
+```
+
+- **Sets.** `lme`: the fixed 100 LongMemEval questions, configurations `baseline`, `b500w2`, `b1000w2`, `b1000w10`, `b2000w10`, `b3000w10`, `b5000w10` (`b<N>w<W>` is `vinci recall --budget N --whole W`; with `--whole 10` the packer fills whole records until the budget and turns the rest into pointers). Each question's index is `~/.vinci/eval/lme-index/<qid>.sqlite` (built by `lme_index_eval`, embeddings from the cache). `personal`: the 60 v2 questions on a temporary copy of the staging journal, index and docs, configurations `baseline`, `b100w2`, `b150w2`, `b250w2`, `b250w10`, `b500w10`. The staging home is only read.
+- **Configurations.** `baseline` is the unbudgeted top 10 with every record whole (`--budget 10000000 --whole 10`). A budget row is `vinci recall --budget N --whole W`. All use `--limit 10`. Context tokens are `ceil(bytes / 4)` for the baseline, and the binary's `packed_tokens` for a budget, which must match that estimator.
+- **Embeddings.** No embedding is computed. The base URL is closed, the LME runs use the same GPU label, cache and CPU corrective-query fallback as `lme_index_eval`, and the personal runs use the cache at `~/.vinci/index/embed-cache.sqlite`. A recall that needs an uncached vector exits non-zero, and that question is written as an error row.
+- **Answer.** The chat model on `127.0.0.1:8080` (the id comes from `/v1/models`), temperature 0, `max_tokens` 256, thinking off with `chat_template_kwargs`, and any `<think>` block stripped. The prompt is a short system prompt, the packed excerpts, the question date (LME only) and the question.
+- **Judge.** The same model, with LongMemEval's `evaluate_qa` prompts by question type, and the abstention prompt for ids ending in `_abs`. The prompts are reconstructed, since the LongMemEval repository is not on this machine. For personal questions the reference is the list of `expectedContains` strings, which the reply must state in any wording. Judging by the answering model is self-judging, so the summary says so.
+- **Output.** One JSON line per answer in `~/.vinci/eval/results/budget-sweep-<date>.jsonl`: configuration, question id, context tokens, prompt and completion tokens for the answer and the judge, the answer, the verdict, seconds for recall, answer and judge, and an `error` field. A rerun skips the keys that finished without an error, so an interrupted run resumes. Errors run again.
+- **Summary.** `--summary` prints a table per set (accuracy, correct/n, errors, mean and median context tokens, mean seconds, mean answer and judge seconds), and a per-type table for LongMemEval.
