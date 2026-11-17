@@ -1,6 +1,6 @@
 # vinci mark 2
 
-Status: M0 done, 2026-11-17. Recommended: continue in Mojo, waiting on your review. See [m0-results.md](m0-results.md). M1 is next.
+Status: M1 done, 2026-11-17: the baseline is in [memory.md](memory.md). M0's recommendation, continue in Mojo, still waits on your review. M2 is next.
 
 Mark 2 is three decisions and one direction:
 

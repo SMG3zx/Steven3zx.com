@@ -25,3 +25,5 @@ The only NuGet package in the program is `Neo4j.Driver`, used by `vinci memory`.
 | `docs/m0-results.md` | The results of mark 2's M0 phase: the calibration tasks, the stop conditions, and the phase estimates |
 | `docs/mojo-gotchas.md` | Mojo mistakes that agents make twice, with a correct snippet for each |
 | `mojo/` | The Mojo project: the pinned toolchain (`pyproject.toml`), the Makefile, the source and tests, `scripts/attempt.sh`, and the calibration tasks in `calibration/` |
+| `mojo/py/vinci_eval/` | The evaluation scripts: the LongMemEval subset (`lme_subset.py`) and reference baseline (`lme_baseline.py`), and the personal baseline (`personal_baseline.py`) |
+| `mojo/eval/` | The fixed LongMemEval subset ids (`longmemeval-subset.json`) |
