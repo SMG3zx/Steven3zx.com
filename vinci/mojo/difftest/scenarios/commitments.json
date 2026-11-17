@@ -1,0 +1,129 @@
+{
+  "description": "commit, kept, missed, the overdue commitment in review, and the commitment count.",
+  "start": {
+    "kind": "empty"
+  },
+  "steps": [
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "idea",
+        "Weekly thing"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "kept"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "missed",
+        "Nothing"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "commit",
+        "Build the frame",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "commit",
+        "Second one"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "kept"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "commit",
+        "Test the cloth",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:20:00+00:00",
+      "argv": [
+        "missed",
+        "Ran out of time"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:22:00+00:00",
+      "argv": [
+        "commit",
+        "Write the notes"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:24:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:26:00+00:00",
+      "argv": [
+        "missed",
+        "Overdue after a week"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:28:00+00:00",
+      "argv": [
+        "diagnose",
+        "x2",
+        "Planned too much"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:30:00+00:00",
+      "argv": [
+        "commit",
+        "Start small"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:32:00+00:00",
+      "argv": [
+        "kept"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:34:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-24T09:36:00+00:00",
+      "argv": [
+        "issues"
+      ]
+    }
+  ]
+}

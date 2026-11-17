@@ -1,0 +1,115 @@
+{
+  "description": "bookmark, unbookmark, bookmarks: tags, why, duplicate URL, bad scheme, missing and unknown ids.",
+  "start": {
+    "kind": "empty"
+  },
+  "steps": [
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "bookmarks"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "bookmark",
+        "Codex",
+        "https://example.org/codex",
+        "Reference scans",
+        "+history",
+        "+flight"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "bookmark",
+        "Glide notes",
+        "http://example.org/glide"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "bookmark",
+        "Same again",
+        "https://example.org/codex"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "bookmark",
+        "Not web",
+        "file:///etc/hosts"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "bookmark",
+        "Bare words",
+        "not a url"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "bookmark",
+        "Tags only",
+        "https://example.org/tags",
+        "+a",
+        "+b",
+        "why",
+        "text"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "bookmarks"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "unbookmark",
+        "b1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:20:00+00:00",
+      "argv": [
+        "unbookmark",
+        "b1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:22:00+00:00",
+      "argv": [
+        "bookmarks"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:24:00+00:00",
+      "argv": [
+        "bookmark",
+        "Second codex",
+        "https://example.org/codex2"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:26:00+00:00",
+      "argv": [
+        "unbookmark"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:28:00+00:00",
+      "argv": [
+        "bookmarks"
+      ]
+    }
+  ]
+}

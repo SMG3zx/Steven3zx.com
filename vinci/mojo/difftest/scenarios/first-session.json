@@ -1,0 +1,312 @@
+{
+  "description": "The README's 'A first session' end to end, then every read command on its data.",
+  "start": {
+    "kind": "empty"
+  },
+  "folders": [
+    "glider",
+    "canal"
+  ],
+  "steps": [
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "idea",
+        "Flying machine"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "for",
+        "i1",
+        "One pilot, launching from a hill"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "goal",
+        "i1",
+        "Carry one person 100 m",
+        "distance",
+        "at-least",
+        "100"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "advance",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "source",
+        "Leonardo da Vinci, Codex on the Flight of Birds, 1505"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "note",
+        "A bird steers by shifting its centre of gravity",
+        "s1:f.7v",
+        "i1",
+        "+flight"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "req",
+        "i1",
+        "Lifts 80 kg",
+        "Leonardo",
+        "A person has to be on it"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "predict",
+        "A 10 m wing lifts 80 kg",
+        "70",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "advance",
+        "i1",
+        "3"
+      ]
+    },
+    {
+      "now": "2026-11-19T09:20:00+00:00",
+      "argv": [
+        "advance",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-19T09:22:00+00:00",
+      "argv": [
+        "commit",
+        "Build the wing frame",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-19T09:24:00+00:00",
+      "argv": [
+        "home",
+        "i1",
+        "glider"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:26:00+00:00",
+      "argv": [
+        "ship",
+        "i1",
+        "Glider model"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:28:00+00:00",
+      "argv": [
+        "used",
+        "i1",
+        "Flew 20 m off the hill"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:30:00+00:00",
+      "argv": [
+        "log",
+        "distance",
+        "20"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:32:00+00:00",
+      "argv": [
+        "result",
+        "h1",
+        "wrong",
+        "Lifted 35 kg"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:34:00+00:00",
+      "argv": [
+        "note",
+        "Lift did not scale with span alone",
+        "h1"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:36:00+00:00",
+      "argv": [
+        "issue",
+        "Wing tore on the first test",
+        "i1",
+        "big"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:38:00+00:00",
+      "argv": [
+        "diagnose",
+        "x1",
+        "Never load-tested the cloth"
+      ]
+    },
+    {
+      "now": "2026-11-21T09:40:00+00:00",
+      "argv": [
+        "principle",
+        "Test each material alone before building with it",
+        "x1"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:42:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:44:00+00:00",
+      "argv": [
+        "kept"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:46:00+00:00",
+      "argv": [
+        "show",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:48:00+00:00",
+      "argv": [
+        "show",
+        "h1"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:50:00+00:00",
+      "argv": [
+        "show",
+        "s1"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:52:00+00:00",
+      "argv": [
+        "show",
+        "n1"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:54:00+00:00",
+      "argv": [
+        "show",
+        "x1"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:56:00+00:00",
+      "argv": [
+        "pipeline"
+      ]
+    },
+    {
+      "now": "2026-11-22T09:58:00+00:00",
+      "argv": [
+        "next"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:00:00+00:00",
+      "argv": [
+        "ideas"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:02:00+00:00",
+      "argv": [
+        "predictions"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:04:00+00:00",
+      "argv": [
+        "issues"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:06:00+00:00",
+      "argv": [
+        "principles"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:08:00+00:00",
+      "argv": [
+        "notes"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:10:00+00:00",
+      "argv": [
+        "notes",
+        "bird"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:12:00+00:00",
+      "argv": [
+        "notes",
+        "+flight"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:14:00+00:00",
+      "argv": [
+        "sources"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:16:00+00:00",
+      "argv": [
+        "tags"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:18:00+00:00",
+      "argv": [
+        "stats",
+        "distance"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:20:00+00:00",
+      "argv": [
+        "stats"
+      ]
+    },
+    {
+      "now": "2026-11-22T10:22:00+00:00",
+      "argv": [
+        "review"
+      ]
+    }
+  ]
+}

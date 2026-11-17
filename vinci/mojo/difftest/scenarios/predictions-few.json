@@ -1,0 +1,83 @@
+{
+  "description": "predictions with fewer than ten settled: 'Too few to judge'.",
+  "start": {
+    "kind": "empty"
+  },
+  "steps": [
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "idea",
+        "Tiny test"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "predict",
+        "Claim one",
+        "90",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "result",
+        "h1",
+        "right",
+        "Observed"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "predict",
+        "Claim two",
+        "40",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "result",
+        "h2",
+        "wrong",
+        "Observed"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "predict",
+        "Claim three",
+        "75",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "result",
+        "h3",
+        "right",
+        "Observed"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "predict",
+        "Still open",
+        "50"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "predictions"
+      ]
+    }
+  ]
+}

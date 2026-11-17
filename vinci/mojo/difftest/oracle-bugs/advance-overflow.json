@@ -1,0 +1,81 @@
+{
+  "description": "ORACLE BUG: advance by days past the DateTimeOffset range throws after appending the stage event; the journal is then poisoned.",
+  "start": {
+    "kind": "empty"
+  },
+  "steps": [
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "idea",
+        "Days overflow"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "for",
+        "i1",
+        "Someone"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "goal",
+        "i1",
+        "Goal",
+        "x",
+        "at-least",
+        "1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "advance",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "note",
+        "A note"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "req",
+        "i1",
+        "Req",
+        "Me",
+        "Why"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "predict",
+        "Claim",
+        "50",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "advance",
+        "i1",
+        "10000000"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "ideas"
+      ]
+    }
+  ]
+}

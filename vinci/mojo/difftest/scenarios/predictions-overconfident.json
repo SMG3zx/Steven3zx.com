@@ -1,0 +1,225 @@
+{
+  "description": "predictions verdict when confidence is well above the record.",
+  "start": {
+    "kind": "empty"
+  },
+  "steps": [
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "idea",
+        "Overconfident"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 0",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "result",
+        "h1",
+        "right",
+        "Outcome 0"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 1",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "result",
+        "h2",
+        "right",
+        "Outcome 1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 2",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "result",
+        "h3",
+        "right",
+        "Outcome 2"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 3",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "result",
+        "h4",
+        "wrong",
+        "Outcome 3"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:20:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 4",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:22:00+00:00",
+      "argv": [
+        "result",
+        "h5",
+        "wrong",
+        "Outcome 4"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:24:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 5",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:26:00+00:00",
+      "argv": [
+        "result",
+        "h6",
+        "wrong",
+        "Outcome 5"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:28:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 6",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:30:00+00:00",
+      "argv": [
+        "result",
+        "h7",
+        "wrong",
+        "Outcome 6"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:32:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 7",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:34:00+00:00",
+      "argv": [
+        "result",
+        "h8",
+        "wrong",
+        "Outcome 7"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:36:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 8",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:38:00+00:00",
+      "argv": [
+        "result",
+        "h9",
+        "wrong",
+        "Outcome 8"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:40:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 9",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:42:00+00:00",
+      "argv": [
+        "result",
+        "h10",
+        "wrong",
+        "Outcome 9"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:44:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 10",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:46:00+00:00",
+      "argv": [
+        "result",
+        "h11",
+        "wrong",
+        "Outcome 10"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:48:00+00:00",
+      "argv": [
+        "predict",
+        "Bold claim 11",
+        "90"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:50:00+00:00",
+      "argv": [
+        "result",
+        "h12",
+        "wrong",
+        "Outcome 11"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:52:00+00:00",
+      "argv": [
+        "predictions"
+      ]
+    }
+  ]
+}
