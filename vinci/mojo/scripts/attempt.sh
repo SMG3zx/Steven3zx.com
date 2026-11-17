@@ -87,8 +87,19 @@ seconds=$(awk -v a="$start" -v b="$end" 'BEGIN { printf "%.2f", b - a }')
 attempts="$task/attempts.jsonl"
 if [ -s "$attempts" ]; then n=$(($(wc -l < "$attempts") + 1)); else n=1; fi
 at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-# The stack-trace hint is noise, so it is skipped; the first Error line is the real one.
-first_error=$(grep -v 'stack trace was not collected' "$log" | grep -m1 -E 'Error|error|not formatted|no test_' || true)
+# first_error is the one line that says why the attempt failed, chosen in this order:
+# a compiler diagnostic, an unformatted file, a test failure, then the first line of the failing step.
+# Source lines that merely contain "Error" (an echoed `raise Error(...)`) do not count.
+# The stack-trace hint is noise, so it is skipped.
+first_error=""
+if [ "$pass" = false ]; then
+	filtered=$(grep -v 'stack trace was not collected' "$log" || true)
+	first_error=$(printf '%s\n' "$filtered" | grep -m1 -E ':[0-9]+:[0-9]+: error:' || true)
+	[ -n "$first_error" ] || first_error=$(printf '%s\n' "$filtered" | grep -m1 'not formatted' || true)
+	[ -n "$first_error" ] || first_error=$(printf '%s\n' "$filtered" | grep -m1 -E 'AssertionError|Unhandled exception|error:' || true)
+	# The failing step is the section after the last "== label" header.
+	[ -n "$first_error" ] || first_error=$(printf '%s\n' "$filtered" | awk '/^== /{found=""; seen=1; next} seen && found=="" && NF {found=$0} END {print found}')
+fi
 
 jq -cn --arg at "$at" --argjson n "$n" --argjson pass "$pass" \
 	--argjson seconds "$seconds" --arg first_error "$first_error" \
