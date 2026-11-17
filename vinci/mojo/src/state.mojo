@@ -285,6 +285,27 @@ struct Bookmark(Copyable, Movable):
 
 
 @fieldwise_init
+struct MemoryRecord(Copyable, Movable):
+    """A memory-kind line: remember, memory, read or exchange (docs/memory.md, "Journal kinds for memory (mark 2)").
+
+    The fold keeps these as plain lists for recall to read. No existing command reads them.
+    Fields follow the Event they came from: text, refs, value, who, why, url, where and tags.
+    """
+
+    var kind: String
+    var id: String
+    var at: Instant
+    var text: String
+    var refs: List[String]
+    var value: Optional[Float64]
+    var who: Optional[String]
+    var why: Optional[String]
+    var url: Optional[String]
+    var where_: Optional[String]
+    var tags: List[String]
+
+
+@fieldwise_init
 struct Metric(Copyable, Movable):
     var name: String
     var points: List[MetricPoint]
@@ -341,6 +362,8 @@ struct State(Movable):
     var commits: List[CommitKey]
     # Bookmarks ever made, kept or not, so an id is never used twice.
     var bookmarks_made: Int
+    # Memory-kind lines in journal order (see MemoryRecord). Nothing reads them yet.
+    var memory_records: List[MemoryRecord]
 
     def __init__(out self):
         self.ideas = List[Idea]()
@@ -358,6 +381,7 @@ struct State(Movable):
         self.synced_to = None
         self.commits = List[CommitKey]()
         self.bookmarks_made = 0
+        self.memory_records = List[MemoryRecord]()
 
     # ---- lookups: an index into the list, or -1 ----
 
@@ -792,6 +816,27 @@ struct State(Movable):
             var m = self.metric_or_new(FINDINGS_METRIC)
             self.metrics[m].points.append(
                 MetricPoint(at.copy(), required_value(e.value))
+            )
+        elif (
+            kind == "remember"
+            or kind == "memory"
+            or kind == "read"
+            or kind == "exchange"
+        ):
+            self.memory_records.append(
+                MemoryRecord(
+                    kind,
+                    id,
+                    at.copy(),
+                    text,
+                    refs.copy(),
+                    e.value.copy(),
+                    e.who.copy(),
+                    e.why.copy(),
+                    e.url.copy(),
+                    e.where_.copy(),
+                    e.tags.copy().or_else(List[String]()),
+                )
             )
         # "tend" changes nothing but when the idea was last touched.
         # Unknown kinds are skipped so an older build can read a newer journal.

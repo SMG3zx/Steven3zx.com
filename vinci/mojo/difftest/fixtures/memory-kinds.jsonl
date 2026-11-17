@@ -1,0 +1,7 @@
+{"at":"2026-11-16T08:00:00+00:00","kind":"idea","id":"i1","text":"Flying machine"}
+{"at":"2026-11-16T08:05:00+00:00","kind":"remember","id":"k1","text":"The sample pilot likes short flights","value":1,"tags":["preference"],"where":"neo4j:sample-memory-1"}
+{"at":"2026-11-16T08:10:00+00:00","kind":"read","id":"d1","text":"Sample page on wing shapes","url":"https://example.org/wings","where":"docs/0000000000000000000000000000000000000000000000000000000000000000.md"}
+{"at":"2026-11-16T08:15:00+00:00","kind":"exchange","id":"e1","text":"A made-up question about gliders","who":"user","why":"sample-session","where":"neo4j:sample-message-1","tags":["user_message"]}
+{"at":"2026-11-16T08:20:00+00:00","kind":"exchange","id":"e2","text":"A made-up answer about gliders","who":"assistant","why":"sample-session","where":"neo4j:sample-message-2","tags":["agent_message"]}
+{"at":"2026-11-16T08:25:00+00:00","kind":"memory","id":"m1","text":"A consolidated sample memory about wings","value":0.9,"refs":["e1","e2","i1"],"tags":["fact","active"],"where":"neo4j:sample-memory-2"}
+{"at":"2026-11-16T08:30:00+00:00","kind":"memory","id":"m2","text":"A retracted sample memory","value":1,"tags":["fact","retracted"],"where":"neo4j:sample-memory-3"}

@@ -1,0 +1,79 @@
+{
+  "description": "Synthetic remember, read, exchange and memory lines (docs/memory.md, mark 2) must be skipped by the fold the way the C# binary skips them, and the existing commands must agree.",
+  "start": {
+    "kind": "fixture",
+    "file": "fixtures/memory-kinds.jsonl"
+  },
+  "steps": [
+    {
+      "now": "2026-11-16T09:00:00+00:00",
+      "argv": [
+        "ideas"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:02:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:04:00+00:00",
+      "argv": [
+        "stats"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:06:00+00:00",
+      "argv": [
+        "pipeline"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:08:00+00:00",
+      "argv": [
+        "notes"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:10:00+00:00",
+      "argv": [
+        "show",
+        "i1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:12:00+00:00",
+      "argv": [
+        "idea",
+        "Second sample idea"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:14:00+00:00",
+      "argv": [
+        "show",
+        "i2"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:16:00+00:00",
+      "argv": [
+        "show",
+        "e1"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:18:00+00:00",
+      "argv": [
+        "review"
+      ]
+    },
+    {
+      "now": "2026-11-16T09:20:00+00:00",
+      "argv": [
+        "ideas"
+      ]
+    }
+  ]
+}

@@ -52,6 +52,13 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
       return q
   ```
 
+- **A `Dict` subscript raises.** `d[key]` and `d[key] = v` can raise, so a helper that uses them fails with "cannot call function that may raise in a context that cannot raise". It hit two helpers in one build. Mark the helper `raises`, or test `key in d` first and let the caller decide.
+  ```mojo
+  def append_to(mut d: Dict[String, List[String]], key: String, value: String) raises:
+      if key in d:
+          d[key].append(value)
+  ```
+
 ## Strings
 
 - **`strip()` and `split()` give a `StringSpan`, not a `String`.** Passing one to a `String` parameter fails with "cannot be converted from 'StringSpan'". Wrap it.

@@ -14,6 +14,7 @@ from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
 from cmd_ops import dispatch_ops
 from journal import Journal
+from memory_import import memory_import
 from session import (
     NOT_PORTED_PREFIX,
     USER_PREFIX,
@@ -153,6 +154,14 @@ def run() raises:
     if args[0] == "serve":
         raise not_ported("serve")
     if args[0] == "memory":
+        # Only `memory import` is in the port (memory_import.mojo). The rest stays not ported.
+        if len(args) > 1 and args[1] == "import":
+            var importing = Session(Journal(journal_path()), now.copy())
+            var import_args = List[String]()
+            for i in range(2, len(args)):
+                import_args.append(args[i])
+            memory_import(importing, import_args)
+            return
         raise not_ported("memory")
 
     var session = Session(Journal(journal_path()), now^)
