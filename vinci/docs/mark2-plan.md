@@ -81,7 +81,7 @@ Fall back to Python, and keep only the kernels in Mojo, if any of these holds af
 
 In order of cost. Each is measured on the calibration tasks before the next is added.
 
-1. **Pin the version** with pixi (`pixi.toml`) and update it on purpose, not by accident.
+1. **Pin the version** with uv and the PyPI `mojo` package, pinned exactly in `vinci/mojo/pyproject.toml`, and update it on purpose, not by accident.
 2. **Modular's own skills** (`mojo-skills@modular` in Claude Code) and the Mojo docs MCP server (`mojo-mcp.modular.com`) for the agents. This is development tooling, so local-only does not apply. Only vinci's data must stay local.
 3. **The compiler and tests in the loop.** `mojo build` and `mojo test` run in a hook after each edit, so an agent sees its errors immediately.
 4. **`docs/mojo-gotchas.md`**, kept the way vinci keeps principles: each mistake an agent makes twice becomes one line with a correct example, and agents read it first.
@@ -201,7 +201,7 @@ Each phase ends with a check. Agents do the work, and you review at each check.
 
 | Phase | Does | Done when |
 | --- | --- | --- |
-| **M0: the bet** | Install Mojo with pixi, Modular's skills and the docs MCP. Hooks for format, build, test and pyright. Three calibration tasks: read the journal and rebuild state; SQLite with FTS5; a SIMD cosine scan. Record first-try and third-try pass rates, time, and every gotcha. From those, estimate how long each later phase should take. | The stop conditions in section 2 are checked and written down: continue, or fall back to Python |
+| **M0: the bet** | Install Mojo with uv (the PyPI `mojo` package, pinned in `vinci/mojo/pyproject.toml`), Modular's skills and the docs MCP. Hooks for format, build, test and pyright. Three calibration tasks: read the journal and rebuild state; SQLite with FTS5; a SIMD cosine scan. Record first-try and third-try pass rates, time, and every gotcha. From those, estimate how long each later phase should take. | The stop conditions in section 2 are checked and written down: continue, or fall back to Python |
 | **M1: the gate** | Phase 0 of the memory plan: a harder personal set (about 60 questions), a fixed 100-question LongMemEval subset, and a baseline. Move `AUDIT_FILE` out of `/tmp`. | The baseline and dataset hashes are in `docs/memory.md` |
 | **M2: the core** | Journal, state, commands, review and stats in Mojo. A differential test against the C# binary on the real journal and on generated ones. | Every command's output matches C# |
 | **M3: memory** | Phases 1 to 3 of the memory plan in Mojo: new journal kinds, the index, recall, handles, `open`, the budget sweep. | At least the M1 baseline, with fewer tokens per answer |

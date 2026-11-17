@@ -1,21 +1,38 @@
 #!/bin/sh
-# Checks janus-go before a commit that stages its Go files: gofmt on those files,
-# then go vet on the whole module. Enable once per clone with:
+# Pre-commit checks, one function per project. Each function returns 0 when none of its
+# files are staged, so one project's early return cannot skip another project's check.
+# Enable once per clone with:
 #   git config core.hooksPath .githooks
 set -e
 
-staged=$(git diff --cached --name-only --diff-filter=ACM -- 'janus/janus-go/*.go')
-[ -n "$staged" ] || exit 0
-
 root=$(git rev-parse --show-toplevel)
-cd "$root/janus/janus-go"
 
-files=$(printf '%s\n' "$staged" | sed 's|^janus/janus-go/||')
-unformatted=$(printf '%s\n' "$files" | xargs gofmt -l)
-if [ -n "$unformatted" ]; then
-	echo "pre-commit: gofmt -w these files before committing:" >&2
-	echo "$unformatted" >&2
-	exit 1
-fi
+# janus-go: gofmt on the staged Go files, then go vet on the whole module.
+check_janus_go() {
+	staged=$(git diff --cached --name-only --diff-filter=ACM -- 'janus/janus-go/*.go')
+	[ -n "$staged" ] || return 0
 
-go vet ./...
+	cd "$root/janus/janus-go"
+
+	files=$(printf '%s\n' "$staged" | sed 's|^janus/janus-go/||')
+	unformatted=$(printf '%s\n' "$files" | xargs gofmt -l)
+	if [ -n "$unformatted" ]; then
+		echo "pre-commit: gofmt -w these files before committing:" >&2
+		echo "$unformatted" >&2
+		return 1
+	fi
+
+	go vet ./...
+}
+
+# vinci/mojo: format check, build, tests and the Python edge checks, all via `make check`.
+check_vinci_mojo() {
+	staged=$(git diff --cached --name-only --diff-filter=ACM -- 'vinci/mojo/')
+	[ -n "$staged" ] || return 0
+
+	echo "pre-commit: running make check in vinci/mojo" >&2
+	make -C "$root/vinci/mojo" check
+}
+
+check_janus_go
+check_vinci_mojo
