@@ -201,7 +201,7 @@ Each phase ends with a check. Agents do the work, and you review at each check.
 
 | Phase | Does | Done when |
 | --- | --- | --- |
-| **M0: the bet** | Install Mojo with pixi, Modular's skills and the docs MCP. Hooks for format, build, test and pyright. Three calibration tasks: read the journal and rebuild state; SQLite with FTS5; a SIMD cosine scan. Record first-try and third-try pass rates, time, and every gotcha. | The stop conditions in section 2 are checked and written down: continue, or fall back to Python |
+| **M0: the bet** | Install Mojo with pixi, Modular's skills and the docs MCP. Hooks for format, build, test and pyright. Three calibration tasks: read the journal and rebuild state; SQLite with FTS5; a SIMD cosine scan. Record first-try and third-try pass rates, time, and every gotcha. From those, estimate how long each later phase should take. | The stop conditions in section 2 are checked and written down: continue, or fall back to Python |
 | **M1: the gate** | Phase 0 of the memory plan: a harder personal set (about 60 questions), a fixed 100-question LongMemEval subset, and a baseline. Move `AUDIT_FILE` out of `/tmp`. | The baseline and dataset hashes are in `docs/memory.md` |
 | **M2: the core** | Journal, state, commands, review and stats in Mojo. A differential test against the C# binary on the real journal and on generated ones. | Every command's output matches C# |
 | **M3: memory** | Phases 1 to 3 of the memory plan in Mojo: new journal kinds, the index, recall, handles, `open`, the budget sweep. | At least the M1 baseline, with fewer tokens per answer |
