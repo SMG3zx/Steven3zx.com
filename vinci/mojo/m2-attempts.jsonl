@@ -26,3 +26,5 @@
 {"agent":"M3.3a","n":2,"pass":false,"first_error":"make: *** [Makefile:42: py-check] Error 1"}
 {"agent":"M3.3a","n":3,"pass":true,"first_error":""}
 {"agent":"M3.3a","n":4,"pass":true,"first_error":""}
+{"agent":"M3.3b","n":1,"pass":true,"first_error":""}
+{"agent":"M3.3b","n":2,"pass":true,"first_error":""}

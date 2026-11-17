@@ -259,3 +259,15 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   ```
 
 - **Check a hand-written expected value against the program before changing the code.** Five expectations in the new tests were wrong on the first run: a grep inside a range (the range limits the result), a fixture line padded with `x` (`line 12xxx`), a JSON quote written as `\"` where `json_string` gives `"`, and two word counts. Each was wrong in the expectation, not the code. Work the value out, then confirm it against the output before deciding the code is wrong.
+
+## Found in M3 step 3b (Python, twice-hit)
+
+- **Ruff flags a bare `except Exception` (BLE001) and an implicit string concatenation inside a list (ISC004).** The ISC004 rule fired twice in one module. Catch the exact errors (the recall, HTTP and parse failures), and wrap each concatenated string in parentheses.
+  ```python
+  lines = [
+      (
+          "| config | accuracy |"
+          " correct/n |"
+      ),
+  ]
+  ```
