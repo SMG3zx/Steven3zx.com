@@ -241,3 +241,21 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   def add(a: int, b: int) -> int:
       return a + b
   ```
+
+## Found in M3 step 3a (twice-hit)
+
+- **Format a file after its last edit, not before.** `mojo format` changes a file, so an edit made after it breaks `make fmt-check`, which compares a copy. Hit twice in one step: a one-line fix to `handles.mojo` failed the check, and a test file changed after it was formatted. Run `uv run mojo format <file>` on every touched file as the final step before `make check`.
+  ```sh
+  uv run mojo format src/handles.mojo tests/test_open.mojo   # last, after every edit
+  ```
+
+- **A `json.loads` value needs a cast before strict pyright.** The result is `Any`, so `raw.get(...)` and `len(tokens)` report "partially unknown" under `typeCheckingMode = "strict"`. The fix is to narrow with `isinstance`, then `cast` to the concrete type (as `index_eval.py` does).
+  ```python
+  reply = cast("dict[str, object]", raw)
+  tokens = reply.get("tokens")
+  if not isinstance(tokens, list):
+      raise TypeError("no tokens list")
+  return len(cast("list[object]", tokens))
+  ```
+
+- **Check a hand-written expected value against the program before changing the code.** Five expectations in the new tests were wrong on the first run: a grep inside a range (the range limits the result), a fixture line padded with `x` (`line 12xxx`), a JSON quote written as `\"` where `json_string` gives `"`, and two word counts. Each was wrong in the expectation, not the code. Work the value out, then confirm it against the output before deciding the code is wrong.

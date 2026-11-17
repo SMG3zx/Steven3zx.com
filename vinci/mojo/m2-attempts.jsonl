@@ -22,3 +22,7 @@
 {"agent":"M3.2b","n":6,"pass":true,"first_error":""}
 {"agent":"M3.2b","n":7,"pass":true,"first_error":""}
 {"agent":"M3.2b","n":8,"pass":true,"first_error":""}
+{"agent":"M3.3a","n":1,"pass":false,"first_error":"fmt-check: not formatted. Run 'make fmt' and commit the result:"}
+{"agent":"M3.3a","n":2,"pass":false,"first_error":"make: *** [Makefile:42: py-check] Error 1"}
+{"agent":"M3.3a","n":3,"pass":true,"first_error":""}
+{"agent":"M3.3a","n":4,"pass":true,"first_error":""}

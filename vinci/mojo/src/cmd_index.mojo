@@ -1,6 +1,7 @@
 # The index and recall commands: `vinci index rebuild|update|stats|load|embed` and
 # `vinci recall [--json] [--limit N] [--routes lexical,vector] [--index PATH]
-#  [--label L] [--base-url U] [--cache PATH] <query...>`.
+#  [--label L] [--base-url U] [--cache PATH] [--budget N [--whole N] [--tokenizer-url U]]
+#  <query...>`, and `vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]`.
 # None of them changes the journal. Index files live beside it, or at --index PATH.
 
 from std.pathlib import Path
@@ -9,16 +10,33 @@ from std.python import Python, PythonObject
 from dates import clock_now, today_of
 from embed_edge import EmbedConfig, default_config
 from fusion import Candidate
+from handles import lookup
 from index_build import BuildReport, load_records, update_from_journal
 from index_store import IndexStore
 from jsonline import format_json_double, json_string
+from open_view import (
+    build_view,
+    no_request,
+    parse_lines_arg,
+    render_json,
+    render_text,
+)
+from pack import (
+    DEFAULT_WHOLE,
+    METHOD_SERVER,
+    Counter,
+    Packed,
+    estimate_counter,
+    pack,
+)
 from recall import DEFAULT_ROUTES, Recall, Settings, recall
 from session import user_error
-from text import clip, pad_right
+from text import ascii_tail, clip, pad_right
 from vectors import embed_missing
 
 comptime INDEX_FILE = "index.sqlite"
 comptime DEFAULT_LIMIT = 10
+comptime OPEN_CAP_BYTES = 4000
 
 
 @fieldwise_init
@@ -34,6 +52,9 @@ struct Options(Movable):
     var model: Optional[String]
     var fallback_label: Optional[String]
     var fallback_url: Optional[String]
+    var budget: Optional[Int]
+    var whole: Int
+    var tokenizer_url: Optional[String]
 
 
 def join_path(dir: String, name: String) -> String:
@@ -56,6 +77,9 @@ def parse_options(args: List[String]) raises -> Options:
         None,
         None,
         None,
+        None,
+        DEFAULT_WHOLE,
+        None,
     )
     var i = 0
     while i < len(args):
@@ -72,6 +96,9 @@ def parse_options(args: List[String]) raises -> Options:
             or a == "--model"
             or a == "--query-fallback-label"
             or a == "--query-fallback-url"
+            or a == "--budget"
+            or a == "--whole"
+            or a == "--tokenizer-url"
         ):
             if i + 1 >= len(args):
                 raise user_error(a + " needs a value")
@@ -91,6 +118,22 @@ def parse_options(args: List[String]) raises -> Options:
                 opts.fallback_label = Optional[String](value)
             elif a == "--query-fallback-url":
                 opts.fallback_url = Optional[String](value)
+            elif a == "--tokenizer-url":
+                opts.tokenizer_url = Optional[String](value)
+            elif a == "--budget":
+                try:
+                    opts.budget = Optional[Int](Int(value))
+                except:
+                    raise user_error("--budget must be a whole number")
+                if opts.budget.value() < 1:
+                    raise user_error("--budget must be at least 1")
+            elif a == "--whole":
+                try:
+                    opts.whole = Int(value)
+                except:
+                    raise user_error("--whole must be a whole number")
+                if opts.whole < 0:
+                    raise user_error("--whole must be 0 or more")
             elif a == "--limit":
                 try:
                     opts.limit = Int(value)
@@ -266,9 +309,13 @@ def index_command(args: List[String], home: String, journal: String) raises:
     raise user_error("unknown index command '" + sub + "'")
 
 
-def recall_json(query: String, r: Recall) raises -> String:
+def recall_json(
+    query: String, r: Recall, packed: Optional[Packed]
+) raises -> String:
     """Results with content, abstain and its reason, and how the question was read.
-    personal_baseline and index_eval read results (content) and abstain."""
+    personal_baseline and index_eval read results (content) and abstain. With a budget,
+    the packed context, its tokens and how they were counted come after the results.
+    """
     var out = String('{"query":') + json_string(query)
     out += ',"route":' + json_string(r.route)
     out += ',"complexity":' + json_string(r.complexity)
@@ -317,7 +364,18 @@ def recall_json(query: String, r: Recall) raises -> String:
         if res.has_cosine:
             out += ',"vectorCosine":' + format_json_double(res.cosine)
         out += ',"rowid":' + String(res.rowid) + "}"
-    return out + "]}"
+    out += "]"
+    if packed is not None:
+        var p = packed.value().copy()
+        out += ',"budget":' + String(p.budget)
+        out += ',"packed":' + json_string(p.text)
+        out += ',"packed_tokens":' + String(p.tokens)
+        out += ',"token_method":' + json_string(p.method)
+        out += ',"packed_whole":' + String(p.whole)
+        out += ',"packed_pointers":' + String(p.pointers)
+        out += ',"packed_oversized":' + String(p.oversized)
+        out += ',"packed_omitted":' + String(p.omitted)
+    return out + "}"
 
 
 def method_of(c: Candidate) -> String:
@@ -355,11 +413,24 @@ def recall_command(args: List[String], home: String) raises:
         embed_config(opts),
     )
     var found = recall(store, query, settings)
+    var packed = Optional[Packed](None)
+    if opts.budget is not None:
+        var counter = estimate_counter()
+        if opts.tokenizer_url is not None:
+            counter = Counter(String(METHOD_SERVER), opts.tokenizer_url.value())
+        packed = Optional[Packed](
+            pack(found.results, opts.budget.value(), opts.whole, counter)
+        )
     if opts.json:
-        print(recall_json(query, found))
+        print(recall_json(query, found, packed))
         return
     if found.abstention.abstain:
         print("abstain: " + found.abstention.reason)
+    if packed is not None:
+        var p = packed.value().copy()
+        if p.text.byte_length() > 0:
+            print(p.text)
+        return
     for res in found.results:
         var one_line = String(res.text.replace("\n", " / "))
         print(
@@ -371,3 +442,60 @@ def recall_command(args: List[String], home: String) raises:
             + "  "
             + clip(one_line, 160)
         )
+
+
+def open_command(args: List[String], home: String) raises:
+    """vinci open: part of the fact or handle an id names, as text or JSON.
+
+    The id is the first argument that is not lines= or grep=. An id can name more than
+    one fact (an idea and its work lines), and each is opened in turn.
+    """
+    var opts = parse_options(args)
+    var id = String()
+    var req = no_request()
+    for a in opts.rest:
+        if a.startswith("lines="):
+            parse_lines_arg(String(ascii_tail(a, 6)), req)
+        elif a.startswith("grep="):
+            var word = String(ascii_tail(a, 5))
+            if word.byte_length() == 0:
+                raise user_error("grep= needs a word, for example grep=ideas")
+            req.has_grep = True
+            req.word = word
+        elif id.byte_length() == 0:
+            id = a
+        else:
+            raise user_error("open takes one id, got " + id + " and " + a)
+    if id.byte_length() == 0:
+        raise user_error(
+            "usage: vinci open <id> [lines=A-B] [grep=word] [--index PATH]"
+            " [--json]"
+        )
+    if req.has_lines and req.has_grep:
+        raise user_error("give lines= or grep=, not both")
+    var path = index_path_of(opts, home)
+    if not Path(path).exists():
+        raise user_error("no index at " + path + "; run vinci index rebuild")
+    var store = IndexStore(path)
+    var items = lookup(store, id)
+    if len(items) == 0:
+        raise user_error("no fact or handle named '" + id + "' in the index")
+    var views = List[String]()
+    for item in items:
+        var view = build_view(id, item, req, OPEN_CAP_BYTES)
+        if opts.json:
+            views.append(render_json(view))
+        else:
+            views.append(render_text(view))
+    if opts.json:
+        var body = String()
+        for i in range(len(views)):
+            if i > 0:
+                body += ","
+            body += views[i]
+        print('{"id":' + json_string(id) + ',"items":[' + body + "]}")
+        return
+    for i in range(len(views)):
+        if i > 0:
+            print("")
+        print(views[i])

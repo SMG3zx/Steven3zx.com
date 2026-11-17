@@ -10,6 +10,8 @@
 #   keys(fact, key)                  extra search keys per fact, filled by consolidation (step 3)
 #   fts (FTS5: text, keys)           rowid = facts.rowid. Every version is indexed; search filters.
 #   vectors(fact, label, dims, vec)  embeddings, filled in step 2b
+#   handles(id, created, source, text, digest)  text too long for a context, saved under a t id
+#                                    (step 3a, handles.mojo). Not a fact: the text is not indexed.
 #
 # A version is current when valid_until is NULL. Recall also needs status = 'active'.
 # The versioning rules are in put(): docs/memory.md states them with the journal's mapping.
@@ -161,6 +163,12 @@ struct IndexStore(Movable):
             " fact INTEGER NOT NULL, label TEXT NOT NULL,"
             " dims INTEGER NOT NULL, vec BLOB NOT NULL,"
             " PRIMARY KEY (fact, label))"
+        )
+        # Added in step 3a with IF NOT EXISTS, so a version 1 file opens unchanged.
+        _ = self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS handles ("
+            " id TEXT PRIMARY KEY, created TEXT NOT NULL,"
+            " source TEXT NOT NULL, text TEXT NOT NULL, digest TEXT NOT NULL)"
         )
         var version = self.meta_get("schema_version")
         if version == "":

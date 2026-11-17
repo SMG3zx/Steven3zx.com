@@ -10,7 +10,7 @@ from std.pathlib import Path
 from std.python import Python, PythonObject
 from std.sys import argv, exit
 
-from cmd_index import index_command, recall_command
+from cmd_index import index_command, open_command, recall_command
 from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
 from cmd_ops import dispatch_ops
@@ -168,6 +168,12 @@ def run() raises:
         for i in range(1, len(args)):
             recall_args.append(args[i])
         recall_command(recall_args, vinci_home())
+        return
+    if args[0] == "open":
+        var open_args = List[String]()
+        for i in range(1, len(args)):
+            open_args.append(args[i])
+        open_command(open_args, vinci_home())
         return
     if args[0] == "memory":
         # Only `memory import` is in the port (memory_import.mojo). The rest stays not ported.

@@ -11,9 +11,17 @@ Routes are given as a list, separated by commas. A route mix joins its routes wi
 "+", so "lexical,vector,lexical+vector" runs three mixes. Vector routes need the
 embedding settings (label, base URL, cache) that `vinci index embed` used.
 
+Budget sweep (M3 step 3a): `--budget 1000,2000,3000,5000` runs `vinci recall --budget B`
+for each budget, with the first route mix of --routes (default lexical+vector), and compares
+the packed text with the unbudgeted top 10. A question is still hit when every expected
+string is in the text that would be read: the packed text, or the top 10's JSON for the
+unbudgeted row, as the route runs score it. Tokens are the estimator, ceil(bytes / 4), for
+both, so the rows compare. The binary's own packed_tokens must agree with it.
+
 Usage, from mojo/py:
     uv run python -m vinci_eval.index_eval
     uv run python -m vinci_eval.index_eval --routes lexical,vector,lexical+vector
+    uv run python -m vinci_eval.index_eval --budget 1000,2000,3000,5000
 """
 
 from __future__ import annotations
@@ -22,6 +30,7 @@ import argparse
 import datetime
 import json
 import os
+import statistics
 import subprocess
 from pathlib import Path
 from typing import Final, cast
@@ -53,6 +62,8 @@ DEFAULT_ROUTES: Final = "lexical,vector,lexical+vector"
 DEFAULT_LABEL: Final = "qwen3-embedding:4b"
 DEFAULT_BASE_URL: Final = "http://127.0.0.1:8081/v1"
 LIMIT: Final = 10
+# A budget no top-10 reaches, so every record can be packed whole (the "10 whole" row).
+UNLIMITED: Final = 10_000_000
 
 
 def run_recall(
@@ -63,11 +74,19 @@ def run_recall(
     label: str,
     base_url: str,
     cache: Path,
+    budget: int | None = None,
+    whole: int | None = None,
 ) -> dict[str, object]:
-    """One `vinci recall --json` call against the index in home."""
+    """One `vinci recall --json` call against the index in home. With a budget, the
+    response also carries the packed context, with `whole` records in whole form."""
     env = dict(os.environ)
     env["VINCI_HOME"] = str(home)
     env["EMBEDDING_BASE_URL"] = base_url
+    budget_args: list[str] = []
+    if budget is not None:
+        budget_args += ["--budget", str(budget)]
+    if whole is not None:
+        budget_args += ["--whole", str(whole)]
     completed = subprocess.run(
         [
             str(binary),
@@ -83,6 +102,7 @@ def run_recall(
             base_url,
             "--cache",
             str(cache),
+            *budget_args,
             query,
         ],
         env=env,
@@ -118,6 +138,173 @@ def score_question(question: Question, response: dict[str, object], mode: str) -
         result_count=len(rows),
         tokens=count_tokens(result_text(rows), mode),
     )
+
+
+def estimate_tokens(text: str) -> int:
+    """ceil(bytes / 4): the estimator the packer uses when no tokenizer URL is given."""
+    return -(-len(text.encode("utf-8")) // 4)
+
+
+def int_field(response: dict[str, object], key: str) -> int:
+    raw = response.get(key)
+    if not isinstance(raw, int) or isinstance(raw, bool):
+        raise TypeError(f"recall response: {key} must be an integer")
+    return raw
+
+
+def packed_text(response: dict[str, object]) -> str:
+    raw = response.get("packed")
+    if not isinstance(raw, str):
+        raise TypeError("recall response: packed must be a string")
+    return raw
+
+
+def result_rows_of(response: dict[str, object]) -> list[object]:
+    rows_raw = response.get("results", [])
+    if not isinstance(rows_raw, list):
+        raise TypeError("results must be a JSON list")
+    return list(cast("list[object]", rows_raw))
+
+
+def budget_sweep(
+    binary: Path,
+    home: Path,
+    routes: str,
+    questions: list[Question],
+    label: str,
+    base_url: str,
+    cache: Path,
+    budgets: list[int],
+) -> dict[str, object]:
+    """Unbudgeted top 10 against each budget. Prints the table and returns the report.
+    routes is one route mix, with commas between its routes."""
+    unbudgeted_hits = 0
+    unbudgeted_tokens: list[int] = []
+    unbudgeted_missed: list[str] = []
+    # The top 10 with every record whole, in the packed format: the same text as the
+    # budgeted rows, so the unbudgeted row compares with them on tokens.
+    whole_hits = 0
+    whole_tokens: list[int] = []
+    whole_missed: list[str] = []
+    answerable = 0
+    for question in questions:
+        response = run_recall(binary, home, routes, question.query, label, base_url, cache)
+        rows = result_rows_of(response)
+        text = result_text(rows)
+        unbudgeted_tokens.append(estimate_tokens(text))
+        everything = run_recall(
+            binary, home, routes, question.query, label, base_url, cache, UNLIMITED, LIMIT
+        )
+        whole_text = packed_text(everything)
+        whole_tokens.append(estimate_tokens(whole_text))
+        if not question.should_abstain:
+            answerable += 1
+            # The same test as score_question: the lowercased JSON of the results.
+            haystack = json.dumps(rows).lower()
+            if all(term in haystack for term in question.expected):
+                unbudgeted_hits += 1
+            else:
+                unbudgeted_missed.append(question.qid)
+            if all(term in whole_text.lower() for term in question.expected):
+                whole_hits += 1
+            else:
+                whole_missed.append(question.qid)
+
+    summaries: dict[str, object] = {}
+    lines: list[str] = []
+    for budget in budgets:
+        hits = 0
+        missed: list[str] = []
+        tokens: list[int] = []
+        whole: list[int] = []
+        pointers: list[int] = []
+        omitted: list[int] = []
+        oversized: list[int] = []
+        for question in questions:
+            response = run_recall(
+                binary, home, routes, question.query, label, base_url, cache, budget
+            )
+            packed = packed_text(response)
+            count = estimate_tokens(packed)
+            if count != int_field(response, "packed_tokens"):
+                raise ValueError(
+                    f"{question.qid}: the binary counted {int_field(response, 'packed_tokens')}"
+                    f" tokens, the estimator {count}"
+                )
+            if count > budget:
+                raise ValueError(f"{question.qid}: packed text is {count} tokens, over {budget}")
+            tokens.append(count)
+            whole.append(int_field(response, "packed_whole"))
+            pointers.append(int_field(response, "packed_pointers"))
+            omitted.append(int_field(response, "packed_omitted"))
+            oversized.append(int_field(response, "packed_oversized"))
+            if not question.should_abstain:
+                if all(term in packed.lower() for term in question.expected):
+                    hits += 1
+                else:
+                    missed.append(question.qid)
+        summaries[str(budget)] = {
+            "hit": hits,
+            "answerable": answerable,
+            "missed_hits": missed,
+            "tokens_mean": round(statistics.fmean(tokens), 1),
+            "tokens_median": statistics.median(tokens),
+            "tokens_max": max(tokens),
+            "whole_mean": round(statistics.fmean(whole), 2),
+            "pointers_mean": round(statistics.fmean(pointers), 2),
+            "omitted_mean": round(statistics.fmean(omitted), 2),
+            "oversized_total": sum(oversized),
+        }
+        lines.append(
+            f"{budget:>8} {hits:>3}/{answerable:<3} {100 * hits / answerable:>6.1f}%"
+            f" {statistics.fmean(tokens):>8.1f} {statistics.median(tokens):>7.0f}"
+            f" {statistics.fmean(whole):>6.2f} {statistics.fmean(pointers):>8.2f}"
+            f" {statistics.fmean(omitted):>8.2f}   missed {missed}"
+        )
+
+    print(
+        f"\n== budget sweep, routes {routes}, {len(questions)} questions"
+        f" ({answerable} answerable), estimator tokens"
+    )
+    print(
+        f"{'budget':>8} {'hit':>7} {'hit %':>7} {'tok mean':>8} {'median':>7}"
+        f" {'whole':>6} {'pointers':>8} {'omitted':>8}"
+    )
+    print(
+        f"{'top 10':>8} {unbudgeted_hits:>3}/{answerable:<3}"
+        f" {100 * unbudgeted_hits / answerable:>6.1f}%"
+        f" {statistics.fmean(unbudgeted_tokens):>8.1f}"
+        f" {statistics.median(unbudgeted_tokens):>7.0f}"
+        f" {'-':>6} {'-':>8} {'-':>8}   content only, missed {unbudgeted_missed}"
+    )
+    print(
+        f"{'10 whole':>8} {whole_hits:>3}/{answerable:<3}"
+        f" {100 * whole_hits / answerable:>6.1f}%"
+        f" {statistics.fmean(whole_tokens):>8.1f}"
+        f" {statistics.median(whole_tokens):>7.0f}"
+        f" {10:>6.2f} {0:>8.2f} {0:>8.2f}   packed, all whole, missed {whole_missed}"
+    )
+    for line in lines:
+        print(line)
+    return {
+        "routes": routes,
+        "label": label,
+        "questions": len(questions),
+        "answerable": answerable,
+        "unbudgeted": {
+            "hit": unbudgeted_hits,
+            "missed_hits": unbudgeted_missed,
+            "tokens_mean": round(statistics.fmean(unbudgeted_tokens), 1),
+            "tokens_median": statistics.median(unbudgeted_tokens),
+        },
+        "all_whole": {
+            "hit": whole_hits,
+            "missed_hits": whole_missed,
+            "tokens_mean": round(statistics.fmean(whole_tokens), 1),
+            "tokens_median": statistics.median(whole_tokens),
+        },
+        "budgets": summaries,
+    }
 
 
 def m1_lexical_row() -> dict[str, object] | None:
@@ -174,12 +361,42 @@ def main() -> int:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--out", type=Path, help="JSON result file (default: results dir)")
+    parser.add_argument(
+        "--budget",
+        help="comma-separated token budgets: run the packed-context sweep instead",
+    )
     args = parser.parse_args()
     binary: Path = args.binary
     home: Path = args.home
     specs: list[str] = [spec.strip() for spec in str(args.routes).split(",") if spec.strip()]
 
     questions = load_questions(QUESTIONS)
+    if args.budget is not None:
+        budgets = [int(part) for part in str(args.budget).split(",") if part.strip()]
+        # One route mix for the sweep, written with "+" as --routes writes it. The default
+        # --routes lists three mixes, so the sweep uses lexical+vector, the default route.
+        mix = "lexical+vector" if str(args.routes) == DEFAULT_ROUTES else str(args.routes)
+        routes = mix.replace("+", ",")
+        started_b = datetime.datetime.now(datetime.UTC)
+        report: dict[str, object] = {
+            "date": started_b.date().isoformat(),
+            "binary": str(binary),
+            "vinci_home": str(home),
+            "question_set": {
+                "path": str(QUESTIONS),
+                "sha256": sha256_of(QUESTIONS),
+                "questions": len(questions),
+            },
+            "token_method": "estimate",
+            "sweep": budget_sweep(
+                binary, home, routes, questions, args.label, args.base_url, args.cache, budgets
+            ),
+        }
+        out_b = args.out or (RESULTS_DIR / f"index-budget-{started_b.date().isoformat()}.json")
+        out_b.parent.mkdir(parents=True, exist_ok=True)
+        out_b.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"\nwrote {out_b}")
+        return 0
     mode = "llama-server" if tokenizer_reachable() else "len/4"
     print(f"tokens counted with: {mode}")
     print(

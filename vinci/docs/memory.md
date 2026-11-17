@@ -319,3 +319,81 @@ The index abstained on 2 of the 10 abstention questions in every route mix. The 
 - The GPU job that filled the LongMemEval cache: 80.2 min for 46,504 texts (about 9.8 texts/s), with a short restart midway.
 - LongMemEval: 100 per-question indexes built and embedded from the cache in 1.4 s each (load 0.46 s, embed 0.98 s, about 494 turns each); the CPU warm pass and the 20-turn agreement sample ran together in under 2 minutes; each scored route took 5 to 8 s for 100 questions.
 - Recall, lexical route on the personal set: 60 calls in 2.0 s. The vector route's first pass took 98 s for 60 calls, because each query vector was embedded once on the CPU; a later pass with the cache warm was not timed.
+
+## Handles, open and budgeted recall (mark 2, M3 step 3a)
+
+Items 1 and 2 of phase 3 of [the one-journal plan](plan-one-journal-one-index.md), with the packing from item 2. Items 3 to 5 are the budget sweep for answers, the summarize step and the write confirmation. The sweep, the summarize step and the confirmation are not built.
+
+```sh
+vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]
+vinci recall --budget N [--whole N] [--tokenizer-url URL] [--json] <query...>
+```
+
+Code: `mojo/src/handles.mojo` (ids, the handles table, the lookup), `open_view.mojo` (what `open` prints), `pack.mojo` (the packed context and the counters), `cmd_index.mojo` (the commands). Tests: `mojo/tests/test_open.mojo`, `test_pack.mojo`. The exact counter is `mojo/py/vinci_edge/llama_count.py`.
+
+### Ids
+
+- **A fact's id is its citation id** (`m12`, `i19`, `d1/2`, `L142`): the `cite` column of the index. `open` reads the facts table for it, so a fact's text is never copied.
+- **A handle's id is `t<n>`** (`t1`, `t2` ...). No journal id uses `t`: the journal prefixes are `i r n s x p h b`, and the import adds `k m d e`. `save_handle` also skips any number whose id a fact already has as its cite, so a loaded record with the id `t2` is never shadowed.
+- **Handles table** (created with `IF NOT EXISTS`, so a schema 1 file opens unchanged): `handles(id, created, source, text, digest)`. `source` names what the text came from (a tool call, a read document, a journal id). `save_handle` commits on its own, so it must not run inside another transaction. Nothing calls it yet: the chat tool that saves over-budget results is M4.
+- **A read document** is opened as its title line followed by its body. The body is the document's chunks (`dN/1`, `dN/2` ...) joined by blank lines, so no second copy is stored.
+- **One id, several facts.** An id can name more than one fact: `i1` is an idea, a home line and its work lines. `open i1` opens each current fact in turn, with its own header.
+
+### open
+
+- **Header** for each fact: `[<id>] <kind> <date> (<n> lines)`. A fact that is not current is marked `[superseded]`, `[retracted]` or `[archived]`, and only its latest version is shown.
+- **Lines** are numbered from 1 and printed as `n: text`. A gap in the numbers prints as `--`.
+- **`lines=A-B`** takes lines A to B, inclusive. B is clipped to the last line. `A > B`, `A < 1` and `A` past the end are errors.
+- **`grep=word`** takes each line that contains the word, ignoring ASCII case, with one line of context either side. It is a substring match, so `activity` finds `ActivityWatch`. With no match it prints `no line matches 'word'`. A range with grep takes only the lines in the range.
+- **Without options** it prints the whole text. Everything taken is capped at 4,000 bytes (the same figure as the C# tool cut in `src/Chat/Tools.cs`, measured in bytes here). A cut between lines ends with a notice such as `showing lines 1-190 of 300; open m1 lines=191-300 for more`. A single line over the cap is cut inside the line, and the notice says so: no option reads past that cut.
+- **Errors** (exit 1): an unknown id (`no fact or handle named 'x' in the index`), a bad range, `lines=` and `grep=` together, two ids, and a missing index (`run vinci index rebuild`).
+- **`--json`** prints `{"id", "items": [{"id", "kind", "date", "note", "total_lines", "lines": [{"n", "text"}], "truncated", "more", "notice"}]}`. `more` is the `lines=` value to read on with, or `null`.
+
+### Packed recall
+
+`vinci recall --budget N` packs the results instead of listing them. Results are best first, and the packer takes them in that order.
+
+```
+[e1] 2026-11-15 exchange: What do I know about the embedding model the project uses?
+[e2] 2026-11-15 exchange: I do not know what embedding model the project uses.
+[i1] 2026-11-15 work: Embed with Qwen3-Embedding-4B and record which model made each vector commit 18b7ae064fef734eccafbca… (open i1 for more)
+```
+
+- **Whole.** The best `--whole` results (default 2) are whole: `[<id>] <date> <kind>: <text>`, with the text as stored, newlines kept.
+- **Pointer.** Every other result is one line: `[<id>] <date> <kind>: <digest> (open <id> for more)`. The digest is the first 100 characters with whitespace collapsed, and `…` after them when cut. When the digest is the whole text, the open hint is left off, since there is nothing more to open. This is a departure from the literal format in the plan, which would have added a hint to short records that have nothing past their digest. On the personal set that hint cost more tokens than the full text.
+- **Fallback.** A whole candidate that does not fit with the lines before it is shown as a pointer. One that does not fit even alone is counted as oversized, and it is shown as a pointer too.
+- **Stop.** The packer stops at the first pointer that does not fit, so the output keeps rank order and the rest are left out. The packed text never goes over the budget.
+- **Counting.** The default is the estimate, `ceil(bytes / 4)` of the packed text. `--tokenizer-url http://127.0.0.1:8080/tokenize` counts exactly with llama-server. Its array input gives one flat list with no boundary between the items, so each check asks for the whole packed text. This is one request per candidate, a few per query.
+- **Output.** Without `--json` the packed text is printed (with an `abstain:` line first when the answer should abstain). With `--json` the response keeps `results` and adds `budget`, `packed`, `packed_tokens`, `token_method` (`estimate` or `llama-server`), `packed_whole`, `packed_pointers`, `packed_oversized` and `packed_omitted`.
+
+### Measured: recall at budget (personal set, v2, 60 questions)
+
+`cd mojo/py && uv run python -m vinci_eval.index_eval --budget 100,150,250,500,1000,2000,3000,5000`. Routes lexical+vector, staging journal (342 lines), the estimator for tokens. The hit rate is over the 48 answerable questions, with the same test as the route runs: every expected string must be in the text that would be read. Written to `~/.vinci/eval/results/index-budget-2026-11-17.json`.
+
+| Read as | Hit | Hit % | Tokens mean | median | Whole | Pointers | Omitted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| top 10, content only (no ids) | 36/48 | 75.0% | 166.2 | 156 | - | - | - |
+| top 10, all whole (packed form) | 36/48 | 75.0% | 227.0 | 217 | 10.00 | 0.00 | 0.00 |
+| budget 100 | 31/48 | 64.6% | 88.1 | 90 | 2.00 | 2.07 | 5.93 |
+| budget 150 | 32/48 | 66.7% | 136.4 | 138 | 2.00 | 4.22 | 3.78 |
+| budget 250 | 36/48 | 75.0% | 212.1 | 218 | 2.00 | 7.33 | 0.67 |
+| **budget 1000** | 36/48 | 75.0% | 231.5 | 222 | 2.00 | 8.00 | 0.00 |
+| **budget 2000** | 36/48 | 75.0% | 231.5 | 222 | 2.00 | 8.00 | 0.00 |
+| **budget 3000** | 36/48 | 75.0% | 231.5 | 222 | 2.00 | 8.00 | 0.00 |
+| **budget 5000** | 36/48 | 75.0% | 231.5 | 222 | 2.00 | 8.00 | 0.00 |
+| budget 500 | 36/48 | 75.0% | 231.5 | 222 | 2.00 | 8.00 | 0.00 |
+
+What it says:
+
+- **The budgets in the plan do not bind on this set.** The top 10 fits in about 230 estimated tokens, so 1,000 to 5,000 all pack the same ten results: two whole and eight pointers. The plan's sweep needs the LongMemEval set, where a top 10 is about 2,500 tokens. This was not run.
+- **Below about 250 tokens recall drops**, to 64.6% at 100. At 250 the packed text holds every string the unbudgeted top 10 holds.
+- **Pointers do not lose hits here.** At 1,000 and above, the eight pointers carry the same hits as the full text, because the records are short and the expected strings sit in the first 100 characters. Long records would show the loss.
+- **The unbudgeted reference for tokens is the packed form, not the content.** The content-only row (166 tokens) leaves out ids and dates, which the model needs to cite.
+
+Exact counts were checked on four questions at budgets 40, 100 and 180: llama-server's count of the packed text matched `packed_tokens` every time, and never exceeded the budget.
+
+### Known limits
+
+- `open` on an id that names many facts (`i1` has 30) prints every one, each up to the cap. The total is not capped. The chat tool will need a cap across the whole output.
+- A pointer for a record over 100 characters can hide an expected string past character 100. `open <id>` reads it. The sweep scores the packed text as it is, so this costs a hit when it happens.
+- The handles are not used yet. Nothing writes to the table, and the C# tool still cuts at 4,000 characters.
