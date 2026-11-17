@@ -1,0 +1,2 @@
+{"at":"2026-11-17T03:08:23Z","n":1,"pass":false,"seconds":0.22,"first_error":"         raise Error(\"scan: query length does not match store dim\")"}
+{"at":"2026-11-17T03:08:29Z","n":2,"pass":true,"seconds":3.35,"first_error":""}
