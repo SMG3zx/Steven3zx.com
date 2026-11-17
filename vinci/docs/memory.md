@@ -166,3 +166,115 @@ The journal went from 128 to 342 lines. The 81 refs in the new lines all resolve
 ### Next
 
 Phase 2 reads these lines into the index. The index reads `remember`, `memory`, `read` and `exchange` from `state.memory_records`, and nothing else in the fold needs to change.
+
+## The index (mark 2, M3 step 2a)
+
+Step 2a of [the one-journal plan](plan-one-journal-one-index.md), phase 2: lexical recall in Mojo. Vectors, fusion, abstention, the corrective query and date ranges are step 2b. The index is derived data: delete it and `vinci index rebuild` makes it again.
+
+```sh
+vinci index rebuild                       # delete and rebuild from the journal
+vinci index update                        # add the journal lines after the stored offset
+vinci index stats                        # facts per kind, file size, last build
+vinci index load records.jsonl --index P  # external records (one JSON object per line)
+vinci recall [--json] [--limit N] [--routes lexical] [--index P] <query...>
+```
+
+The index is `$VINCI_HOME/index.sqlite`, or `--index PATH`. None of these commands writes the journal. Code: `mojo/src/index_store.mojo` (schema, versioning), `index_build.mojo` (the mapping, the incremental build, the loader), `recall.mojo` (tokens, FTS5 query, routes), `cmd_index.mojo` (the commands). Tests: `mojo/tests/test_index_store.mojo`, `test_index_build.mojo`, `test_index_recall.mojo`.
+
+### Schema (version 1)
+
+| Table | Holds |
+| --- | --- |
+| `meta` | `schema_version`, `journal_offset` (bytes of complete lines read), `journal_lines`, `last_build_seconds` |
+| `facts` | one row per version. The rowid is the fact id. `source`, `record_id`, `version_hash`, `kind`, `text`, `cite` (the journal id, e.g. `m12`), `at`, `valid_from`, `valid_until`, `idea`, `tags` and `refs` (JSON arrays), `trusted`, `status` (`active`, `archived`, `retracted`, `superseded`), `line` (journal line, or 0 for loaded records) |
+| `keys` | `(fact, key)`: extra search keys. Empty until consolidation (step 3) |
+| `fts` | FTS5 over `text` and `keys`, rowid = `facts.rowid`. Every version is indexed, and search filters |
+| `vectors` | `(fact, label, dims, vec)`: empty until step 2b |
+
+A version is **current** when `valid_until` is NULL. Recall returns current versions with `status = 'active'`.
+
+### Which lines become facts
+
+One fact per line that carries text a person would recall. The kinds, from `State` in `state.mojo`:
+
+| Kind | Fact? | Content | Idea |
+| --- | --- | --- | --- |
+| idea, for, goal, req, cut, work, ship, retire, home, issue, diagnose, principle, predict, result, commit, missed, kept, note, source | yes | `text`. A work line adds `commit <where>`. A source adds its `url` | its id (idea kinds), else the first `i` ref, else a `from:i…` tag |
+| bookmark | yes | `text`, `why`, `url` on separate lines | as above |
+| remember, memory | yes | `text` | as above |
+| read | yes: the title line, plus one fact per body chunk | title and `url`. Chunks are the body text | none |
+| exchange | yes | `text` | none |
+| stage, watch, unwatch, unbookmark | no | configuration, not recall text | |
+| link, log, spec, spent, sync, used, review, tend | no | no text a person would recall (metrics, time, sync cursor) | |
+| unknown kinds | no | skipped, as the fold skips them | |
+
+`trusted` is true for the user's own lines and the read title. It is false for read body chunks, and for an `exchange` whose `who` is not `user`. `at` and `valid_from` are the line's `at`, in the journal's format.
+
+### Record keys and versions
+
+A record is keyed by `(source, record_id)`. For the journal, `source` is `journal`:
+
+- `record_id = kind:id` for a line with an id. The kind keeps an idea `i19` and a work line `i19` apart.
+- A repeat of the same kind and id is a **new fact** with `kind:id#L<line>`, for appended kinds (work, spent, note …). Work lines are events, so a second work line does not correct the first.
+- **Versioned kinds** (`for`, `goal`, `cut`, `home`, `diagnose`, `result`, `remember`, `memory`) keep one key: a later line with the same id is a new version of the earlier one, as the fold keeps only the last value.
+- A line with no id: `kind:L<line>`. A read chunk: `<title record>/<n>`.
+- `cite` is the journal id (`m12`), `L<line>` when there is none, and `d1/2` for a read chunk. Two kinds can share an id, so a result carries its `kind` too.
+
+### Versioning (`IndexStore.put`)
+
+| Case | Result |
+| --- | --- |
+| Record is new | stored, returns 1 |
+| Same hash as the current version | nothing changes, returns 0 |
+| New hash | the current version ends (`valid_until` = the new line's `at`), the new one is stored, returns 2 |
+| An older hash comes back (A, B, A) | a new version, like any new hash. The older versions are never compared |
+
+The hash of a journal line is the SHA-256 of the stripped line. A read chunk's hash is the SHA-256 of its text. A loaded record's hash is its `hash` field, or the SHA-256 of its text.
+
+### valid_until
+
+1. **Supersession.** A `remember` or `memory` line whose `refs` name `k` ids ends the `remember:k…` records, and `m` ids end `memory:m…`, at its `at`. This is the only correction from the journal for memory.
+2. **Status tags.** `archived`, `retracted` and `superseded` on a memory line are stored in `status`, so the version is not active and recall does not show it. The history stays.
+3. **Idea retire is not a correction.** `retire` is a fact about the idea, and the idea's text stays true. It ends nothing.
+4. **Journal order decides what is current, not dates.** Imported lines carry earlier `at` values, so `valid_until` can be earlier than `valid_from`. Step 2b's as-of queries must allow for that.
+
+### Read bodies
+
+A body is split at markdown headings, which always start a new chunk. Otherwise lines are packed into chunks of about 1,000 bytes, cut at line boundaries. A line longer than that stays whole. Blank-only chunks are dropped. A missing body is counted in the build report, and the title is still indexed.
+
+### The build
+
+`update` reads from `journal_offset`, and only complete lines count: a last line without its newline waits for the next run. One run is one transaction, and the offset is stored in it. A journal shorter than the offset is refused, and so is a bad line: the whole run rolls back. `rebuild` deletes the file and runs `update` from 0. A rebuild equals an incremental build, row for row (tested).
+
+### Recall (lexical)
+
+- **Tokens** as `Retrieval.cs`: lowercase, runs of `[a-z0-9][a-z0-9_-]{2,}`, minus its stop words. `the` is one of them.
+- **Query**: each term is a quoted FTS5 phrase, and the terms are joined with OR. Neo4j's full-text index, which the C# route used, joins words with OR by default. With no terms left, the question's own words are quoted.
+- **Ranking**: bm25 (`score` is its negation, so higher is better). Only current, active versions. `limit` is applied after the join.
+- **Result**: `id`, `kind`, `text`, `at`, `source`, `trusted`, `score`, `route`, `rowid`. The JSON has `results` (with `content`), `abstain` (always false until 2b) and `routes`.
+- **Routes**: `recall(store, query, limit, routes)` runs one route. More than one is refused until 2b adds fusion, and `vector` is refused until 2b.
+
+### Measured (staging journal, 342 lines, 2026-11-16)
+
+| Run | Result |
+| --- | --- |
+| Full rebuild | 312 facts from 342 lines (14 `spent`, 14 `sync` and 3 `review` carry no text, so 311, plus 1 read chunk). 6 versions ended. 8 ms in the build, 0.28 s wall |
+| Update, no new lines | 0 writes. 0.03 s wall |
+| Per kind, current / total | bookmark 4/4, exchange 25/25, home 19/19, idea 19/19, memory 144/160, read 2/2, remember 13/28, retire 2/2, work 53/53 |
+
+Personal set, lexical, v2 (60 questions, `index_eval.py`, tokens by `len/4` because llama-server was down):
+
+| Route mix | hit | abstention | tokens mean / median |
+| --- | --- | --- | --- |
+| M1 lexical (memory API) | 34/48 | 44/60 | 240.6 / 245.0 (llama tokens) |
+| Step 2a lexical (index) | 34/48 | 48/60 | 127.8 / 132.5 (len/4) |
+
+Step 2a abstains on nothing, so its 48/60 is the 48 answerable questions it did not refuse plus the 0 of 12 abstain questions it failed. M1 abstained on 5 of 12 abstain questions. The token columns are not comparable: M1 counted the llama tokenizer, and step 2a counted `len/4`.
+
+Per type, M1 lexical against step 2a: single 24/26 and 24/26, temporal 8/12 and 9/12, multihop 2/10 and 1/10. The misses are the single questions j-01 (`/steven3zx` sits in a home line, outranked by facts that also say "vinci") and j-30 (`ActivityWatch` is one FTS5 token, so `activity` does not match it), and most multihop questions. Vector and fusion are for those.
+
+### Open for step 2b
+
+- Abstention, the corrective query and date ranges.
+- The vector route (`vectors` table, `TensorPrimitives`-style scan), and fusion of the routes in `recall()`.
+- `keys` are filled by consolidation. Until then `keys` is empty and search uses `text` only.

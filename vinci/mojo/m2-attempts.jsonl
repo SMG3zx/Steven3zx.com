@@ -11,3 +11,6 @@
 {"agent":"ops","n":2,"pass":true,"first_error":""}
 {"agent": "M3.1", "n": 1, "pass": false, "first_error": "fmt-check: not formatted (first diff: src/memory_import.mojo). Run make fmt"}
 {"agent": "M3.1", "n": 2, "pass": true, "first_error": ""}
+{"agent":"M3.2a","n":1,"pass":true,"first_error":""}
+{"agent":"M3.2a","n":2,"pass":true,"first_error":""}
+{"agent":"M3.2a","n":3,"pass":true,"first_error":""}

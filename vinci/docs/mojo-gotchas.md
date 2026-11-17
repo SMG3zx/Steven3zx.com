@@ -31,6 +31,19 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
       """Sum the values."""
   ```
 
+- **`ref` is a keyword too.** A variable named `ref` fails with "unexpected token in expression", and `mojo format` says "Cannot parse". Name it `target`, `other` or the like. Hit twice in one build.
+  ```mojo
+  for r in refs:
+      var target = String(r)           # not: var ref = String(r)
+  ```
+- **A struct built with positional arguments needs `@fieldwise_init`.** Without it the call fails with "no matching function in initialization" and lists a generated `move` or `copy` initializer as the missing argument. Four structs hit this in one build.
+  ```mojo
+  @fieldwise_init
+  struct KindCount(Copyable, Movable):
+      var kind: String
+      var total: Int
+      var current: Int
+  ```
 - **`where` is a keyword.** A struct field or argument named `where` fails to parse with "Cannot parse" under `mojo format`. Name it `where_`, as `for` is named `for_`. JSON keys keep their own spelling.
   ```mojo
   var where_: Optional[String]     # not: var where: Optional[String]
@@ -111,6 +124,13 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
           sys.stderr.write(text + "\n")
       except:
           pass
+  ```
+
+- **Each statement commits on its own in Python's sqlite3, and each commit fsyncs.** On this disk that is about 100 to 150 ms per statement. Schema creation ran about 1 s until it sat in one `BEGIN IMMEDIATE` ... `COMMIT`. A run that changes nothing should write nothing: an update with no new lines fsynced its meta rows until that check was added.
+  ```mojo
+  _ = self.conn.execute("BEGIN IMMEDIATE")   # the schema and a build: one transaction
+  # ... CREATE TABLE ..., INSERT ...
+  self.conn.commit()
   ```
 
 ## Pointers and SIMD

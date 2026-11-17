@@ -10,6 +10,7 @@ from std.pathlib import Path
 from std.python import Python, PythonObject
 from std.sys import argv, exit
 
+from cmd_index import index_command, recall_command
 from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
 from cmd_ops import dispatch_ops
@@ -111,15 +112,17 @@ def parse_now(text: String) raises -> Instant:
         )
 
 
+def vinci_home() raises -> String:
+    """Program.cs: $VINCI_HOME, or ~/.vinci when it is not set."""
+    var home = env_value("VINCI_HOME")
+    if home is not None:
+        return home.value()
+    return join_path(user_profile(), ".vinci")
+
+
 def journal_path() raises -> String:
     """Program.cs: $VINCI_HOME (default ~/.vinci) plus journal.jsonl."""
-    var home = env_value("VINCI_HOME")
-    var dir: String
-    if home is not None:
-        dir = home.value()
-    else:
-        dir = join_path(user_profile(), ".vinci")
-    return join_path(dir, "journal.jsonl")
+    return join_path(vinci_home(), "journal.jsonl")
 
 
 def run() raises:
@@ -153,6 +156,19 @@ def run() raises:
         raise not_ported("chat")
     if args[0] == "serve":
         raise not_ported("serve")
+    # The index and recall read the journal and write only their own index file.
+    if args[0] == "index":
+        var index_args = List[String]()
+        for i in range(1, len(args)):
+            index_args.append(args[i])
+        index_command(index_args, vinci_home(), journal_path())
+        return
+    if args[0] == "recall":
+        var recall_args = List[String]()
+        for i in range(1, len(args)):
+            recall_args.append(args[i])
+        recall_command(recall_args, vinci_home())
+        return
     if args[0] == "memory":
         # Only `memory import` is in the port (memory_import.mojo). The rest stays not ported.
         if len(args) > 1 and args[1] == "import":
