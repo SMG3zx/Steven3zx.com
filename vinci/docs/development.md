@@ -22,3 +22,6 @@ The only NuGet package in the program is `Neo4j.Driver`, used by `vinci memory`.
 | `deploy/memory.service`, `deploy/memory-worker.service` | The systemd user units for `vinci memory serve` and `worker` |
 | `deploy/memory/` | The Neo4j compose file and the settings example |
 | `deploy/models/` | The Modelfile that builds the chat model, and how to set up both models |
+| `docs/m0-results.md` | The results of mark 2's M0 phase: the calibration tasks, the stop conditions, and the phase estimates |
+| `docs/mojo-gotchas.md` | Mojo mistakes that agents make twice, with a correct snippet for each |
+| `mojo/` | The Mojo project: the pinned toolchain (`pyproject.toml`), the Makefile, the source and tests, `scripts/attempt.sh`, and the calibration tasks in `calibration/` |
