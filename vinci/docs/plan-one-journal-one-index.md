@@ -1,6 +1,6 @@
 # Plan: one journal, one index
 
-Status: proposed, 2026-11-16. Nothing here is built yet.
+Status: proposed, 2026-11-16. Nothing here is built yet. Part of [mark 2](mark2-plan.md), which builds phases 1 to 3 in Mojo instead of C#.
 
 This plan takes two ideas from outside vinci and changes how vinci keeps memory. The ideas come from [atlas](https://github.com/bloodfeast/atlas) (keep big text out of the context, behind a short handle) and from LangChain's [deep agents RAG guide](https://docs.langchain.com/oss/python/deepagents/rag) (retrieve, save the results aside, read only what is needed). Neither project's code is used. Section 2 is the first draft. Section 3 is a second round of questioning, with measurements and research. Section 4 is the plan that came out of it.
 
