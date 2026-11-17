@@ -26,7 +26,7 @@ Section 2 of the plan sets three stop conditions. Here is each one.
 
 ## Verdict
 
-Recommended: continue in Mojo. The decision is yours, at this check. The sample is small: three tasks, and the third-try pass rate clears 60% only narrowly. So the stop conditions are checked again at the end of M2, the first phase with real volume.
+Decision, 2026-11-17: continue in Mojo. The sample is small: three tasks, and the third-try pass rate clears 60% only narrowly. So the stop conditions are checked again at the end of M2, the first phase with real volume.
 
 ## Findings that are not about Mojo
 
