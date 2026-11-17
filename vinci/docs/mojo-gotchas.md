@@ -72,6 +72,12 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
           d[key].append(value)
   ```
 
+- **A struct that is not `Copyable` cannot be passed by value twice.** `Instant` and `VectorIndex` hit this. Store the plain values a callee needs (UTC ticks, a date string), or pass the struct borrowed (no `var`) and let the callee read it.
+  ```mojo
+  var now_utc = settings.now_utc      # an Int, not settings.clock (an Instant)
+  ```
+- **A result struct built with positional arguments needs `@fieldwise_init` too.** `Recall` and `Assessment` failed the same way as `KindCount` above.
+
 ## Strings
 
 - **`strip()` and `split()` give a `StringSpan`, not a `String`.** Passing one to a `String` parameter fails with "cannot be converted from 'StringSpan'". Wrap it.
@@ -149,6 +155,24 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
 
   comptime W = simd_width_of[Float32]()
   ```
+
+- **`UnsafePointer` is deprecated in 1.2, and `std.memory` has no `memcpy`.** Use `Pointer`, built from an address, and copy element by element with `unsafe_offset=`. A bytes object's address comes from `ctypes`, and it is valid only while that object is alive.
+  ```mojo
+  var src = Pointer[Float32, MutAnyOrigin](unsafe_from_address=addr)
+  var dst = values.unsafe_ptr()
+  for i in range(count):
+      dst[unsafe_offset=i] = src[unsafe_offset=i]
+  ```
+
+- **`os.environ[key] = value` works; `os.environ.__setitem__(key)` does not.** The synthetic signature needs a `value` argument as well. Hit in a test helper.
+  ```mojo
+  os.environ[PythonObject("VINCI_MOJO_PY")] = py_dir
+  ```
+- **Python results are `PythonObject`, not `String`.** `os.path.join` and `os.path.abspath` return one, and a `String` variable will not take it. Wrap the call in `String(...)`.
+  ```mojo
+  py_dir = String(os.path.join(dirname, PythonObject(".."), PythonObject("py")))
+  ```
+- **Python's `sqlite3` opens a transaction before the first `INSERT`.** A later `BEGIN IMMEDIATE` then fails with "cannot start a transaction within a transaction", and a raw `COMMIT` fails when nothing is open. In a fixture that writes with `put()` before calling `begin()`, commit with `store.conn.commit()` first. The production paths begin before any write.
 
 ## Formatting
 

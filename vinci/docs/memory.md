@@ -176,7 +176,8 @@ vinci index rebuild                       # delete and rebuild from the journal
 vinci index update                        # add the journal lines after the stored offset
 vinci index stats                        # facts per kind, file size, last build
 vinci index load records.jsonl --index P  # external records (one JSON object per line)
-vinci recall [--json] [--limit N] [--routes lexical] [--index P] <query...>
+vinci index embed [--label L] [--base-url U] [--cache PATH]   # vectors for facts without one (step 2b)
+vinci recall [--json] [--limit N] [--routes lexical,vector] [--index P] [--label L] [--base-url U] [--cache PATH] <query...>
 ```
 
 The index is `$VINCI_HOME/index.sqlite`, or `--index PATH`. None of these commands writes the journal. Code: `mojo/src/index_store.mojo` (schema, versioning), `index_build.mojo` (the mapping, the incremental build, the loader), `recall.mojo` (tokens, FTS5 query, routes), `cmd_index.mojo` (the commands). Tests: `mojo/tests/test_index_store.mojo`, `test_index_build.mojo`, `test_index_recall.mojo`.
@@ -189,7 +190,7 @@ The index is `$VINCI_HOME/index.sqlite`, or `--index PATH`. None of these comman
 | `facts` | one row per version. The rowid is the fact id. `source`, `record_id`, `version_hash`, `kind`, `text`, `cite` (the journal id, e.g. `m12`), `at`, `valid_from`, `valid_until`, `idea`, `tags` and `refs` (JSON arrays), `trusted`, `status` (`active`, `archived`, `retracted`, `superseded`), `line` (journal line, or 0 for loaded records) |
 | `keys` | `(fact, key)`: extra search keys. Empty until consolidation (step 3) |
 | `fts` | FTS5 over `text` and `keys`, rowid = `facts.rowid`. Every version is indexed, and search filters |
-| `vectors` | `(fact, label, dims, vec)`: empty until step 2b |
+| `vectors` | `(fact, label, dims, vec)`: packed float32, one row per fact and label. Filled by `vinci index embed` (step 2b) |
 
 A version is **current** when `valid_until` is NULL. Recall returns current versions with `status = 'active'`.
 
@@ -252,7 +253,7 @@ A body is split at markdown headings, which always start a new chunk. Otherwise 
 - **Query**: each term is a quoted FTS5 phrase, and the terms are joined with OR. Neo4j's full-text index, which the C# route used, joins words with OR by default. With no terms left, the question's own words are quoted.
 - **Ranking**: bm25 (`score` is its negation, so higher is better). Only current, active versions. `limit` is applied after the join.
 - **Result**: `id`, `kind`, `text`, `at`, `source`, `trusted`, `score`, `route`, `rowid`. The JSON has `results` (with `content`), `abstain` (always false until 2b) and `routes`.
-- **Routes**: `recall(store, query, limit, routes)` runs one route. More than one is refused until 2b adds fusion, and `vector` is refused until 2b.
+- **Routes**: `lexical` and `vector`, fused by reciprocal rank (step 2b, below). Step 2a's single-route refusal is gone.
 
 ### Measured (staging journal, 342 lines, 2026-11-16)
 
@@ -273,8 +274,48 @@ Step 2a abstains on nothing, so its 48/60 is the 48 answerable questions it did 
 
 Per type, M1 lexical against step 2a: single 24/26 and 24/26, temporal 8/12 and 9/12, multihop 2/10 and 1/10. The misses are the single questions j-01 (`/steven3zx` sits in a home line, outranked by facts that also say "vinci") and j-30 (`ActivityWatch` is one FTS5 token, so `activity` does not match it), and most multihop questions. Vector and fusion are for those.
 
-### Open for step 2b
+### Step 2b (done, see the results below)
 
-- Abstention, the corrective query and date ranges.
-- The vector route (`vectors` table, `TensorPrimitives`-style scan), and fusion of the routes in `recall()`.
+Abstention, the corrective query, date ranges, the vector route and fusion are built. Vectors are embedded by `vinci index embed` and scanned by `vector_scan.mojo`. Remaining open: `keys` (consolidation, step 3).
 - `keys` are filled by consolidation. Until then `keys` is empty and search uses `text` only.
+
+### Index vs baseline (M3 step 2b)
+
+Step 2b of [the one-journal plan](plan-one-journal-one-index.md), phase 2: vectors, fusion, abstention, the corrective query and date boosts. Status: **both sets are measured.** Verdict below: phase 2's done-when is met on both sets. Tokens per answer are higher than M1 on the personal set, and phase 3 is where they get cut.
+
+**Personal set** (v2, 60 questions, staging journal of 342 lines, 281 facts, `vinci recall --limit 10`, tokens from llama-server `/tokenize`):
+
+| Route mix | v2 hit | v2 abstention | v2 tokens mean / median |
+| --- | --- | --- | --- |
+| M1 lexical (memory API) | 34/48 | 44/60 | 240.6 / 245.0 |
+| M1 default, lexical + vector + graph | 35/48 | 48/60 | 244.0 / 246.5 |
+| 2b lexical | 35/48 | 45/60 | 200.6 / 195.5 |
+| 2b vector | 34/48 | 49/60 | 296.8 / 316.0 |
+| 2b lexical + vector (new default) | 36/48 | 49/60 | 275.4 / 263.0 |
+
+Against the phase 2 bar (at least the phase 0 default on both sets): the new default meets it on hits (36 against 35) and abstention (49 against 48). **Tokens are higher, not lower:** lexical + vector returns 275 tokens on average against the default's 244. Only lexical alone is lower (200.6). The plan's "tokens lower" goal is therefore not met by the default. Phase 3's budget work is where that gets addressed, not phase 2's pass/fail bar.
+
+**LongMemEval subset** (100 questions, 90 answerable and 10 abstention, `lme_index_eval.py`). Per-type numbers are in `~/.vinci/eval/results/lme-index-2026-11-17.json`. The reference is `lme-baseline-2026-11-16.json` (SQLite FTS5 BM25 over each question's haystack). Tokens are over the top 10 results, counted with llama-server in both.
+
+| Route mix | any@5 | all@5 | any@10 | all@10 | turn@10 | tokens median / mean |
+| --- | --- | --- | --- | --- | --- | --- |
+| Reference (BM25 over haystack) | 96.7% | 80.0% | 97.8% | 88.9% | 87.8% | 2487.5 / 2496.5 |
+| 2b lexical | 96.7% | 80.0% | 97.8% | 87.8% | 87.8% | 2477.5 / 2539.1 |
+| 2b vector | 98.9% | 92.2% | 98.9% | 98.9% | 96.7% | 1588.5 / 1591.3 |
+| 2b lexical + vector (new default) | 97.8% | 88.9% | 98.9% | 94.4% | 94.4% | 2108.5 / 2177.6 |
+
+The index abstained on 2 of the 10 abstention questions in every route mix. The subset's abstention questions are not scored in the baseline, so that count is reported only.
+
+**Where the question vectors came from.** Documents (the turns) and the original questions are the GPU vectors (`qwen3-embedding:4b@gpu`) that `lme_embed.py` cached. The GPU job skipped 3 turns that were over the 8,192-token context, so 3 turns have no vector (2e6d26dc, 852ce960 and 2698e78f each have one). Those turns are found by lexical recall only. The corrective queries were not in the cache. All 100 questions had one, so 100 were embedded on the CPU (`qwen3-embedding:4b@cpu`, a distinct label, in the same cache file). The scored runs pointed both their base and fallback URLs at a closed port, and the cache held the same 46,604 rows before and after. So the scored runs made no successful server call. CPU and GPU are not the same device, so the query vectors are not identical to GPU ones. On a 20-turn sample, the CPU and GPU vectors of the same texts have cosine 0.9955 minimum and 0.9967 mean.
+
+**Verdict, Phase 2 done-when** ("at least the phase 0 baseline on both sets, and a full rebuild time is recorded"):
+- **Personal set: met.** The new default (lexical + vector) gets 36/48 hits against M1's 35/48, and 49/60 abstentions against 48/60. **Tokens are higher, not lower:** 275 mean against M1's 244 (llama tokens). Phase 2 does not require fewer tokens; Phase 3's budget sweep and handles are what cut them.
+- **LongMemEval: met.** Lexical + vector is at or above the reference on every recall metric: any@5 97.8 against 96.7, all@5 88.9 against 80.0, any@10 98.9 against 97.8, all@10 94.4 against 88.9, turn@10 94.4 against 87.8. Its tokens are lower (median 2108 against 2488). Lexical alone does not beat the reference on all@10 (87.8 against 88.9), so the fusion is what gets there.
+- **Rebuild time recorded:** below.
+
+**Timings** (staging journal, 342 lines; machine shared with the GPU job):
+- Full rebuild, no embedding: 0.3 s wall (120 ms in the build).
+- Embedding all 281 facts on the CPU with a cold cache: 51.5 s.
+- The GPU job that filled the LongMemEval cache: 80.2 min for 46,504 texts (about 9.8 texts/s), with a short restart midway.
+- LongMemEval: 100 per-question indexes built and embedded from the cache in 1.4 s each (load 0.46 s, embed 0.98 s, about 494 turns each); the CPU warm pass and the 20-turn agreement sample ran together in under 2 minutes; each scored route took 5 to 8 s for 100 questions.
+- Recall, lexical route on the personal set: 60 calls in 2.0 s. The vector route's first pass took 98 s for 60 calls, because each query vector was embedded once on the CPU; a later pass with the cache warm was not timed.

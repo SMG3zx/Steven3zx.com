@@ -14,3 +14,11 @@
 {"agent":"M3.2a","n":1,"pass":true,"first_error":""}
 {"agent":"M3.2a","n":2,"pass":true,"first_error":""}
 {"agent":"M3.2a","n":3,"pass":true,"first_error":""}
+{"agent": "M3.2b", "n": 1, "pass": true, "first_error": ""}
+{"agent": "M3.2b", "n": 2, "pass": false, "first_error": "/home/steven3zx/Steven3zx.com/vinci/mojo/tests/test_index_recall.mojo:212:18: error: 'Candidate' value has no attribute 'score'"}
+{"agent": "M3.2b", "n": 3, "pass": false, "first_error": "/home/steven3zx/Steven3zx.com/vinci/mojo/.venv/bin/mojo: error: module does not define a `main` function"}
+{"agent": "M3.2b", "n": 4, "pass": false, "first_error": "Unhandled exception caught during execution: At /home/steven3zx/Steven3zx.com/vinci/mojo/tests/test_index_recall.mojo:212:16: AssertionError: the fused score is positive for a found fact"}
+{"agent": "M3.2b", "n": 5, "pass": true, "first_error": ""}
+{"agent":"M3.2b","n":6,"pass":true,"first_error":""}
+{"agent":"M3.2b","n":7,"pass":true,"first_error":""}
+{"agent":"M3.2b","n":8,"pass":true,"first_error":""}

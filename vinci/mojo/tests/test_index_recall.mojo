@@ -4,7 +4,15 @@
 from std.testing import assert_equal, assert_false, assert_true
 
 from index_store import Fact, IndexStore
-from recall import fts_query, lexical, query_terms, quote_phrase, recall
+from embed_edge import EmbedConfig
+from recall import (
+    Settings,
+    fts_query,
+    lexical,
+    query_terms,
+    quote_phrase,
+    recall,
+)
 
 
 def fact(
@@ -49,19 +57,19 @@ def test_terms_follow_retrieval_cs() raises:
     expected.append("decide")
     expected.append("gomath")
     expected.append("bank")
-    expect_terms("What did we decide about the GoMath bank?", expected^)
+    expect_terms("What did we decide about the GoMath bank?", expected)
 
 
 def test_terms_keep_hyphens_and_underscores() raises:
     var expected = List[String]()
     expected.append("auto-indexed")
     expected.append("foo_bar")
-    expect_terms("auto-indexed foo_bar x1", expected^)
+    expect_terms("auto-indexed foo_bar x1", expected)
 
 
 def test_query_with_no_terms_falls_back_to_its_words() raises:
     var empty = List[String]()
-    expect_terms("a I", empty^)
+    expect_terms("a I", empty)
     assert_equal(fts_query("a I"), '"a" OR "I"')
     assert_equal(fts_query("   "), "")
     assert_equal(fts_query("alpha beta"), '"alpha" OR "beta"')
@@ -112,13 +120,13 @@ def test_fts5_syntax_in_queries_is_text() raises:
     queries.append("   ")
     for q in queries:
         # Each query runs without raising, whatever FTS5 would make of it as syntax.
-        _ = lexical(store, q, 10)
+        _ = lexical(store, q, 10, False)
     # Quoted, "NOT" is an ordinary word, so it finds only what contains it.
-    var words = lexical(store, "NOT", 10)
+    var words = lexical(store, "NOT", 10, False)
     assert_equal(len(words), 1)
     assert_equal(words[0].id, "r1")
     # A quote inside a query is doubled, so the phrase still matches the text.
-    var quoted = lexical(store, 'quoted "text"', 10)
+    var quoted = lexical(store, 'quoted "text"', 10, False)
     assert_equal(len(quoted), 1)
     assert_equal(quoted[0].id, "r2")
 
@@ -171,10 +179,10 @@ def test_superseded_and_inactive_versions_are_not_returned() raises:
     )
     # The old version of r1 still exists, but it is not current.
     assert_equal(store.fact_total(), 4)
-    var alpha = lexical(store, "alpha", 10)
+    var alpha = lexical(store, "alpha", 10, False)
     assert_equal(len(alpha), 1)
     assert_equal(alpha[0].id, "r3")
-    var gamma = lexical(store, "gamma", 10)
+    var gamma = lexical(store, "gamma", 10, False)
     assert_equal(len(gamma), 1)
     assert_equal(gamma[0].id, "r1")
 
@@ -192,7 +200,7 @@ def test_result_holds_the_citation_and_the_text() raises:
             "active",
         )
     )
-    var found = lexical(store, "bun", 5)
+    var found = lexical(store, "bun", 5, False)
     assert_equal(len(found), 1)
     var r = found[0].copy()
     assert_equal(r.id, "m12")
@@ -201,8 +209,9 @@ def test_result_holds_the_citation_and_the_text() raises:
     assert_equal(r.at, "2026-03-04T05:06:07Z")
     assert_equal(r.source, "test")
     assert_false(r.trusted)
-    assert_true(r.score > 0.0, "the score is higher for better matches")
-    assert_equal(r.route, "lexical")
+    # The raw route has no fused score yet: fusion sets it.
+    assert_equal(r.fused, 0.0)
+    assert_true(r.in_lexical and not r.in_vector)
 
 
 def test_or_matching_and_limit() raises:
@@ -217,40 +226,76 @@ def test_or_matching_and_limit() raises:
         fact("c", "h3", "idea", "gamma", "2026-01-01T00:00:00Z", True, "active")
     )
     # Words are joined with OR, as Neo4j's full-text index joins them.
-    assert_equal(len(lexical(store, "alpha beta", 10)), 2)
-    assert_equal(len(lexical(store, "alpha beta gamma", 2)), 2)
-    assert_equal(len(lexical(store, "alpha", 0)), 0)
+    assert_equal(len(lexical(store, "alpha beta", 10, False)), 2)
+    assert_equal(len(lexical(store, "alpha beta gamma", 2, False)), 2)
+    assert_equal(len(lexical(store, "alpha", 0, False)), 0)
 
 
-def test_recall_runs_one_route_and_refuses_the_rest() raises:
+def test_recall_refuses_unknown_and_empty_routes() raises:
     var store = IndexStore(":memory:")
     _ = store.put(
-        fact("a", "h1", "idea", "alpha", "2026-01-01T00:00:00Z", True, "active")
+        fact(
+            "r1",
+            "h1",
+            "idea",
+            "alpha beta",
+            "2026-01-01T00:00:00Z",
+            True,
+            "active",
+        )
+    )
+    var none = List[String]()
+    var settings_none = Settings(
+        5, none^, 0, "2026-11-16", EmbedConfig("", "", "", "", "")
+    )
+    var refused = False
+    try:
+        _ = recall(store, "alpha", settings_none)
+    except:
+        refused = True
+    assert_true(refused)
+    var graph = List[String]()
+    graph.append("graph")
+    var settings_graph = Settings(
+        5, graph^, 0, "2026-11-16", EmbedConfig("", "", "", "", "")
+    )
+    refused = False
+    try:
+        _ = recall(store, "alpha", settings_graph)
+    except:
+        refused = True
+    assert_true(refused)
+
+
+def test_recall_lexical_only_answers_without_a_vector_store() raises:
+    var store = IndexStore(":memory:")
+    _ = store.put(
+        fact(
+            "r1",
+            "h1",
+            "idea",
+            "alpha beta",
+            "2026-01-01T00:00:00Z",
+            True,
+            "active",
+        )
     )
     var routes = List[String]()
     routes.append("lexical")
-    var answer = recall(store, "alpha", 5, routes)
+    # The vector route is not asked for, so no embedding is made (base URL unused).
+    var settings = Settings(
+        5,
+        routes^,
+        0,
+        "2026-11-16",
+        EmbedConfig("http://127.0.0.1:9/v1", "m", "m", "", ""),
+    )
+    var answer = recall(store, "alpha", settings)
     assert_equal(len(answer.results), 1)
-    assert_false(answer.abstain)
-
-    var vector_only = List[String]()
-    vector_only.append("vector")
-    var refused = False
-    try:
-        _ = recall(store, "alpha", 5, vector_only)
-    except:
-        refused = True
-    assert_true(refused, "the vector route is step 2b")
-
-    var both = List[String]()
-    both.append("lexical")
-    both.append("vector")
-    refused = False
-    try:
-        _ = recall(store, "alpha", 5, both)
-    except:
-        refused = True
-    assert_true(refused, "fusing routes is step 2b")
+    assert_equal(answer.results[0].id, "r1")
+    assert_false(answer.abstention.abstain)
+    assert_equal(answer.route, "semantic")
+    assert_equal(answer.complexity, "simple")
 
 
 def main() raises:
@@ -270,5 +315,7 @@ def main() raises:
     print("test_result_holds_the_citation_and_the_text: ok")
     test_or_matching_and_limit()
     print("test_or_matching_and_limit: ok")
-    test_recall_runs_one_route_and_refuses_the_rest()
-    print("test_recall_runs_one_route_and_refuses_the_rest: ok")
+    test_recall_refuses_unknown_and_empty_routes()
+    print("test_recall_refuses_unknown_and_empty_routes: ok")
+    test_recall_lexical_only_answers_without_a_vector_store()
+    print("test_recall_lexical_only_answers_without_a_vector_store: ok")

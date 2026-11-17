@@ -104,6 +104,14 @@ struct CurrentVersion(Copyable, Movable):
 
 
 @fieldwise_init
+struct Unembedded(Copyable, Movable):
+    """A fact that has no vector yet: its rowid and the text to embed."""
+
+    var rowid: Int
+    var text: String
+
+
+@fieldwise_init
 struct KindCount(Copyable, Movable):
     var kind: String
     var total: Int
@@ -329,3 +337,39 @@ struct IndexStore(Movable):
     def file_bytes(self) raises -> Int:
         var os = Python.import_module("os")
         return Int(String(os.path.getsize(PythonObject(self.path))))
+
+    def missing_vectors(self, label: String) raises -> List[Unembedded]:
+        """Active facts with no vector for the label, in rowid order.
+
+        Superseded facts still count: the temporal route can reach them, so they need
+        vectors too.
+        """
+        var out = List[Unembedded]()
+        var rows = self.conn.execute(
+            (
+                "SELECT f.rowid, f.text FROM facts AS f WHERE f.status ="
+                " 'active' AND NOT EXISTS (SELECT 1 FROM vectors AS v WHERE"
+                " v.fact = f.rowid AND v.label = ?) ORDER BY f.rowid"
+            ),
+            py_params(PythonObject(label)),
+        ).fetchall()
+        for row in rows:
+            out.append(Unembedded(Int(String(row[0])), String(row[1])))
+        return out^
+
+    def put_vector(
+        self, fact: Int, label: String, blob: PythonObject, dims: Int
+    ) raises:
+        """Store one packed float32 vector for a fact under a label."""
+        _ = self.conn.execute(
+            (
+                "INSERT OR REPLACE INTO vectors (fact, label, dims, vec)"
+                " VALUES (?, ?, ?, ?)"
+            ),
+            py_params(
+                PythonObject(fact),
+                PythonObject(label),
+                PythonObject(dims),
+                blob,
+            ),
+        )
