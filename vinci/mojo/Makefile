@@ -10,7 +10,7 @@ UV := uv run
 MOJO := $(UV) mojo
 
 # Mojo programs that get built into build/. Add a new main program here.
-BIN_SRCS := src/hello.mojo
+BIN_SRCS :=
 BINS := $(patsubst src/%.mojo,build/%,$(BIN_SRCS))
 MOJO_SRCS := $(wildcard src/*.mojo)
 TEST_SRCS := $(wildcard tests/test_*.mojo)

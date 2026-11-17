@@ -31,6 +31,27 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
       """Sum the values."""
   ```
 
+- **`where` is a keyword.** A struct field or argument named `where` fails to parse with "Cannot parse" under `mojo format`. Name it `where_`, as `for` is named `for_`. JSON keys keep their own spelling.
+  ```mojo
+  var where_: Optional[String]     # not: var where: Optional[String]
+  ```
+- **Passing a struct or an optional into a constructor moves it.** Constructor parameters must be `var`, and each one is moved with `^` or copied with `.copy()`. A borrowed `Optional` also needs `.copy()` before `.or_else(...)`.
+  ```mojo
+  def __init__(out self, var at: Instant, var refs: Optional[List[String]] = None):
+      self.at = at^
+      self.refs = refs^
+
+  var refs = e.refs.copy().or_else(List[String]())   # not: e.refs.or_else(...)
+  ```
+- **`//` on `Int` rounds toward negative infinity.** `-7 // 2` is `-4`, but C# casts such as `(int)TotalMinutes` truncate to `-3`. Use a helper that adds one back for an inexact negative quotient.
+  ```mojo
+  def truncate_div(a: Int, b: Int) -> Int:
+      var q = a // b
+      if q < 0 and q * b != a:
+          q += 1
+      return q
+  ```
+
 ## Strings
 
 - **JSON escapes inside Mojo string literals must be doubled.** Mojo decodes `\"` and `\u` first, so write `\\` to reach the JSON parser intact.

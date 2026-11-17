@@ -1,0 +1,2 @@
+{"agent":"W1","n":1,"pass":false,"first_error":"error: cannot format /tmp/tmp.Y2Mc4xvDKN/src/journal.mojo: Cannot parse: 30:8:     var where: Optional[String]"}
+{"agent":"W1","n":2,"pass":false,"first_error":"/home/steven3zx/Steven3zx.com/vinci/mojo/py/vinci_diff/generate.py:71:15 - error: Cases within match statement do not exhaustively handle all values"}
