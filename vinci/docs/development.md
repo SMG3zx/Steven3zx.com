@@ -27,3 +27,5 @@ The only NuGet package in the program is `Neo4j.Driver`, used by `vinci memory`.
 | `mojo/` | The Mojo project: the pinned toolchain (`pyproject.toml`), the Makefile, the source and tests, `scripts/attempt.sh`, and the calibration tasks in `calibration/` |
 | `mojo/py/vinci_eval/` | The evaluation scripts: the LongMemEval subset (`lme_subset.py`) and reference baseline (`lme_baseline.py`), and the personal baseline (`personal_baseline.py`) |
 | `mojo/eval/` | The fixed LongMemEval subset ids (`longmemeval-subset.json`) |
+
+`VINCI_NOW` (an ISO 8601 time with an offset) replaces the clock, and `VINCI_NO_TRACK=1` skips the window and git reads so a run only appends what the command itself writes. Both exist for the mark 2 differential test, which runs the C# binary (`mojo/build/oracle/`) against the Mojo port on the same journal; neither is set in normal use.

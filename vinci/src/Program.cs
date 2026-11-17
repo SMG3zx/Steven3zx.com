@@ -17,6 +17,17 @@ var activityWatch = Environment.GetEnvironmentVariable("VINCI_ACTIVITYWATCH")
     ?? "http://127.0.0.1:5600";
 var journal = new Journal(Path.Combine(home, "journal.jsonl"));
 
+// VINCI_NOW pins the clock, and VINCI_NO_TRACK=1 stops the window and git
+// reads, so the C# binary can be the oracle for the Mojo port's differential test.
+var now = DateTimeOffset.Now;
+var nowText = Environment.GetEnvironmentVariable("VINCI_NOW");
+if (nowText is not null && !App.TryParseNow(nowText, out now))
+{
+    Console.Error.WriteLine($"vinci: VINCI_NOW must be an ISO 8601 time with an offset, got '{nowText}'");
+    return 1;
+}
+var track = Environment.GetEnvironmentVariable("VINCI_NO_TRACK") != "1";
+
 // The one command that does not end: it answers requests until it is stopped.
 if (args is ["serve", ..])
 {
@@ -50,9 +61,10 @@ if (args is [] or ["chat"])
                 TextReader.Null,
                 output,
                 output,
-                DateTimeOffset.Now,
+                now,
                 activity,
-                Git.Log
+                Git.Log,
+                track
             ),
         Console.In,
         Console.Out,
@@ -66,7 +78,8 @@ return App.Run(
     Console.In,
     Console.Out,
     Console.Error,
-    DateTimeOffset.Now,
+    now,
     activity,
-    Git.Log
+    Git.Log,
+    track
 );

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Vinci;
 
@@ -22,8 +23,19 @@ public static class Text
 
 public static class App
 {
+    /// The offset is required: without one, the same text names different
+    /// moments on different machines.
+    public static bool TryParseNow(string text, out DateTimeOffset now)
+    {
+        now = default;
+        return Regex.IsMatch(text, @"^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:\d{2})$")
+            && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out now);
+    }
+
     /// Window time is credited before the command runs, so every command
     /// sees current totals and nobody has to start or stop a timer.
+    /// With track false nothing is read from the watchers or git, so the journal
+    /// is only appended to by the command itself.
     public static int Run(
         string[] args,
         Journal journal,
@@ -32,12 +44,13 @@ public static class App
         TextWriter errors,
         DateTimeOffset now,
         ActivitySource? activity = null,
-        CommitSource? commits = null
+        CommitSource? commits = null,
+        bool track = true
     )
     {
         try
         {
-            var tracked = Tracker.Sync(journal, activity, commits, now);
+            IReadOnlyList<string> tracked = track ? Tracker.Sync(journal, activity, commits, now) : [];
             new Session(journal, input, output, now, tracked).Dispatch(args);
             return 0;
         }

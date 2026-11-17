@@ -1,3 +1,4 @@
+using System.Globalization;
 using Vinci;
 
 namespace Vinci.Tests;
@@ -260,6 +261,54 @@ public sealed class VinciTests : IDisposable
         Assert.Contains("touch 0m", Run("ideas"));
         reachable = true;
         Assert.Contains("touch 30m", Run("ideas"));
+    }
+
+    [Fact]
+    public void Without_tracking_a_run_reads_no_window_time_and_appends_nothing_else()
+    {
+        Run("idea", "Flying machine");
+        Run("watch", "i1", "wing");
+        Wait(TimeSpan.FromMinutes(40));
+        Window(now.AddMinutes(-40), 40, "code Wing.cs");
+        var before = File.ReadAllLines(JournalPath).Length;
+
+        var output = new StringWriter();
+        var code = App.Run(
+            ["sync"],
+            new Journal(JournalPath),
+            TextReader.Null,
+            output,
+            output,
+            now,
+            (from, to) => new Seen(windows, to),
+            null,
+            track: false
+        );
+
+        Assert.Equal(0, code);
+        Assert.Equal("", output.ToString());
+        Assert.Equal(before, File.ReadAllLines(JournalPath).Length);
+        // Tracking is still on by default, so the same window is credited now.
+        Assert.StartsWith("i1   +40m", Run("sync"));
+    }
+
+    [Theory]
+    [InlineData("2026-11-20T12:00:00-06:00")]
+    [InlineData("2026-11-20T18:00:00Z")]
+    [InlineData("2026-11-20T12:00:00.5+01:00")]
+    public void VINCI_NOW_takes_an_iso_time_with_an_offset(string text)
+    {
+        Assert.True(App.TryParseNow(text, out var at));
+        Assert.Equal(DateTimeOffset.Parse(text, CultureInfo.InvariantCulture), at);
+    }
+
+    [Theory]
+    [InlineData("2026-11-20T12:00:00")]
+    [InlineData("2026-11-20 12:00:00-06:00")]
+    [InlineData("tomorrow")]
+    public void VINCI_NOW_without_an_offset_or_in_another_form_is_refused(string text)
+    {
+        Assert.False(App.TryParseNow(text, out _));
     }
 
     [Fact]
