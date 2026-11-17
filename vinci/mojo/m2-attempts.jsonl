@@ -2,3 +2,10 @@
 {"agent":"W1","n":2,"pass":false,"first_error":"/home/steven3zx/Steven3zx.com/vinci/mojo/py/vinci_diff/generate.py:71:15 - error: Cases within match statement do not exhaustively handle all values"}
 {"agent":"W2-skeleton","n":1,"pass":false,"first_error":"fmt-check: not formatted: src/cmd_ideas.mojo (a def signature over 80 columns is wrapped by mojo format)"}
 {"agent":"W2-skeleton","n":2,"pass":true,"first_error":""}
+{"agent":"knowledge","n":1,"pass":false,"first_error":"cmd_knowledge.mojo:190:20: error: cannot transfer out of immutable reference (url=url^ on a borrowed argument)"}
+{"agent":"knowledge","n":2,"pass":true,"first_error":""}
+{"agent":"ideas","n":1,"pass":false,"first_error":"cmd_ideas.mojo: value of type 'Instant' cannot be implicitly copied (var until = idea.incubate_until.value())"}
+{"agent":"ideas","n":2,"pass":false,"first_error":"cmd_ideas.mojo: cannot call function that may raise in a context that cannot raise (issue_line)"}
+{"agent":"ideas","n":3,"pass":true,"first_error":""}
+{"agent":"ops","n":1,"pass":false,"first_error":"review.mojo:108:18: error: no matching function in initialization (Limits lacked @fieldwise_init)"}
+{"agent":"ops","n":2,"pass":true,"first_error":""}
