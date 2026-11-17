@@ -1,6 +1,6 @@
 # vinci mark 2
 
-Status: M0 and M1 done. On 2026-11-17 you chose to continue in Mojo ([m0-results.md](m0-results.md)); the baseline is in [memory.md](memory.md). M2 is in progress.
+Status: M0, M1 and M2 done (2026-11-16): continue in Mojo; the core runs in Mojo and matches the C# binary ([m2-results.md](m2-results.md)). M3 is next.
 
 Mark 2 is three decisions and one direction:
 

@@ -1,6 +1,6 @@
 # M0 results: the bet
 
-Date: 2026-11-17. This is the result of phase M0 in [mark 2](mark2-plan.md), section 7.
+Date: 2026-11-16. This is the result of phase M0 in [mark 2](mark2-plan.md), section 7.
 
 ## Setup
 
@@ -26,7 +26,7 @@ Section 2 of the plan sets three stop conditions. Here is each one.
 
 ## Verdict
 
-Decision, 2026-11-17: continue in Mojo. The sample is small: three tasks, and the third-try pass rate clears 60% only narrowly. So the stop conditions are checked again at the end of M2, the first phase with real volume.
+Decision, 2026-11-16: continue in Mojo. The sample is small: three tasks, and the third-try pass rate clears 60% only narrowly. So the stop conditions are checked again at the end of M2, the first phase with real volume.
 
 ## Findings that are not about Mojo
 
