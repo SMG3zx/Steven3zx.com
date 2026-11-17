@@ -54,6 +54,11 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
 
 ## Strings
 
+- **`strip()` and `split()` give a `StringSpan`, not a `String`.** Passing one to a `String` parameter fails with "cannot be converted from 'StringSpan'". Wrap it.
+  ```mojo
+  var name = String(ascii_prefix(line, at).strip())    # not: ascii_prefix(line, at).strip()
+  ```
+
 - **JSON escapes inside Mojo string literals must be doubled.** Mojo decodes `\"` and `\u` first, so write `\\` to reach the JSON parser intact.
   ```mojo
   lines.append('{"kind":"idea","id":"i3","text":"delta \\"quoted\\""}')
@@ -91,6 +96,16 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   var digest = String(hashlib.sha256(PythonObject(text).encode()).hexdigest())
   ```
 
+- **Interop calls raise, so the function calling them must too.** `Python.import_module` in a non-raising `def` fails with "cannot call function that may raise". Mark the function `raises`, or wrap the call in `try:` inside a helper that may swallow the error (a stderr write at exit is the usual case).
+  ```mojo
+  def stderr_line(text: String):
+      try:
+          var sys = Python.import_module("sys")
+          sys.stderr.write(text + "\n")
+      except:
+          pass
+  ```
+
 ## Pointers and SIMD
 
 - **`UnsafePointer.load` is deprecated.** Use `unsafe_load`, which builds without a warning.
@@ -115,7 +130,7 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   cp -R src "$tmp/" && uv run mojo format "$tmp/src" && diff -ru src "$tmp/src"
   ```
 - **The default line length is 80.** `mojo format` takes `-l`/`--line-length`; it was not checked whether it reads any config file.
-- **`mojo format` joins a signature onto one line when it fits.** A signature wrapped over several lines fails the format check, so write it on one line.
+- **`mojo format` joins a signature onto one line when it fits, and wraps one longer than 80 columns.** Either way the check compares against `mojo format`, so run `uv run mojo format <file>` on the file rather than wrapping by hand. A `def` over 80 columns fails `make fmt-check` as written.
   ```mojo
   def add(a: Int, b: Int) -> Int:
   ```
