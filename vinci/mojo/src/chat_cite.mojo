@@ -1,11 +1,14 @@
 # The citation check (Conversation.cs: Citation, and the unsourced check) for the Mojo chat.
-# A citation is an id in square brackets, as recall prints it: a letter, digits, and for a
-# read passage a slash and more digits ([i1], [m12], [L142], [d1/2]). Each cited id must
-# appear in the tool results of the same turn, as "[id]". Anything else is reported.
+# A citation is a bracketed token of the answer that is either an id as journal recall prints
+# it, a letter, digits, and for a read passage a slash and more digits ([i1], [m12], [L142],
+# [d1/2]), or any token that appears bracketed in this turn's tool results (an id of another
+# shape, such as an evaluation's [answer_d8e33f5c_2:0]). Each cited id must appear in the tool
+# results of the same turn, as "[id]". A journal-shaped id that the results do not show is
+# reported. Anything else in brackets is ordinary text.
 
 comptime OPEN_BRACKET = 91
 comptime CLOSE_BRACKET = 93
-comptime MAX_CITE_BYTES = 24
+comptime MAX_CITE_BYTES = 80
 comptime SLASH = 47
 
 
@@ -42,9 +45,9 @@ def is_cite_id(text: String) -> Bool:
     return more > 0 and i == n
 
 
-def cited_ids(answer: String) raises -> List[String]:
-    """The distinct citation ids in an answer, in the order they first appear. A bracket
-    pair with white space, a second bracket, or a long run between is not a citation.
+def bracketed_tokens(answer: String) raises -> List[String]:
+    """The distinct bracketed tokens of an answer, in the order they first appear. A bracket
+    pair with white space, a second bracket, or a long run between is not a token.
     """
     var out = List[String]()
     var b = answer.as_bytes()
@@ -69,18 +72,40 @@ def cited_ids(answer: String) raises -> List[String]:
             var inside = List[UInt8]()
             for k in range(i + 1, j):
                 inside.append(b[k])
-            var id = String(unsafe_from_utf8=inside)
-            if is_cite_id(id):
-                var seen = False
-                for old in out:
-                    if old == id:
-                        seen = True
-                        break
-                if not seen:
-                    out.append(id)
+            var token = String(unsafe_from_utf8=inside)
+            var seen = False
+            for old in out:
+                if old == token:
+                    seen = True
+                    break
+            if not seen:
+                out.append(token)
             i = j + 1
         else:
             i += 1
+    return out^
+
+
+def cited_ids(answer: String) raises -> List[String]:
+    """The distinct bracketed tokens of an answer that have the shape of a journal id (see
+    is_cite_id), in the order they first appear."""
+    var out = List[String]()
+    for token in bracketed_tokens(answer):
+        if is_cite_id(token):
+            out.append(token.copy())
+    return out^
+
+
+def cited_ids_with_evidence(
+    answer: String, evidence: String
+) raises -> List[String]:
+    """The citations of an answer: the journal-shaped ids, and any other bracketed token that
+    the tool results of this turn show as "[token]". Ordinary bracketed text is neither.
+    """
+    var out = List[String]()
+    for token in bracketed_tokens(answer):
+        if is_cite_id(token) or evidence.find("[" + token + "]") >= 0:
+            out.append(token.copy())
     return out^
 
 

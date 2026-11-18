@@ -10,14 +10,23 @@ serves, the same request OpenAiChat.cs sends.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Final, cast
 
 CHAT_TIMEOUT_S: Final = 300
 CHILD_TIMEOUT_S: Final = 120
+# Eval only (the M4 chat-loop evaluation). VINCI_CHAT_TEMPERATURE is sent with the request when
+# set; VINCI_CHAT_USAGE_LOG names a JSON lines file that gets one record per model call: the
+# token counts, the reply, and whether the request carried a recall that fell back to lexical.
+# Unset, neither changes the request or writes anything.
+TEMPERATURE_ENV: Final = "VINCI_CHAT_TEMPERATURE"
+USAGE_LOG_ENV: Final = "VINCI_CHAT_USAGE_LOG"
+LEXICAL_FALLBACK_MARK: Final = "the embedding server did not answer"
 
 
 def _field(value: object, key: str) -> object | None:
@@ -25,6 +34,23 @@ def _field(value: object, key: str) -> object | None:
     if not isinstance(value, dict):
         return None
     return cast("dict[str, object]", value).get(key)
+
+
+def _log_usage(log: str, raw: object, messages_json: str) -> None:
+    """Append one usage record for a model call (eval only, see USAGE_LOG_ENV)."""
+    usage = _field(raw, "usage")
+    choices = _field(raw, "choices")
+    content: object = None
+    if isinstance(choices, list) and cast("list[object]", choices):
+        content = _field(_field(cast("list[object]", choices)[0], "message"), "content")
+    record: dict[str, object] = {
+        "prompt_tokens": _field(usage, "prompt_tokens"),
+        "completion_tokens": _field(usage, "completion_tokens"),
+        "reply": content,
+        "lexical_fallback": LEXICAL_FALLBACK_MARK in messages_json,
+    }
+    with Path(log).open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def complete(base_url: str, model: str, messages_json: str, think: bool) -> tuple[str, str]:
@@ -40,6 +66,9 @@ def complete(base_url: str, model: str, messages_json: str, think: bool) -> tupl
             "stream": False,
             "chat_template_kwargs": {"enable_thinking": think},
         }
+        temperature = os.environ.get(TEMPERATURE_ENV, "")
+        if temperature:
+            body["temperature"] = float(temperature)
         request = urllib.request.Request(
             base_url.rstrip("/") + "/chat/completions",
             data=json.dumps(body).encode("utf-8"),
@@ -52,6 +81,9 @@ def complete(base_url: str, model: str, messages_json: str, think: bool) -> tupl
         return ("error", f"chat model {model} returned {err.code}")
     except (urllib.error.URLError, OSError, ValueError) as err:
         return ("error", str(err))
+    usage_log = os.environ.get(USAGE_LOG_ENV, "")
+    if usage_log:
+        _log_usage(usage_log, raw, messages_json)
     if raw is None:
         return ("error", "chat model returned an empty reply")
     choices = _field(raw, "choices")

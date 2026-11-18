@@ -46,3 +46,5 @@
 {"agent": "M4b", "n": 12, "pass": true, "first_error": ""}
 {"agent": "M4b", "n": 13, "pass": false, "first_error": "DIVERGED portal step 1 page: //relative.example:9090/x shown as raw text, oracle says not an absolute address"}
 {"agent": "M4b", "n": 14, "pass": true, "first_error": ""}
+{"agent": "M4c", "n": 1, "pass": true, "first_error": ""}
+{"agent": "M4c", "n": 2, "pass": true, "first_error": ""}

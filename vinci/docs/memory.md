@@ -463,3 +463,46 @@ Once untrusted text has entered the conversation (the `read` tool ran, or a reca
 
 - Unit: `mojo/tests/test_chat_cite.mojo` (citation scanning and the unseen check), `test_chat_gate.mojo` (writes, the gate, yes and no), `test_chat_open.mojo` (the cap, notice, multi-fact cut, grep), `test_chat_args.mojo` (action parsing, accessors, summary).
 - Differential: `cd mojo/py && uv run python -m vinci_diff.chat_diff` runs each script in `mojo/difftest/chat/*.json` against the C# oracle (`mojo/build/oracle/vinci chat`) and the Mojo chat. A fake llama-server (`vinci_diff/fake_llm.py`) replays the script's replies and records what the model was shown. The C# side is compared on stdout and on the journal lines it adds, with the Neo4j notices, the answer-not-saved line and the memory kinds (`exchange`, `remember`, `read`) left out, since those are by design. The Mojo side is checked against each script's expectations. `--show <name>` prints one Mojo transcript.
+
+### Chat-loop evaluation (M4 step c)
+
+The M3 sweep answered from packed recall with no tools. This step measures the real chat loop (`vinci chat`, with recall, open and the rest) on the same questions, judged the same way, so the two can be compared. The full results are not in yet; the smoke run (3 questions per set, both configurations) is clean, see below.
+
+```sh
+cd mojo/py
+uv run python -m vinci_eval.chat_eval --limit-questions 3 --out SCRATCH.jsonl --transcripts DIR   # smoke
+uv run python -m vinci_eval.chat_eval --set both                                                  # full run, resumable
+uv run python -m vinci_eval.chat_eval --summary --out ~/.vinci/eval/results/chat-eval-<date>.jsonl
+```
+
+- **Runs.** Each conversation is one `vinci chat` process: one question on standard input, then end of input. The stdout is parsed into the answer (lines starting `  · `, `  ! `, `  ? ` removed), the citation flags and the tool calls. Tool calls come from the usage log (each model reply that is a tool call, whole), and are cross-checked against the count of `  · ` notice lines.
+- **Configurations.** `chat-w10` (recall budget 3000, whole 10: the chat default) and `chat-w2` (budget 1000, whole 2: pointers, which need `open`).
+- **Sets and fresh homes.** LME: an empty journal and a copy of the question's index (`~/.vinci/eval/lme-index/<qid>.sqlite`), with `VINCI_CHAT_INDEX` pointing at the copy and `VINCI_NOW` = the question date. Personal: a fresh copy of `~/.vinci/staging` per conversation, no `VINCI_NOW`. The originals are read only.
+- **Embeddings.** The model rephrases its recall queries, and those vectors are not cached, so the query path goes further than `budget_sweep`'s question-only lookup. For each question vector, in order: the device label in the GPU cache (`gpu`); the CPU label in the same cache, the corrective-query rows `lme_index_eval` warmed (`cpu-cached`); a separate scratch cache of live CPU vectors (`cpu-live`); and only then a live embed on the CPU server at 127.0.0.1:8081, written to that scratch cache (`cpu-live`). Nothing is written to the GPU cache or the user's embedding cache. The scratch cache defaults to `~/.vinci/eval/cache/chat-eval-live-cpu.sqlite` (`--live-cache`; it must not be the GPU cache). Document vectors still come from the closed-URL caches. A recall whose vector cannot be had even on the CPU falls back to lexical, which is logged as `error`. Only that case makes a row an error. The judge runs on every completed answer, whether or not it was saved.
+- **Eval-only hooks** (all unset by default; defaults unchanged):
+  - `VINCI_CHAT_RECALL_BUDGET`, `VINCI_CHAT_RECALL_WHOLE` (chat_tools.mojo): the recall packing.
+  - `VINCI_CHAT_INDEX` (chat_tools.mojo): the index file the chat reads, and then the chat never updates it from the journal.
+  - `VINCI_EVAL_EMBED_LABEL`, `_CACHE`, `_FALLBACK_LABEL`, `_FALLBACK_URL` (embed_edge.mojo `default_config`).
+  - `VINCI_CHAT_USAGE_LOG` (vinci_edge/chat_edge.py): one JSON line per model call with the token counts, the reply and the lexical-fallback flag.
+  - `VINCI_CHAT_TEMPERATURE` (chat_edge.py): sent with the request when set. The chat sends no temperature by default, while M3 used 0, so the eval sets 0.
+  - `VINCI_EVAL_LIVE_CACHE`, `VINCI_EVAL_QUERY_LOG` (vinci_edge/index_embed.py `query_with_fallback`): the scratch cache for live CPU vectors (written there, not in the cache the caller names), and one `{"source": ...}` record per question vector (`gpu`, `cpu-cached`, `cpu-live`, `error`). Unset, the fallback writes into its caller's cache, as before.
+- **Judge.** `budget_sweep`'s judge prompts, verdict parser and lexical check, on the chat's final answer. Token totals cover the answer rounds only.
+- **Citations.** A bracketed token of the answer counts when it has journal shape (`[i1]`, `[d1/2]`) or when this turn's tool results show it bracketed (`[answer_d8e33f5c_2:0]` from an evaluation index). A journal-shaped id the results did not show is flagged, as before. Other bracketed text is ordinary text (`chat_cite.mojo`, `cited_ids_with_evidence`; unit test in `test_chat_cite.mojo`).
+- **Results.** One row per conversation in `~/.vinci/eval/results/chat-eval-<date>.jsonl`: config, qid, question, answer, tool calls, citation flags, not-saved, model calls, prompt/completion/total tokens, `query_sources` (gpu, cpu-cached, cpu-live, error counts), seconds, judge verdict, lexical hit, error. Error rows run again on resume. The summary has a question-vector table per configuration.
+
+#### Smoke (2026-11-18, second run): clean, 0 errors
+
+The first smoke gave 12 error rows, because the model's rephrased recall queries were not cached. Live CPU embedding (above) fixed that. Second smoke, 3 questions per set, both configurations, scratch output and live cache, deleted afterwards:
+
+| config | LME judge | LME tool / open | personal judge | personal lexical | total tokens (LME / personal) | seconds per conversation (LME / personal) |
+| --- | --- | --- | --- | --- | --- | --- |
+| chat-w10 | 1/3 | 3/3 / 0/3 | 2/3 | 3/3 | 4,037 / 2,237 | 12.4 / 6.0 |
+| chat-w2 | 1/3 | 3/3 / 1/3 | 2/3 | 3/3 | 3,288 / 2,225 | 8.7 / 5.0 |
+
+Question vectors: 1 GPU-cache hit, 7 live CPU embeds, 0 CPU-cached, 0 lexical fallbacks, across 12 conversations. Citation flags 0, answers not saved 0. Three samples per cell are too few to read accuracy; they show the path works. The full run is about 320 conversations at roughly 8 s each, so about 45 minutes, plus the judge and any first-time CPU embeds.
+
+#### Known issues, from the smoke transcripts
+
+- (a) The model answered without a tool: not seen. All 12 conversations called recall, and 1 of the 6 w2 conversations also used open.
+- (b) Answers not saved because they cite no id: fixed in the citation check above. Before the fix, the LME answers cited `[answer_d8e33f5c_2:0]`, which the journal-shaped check never read, so they were not saved. Now 0 of 12 are not saved.
+- (c) Single-session-preference: not seen. No such question was in the first three of each set.

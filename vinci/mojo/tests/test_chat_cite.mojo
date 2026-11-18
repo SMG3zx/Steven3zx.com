@@ -5,6 +5,7 @@ from std.testing import assert_equal, assert_false, assert_true
 
 from chat_cite import (
     cited_ids,
+    cited_ids_with_evidence,
     document_base,
     is_cite_id,
     is_document_cite,
@@ -55,6 +56,26 @@ def test_unseen_against_this_turn() raises:
     print("test_unseen_against_this_turn: ok")
 
 
+def test_evidence_citations() raises:
+    # An id of another shape counts when this turn's results showed it, bracketed.
+    var evidence = (
+        "[answer_d8e33f5c_2:0] 2022-03-09 I went to a networking event\n"
+    )
+    var found = cited_ids_with_evidence(
+        "You went [answer_d8e33f5c_2:0], see [i99] and [1] and [see here].",
+        evidence,
+    )
+    assert_equal(len(found), 2)
+    assert_equal(found[0], "answer_d8e33f5c_2:0")
+    assert_equal(found[1], "i99")
+    var missing = unseen_cites(found, evidence)
+    assert_equal(len(missing), 1)
+    assert_equal(missing[0], "i99")
+    # A shape the results did not show is not a citation unless it has journal shape.
+    assert_equal(len(cited_ids_with_evidence("[x_1:2]", evidence)), 0)
+    print("test_evidence_citations: ok")
+
+
 def test_documents() raises:
     assert_equal(document_base("d1/2"), "d1")
     assert_equal(document_base("d7"), "d7")
@@ -68,5 +89,6 @@ def main() raises:
     test_cited_ids_in_an_answer()
     test_unclosed_and_nested_brackets()
     test_unseen_against_this_turn()
+    test_evidence_citations()
     test_documents()
     print("test_chat_cite: ok")

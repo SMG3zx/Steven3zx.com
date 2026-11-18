@@ -57,15 +57,26 @@ def env_or(name: String, fallback: String) raises -> String:
 def default_config() raises -> EmbedConfig:
     """EMBEDDING_BASE_URL and EMBEDDING_MODEL from the environment (memory.env is loaded
     first), else the CPU server and the model name. The label is the model name.
+
+    Eval only (the M4 chat-loop evaluation, vinci_eval/chat_eval.py): VINCI_EVAL_EMBED_LABEL,
+    VINCI_EVAL_EMBED_CACHE, VINCI_EVAL_EMBED_FALLBACK_LABEL and VINCI_EVAL_EMBED_FALLBACK_URL
+    set the label, the cache file and the query fallback that lme_index_eval uses. Unset, they
+    change nothing.
     """
     var model = env_or("EMBEDDING_MODEL", DEFAULT_MODEL)
-    return EmbedConfig(
+    var cfg = EmbedConfig(
         env_or("EMBEDDING_BASE_URL", DEFAULT_BASE_URL),
         model,
-        model,
-        "",
+        env_or("VINCI_EVAL_EMBED_LABEL", model),
+        env_or("VINCI_EVAL_EMBED_CACHE", ""),
         "",
     )
+    var fallback_url = env_or("VINCI_EVAL_EMBED_FALLBACK_URL", "")
+    if fallback_url.byte_length() > 0:
+        cfg.set_fallback(
+            env_or("VINCI_EVAL_EMBED_FALLBACK_LABEL", ""), fallback_url^
+        )
+    return cfg^
 
 
 def edge_module() raises -> PythonObject:

@@ -28,7 +28,7 @@ from chat_edge import read_source, run_vinci
 from chat_gate import ask_write, is_write_call, needs_confirmation, refusal
 from chat_open import open_text
 from dates import today_of
-from embed_edge import default_config
+from embed_edge import default_config, env_or
 from handles import lookup
 from index_build import update_from_journal
 from index_store import IndexStore, py_params
@@ -45,6 +45,12 @@ comptime DEFAULT_BUDGET = 3000
 # The newest whole records within the budget; the rest are pointers (the M3 sweep, budget 3000).
 comptime CHAT_WHOLE = 10
 comptime RECALL_LIMIT = 10
+# Eval only (the M4 chat-loop evaluation). VINCI_CHAT_RECALL_BUDGET and VINCI_CHAT_RECALL_WHOLE
+# set the packing of recall; VINCI_CHAT_INDEX names the index file the chat reads, and then the
+# chat never updates it from the journal. Unset, none of them changes anything.
+comptime ENV_RECALL_BUDGET = "VINCI_CHAT_RECALL_BUDGET"
+comptime ENV_RECALL_WHOLE = "VINCI_CHAT_RECALL_WHOLE"
+comptime ENV_INDEX = "VINCI_CHAT_INDEX"
 comptime FALLBACK_NOTE = (
     "note: the embedding server did not answer, so this recall is lexical"
     " only.\n"
@@ -97,6 +103,23 @@ def error_text(e: Error) raises -> String:
     return message
 
 
+def env_int(name: String, fallback: Int) raises -> Int:
+    """An integer from the environment, or fallback when it is unset."""
+    var text = env_or(name, "")
+    if text.byte_length() == 0:
+        return fallback
+    try:
+        return Int(text)
+    except:
+        raise Error(name + " must be a whole number")
+
+
+def chat_index_path(home: String) raises -> String:
+    """The index the chat reads: home/index.sqlite, or VINCI_CHAT_INDEX (eval only).
+    """
+    return env_or(ENV_INDEX, join_path(home, "index.sqlite"))
+
+
 def next_id(journal_path: String, letter: String) raises -> String:
     """The next free id with a prefix letter (k1, e7 ...), from the journal's own ids.
     """
@@ -132,8 +155,9 @@ struct ChatTools(Movable):
         var journal_path: String,
         var exe: String,
         var now: Instant,
+        var index_path: String,
     ):
-        self.index_path = join_path(home, "index.sqlite")
+        self.index_path = index_path^
         self.home = home^
         self.journal_path = journal_path^
         self.exe = exe^
@@ -141,7 +165,10 @@ struct ChatTools(Movable):
         self.untrusted = False
 
     def index_update(self) raises:
-        """The index follows the journal: this is what replaces JournalSync."""
+        """The index follows the journal: this is what replaces JournalSync. Not under
+        VINCI_CHAT_INDEX, where the index is a fixed file (the evaluation)."""
+        if env_or(ENV_INDEX, "").byte_length() > 0:
+            return
         var store = IndexStore(self.index_path)
         _ = update_from_journal(store, self.journal_path, self.home)
 
@@ -211,7 +238,9 @@ struct ChatTools(Movable):
 
     def recall_tool(mut self, action: Action) raises -> String:
         var query = text_arg(action, "query")
-        var budget = int_arg(action, "budget", DEFAULT_BUDGET)
+        var budget = int_arg(
+            action, "budget", env_int(ENV_RECALL_BUDGET, DEFAULT_BUDGET)
+        )
         if budget < 1:
             raise Error("budget must be at least 1")
         var store = IndexStore(self.index_path)
@@ -242,7 +271,8 @@ struct ChatTools(Movable):
         """Recall and pack: the text the model reads, with any abstention reason first.
         """
         var found = recall(store, query, settings)
-        var packed = pack(found.results, budget, CHAT_WHOLE, estimate_counter())
+        var whole = env_int(ENV_RECALL_WHOLE, CHAT_WHOLE)
+        var packed = pack(found.results, budget, whole, estimate_counter())
         var out = note.copy()
         if found.abstention.abstain:
             out += "abstain: " + found.abstention.reason + "\n"

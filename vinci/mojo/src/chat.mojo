@@ -13,9 +13,14 @@ from std.python import Python, PythonObject
 from std.sys import exit
 
 from chat_action import Action, parse_action, summary_of, trim_bytes
-from chat_cite import cited_ids, document_base, is_document_cite, unseen_cites
+from chat_cite import (
+    cited_ids_with_evidence,
+    document_base,
+    is_document_cite,
+    unseen_cites,
+)
 from chat_edge import complete, read_line
-from chat_tools import CHAT_INSTRUCTIONS, ChatTools, next_id
+from chat_tools import CHAT_INSTRUCTIONS, ChatTools, chat_index_path, next_id
 from dates import today_of
 from embed_edge import env_or
 from index_build import update_from_journal
@@ -223,7 +228,7 @@ struct Chat(Movable):
         if not answered:
             answer = String(NOT_ANSWERED)
 
-        var cited = cited_ids(answer)
+        var cited = cited_ids_with_evidence(answer, evidence)
         var unsourced = unseen_cites(cited, evidence)
         for c in unsourced:
             print(
@@ -320,10 +325,14 @@ def run_chat(
     var base_url = env_or("CHAT_BASE_URL", DEFAULT_BASE_URL)
     var model = env_or("CHAT_MODEL", DEFAULT_MODEL)
     var think = env_or("CHAT_THINK", "") == "1"
+    var index_path = chat_index_path(home)
     var tools = ChatTools(
-        home.copy(), journal_path.copy(), exe.copy(), now.copy()
+        home.copy(),
+        journal_path.copy(),
+        exe.copy(),
+        now.copy(),
+        index_path.copy(),
     )
-    var index_path = home + "/index.sqlite"
     var chat = Chat(
         tools^,
         base_url.copy(),
