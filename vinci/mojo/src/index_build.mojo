@@ -8,6 +8,8 @@
 from std.pathlib import Path
 from std.python import Python, PythonObject
 
+from feed_edge import journal_prefix, journal_split
+from feed_store import delete_source_rows
 from index_store import Fact, IndexStore, sha256_hex
 from journal import Event, parse_event
 from text import ascii_tail
@@ -30,6 +32,8 @@ struct BuildReport(Copyable, Movable):
     var journal_lines: Int
     var offset: Int
     var seconds: Float64
+    var versions: Int
+    var rebuilt: Bool
 
     def __init__(out self):
         self.lines = 0
@@ -41,6 +45,8 @@ struct BuildReport(Copyable, Movable):
         self.journal_lines = 0
         self.offset = 0
         self.seconds = 0.0
+        self.versions = 0
+        self.rebuilt = False
 
 
 def indexed_kind(kind: String) -> Bool:
@@ -283,6 +289,7 @@ def index_event(
         report.written += 1
         if code == 2:
             report.ended += 1
+            report.versions += 1
 
     if kind == "read":
         index_read_body(store, e, record_id, cite, at, line, home, report)
@@ -336,6 +343,7 @@ def index_read_body(
             report.written += 1
             if code == 2:
                 report.ended += 1
+                report.versions += 1
 
 
 def strip_cr(line: String) -> String:
@@ -371,8 +379,13 @@ def update_from_journal(
 ) raises -> BuildReport:
     """Index the journal lines after the stored offset. A full rebuild is an empty store.
 
-    Only complete lines are read: a last line without its newline is left for the
-    next run, in case the C# binary is still writing it.
+    The journal's cursor is its byte offset and the sha-256 of the bytes before it. When
+    those bytes changed (the journal was rewritten), the journal's facts are dropped and it
+    is read again from the start, and the report says so. A journal shorter than the offset
+    is refused: it was truncated, which is for the person to decide (vinci feed rebuild).
+
+    Only complete lines are read: a last line without its newline is left for the next run,
+    in case the C# binary is still writing it.
     """
     var report = BuildReport()
     var time = Python.import_module("time")
@@ -382,16 +395,34 @@ def update_from_journal(
     if file_bytes(journal) < offset:
         raise Error(
             "index: the journal is shorter than the index's offset; run"
-            " vinci index rebuild"
+            " vinci feed rebuild journal"
         )
-
-    var text = read_bytes_from(journal, offset)
-    var parts = List[String]()
-    for raw in text.split("\n"):
-        parts.append(String(raw))
+    var split = journal_split(journal, offset)
+    if split.status == "error":
+        raise Error("index: cannot read the journal: " + split.prefix)
+    var stored = store.meta_get("journal_prefix")
 
     store.begin()
     try:
+        if offset > 0 and stored == "":
+            # An index made before the prefix was kept: this journal's prefix is the reference.
+            store.meta_set("journal_prefix", split.prefix)
+            stored = split.prefix
+        if offset > 0 and stored != split.prefix:
+            delete_source_rows(store, JOURNAL_SOURCE)
+            report.rebuilt = True
+            offset = 0
+            lines_before = 0
+            store.meta_set("journal_offset", "0")
+            store.meta_set("journal_lines", "0")
+            store.meta_set("journal_prefix", "")
+            split = journal_split(journal, 0)
+        var text = String()
+        if split.status == "ok":
+            text = split.text.copy()
+        var parts = List[String]()
+        for raw in text.split("\n"):
+            parts.append(String(raw))
         var consumed = 0
         var lineno = lines_before
         for i in range(len(parts)):
@@ -420,6 +451,9 @@ def update_from_journal(
             store.meta_set("journal_offset", String(report.offset))
             store.meta_set("journal_lines", String(lineno))
             store.meta_set("last_build_seconds", String(seconds))
+            store.meta_set(
+                "journal_prefix", journal_prefix(journal, report.offset)
+            )
     except err:
         store.rollback()
         raise Error(String(err))

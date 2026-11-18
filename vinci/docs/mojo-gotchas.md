@@ -333,3 +333,42 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
 - **A unit test with synthetic blobs can pass on code that crashes in production.** `test_loaded_rows_are_the_stored_vectors` (463 rows, two loads, a file-backed store) passed on the broken code, so it does not reproduce the freed read. The gate for this bug is the eval repro: `chat_eval --qids` on the qid that crashed, with 0 errors.
 
 - **`mojo run` and a built binary run the chat on the real home unless the eval environment is set.** Set `VINCI_HOME`, `VINCI_ENV_FILE` and `VINCI_CHAT_INDEX` before every manual `vinci chat` run, in the same command. `chat_eval` sets them for each conversation; a bare `./build/vinci chat` writes to `~/.vinci`.
+
+## Found in M5a (the feeds, twice-hit)
+
+- **`read` is a reserved argument convention.** A parameter named `read` fails with "'read' was removed; use 'imm'", and the build stops at the first error, so locals named `read` are not reached yet. Rename both. Hit in the feed reader and its caller.
+  ```mojo
+  def apply_read(mut store: IndexStore, got: FeedRead) raises:   # not: read: FeedRead
+      ...
+  ```
+
+- **`strip()` is a `StringSpan` on return too.** A `def` that returns `String` fails the same way as a parameter does. Hit twice in one test helper.
+  ```mojo
+  return String(String(done.stdout).strip())    # not: return String(done.stdout).strip()
+  ```
+
+- **Python keyword arguments work from Mojo.** `subprocess.run(cmd, capture_output=True, text=True, check=False)` and `os.makedirs(path, 511, True)` both compiled and ran. Positional form is still the safer choice for `makedirs`, since its second parameter is the mode.
+
+- **A check on a stored status counts ended versions too.** A version ended by a newer one keeps `status = 'active'`, so `WHERE status = 'active'` counts history. A current count needs `valid_until IS NULL` as well. The first expectation was off by the number of versions ended.
+  ```sql
+  SELECT COUNT(*) FROM facts WHERE source = 'git' AND status = 'active' AND valid_until IS NULL
+  ```
+
+- **Values from `tomllib` and `json` are `object` to pyright strict.** `isinstance` narrows to an unknown `list` or `dict`, so the next line reports "partially unknown". Narrow, then `cast`, and build the typed dictionaries in local variables first.
+  ```python
+  items = cast("list[object]", value)
+  return [str(v) for v in items]
+  ```
+
+- **A type check raises `TypeError`, not `ValueError`.** Ruff's TRY004 flags a `ValueError` after an `isinstance` test. A bad value that is the wrong type is a `TypeError`.
+  ```python
+  if not isinstance(value, dict):
+      raise TypeError(f"[{name}] must be a table")
+  ```
+
+- **Check the harness's arguments before a run.** `vinci_diff.chat_diff` takes a script filter as its first argument, so `--candidate` was read as a filter and nothing ran ("no scripts match"). It uses `mojo/build/vinci` with no arguments.
+
+- **A binary outside `mojo/build` cannot find the Python edges.** `vinci` looks for `../py` beside itself, so a copy in a scratch directory fails with "No module named 'vinci_edge'". Set `VINCI_MOJO_PY=<checkout>/mojo/py` in the same command.
+  ```sh
+  VINCI_MOJO_PY=/home/steven3zx/Steven3zx.com/vinci/mojo/py "$scratch/vinci" feed run journal
+  ```

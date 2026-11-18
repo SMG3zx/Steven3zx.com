@@ -31,7 +31,7 @@ from dates import today_of
 from embed_edge import default_config, env_or
 from handles import lookup
 from index_build import update_from_journal
-from index_store import IndexStore, py_params
+from index_store import CITE_MATCH, IndexStore, py_params
 from jsonline import json_string
 from journal import Event, Journal
 from open_view import no_request, parse_lines_arg
@@ -336,8 +336,10 @@ struct ChatTools(Movable):
         """True when a fact under this citation came from text that is not the person's.
         """
         var row = store.conn.execute(
-            "SELECT COUNT(*) FROM facts WHERE cite = ? AND trusted = 0",
-            py_params(PythonObject(id)),
+            "SELECT COUNT(*) FROM facts WHERE "
+            + CITE_MATCH
+            + " AND trusted = 0",
+            py_params(PythonObject(id), PythonObject(id)),
         ).fetchone()
         return Int(String(row[0])) > 0
 

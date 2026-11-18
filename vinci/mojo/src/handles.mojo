@@ -12,7 +12,7 @@
 
 from std.python import Python, PythonObject
 
-from index_store import IndexStore, py_params
+from index_store import CITE_MATCH, IndexStore, py_params
 from text import code_points_to_string, utf8_code_points
 
 comptime HANDLE_PREFIX = "t"
@@ -178,10 +178,11 @@ def facts_of(store: IndexStore, id: String) raises -> List[Stored]:
     var out = List[Stored]()
     var rows = store.conn.execute(
         (
-            "SELECT kind, text, at, valid_until, status FROM facts WHERE cite ="
-            " ? ORDER BY rowid"
+            "SELECT kind, text, at, valid_until, status FROM facts WHERE "
+            + CITE_MATCH
+            + " ORDER BY rowid"
         ),
-        py_params(PythonObject(id)),
+        py_params(PythonObject(id), PythonObject(id)),
     ).fetchall()
     var current = List[Stored]()
     var latest = Optional[Stored](None)

@@ -62,3 +62,17 @@
 {"agent": "M4e", "n": 2, "pass": true, "first_error": ""}
 {"agent": "M4e", "n": 3, "pass": true, "first_error": ""}
 {"agent": "M4e", "n": 4, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 1, "pass": false, "first_error": "feed.mojo:126:5: error: 'read' was removed; use 'imm' (reserved parameter name)"}
+{"agent": "M5a", "n": 2, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 3, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 4, "pass": false, "first_error": "test_feed_git.mojo: cannot implicitly convert 'StringSpan' to 'String' (strip on return)"}
+{"agent": "M5a", "n": 5, "pass": false, "first_error": "test_feed_git.mojo:170: AssertionError left 5 right 4 (status count included ended versions)"}
+{"agent": "M5a", "n": 6, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 7, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 8, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 9, "pass": false, "first_error": "make check: py-check, 5 pyright errors in feed_edge.py (untyped TOML values)"}
+{"agent": "M5a", "n": 10, "pass": false, "first_error": "ruff check: TRY004 Prefer TypeError (2 places in feed_edge.py)"}
+{"agent": "M5a", "n": 11, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 12, "pass": false, "first_error": "chat_diff run with --candidate: no scripts match (flag read as a filter)"}
+{"agent": "M5a", "n": 13, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 14, "pass": true, "first_error": ""}

@@ -117,6 +117,7 @@ Errors go to standard error and the exit code is 1.
 | Time and commits counted from your windows and folders; ActivityWatch setup | [docs/time-tracking.md](docs/time-tracking.md) |
 | The portal of saved, project and local links (`vinci serve`) | [docs/portal.md](docs/portal.md) |
 | Memory: the journal, the index, recall, and what mark 2 removed (`vinci memory`) | [docs/memory.md](docs/memory.md) |
+| Feeds: git, the Markdown vaults and the journal read into the index (`vinci feed`), and their contract | [docs/feeds.md](docs/feeds.md) |
 | Where each part of the method comes from, how vinci improves itself, known weak points, what was left out on purpose | [docs/method.md](docs/method.md) |
 | Code map and tests | [docs/development.md](docs/development.md) |
 

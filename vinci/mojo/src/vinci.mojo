@@ -11,6 +11,7 @@ from std.python import Python, PythonObject
 from std.sys import argv, exit
 
 from chat import run_chat
+from cmd_feed import feed_command
 from cmd_index import index_command, open_command, recall_command
 from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
@@ -174,6 +175,13 @@ def run() raises:
         for i in range(1, len(args)):
             index_args.append(args[i])
         index_command(index_args, vinci_home(), journal_path())
+        return
+    # The feeds read outside sources into the index (M5), and write only the index file.
+    if args[0] == "feed":
+        var feed_args = List[String]()
+        for i in range(1, len(args)):
+            feed_args.append(args[i])
+        feed_command(feed_args, vinci_home(), journal_path(), now.copy())
         return
     if args[0] == "recall":
         var recall_args = List[String]()

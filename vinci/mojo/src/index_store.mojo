@@ -22,6 +22,10 @@ from jsonline import json_string
 
 comptime SCHEMA_VERSION = "1"
 
+# Matches the facts that a citation id names: a journal id (cite), or a feed record's
+# record id (the short sha of a commit, or the path and slug of a section). Two params.
+comptime CITE_MATCH = "(cite = ? OR (source <> 'journal' AND record_id = ?))"
+
 
 def py_params(*values: PythonObject) raises -> PythonObject:
     """A Python list of sqlite3 parameters, in the order given."""
@@ -106,6 +110,18 @@ struct CurrentVersion(Copyable, Movable):
 
 
 @fieldwise_init
+struct FactRow(Copyable, Movable):
+    """The current version of a record, with what a retraction needs to copy."""
+
+    var rowid: Int
+    var version_hash: String
+    var kind: String
+    var text: String
+    var cite: String
+    var status: String
+
+
+@fieldwise_init
 struct Unembedded(Copyable, Movable):
     """A fact that has no vector yet: its rowid and the text to embed."""
 
@@ -169,6 +185,13 @@ struct IndexStore(Movable):
             "CREATE TABLE IF NOT EXISTS handles ("
             " id TEXT PRIMARY KEY, created TEXT NOT NULL,"
             " source TEXT NOT NULL, text TEXT NOT NULL, digest TEXT NOT NULL)"
+        )
+        # Added in M5 step a with IF NOT EXISTS (feed.mojo): one row per feed, its cursor
+        # string, when it last ran, and what that run did.
+        _ = self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS feeds ("
+            " name TEXT PRIMARY KEY, cursor TEXT NOT NULL,"
+            " last_run TEXT NOT NULL, summary TEXT NOT NULL)"
         )
         var version = self.meta_get("schema_version")
         if version == "":
@@ -238,6 +261,45 @@ struct IndexStore(Movable):
         if Bool(row == Python.none()):
             return None
         return CurrentVersion(Int(String(row[0])), String(row[1]))
+
+    def current_fact(
+        self, source: String, record_id: String
+    ) raises -> Optional[FactRow]:
+        """The current version as a whole row, for a retraction to copy from."""
+        var row = self.conn.execute(
+            (
+                "SELECT rowid, version_hash, kind, text, cite, status FROM"
+                " facts WHERE source = ? AND record_id = ? AND valid_until IS"
+                " NULL ORDER BY rowid DESC LIMIT 1"
+            ),
+            py_params(PythonObject(source), PythonObject(record_id)),
+        ).fetchone()
+        if Bool(row == Python.none()):
+            return None
+        return FactRow(
+            Int(String(row[0])),
+            String(row[1]),
+            String(row[2]),
+            String(row[3]),
+            String(row[4]),
+            String(row[5]),
+        )
+
+    def latest_cite(
+        self, source: String, record_id: String
+    ) raises -> Optional[String]:
+        """The citation id a record was given when it was first stored. Every version
+        of a record keeps it, so a citation stays valid across versions."""
+        var row = self.conn.execute(
+            (
+                "SELECT cite FROM facts WHERE source = ? AND record_id = ?"
+                " ORDER BY rowid DESC LIMIT 1"
+            ),
+            py_params(PythonObject(source), PythonObject(record_id)),
+        ).fetchone()
+        if Bool(row == Python.none()):
+            return None
+        return Optional[String](String(row[0]))
 
     def end_row(self, rowid: Int, at: String) raises:
         """Set valid_until on one version: the at of the line that replaced it.
