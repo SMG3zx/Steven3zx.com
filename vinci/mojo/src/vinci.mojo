@@ -25,6 +25,7 @@ from session import (
     user_error,
 )
 from text import ascii_tail, truncate_div
+from track import activitywatch_server, track_sync
 from timeutil import (
     DAYS_0001_TO_1970,
     TICKS_PER_DAY,
@@ -152,7 +153,6 @@ def run() raises:
     else:
         now = local_now()
 
-    # VINCI_NO_TRACK is accepted and ignored: this port never reads the watchers or git.
     var argv_all = argv()
     var args = List[String]()
     for i in range(1, len(argv_all)):
@@ -202,7 +202,16 @@ def run() raises:
             "Its notes are in the journal; see docs/memory.md."
         )
 
+    # Program.cs and App.Run: the tracker writes its facts before the command reads the
+    # journal, so every command shows current totals. VINCI_NO_TRACK=1 turns it off.
+    var tracked = List[String]()
+    var no_track = env_value("VINCI_NO_TRACK")
+    if not no_track or no_track.value() != "1":
+        tracked = track_sync(
+            Journal(journal_path()), activitywatch_server(), now.copy()
+        )
     var session = Session(Journal(journal_path()), now^)
+    session.tracked = tracked^
     var cmd = args[0]
     var rest = List[String]()
     for i in range(1, len(args)):

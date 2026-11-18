@@ -170,6 +170,9 @@ struct Session(Movable):
     var journal: Journal
     var state: State
     var now: Instant
+    # The lines the window and git tracker wrote before this command (track.mojo).
+    # `vinci sync` prints them; every other command ignores them.
+    var tracked: List[String]
 
     def __init__(out self, var journal: Journal, var now: Instant) raises:
         """Reads the journal once. A broken journal fails here, even for help, as in C#.
@@ -177,6 +180,7 @@ struct Session(Movable):
         self.state = state_from(journal.read())
         self.journal = journal^
         self.now = now^
+        self.tracked = List[String]()
 
     def record(self, e: Event) raises:
         """Append one fact. The state is not refolded; later reads in this command see the old one.

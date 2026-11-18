@@ -15,6 +15,7 @@ from jsonline import json_string
 
 comptime GIT_SOURCE = "git"
 comptime VAULT_SOURCE = "vaults"
+comptime ACTIVITY_SOURCE = "activity"
 comptime JOURNAL_SOURCE = "journal"
 comptime RETRACTED = "retracted"
 comptime ACTIVE = "active"
@@ -86,6 +87,8 @@ def cite_prefix(source: String) raises -> String:
         return "g"
     if source == VAULT_SOURCE:
         return "v"
+    if source == ACTIVITY_SOURCE:
+        return "w"
     raise Error("feed: no citation prefix for source " + source)
 
 
@@ -226,6 +229,13 @@ def delete_source_rows(mut store: IndexStore, source: String) raises:
     _ = store.conn.execute(
         (
             "DELETE FROM fts_feeds WHERE rowid IN"
+            " (SELECT rowid FROM facts WHERE source = ?)"
+        ),
+        py_params(PythonObject(source)),
+    )
+    _ = store.conn.execute(
+        (
+            "DELETE FROM fts_activity WHERE rowid IN"
             " (SELECT rowid FROM facts WHERE source = ?)"
         ),
         py_params(PythonObject(source)),

@@ -104,3 +104,29 @@ def feed_config(path: String) raises -> Reply:
     """The settings from feeds.toml with the defaults filled in, as a dict."""
     var pair = feed_edge().feed_config(PythonObject(path))
     return Reply(String(pair[0]), pair[1])
+
+
+def activity_buckets(server: String) raises -> Reply:
+    """The window buckets and their afk twins: value is {"pairs", "skipped"} when ok.
+    """
+    var pair = feed_edge().activity_buckets(PythonObject(server))
+    return Reply(String(pair[0]), pair[1])
+
+
+def activity_pieces(
+    server: String,
+    window_id: String,
+    afk_id: String,
+    from_text: String,
+    to_text: String,
+) raises -> Reply:
+    """One bucket pair's window events in a period: value is the list of rows when ok.
+    """
+    var pair = feed_edge().activity_pieces(
+        PythonObject(server),
+        PythonObject(window_id),
+        PythonObject(afk_id),
+        PythonObject(from_text),
+        PythonObject(to_text),
+    )
+    return Reply(String(pair[0]), pair[1])

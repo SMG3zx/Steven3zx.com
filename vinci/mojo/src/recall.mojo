@@ -139,13 +139,15 @@ def fts_query(query: String) raises -> String:
 comptime JOURNAL_SOURCE = "journal"
 comptime GIT_SOURCE = "git"
 comptime VAULTS_SOURCE = "vaults"
+comptime ACTIVITY_SOURCE = "activity"
+# all is the three sources that were always searched together. activity is named on its own.
 comptime SOURCES_ALL = "journal,git,vaults"
 
 
 def parse_sources(text: String) raises -> List[String]:
-    """The sources a recall searches: a comma list of journal, git and vaults, or all.
-    The journal is the default. An unknown name is an error, so a typo is not a silent
-    empty search."""
+    """The sources a recall searches: a comma list of journal, git, vaults and activity, or
+    all (journal, git and vaults). The journal is the default. An unknown name is an error,
+    so a typo is not a silent empty search."""
     var out = List[String]()
     if text == "all":
         return parse_sources(String(SOURCES_ALL))
@@ -155,9 +157,12 @@ def parse_sources(text: String) raises -> List[String]:
             name != JOURNAL_SOURCE
             and name != GIT_SOURCE
             and name != VAULTS_SOURCE
+            and name != ACTIVITY_SOURCE
         ):
             raise user_error(
-                "unknown source '" + name + "' (journal, git, vaults, or all)"
+                "unknown source '"
+                + name
+                + "' (journal, git, vaults, activity, or all)"
             )
         if name not in out:
             out.append(name)
@@ -258,6 +263,30 @@ def lexical(
     return lexical_from(store, query, limit, include_superseded, journal)
 
 
+def merge_ranked(first: Scored, second: Scored, limit: Int) -> Scored:
+    """Two lists, each ranked by its bm25 score (lower is better), merged by score. A tie
+    goes to the first list, so the journal stays ahead of the feeds on equal scores.
+    """
+    var out = Scored(List[Candidate](), List[Float64]())
+    var i = 0
+    var j = 0
+    while len(out.candidates) < limit and (
+        i < len(first.candidates) or j < len(second.candidates)
+    ):
+        var take_first = j >= len(second.candidates)
+        if i < len(first.candidates) and j < len(second.candidates):
+            take_first = first.scores[i] <= second.scores[j]
+        if take_first:
+            out.candidates.append(first.candidates[i].copy())
+            out.scores.append(first.scores[i])
+            i += 1
+        else:
+            out.candidates.append(second.candidates[j].copy())
+            out.scores.append(second.scores[j])
+            j += 1
+    return out^
+
+
 def lexical_from(
     store: IndexStore,
     query: String,
@@ -267,10 +296,10 @@ def lexical_from(
 ) raises -> List[Candidate]:
     """Candidates from FTS5, best bm25 first. Current and active versions only, or,
     for the temporal route, superseded and active versions too.
-
-    The journal and the feeds are two FTS tables (index_store.mojo), so the journal's scores
-    are the same as they were before feeds existed. When both are asked for, their lists are
-    merged by score. The source names are checked by parse_sources, so they are safe in SQL.
+    The journal, the feeds (git, vaults) and the activity feed are three FTS tables
+    (index_store.mojo), so each table's bm25 scores count only its own rows. When more than
+    one table is asked for, their lists are merged by score. The source names are checked by
+    parse_sources, so they are safe in SQL.
     """
     var out = List[Candidate]()
     var match_expr = fts_query(query)
@@ -281,43 +310,34 @@ def lexical_from(
         status_clause = "f.status IN ('active', 'superseded')"
     var journal = List[String]()
     var feeds = List[String]()
+    var activity = List[String]()
     for name in sources:
         if name == JOURNAL_SOURCE:
             journal.append(name.copy())
+        elif name == ACTIVITY_SOURCE:
+            activity.append(name.copy())
         else:
             feeds.append(name.copy())
-    if len(feeds) == 0:
-        var only_journal = lexical_table(
+    var merged = Scored(List[Candidate](), List[Float64]())
+    var have_any = False
+    if len(journal) > 0:
+        merged = lexical_table(
             store, "fts", match_expr, limit, status_clause, journal
         )
-        return only_journal.candidates.copy()
-    if len(journal) == 0:
-        var only_feeds = lexical_table(
+        have_any = True
+    if len(feeds) > 0:
+        var found = lexical_table(
             store, "fts_feeds", match_expr, limit, status_clause, feeds
         )
-        return only_feeds.candidates.copy()
-
-    var first = lexical_table(
-        store, "fts", match_expr, limit, status_clause, journal
-    )
-    var second = lexical_table(
-        store, "fts_feeds", match_expr, limit, status_clause, feeds
-    )
-    var i = 0
-    var j = 0
-    while len(out) < limit and (
-        i < len(first.candidates) or j < len(second.candidates)
-    ):
-        var take_first = j >= len(second.candidates)
-        if i < len(first.candidates) and j < len(second.candidates):
-            take_first = first.scores[i] <= second.scores[j]
-        if take_first:
-            out.append(first.candidates[i].copy())
-            i += 1
-        else:
-            out.append(second.candidates[j].copy())
-            j += 1
-    return out^
+        merged = merge_ranked(merged, found, limit) if have_any else found^
+        have_any = True
+    if len(activity) > 0:
+        var found = lexical_table(
+            store, "fts_activity", match_expr, limit, status_clause, activity
+        )
+        merged = merge_ranked(merged, found, limit) if have_any else found^
+        have_any = True
+    return merged.candidates.copy()
 
 
 struct Settings(Copyable, Movable):

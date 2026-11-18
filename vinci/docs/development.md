@@ -34,7 +34,7 @@ The toolchain is pinned in `mojo/pyproject.toml` (Mojo 1.2.0, Python 3.13) and r
 | `deploy/llm/` | The systemd user units for llama-server: the chat model and the embedding model |
 | `deploy/models/` | The Modelfile that builds the chat model, and how to set up both models |
 | `deploy/portal.service` | The systemd user unit that runs `vinci serve` |
-| `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch (for the time feeds, paused until M5) |
+| `deploy/awatcher.service` | The systemd user unit that runs ActivityWatch (for the window time: the tracker and the activity feed) |
 
 ## The oracle
 

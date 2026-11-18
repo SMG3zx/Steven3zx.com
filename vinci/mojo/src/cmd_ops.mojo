@@ -3,8 +3,7 @@
 # issue, diagnose, principle, issues, principles, commit, kept, missed, review, path,
 # help, --help, -h, sync.
 #
-# sync is not in the Mojo port: it shows what the C# tracker just counted from window and
-# git activity, and this port never tracks, so it says so rather than print nothing.
+# sync prints the lines the window and git tracker (track.mojo) wrote before this command.
 #
 # The unknown-command branch is not here: C# Dispatch ends with it, so vinci.mojo does too.
 #
@@ -395,8 +394,9 @@ def dispatch_ops(
         print(s.journal.path)
         return True
     if cmd == "sync":
-        # The oracle with VINCI_NO_TRACK=1: nothing is tracked, so nothing is
-        # printed and nothing is appended. The journal was read by Session.
+        # Program.cs's Tracker.Sync already ran (vinci.mojo): print what it wrote.
+        for line in s.tracked:
+            print(line)
         return True
     if cmd == "issue":
         var text = s.arg(args, 0, "what went wrong")

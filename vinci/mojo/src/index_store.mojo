@@ -12,6 +12,8 @@
 #                                    Journal facts only.
 #   fts_feeds (FTS5: text, keys)     the same for feed records (git, vaults), in a table of their
 #                                    own, so the journal's bm25 scores do not change with feeds.
+#   fts_activity (FTS5: text, keys)  the same for the activity feed's window records, in its own
+#                                    table, so git and vaults scores do not change with it.
 #   vectors(fact, label, dims, vec)  embeddings, filled in step 2b
 #   handles(id, created, source, text, digest)  text too long for a context, saved under a t id
 #                                    (step 3a, handles.mojo). Not a fact: the text is not indexed.
@@ -194,6 +196,13 @@ struct IndexStore(Movable):
                 "DELETE FROM fts WHERE rowid IN"
                 " (SELECT rowid FROM facts WHERE source <> 'journal')"
             )
+        # Added in M5 step b: the activity feed has its own table, so loading its windows
+        # does not move the bm25 scores of the journal or of git and vaults (bm25 counts
+        # every row in a table).
+        _ = self.conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS fts_activity USING fts5(text,"
+            " keys)"
+        )
         _ = self.conn.execute(
             "CREATE TABLE IF NOT EXISTS vectors ("
             " fact INTEGER NOT NULL, label TEXT NOT NULL,"
@@ -386,7 +395,9 @@ struct IndexStore(Movable):
         )
         var rowid = cur.lastrowid
         var table = String("fts")
-        if f.source != "journal":
+        if f.source == "activity":
+            table = "fts_activity"
+        elif f.source != "journal":
             table = "fts_feeds"
         _ = self.conn.execute(
             "INSERT INTO " + table + " (rowid, text, keys) VALUES (?, ?, '')",

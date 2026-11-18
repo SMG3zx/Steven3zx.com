@@ -4,6 +4,8 @@
 #   journal  the journal's lines, as the index has always read them (index_build.mojo). Trusted.
 #   git      the first-parent commits of a branch (feed_git.mojo). Not trusted.
 #   vaults   the Markdown sections of the configured folders (feed_vaults.mojo). Not trusted.
+#   activity the window time ActivityWatch recorded, one record per window per day
+#            (feed_activity.mojo). Off until [activity] enabled = true. Not trusted.
 #
 # A run reads, then writes one transaction per feed: the new and changed records, their
 # retractions when the read saw the whole source, and the feed's cursor. A feed that fails
@@ -11,6 +13,7 @@
 
 from std.python import Python
 
+from feed_activity import read_activity
 from feed_edge import feed_config
 from feed_git import read_git
 from feed_store import (
@@ -26,10 +29,13 @@ from feed_vaults import read_vaults
 from index_build import BuildReport, update_from_journal
 from index_store import IndexStore
 from session import user_error
+from track import activitywatch_server
+from timeutil import parse_instant
 
 comptime JOURNAL_FEED = "journal"
 comptime GIT_FEED = "git"
 comptime VAULTS_FEED = "vaults"
+comptime ACTIVITY_FEED = "activity"
 comptime CONFIG_FILE = "feeds.toml"
 
 
@@ -44,6 +50,9 @@ struct FeedConfig(Movable):
     var vault_roots: List[String]
     var vault_max_bytes: Int
     var vault_exclude: List[String]
+    var activity_enabled: Bool
+    var activity_deny: List[String]
+    var activity_server: String
 
     def __init__(out self):
         self.from_file = False
@@ -54,6 +63,9 @@ struct FeedConfig(Movable):
         self.vault_roots = List[String]()
         self.vault_max_bytes = 524288
         self.vault_exclude = List[String]()
+        self.activity_enabled = False
+        self.activity_deny = List[String]()
+        self.activity_server = String("http://127.0.0.1:5600")
 
 
 @fieldwise_init
@@ -74,7 +86,12 @@ struct FeedReport(Movable):
 
 
 def known_feed(name: String) -> Bool:
-    return name == JOURNAL_FEED or name == GIT_FEED or name == VAULTS_FEED
+    return (
+        name == JOURNAL_FEED
+        or name == GIT_FEED
+        or name == VAULTS_FEED
+        or name == ACTIVITY_FEED
+    )
 
 
 def now_seconds() raises -> Float64:
@@ -103,6 +120,11 @@ def load_config(path: String) raises -> FeedConfig:
     cfg.vault_max_bytes = Int(String(vaults["max_bytes"]))
     for e in vaults["exclude"]:
         cfg.vault_exclude.append(String(e))
+    var activity = raw["activity"]
+    cfg.activity_enabled = String(activity["enabled"]) == "True"
+    for d in activity["deny"]:
+        cfg.activity_deny.append(String(d))
+    cfg.activity_server = activitywatch_server()
     return cfg^
 
 
@@ -192,6 +214,23 @@ def run_vaults(
     )
 
 
+def run_activity(
+    mut store: IndexStore, cfg: FeedConfig, now_iso: String
+) raises -> FeedReport:
+    """The window time since the cursor. A server that cannot be read raises, so the run
+    writes nothing and the other feeds still run (see run_command)."""
+    var started = now_seconds()
+    var reading = read_activity(
+        cfg.activity_server,
+        cfg.activity_deny,
+        feed_cursor(store, ACTIVITY_FEED),
+        parse_instant(now_iso),
+    )
+    return apply_read(
+        store, ACTIVITY_FEED, reading, now_iso, now_seconds() - started
+    )
+
+
 def run_journal(
     mut store: IndexStore, journal: String, home: String, now_iso: String
 ) raises -> FeedReport:
@@ -246,6 +285,8 @@ def run_feed(
         return run_journal(store, journal, home, now_iso)
     if name == GIT_FEED:
         return run_git(store, cfg, now_iso)
+    if name == ACTIVITY_FEED:
+        return run_activity(store, cfg, now_iso)
     return run_vaults(store, cfg, now_iso)
 
 

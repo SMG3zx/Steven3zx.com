@@ -1,11 +1,12 @@
-# The feed command: `vinci feed run [journal|git|vaults ...]`, `vinci feed status`, and
-# `vinci feed rebuild <journal|git|vaults>`, with --index PATH on each. All feeds run when no
-# name is given. Settings are read from $VINCI_HOME/feeds.toml (feed.mojo). None of the
-# commands writes the journal.
+# The feed command: `vinci feed run [journal|git|vaults|activity ...]`, `vinci feed status`, and
+# `vinci feed rebuild <journal|git|vaults|activity>`, with --index PATH on each. All enabled feeds
+# run when no name is given. Settings are read from $VINCI_HOME/feeds.toml (feed.mojo). None of
+# the commands writes the journal.
 
 from std.pathlib import Path
 
 from feed import (
+    ACTIVITY_FEED,
     CONFIG_FILE,
     GIT_FEED,
     JOURNAL_FEED,
@@ -27,9 +28,10 @@ from timeutil import Instant, format_instant
 
 comptime INDEX_FILE = "index.sqlite"
 comptime USAGE = (
-    "usage: vinci feed run [journal|git|vaults ...] | status |"
-    " rebuild <journal|git|vaults> [--index PATH]"
+    "usage: vinci feed run [journal|git|vaults|activity ...] | status |"
+    " rebuild <journal|git|vaults|activity> [--index PATH]"
 )
+comptime FEED_NAMES = "(journal, git, vaults, activity)"
 comptime SHORT_CURSOR_CHARS = 24
 
 
@@ -53,6 +55,17 @@ def cursor_note(name: String, cursor: String) raises -> String:
         return "cursor " + short(cursor)
     if name == GIT_FEED:
         return "cursor " + short(cursor)
+    if name == ACTIVITY_FEED:
+        var buckets = 0
+        for entry in cursor.split(";"):
+            if String(entry).byte_length() > 0:
+                buckets += 1
+        return (
+            String(buckets)
+            + " window bucket"
+            + ("" if buckets == 1 else "s")
+            + " in the cursor"
+        )
     var files = 0
     for line in cursor.split("\n"):
         if String(line).byte_length() > 0:
@@ -75,6 +88,8 @@ def feed_enabled(name: String, cfg: FeedConfig) -> Bool:
         return cfg.git_enabled
     if name == VAULTS_FEED:
         return cfg.vault_enabled
+    if name == ACTIVITY_FEED:
+        return cfg.activity_enabled
     return True
 
 
@@ -95,13 +110,12 @@ def run_command(
         chosen.append(JOURNAL_FEED)
         chosen.append(GIT_FEED)
         chosen.append(VAULTS_FEED)
+        chosen.append(ACTIVITY_FEED)
 
     var failed = List[String]()
     for name in chosen:
         if not known_feed(name):
-            raise user_error(
-                "no feed named '" + name + "' (journal, git, vaults)"
-            )
+            raise user_error("no feed named '" + name + "' " + FEED_NAMES)
         if not feed_enabled(name, cfg):
             if explicit:
                 raise user_error(name + " is turned off in " + CONFIG_FILE)
@@ -127,7 +141,7 @@ def run_command(
 
 
 def status_command(store: IndexStore, cfg: FeedConfig) raises:
-    for name in [JOURNAL_FEED, GIT_FEED, VAULTS_FEED]:
+    for name in [JOURNAL_FEED, GIT_FEED, VAULTS_FEED, ACTIVITY_FEED]:
         if not feed_enabled(name, cfg):
             print(pad_right(name, 9) + "off in " + CONFIG_FILE)
             continue
@@ -202,12 +216,12 @@ def feed_command(
         return
     if sub == "rebuild":
         if len(names) != 1:
-            raise user_error("usage: vinci feed rebuild <journal|git|vaults>")
+            raise user_error(
+                "usage: vinci feed rebuild <journal|git|vaults|activity>"
+            )
         var name = names[0].copy()
         if not known_feed(name):
-            raise user_error(
-                "no feed named '" + name + "' (journal, git, vaults)"
-            )
+            raise user_error("no feed named '" + name + "' " + FEED_NAMES)
         if not feed_enabled(name, cfg):
             raise user_error(name + " is turned off in " + CONFIG_FILE)
         var rebuild_store = IndexStore(index_path)

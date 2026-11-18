@@ -41,12 +41,8 @@ from text import (
     span,
 )
 from timeutil import TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE
+from track import NOTHING_WATCHED
 
-# Shown by watches when nothing is watched (Tracker.NothingWatched).
-comptime NOTHING_WATCHED = (
-    "Nothing is watched. vinci home <idea> <folder>, or vinci watch <idea>"
-    ' "text in its window titles"'
-)
 comptime GOAL_USAGE = (
     'goal <idea> "goal" <metric> at-least <n> | at-most <n> | between <low>'
     " <high>"

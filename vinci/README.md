@@ -22,7 +22,7 @@ Every fact is written once, with the time, to an append-only journal (`~/.vinci/
 That gives you, without separate features:
 
 - **Provenance.** Every fact has a date, and a note points at the source it came from.
-- **Time tracking.** Time in an idea's windows and each commit in its folder are facts too, written for you. This is paused: the Mojo port does not read ActivityWatch or git yet, and `vinci sync` does nothing until the feeds return in M5.
+- **Time tracking.** Time in an idea's windows and each commit in its folder are facts too, written for you before every command. `vinci sync` prints what was just written. ActivityWatch's window titles are also a feed (`vinci feed run activity`, off until you turn it on in `feeds.toml`).
 - **Life tracking.** A measurement is a fact with a number in it.
 - **Self-measurement.** The system's own defects are facts too, so it can chart them.
 - **A tool that fits in a pipe.** The journal is plain JSON lines, so `jq` and `grep` work on it.

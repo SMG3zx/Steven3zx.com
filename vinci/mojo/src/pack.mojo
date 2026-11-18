@@ -109,6 +109,8 @@ def label_of(c: Candidate) -> String:
         return "git " + c.kind
     if c.source == "vaults":
         return "vault " + c.kind
+    if c.source == "activity":
+        return "window time"
     return c.kind
 
 

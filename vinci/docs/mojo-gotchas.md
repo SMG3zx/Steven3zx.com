@@ -382,3 +382,35 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   ```
 
 - **A SQL filter does not change FTS5 scores.** bm25 uses the whole table's word counts, so rows that a `WHERE` removes still move the scores of the rows it keeps. Rows that should not affect the search need their own FTS table. The personal set's default answers changed on about half the questions when feed rows shared the journal's table.
+
+## Found in M5b (the tracker and the activity feed, twice-hit)
+
+- **A harness that changes directory must resolve its binary paths first.** `--candidate ../build/vinci` passed to `vinci_diff` and to `sync_diff` failed with `FileNotFoundError` at the first step, because each case runs with its own working directory. Resolve the paths in `main` before the first case.
+  ```python
+  args.candidate = args.candidate.resolve()
+  ```
+
+- **A journal records a repository's path, so both binaries must build it at one path.** Giving each side its own folder made every `home` line differ, and the sync diff failed at step 1 with the paths, not the tracker. Build the repositories again at one shared path before each binary, and run the binaries one after the other.
+
+- **A scripted cut from one `def` to the next can delete a `struct` between them.** An edit that took `lexical_from` through to the next `def` removed `struct Settings` (with its constructor) and left the function's old body behind. Anchor the end on a line that is unique, such as the function's own `return out^` with its leading newline (`"\n    return out^\n"`). The shorter `"    return out^\n"` also matches the eight-space guard inside the function.
+  ```python
+  end = s.index("\n    return out^\n", start) + len("\n    return out^\n")
+  ```
+
+- **A `len()` on a string literal is rejected.** `len("2026-11-18/")` fails in a test. Use `String("2026-11-18/").byte_length()`, as the rule for `len` on strings already says.
+
+- **A `struct` or a value moved inside a conditional expression needs the same ownership on both branches.** `merged = merge_ranked(merged, found, limit) if have_any else found^` compiled. The earlier form that moved `merged` in one branch and copied in the other did not.
+
+- **An ActivityWatch duration is a double, and the tick count comes from truncation.** `int(seconds * 10_000_000)` in the edge matches `TimeSpan.FromSeconds`. Rounding to the nearest tick or to milliseconds gives a different `at` on every `spent` fact with a fraction.
+
+- **A bm25 table must hold only the rows it ranks.** The activity feed has its own `fts_activity` table. Loading it into `fts_feeds` would have moved the git and vault scores (bm25 counts every row of the table), so the rule above applies again, one table per source.
+
+- **A deny list is compared in the same case as the text it is matched against.** The window text was folded for matching but the configured terms were not, so `journal.cs` never matched `JOURNAL.CS`. The unit test passed because it passed folded terms. Fold the list once per run and check that the end-to-end count changes.
+
+- **Each Bash call starts with an empty shell variable set.** A build log written to `$S/build.log` after a call that did not set `S` went to `/build.log` and was denied, and the build did not run. Set the scratch path in each command that uses it.
+
+- **A file in the scratch folder shadows the standard library for scripts run from there.** `inspect.py` in the scratch folder made `dataclasses` fail to import when a dump script was run from the same folder. Run scratch scripts from their own subfolder.
+- **`recall` writes the embedding cache under `~/.vinci/index` whatever `VINCI_HOME` is.** A scratch recall with `VINCI_HOME` set appended query vectors to the real `embed-cache.sqlite` (the file predates the session, so it was appended to, not created). Set `VINCI_EVAL_EMBED_CACHE=<scratch>/embed-cache.sqlite` in the same command for any scratch recall, as the chat and portal harnesses point `HOME` away from `~/.vinci`.
+  ```sh
+  VINCI_HOME="$scratch" VINCI_EVAL_EMBED_CACHE="$scratch/embed-cache.sqlite" ./build/vinci recall "word"
+  ```

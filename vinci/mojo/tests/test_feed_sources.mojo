@@ -102,6 +102,11 @@ def test_parse_sources() raises:
     except:
         refused = True
     assert_true(refused, "an unknown source must be refused")
+    # activity is named on its own: all stays git, vaults and the journal (M5 step b).
+    assert_equal(len(parse_sources("all")), 3)
+    var activity = parse_sources("activity,git")
+    assert_equal(len(activity), 2)
+    assert_equal(activity[0], "activity")
 
 
 def test_feed_records_stay_out_of_the_journal_table() raises:

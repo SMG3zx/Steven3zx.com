@@ -85,3 +85,12 @@
 {"agent": "M5a", "n": 21, "pass": false, "first_error": "make check: test_index_recall.mojo:126 AssertionError left 0 right 1 (test facts had source 'test', not journal)"}
 {"agent": "M5a", "n": 22, "pass": false, "first_error": "make check: test_index_recall.mojo:210 AssertionError left 'journal' right 'test' (source assertion)"}
 {"agent": "M5a", "n": 23, "pass": true, "first_error": ""}
+{"agent": "M5b", "n": 1, "pass": true, "first_error": ""}
+{"agent": "M5b", "n": 2, "pass": false, "first_error": "sync_diff git_commits: journal home paths differ between the two sides (repos were built under each side's own folder)"}
+{"agent": "M5b", "n": 3, "pass": false, "first_error": "sync_diff midnight_and_use: no used line; ship refused in Seed (vinci: i1 is in Seed), so the case never reached the used branch"}
+{"agent": "M5b", "n": 4, "pass": true, "first_error": ""}
+{"agent": "M5b", "n": 5, "pass": false, "first_error": "recall.mojo:479 use of unknown declaration 'Settings' (a scripted cut to the next def removed struct Settings)"}
+{"agent": "M5b", "n": 6, "pass": false, "first_error": "recall.mojo:341 invalid redefinition of 'status_clause' (cut anchored on the 4-space return inside the 8-space guard)"}
+{"agent": "M5b", "n": 7, "pass": false, "first_error": "test_feed_activity.mojo:167 len(String) not supported (use byte_length)"}
+{"agent": "M5b", "n": 8, "pass": false, "first_error": "e2e deny: a denied term 'journal.cs' removed nothing (terms were not folded like the window text); unit tests had passed folded terms"}
+{"agent": "M5b", "n": 9, "pass": true, "first_error": ""}

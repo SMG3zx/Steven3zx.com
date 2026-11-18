@@ -9,12 +9,25 @@ which is in the standard library since Python 3.11.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import re
 import subprocess
 import tomllib
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Final, cast
+
+from vinci_edge.track_edge import (
+    HTTP_TIMEOUT_S,
+    array_of,
+    member,
+    nullable_text,
+    ticks_of,
+    timestamp_of,
+)
 
 COLD_STORAGE: Final = "cold-storage"
 # Folders never read. cold-storage is the repository's rule (janus/cold-storage/README.md):
@@ -41,7 +54,24 @@ GIT_LOG_FORMAT: Final = "%x1e%H%x1f%P%x1f%cI%x1f%s%x1f%b%x1d"
 CONFIG_KEYS: Final = {
     "git": frozenset({"enabled", "path", "branch"}),
     "vaults": frozenset({"enabled", "roots", "max_bytes", "exclude"}),
+    "activity": frozenset({"enabled", "deny"}),
 }
+# Window titles and apps that are never read, whatever feeds.toml says. Matched without
+# regard to case, as a substring of "app title". A person adds to the list in [activity]
+# deny; the built-in list always applies, so a config cannot switch the guard off.
+ACTIVITY_DENY_BUILTIN: Final = (
+    "1Password",
+    "Bitwarden",
+    "KeePass",
+    "Keychain Access",
+    "Password Manager",
+    "Private Browsing",
+    "Private Window",
+    "InPrivate",
+    "Incognito",
+)
+# An ActivityWatch bucket id is written into a query, so only these characters are allowed.
+BUCKET_ID: Final = re.compile(r"^[A-Za-z0-9._@:-]+$")
 
 
 def _git(repo: str, *args: str) -> subprocess.CompletedProcess[str]:
@@ -248,7 +278,13 @@ def feed_config(path: str) -> tuple[str, object]:
         "max_bytes": DEFAULT_MAX_BYTES,
         "exclude": [],
     }
-    config: dict[str, object] = {"git": git, "vaults": vaults, "from_file": False}
+    activity: dict[str, object] = {"enabled": False, "deny": list(ACTIVITY_DENY_BUILTIN)}
+    config: dict[str, object] = {
+        "git": git,
+        "vaults": vaults,
+        "activity": activity,
+        "from_file": False,
+    }
     if not Path(path).exists():
         return ("ok", config)
     try:
@@ -281,7 +317,102 @@ def feed_config(path: str) -> tuple[str, object]:
             vaults["max_bytes"] = max_bytes
         if "exclude" in vault_raw:
             vaults["exclude"] = _strings(vault_raw["exclude"], "exclude")
+        activity_raw = _table(raw, "activity")
+        if "enabled" in activity_raw:
+            activity["enabled"] = bool(activity_raw["enabled"])
+        if "deny" in activity_raw:
+            extra = _strings(activity_raw["deny"], "deny")
+            activity["deny"] = list(ACTIVITY_DENY_BUILTIN) + [e for e in extra if e]
     except (ValueError, TypeError) as err:
         return ("error", f"{path}: {err}")
     config["from_file"] = True
     return ("ok", config)
+
+
+# ---- the activity feed (feed_activity.mojo): ActivityWatch's window buckets ----
+
+
+def _activity_server_error(err: BaseException) -> tuple[str, object]:
+    return ("error", str(err))
+
+
+def activity_buckets(server: str) -> tuple[str, object]:
+    """The window buckets and the afk bucket of each host, from GET /api/0/buckets/.
+
+    value is {"pairs": [[window_id, afk_id], ...], "skipped": [window_id, ...]}. A window
+    bucket with no afk bucket is skipped: without the afk record its time cannot be cut to
+    the time the person was at the keyboard, and that time is not recorded.
+    """
+    try:
+        with urllib.request.urlopen(
+            server.rstrip("/") + "/api/0/buckets/", timeout=HTTP_TIMEOUT_S
+        ) as reply:
+            if not 200 <= reply.status <= 299:
+                return ("error", f"status {reply.status}")
+            doc = cast("object", json.loads(reply.read()))
+        if not isinstance(doc, dict):
+            raise TypeError("the bucket list is not an object")
+        ids = sorted(cast("dict[str, object]", doc).keys())
+    except (urllib.error.URLError, OSError, ValueError, TypeError) as err:
+        return _activity_server_error(err)
+    windows = [i for i in ids if i.startswith("aw-watcher-window_")]
+    afk = set(ids)
+    pairs: list[list[str]] = []
+    skipped: list[str] = []
+    for window in windows:
+        if not BUCKET_ID.match(window):
+            skipped.append(window)
+            continue
+        twin = "aw-watcher-afk_" + window[len("aw-watcher-window_") :]
+        if twin in afk and BUCKET_ID.match(twin):
+            pairs.append([window, twin])
+        else:
+            skipped.append(window)
+    return ("ok", {"pairs": pairs, "skipped": skipped})
+
+
+def activity_pieces(
+    server: str, window_id: str, afk_id: str, from_text: str, to_text: str
+) -> tuple[str, object]:
+    """The window events of one bucket in one period, cut to the time not away (afk).
+
+    The server does the cut, as the tracker's query does (track_edge.activity): the query
+    names this pair of buckets. value is [[timestamp, ticks, app, title], ...]. Denied
+    windows are not dropped here: the feed drops them, so one list serves every caller.
+    """
+    if not (BUCKET_ID.match(window_id) and BUCKET_ID.match(afk_id)):
+        return ("error", "a bucket id has characters that are not allowed")
+    query = [
+        f'window = flood(query_bucket("{window_id}"));',
+        f'afk = flood(query_bucket("{afk_id}"));',
+        'present = filter_keyvals(afk, "status", ["not-afk"]);',
+        'RETURN = {"window": filter_period_intersect(window, present)};',
+    ]
+    body = json.dumps({"timeperiods": [f"{from_text}/{to_text}"], "query": query}).encode("utf-8")
+    request = urllib.request.Request(
+        server.rstrip("/") + "/api/0/query/",
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_S) as reply:
+            if not 200 <= reply.status <= 299:
+                return ("error", f"status {reply.status}")
+            doc = cast("object", json.loads(reply.read()))
+        if not isinstance(doc, list) or len(cast("list[object]", doc)) == 0:
+            raise TypeError("the query reply is not a non-empty array")
+        rows: list[object] = []
+        for event in array_of(member(cast("list[object]", doc)[0], "window")):
+            data = member(event, "data")
+            rows.append(
+                [
+                    timestamp_of(member(event, "timestamp")),
+                    ticks_of(member(event, "duration")),
+                    nullable_text(member(data, "app")),
+                    nullable_text(member(data, "title")),
+                ]
+            )
+    except (urllib.error.URLError, OSError, ValueError, TypeError, KeyError) as err:
+        return _activity_server_error(err)
+    return ("ok", rows)
