@@ -123,4 +123,4 @@ Errors go to standard error and the exit code is 1.
 
 ## Privacy
 
-The journal holds personal data and lives outside this repository. Set `VINCI_HOME` to move it. Back it up yourself; it is plain text and works well in a private git repository.
+The journal holds personal data and lives outside this repository. Set `VINCI_HOME` to move it. Back it up with `vinci backup`, which copies it with a sha256 manifest (a reader: it never waits for a write); `vinci verify` checks it without writing (see [docs/development.md](docs/development.md#backup-and-verify)). The journal is plain text and works well in a private git repository too.

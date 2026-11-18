@@ -82,7 +82,7 @@ def contains_ignore_case(hay: String, needle: String) -> Bool:
     return False
 
 
-def linkable(s: Session, id: String) -> Bool:
+def linkable(mut s: Session, id: String) -> Bool:
     """Linkable: a note, idea, source or prediction that exists. The first letter
     says which kind, so only n, i, s and h are tried."""
     var b = id.as_bytes()
@@ -94,7 +94,7 @@ def linkable(s: Session, id: String) -> Bool:
     return s.state.has(id)
 
 
-def note_lines_about(s: Session, id: String) raises -> List[String]:
+def note_lines_about(mut s: Session, id: String) raises -> List[String]:
     """The note lines of every note that refers to id, in journal order."""
     var out = List[String]()
     for i in s.state.notes_about(id):
@@ -103,7 +103,7 @@ def note_lines_about(s: Session, id: String) raises -> List[String]:
 
 
 def new_bookmark(
-    s: Session, title: String, url: String, rest: List[String]
+    mut s: Session, title: String, url: String, rest: List[String]
 ) raises:
     """NewBookmark: a saved link. +words are tags, the rest is why it is kept.
     """
@@ -146,7 +146,7 @@ def new_bookmark(
     print(id + " saved. It is on the portal: vinci serve")
 
 
-def unbookmark(s: Session, id: String) raises:
+def unbookmark(mut s: Session, id: String) raises:
     """Unbookmark: take a saved link off the portal."""
     if not has_bookmark(s, id):
         raise user_error("no bookmark " + id)
@@ -154,14 +154,14 @@ def unbookmark(s: Session, id: String) raises:
     print(id + " is off the portal.")
 
 
-def has_bookmark(s: Session, id: String) -> Bool:
+def has_bookmark(mut s: Session, id: String) -> Bool:
     for b in s.state.bookmarks:
         if b.id == id:
             return True
     return False
 
 
-def bookmarks(s: Session) raises:
+def bookmarks(mut s: Session) raises:
     """Bookmarks: every saved link, one per line."""
     if len(s.state.bookmarks) == 0:
         print(
@@ -178,7 +178,7 @@ def bookmarks(s: Session) raises:
         print(line)
 
 
-def new_source(s: Session, citation: String, url: Optional[String]) raises:
+def new_source(mut s: Session, citation: String, url: Optional[String]) raises:
     """NewSource: a place knowledge came from. Notes cite it by id."""
     var id = s.state.next_id("s")
     s.record(
@@ -199,7 +199,7 @@ def new_source(s: Session, citation: String, url: Optional[String]) raises:
     )
 
 
-def new_note(s: Session, text: String, rest: List[String]) raises:
+def new_note(mut s: Session, text: String, rest: List[String]) raises:
     """NewNote: after the text come, in any order, ids to link to, a source with an
     optional place (s1:p.42), and tags (+flight)."""
     var refs = List[String]()
@@ -259,7 +259,7 @@ def new_note(s: Session, text: String, rest: List[String]) raises:
     print(note_id + " written." + origin)
 
 
-def link(s: Session, from_id: String, to_id: String) raises:
+def link(mut s: Session, from_id: String, to_id: String) raises:
     """Link: a note points at another note, idea, source or prediction."""
     var n = s.state.note_index(from_id)
     if n < 0:
@@ -288,7 +288,7 @@ def link(s: Session, from_id: String, to_id: String) raises:
     print(from_id + " → " + to_id)
 
 
-def notes(s: Session, query: Optional[String]) raises:
+def notes(mut s: Session, query: Optional[String]) raises:
     """Notes: every note, or those matching a word in the text or a +tag."""
     var found = 0
     for note in s.state.notes:
@@ -310,7 +310,7 @@ def notes(s: Session, query: Optional[String]) raises:
         print("No notes.")
 
 
-def tags(s: Session) raises:
+def tags(mut s: Session) raises:
     """Tags: the index of subjects, most used first, then by name."""
     var index = List[TagCount]()
     for note in s.state.notes:
@@ -345,7 +345,7 @@ def tags(s: Session) raises:
         print("+" + pad_right(tag.name, 20) + " " + String(tag.count))
 
 
-def sources(s: Session) raises:
+def sources(mut s: Session) raises:
     """Sources: every source with its url and how many notes cite it."""
     if len(s.state.sources) == 0:
         print('No sources yet. vinci source "citation" [url]')
@@ -358,7 +358,7 @@ def sources(s: Session) raises:
         print(line)
 
 
-def show_note(s: Session, n: Int) raises:
+def show_note(mut s: Session, n: Int) raises:
     """ShowNote: the full view of one note."""
     var note = s.state.notes[n].copy()
     print(note.id + "  " + note.text)
@@ -396,7 +396,7 @@ def show_note(s: Session, n: Int) raises:
     s.section("linked from", note_lines_about(s, note.id))
 
 
-def show_issue(s: Session, x: Int) raises:
+def show_issue(mut s: Session, x: Int) raises:
     """Show, for an issue: what went wrong, its cause and its principle."""
     var issue = s.state.issues[x].copy()
     print(issue.id + "  " + issue.text + ("  (big)" if issue.big else ""))
@@ -431,7 +431,7 @@ def show_issue(s: Session, x: Int) raises:
     print("principle   " + principle_line)
 
 
-def show_prediction(s: Session, h: Int) raises:
+def show_prediction(mut s: Session, h: Int) raises:
     """Show, for a prediction: the claim, when it was made, and the outcome."""
     var pred = s.state.predictions[h].copy()
     print(prediction_line(pred))
@@ -444,7 +444,7 @@ def show_prediction(s: Session, h: Int) raises:
     s.section("notes about it", note_lines_about(s, pred.id))
 
 
-def show_source(s: Session, si: Int) raises:
+def show_source(mut s: Session, si: Int) raises:
     """Show, for a source: its citation, url, date, and the notes drawn from it.
     """
     var src = s.state.sources[si].copy()
@@ -455,7 +455,7 @@ def show_source(s: Session, si: Int) raises:
     s.section("notes drawn from it", note_lines_about(s, src.id))
 
 
-def show(s: Session, id: String) raises:
+def show(mut s: Session, id: String) raises:
     """Show: the view of any id. Ideas go to show_idea; the rest are written here.
     """
     var i = s.state.idea_index(id)
@@ -482,7 +482,7 @@ def show(s: Session, id: String) raises:
 
 
 def predict(
-    s: Session, text: String, percent: Float64, idea_id: Optional[String]
+    mut s: Session, text: String, percent: Float64, idea_id: Optional[String]
 ) raises:
     """Predict: write down what you expect and how sure you are, before the test.
     """
@@ -516,7 +516,7 @@ def predict(
     )
 
 
-def result(s: Session, id: String, verdict: String, outcome: String) raises:
+def result(mut s: Session, id: String, verdict: String, outcome: String) raises:
     """Result: settle a prediction, right or wrong, with what happened."""
     var h = s.state.prediction_index(id)
     if h < 0:
@@ -546,7 +546,7 @@ def result(s: Session, id: String, verdict: String, outcome: String) raises:
     )
 
 
-def predictions(s: Session) raises:
+def predictions(mut s: Session) raises:
     """Predictions: every prediction, then your calibration once some are settled.
     """
     if len(s.state.predictions) == 0:
@@ -600,7 +600,7 @@ def predictions(s: Session) raises:
 
 
 def log_value(
-    s: Session, metric: String, value: Float64, comment: Optional[String]
+    mut s: Session, metric: String, value: Float64, comment: Optional[String]
 ) raises:
     """Log: one measurement, and whether each goal on this metric is now met."""
     if metric == FINDINGS_METRIC:
@@ -638,7 +638,7 @@ def log_value(
         )
 
 
-def spec(s: Session, metric: String, lo: Float64, hi: Float64) raises:
+def spec(mut s: Session, metric: String, lo: Float64, hi: Float64) raises:
     """Spec: say what good looks like for a metric, between two limits."""
     if lo > hi:
         raise user_error("low must not be above high")
@@ -654,7 +654,7 @@ def spec(s: Session, metric: String, lo: Float64, hi: Float64) raises:
     print(metric + " is good between " + num(lo) + " and " + num(hi) + ".")
 
 
-def metrics(s: Session) raises:
+def metrics(mut s: Session) raises:
     """Stats with no name: one line per measured metric."""
     if len(s.state.metrics) == 0:
         print("Nothing measured yet. vinci log <metric> <value>")
@@ -680,7 +680,7 @@ def metrics(s: Session) raises:
         )
 
 
-def metric_detail(s: Session, name: String) raises:
+def metric_detail(mut s: Session, name: String) raises:
     """Stats NAME: the mean, the range, control limits and the spec for one metric.
     """
     var m = s.state.metric_index(name)

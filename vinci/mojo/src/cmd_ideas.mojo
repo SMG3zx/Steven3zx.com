@@ -133,7 +133,7 @@ def dispatch_ideas(
 # ---- helpers ----
 
 
-def idea_arg_index(s: Session, a: List[String]) raises -> Int:
+def idea_arg_index(mut s: Session, a: List[String]) raises -> Int:
     """IdeaArg: the first argument names an idea. Returns its index in the state.
     """
     var id = s.arg(a, 0, "idea id")
@@ -170,21 +170,21 @@ def advise(text: String):
     print("Not ready: " + text)
 
 
-def has_live_requirement(s: Session, id: String) -> Bool:
+def has_live_requirement(mut s: Session, id: String) -> Bool:
     for r in s.state.requirements:
         if r.idea_id == id and r.live():
             return True
     return False
 
 
-def has_prediction(s: Session, id: String) -> Bool:
+def has_prediction(mut s: Session, id: String) -> Bool:
     for h in s.state.predictions:
         if idea_is(h.idea_id, id):
             return True
     return False
 
 
-def remind(s: Session, stage: Int):
+def remind(mut s: Session, stage: Int):
     """Remind: a principle is shown again at the stage where its issue happened.
     """
     for p in s.state.principles:
@@ -207,7 +207,7 @@ def move_to(mut s: Session, idx: Int, stage: Int) raises:
     remind(s, stage)
 
 
-def goal_status(s: Session, idx: Int) raises -> String:
+def goal_status(mut s: Session, idx: Int) raises -> String:
     """GoalStatus: the goal, and what the latest measurement says about it."""
     var i = s.state.ideas[idx].copy()
     if i.goal is None:
@@ -247,7 +247,7 @@ def percent_one_decimal(ratio: Float64) raises -> String:
     return text + "%"
 
 
-def flow_text(s: Session, idx: Int) raises -> String:
+def flow_text(mut s: Session, idx: Int) raises -> String:
     """Flow: touch time over elapsed time, or "-" when the idea is not yet old.
     """
     var i = s.state.ideas[idx].copy()
@@ -281,7 +281,7 @@ def folder_arg(folder: String) raises -> String:
     return path
 
 
-def home_owner(s: Session, path: String) -> Int:
+def home_owner(mut s: Session, path: String) -> Int:
     """The first idea whose home is this folder, or -1."""
     for i in range(len(s.state.ideas)):
         var home_path = s.state.ideas[i].home.copy()
@@ -290,7 +290,7 @@ def home_owner(s: Session, path: String) -> Int:
     return -1
 
 
-def check_days_in_range(s: Session, days: Float64) raises:
+def check_days_in_range(mut s: Session, days: Float64) raises:
     """AddDays throws past the DateTime range, after C# has already appended
     the event. Refuse first, so nothing is recorded."""
     var target = Float64(s.now.local_ticks()) + days * Float64(TICKS_PER_DAY)
@@ -670,7 +670,7 @@ def retire(mut s: Session, idx: Int, why: String) raises:
     print(id + " retired on purpose. Its notes stay.")
 
 
-def ideas_list(s: Session) raises:
+def ideas_list(mut s: Session) raises:
     """Ideas: every idea, with its stage, touch time, age and flow."""
     if len(s.state.ideas) == 0:
         print('No ideas yet. vinci idea "title"')
@@ -693,7 +693,7 @@ def ideas_list(s: Session) raises:
         )
 
 
-def pipeline_detail(s: Session, idx: Int, stage: Int) raises -> String:
+def pipeline_detail(mut s: Session, idx: Int, stage: Int) raises -> String:
     """The text in brackets on one pipeline line, which depends on the stage."""
     var i = s.state.ideas[idx].copy()
     if stage == INCUBATE:
@@ -720,7 +720,7 @@ def pipeline_detail(s: Session, idx: Int, stage: Int) raises -> String:
     return span(i.time_in(stage, s.now)) + " here"
 
 
-def pipeline(s: Session) raises:
+def pipeline(mut s: Session) raises:
     """Pipeline: every live idea by stage, where ideas get stuck, and the one thing
     to do now."""
     var stages = List[Int]()
@@ -770,7 +770,7 @@ def pipeline(s: Session) raises:
     next_action(s)
 
 
-def next_action(s: Session) raises:
+def next_action(mut s: Session) raises:
     """Next: the one thing to do now, from review.mojo."""
     var step = next_step(s.state, s.now)
     print("Next: " + step.what)
@@ -914,7 +914,7 @@ def unwatch(mut s: Session, idx: Int, pattern: String) raises:
     print(id + ' no longer watches "' + pattern + '".')
 
 
-def watches(s: Session) raises:
+def watches(mut s: Session) raises:
     """Watches: what is watched, recorded or implied by a home folder."""
     var all = s.state.all_watches()
     if len(all) == 0:
@@ -956,7 +956,7 @@ def spent(mut s: Session, idx: Int, minutes: Float64) raises:
     print(span(ticks) + " added to " + id + ".")
 
 
-def show_idea(s: Session, idea_index: Int) raises:
+def show_idea(mut s: Session, idea_index: Int) raises:
     """ShowIdea: the idea's full view, with its requirements, predictions, notes,
     credits, ships and issues."""
     var i = s.state.ideas[idea_index].copy()

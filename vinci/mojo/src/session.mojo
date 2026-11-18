@@ -12,7 +12,7 @@
 from std.math import isfinite
 from std.python import Python
 
-from journal import Event, Journal
+from journal import Event, JournalTx
 from state import Idea, Note, Prediction, State, state_from
 from text import (
     code_points_to_string,
@@ -160,25 +160,35 @@ struct Session(Movable):
     """The journal, the state folded once at start, and the clock for one command.
     """
 
-    var journal: Journal
+    var journal: JournalTx
     var state: State
     var now: Instant
     # The lines the window and git tracker wrote before this command (track.mojo).
     # `vinci sync` prints them; every other command ignores them.
     var tracked: List[String]
 
-    def __init__(out self, var journal: Journal, var now: Instant) raises:
-        """Reads the journal once. A broken journal fails here, even for help, as in C#.
+    def __init__(out self, var journal: JournalTx, var now: Instant) raises:
+        """Reads the journal once, under the transaction's lock. A broken journal fails here,
+        even for help, as in C#. The caller commits or aborts the transaction.
         """
         self.state = state_from(journal.read())
         self.journal = journal^
         self.now = now^
         self.tracked = List[String]()
 
-    def record(self, e: Event) raises:
-        """Append one fact. The state is not refolded; later reads in this command see the old one.
+    def record(mut self, e: Event) raises:
+        """Queue one fact for the transaction. The state is not refolded; later reads in
+        this command see the old one.
         """
-        self.journal.append(e)
+        self.journal.append(e.copy())
+
+    def commit(mut self) raises:
+        """Writes the command's facts with one fsync and releases the lock."""
+        self.journal.commit()
+
+    def abort(mut self) raises:
+        """Drops the command's facts and releases the lock, after an error."""
+        self.journal.abort()
 
     def read_input(self) raises -> String:
         """Everything on standard input: what a lone "-" argument means."""

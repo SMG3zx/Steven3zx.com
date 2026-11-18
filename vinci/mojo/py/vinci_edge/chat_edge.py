@@ -20,6 +20,7 @@ from typing import Final, cast
 
 CHAT_TIMEOUT_S: Final = 300
 CHILD_TIMEOUT_S: Final = 120
+NO_TRACK_ENV: Final = "VINCI_NO_TRACK"
 # Eval only (the M4 chat-loop evaluation). VINCI_CHAT_TEMPERATURE is sent with the request when
 # set; VINCI_CHAT_USAGE_LOG names a JSON lines file that gets one record per model call: the
 # token counts, the reply, and whether the request carried a recall that fell back to lexical.
@@ -102,12 +103,16 @@ def read_line() -> tuple[str, str]:
     return ("line", line.rstrip("\r\n"))
 
 
-def run_vinci(exe: str, args_json: str) -> tuple[int, str]:
+def run_vinci(exe: str, args_json: str, no_track: bool) -> tuple[int, str]:
     """Runs exe with the JSON array of arguments, standard input empty, and returns its exit
     code with its standard output and error, in the order written. The environment is the
     chat's, so VINCI_HOME, VINCI_NOW and the rest reach the command as they reach the chat.
+    no_track sets VINCI_NO_TRACK=1 in the child's environment (a read-only command).
     """
     args = cast("list[str]", json.loads(args_json))
+    env = dict(os.environ)
+    if no_track:
+        env[NO_TRACK_ENV] = "1"
     done = subprocess.run(
         [exe, *args],
         stdin=subprocess.DEVNULL,
@@ -115,5 +120,6 @@ def run_vinci(exe: str, args_json: str) -> tuple[int, str]:
         stderr=subprocess.STDOUT,
         timeout=CHILD_TIMEOUT_S,
         check=False,
+        env=env,
     )
     return (done.returncode, done.stdout.decode("utf-8", errors="replace"))

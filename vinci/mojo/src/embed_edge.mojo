@@ -80,9 +80,16 @@ def default_config() raises -> EmbedConfig:
 
 
 def edge_module() raises -> PythonObject:
-    """vinci_edge.index_embed, with mojo/py on sys.path. VINCI_MOJO_PY names that
-    directory; otherwise it is ../py from the binary (mojo/build/vinci -> mojo/py).
+    """vinci_edge.index_embed, with mojo/py on sys.path. Importing it also imports the
+    HTTP and JSON modules, so an edge that needs neither calls edge_path instead.
     """
+    edge_path()
+    return Python.import_module("vinci_edge.index_embed")
+
+
+def edge_path() raises:
+    """mojo/py on sys.path, and nothing imported. VINCI_MOJO_PY names that directory;
+    otherwise it is ../py from the binary (mojo/build/vinci -> mojo/py)."""
     var sys = Python.import_module("sys")
     var os = Python.import_module("os")
     var py_dir = env_or("VINCI_MOJO_PY", "")
@@ -99,7 +106,6 @@ def edge_module() raises -> PythonObject:
             present = True
     if not present:
         sys.path.insert(0, PythonObject(resolved))
-    return Python.import_module("vinci_edge.index_embed")
 
 
 def embed_documents(

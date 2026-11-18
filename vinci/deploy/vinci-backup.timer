@@ -1,0 +1,10 @@
+[Unit]
+Description=vinci: daily journal backup at 03:00
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=vinci-backup.service
+
+[Install]
+WantedBy=timers.target

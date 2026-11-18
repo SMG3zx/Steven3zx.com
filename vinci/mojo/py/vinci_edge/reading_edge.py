@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import html
 import os
+import pwd
 import re
 import urllib.error
 import urllib.parse
@@ -18,20 +19,26 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+from .read_guard import (
+    Refused,
+    check_local_path,
+    deny_list,
+    describe_fetch_error,
+    guarded_opener,
+    scheme_problem,
+)
+
 PASSAGE_CHARS: Final = 1200
 MAX_BYTES: Final = 1_000_000
 MAX_PASSAGES: Final = 500
 FETCH_TIMEOUT_S: Final = 30
 TEXT_EXTENSIONS: Final = (".txt", ".md", ".markdown")
+# Refusals and fetch errors are read_guard.Refused: its message is what the tool tells the model.
 
 _BLANK: Final = re.compile(r"\n\s*\n")
 _HIDDEN: Final = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
 _TAG: Final = re.compile(r"<[^>]+>")
 _TITLE: Final = re.compile(r"<title[^>]*>(.*?)</title\s*>", re.IGNORECASE | re.DOTALL)
-
-
-class ReadRefused(Exception):
-    """The source cannot be read. The message is what the tool tells the model."""
 
 
 def passages_of(text: str) -> list[str]:
@@ -75,36 +82,47 @@ def utc_date(now_iso: str) -> str:
     return datetime.fromisoformat(now_iso).astimezone(UTC).date().isoformat()
 
 
-def _from_file(path: str) -> tuple[str, str, str]:
-    full = os.path.abspath(path)
+def account_home() -> str:
+    """The home folder of the account that runs vinci, from the password database. HOME is not
+    used: anything that sets it (a test, a wrapper) would move the boundary of the read tool."""
+    return pwd.getpwuid(os.getuid()).pw_dir
+
+
+def _from_file(path: str, root: str, deny: list[str]) -> tuple[str, str, str]:
+    """A text file under the person's home folder, and not in a secret folder (read_guard)."""
+    full = os.path.abspath(os.path.expanduser(path))
     if not full.lower().endswith(TEXT_EXTENSIONS):
-        raise ReadRefused("only .txt, .md and .markdown files can be read for now")
-    if not os.path.isfile(full):
-        raise ReadRefused(f"there is no file at {full}")
-    if os.path.getsize(full) > MAX_BYTES:
-        raise ReadRefused("the file is larger than 1 MB")
-    with open(full, encoding="utf-8", errors="replace") as handle:
+        raise Refused("only .txt, .md and .markdown files can be read for now")
+    resolved = check_local_path(full, root, deny)
+    if not os.path.isfile(resolved):
+        raise Refused(f"there is no file at {full}")
+    if os.path.getsize(resolved) > MAX_BYTES:
+        raise Refused("the file is larger than 1 MB")
+    with open(resolved, encoding="utf-8", errors="replace") as handle:
         text = handle.read()
-    return (Path(full).stem, text, full)
+    return (Path(resolved).stem, text, resolved)
 
 
 def _from_url(url: str) -> tuple[str, str, str]:
+    """A web page: http or https only, every address checked, every redirect checked again
+    (read_guard.guarded_opener)."""
+    problem = scheme_problem(url)
+    if problem is not None:
+        raise Refused(problem)
     parts = urllib.parse.urlsplit(url)
-    if parts.scheme not in ("http", "https") or parts.netloc == "":
-        raise ReadRefused("the address must start with http:// or https://")
     request = urllib.request.Request(url, headers={"User-Agent": "vinci"})
     try:
-        with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_S) as response:
+        with guarded_opener().open(request, timeout=FETCH_TIMEOUT_S) as response:
             media = response.headers.get_content_type()
             if not media.startswith("text/"):
-                raise ReadRefused(f"the page is {media}, not text")
+                raise Refused(f"the page is {media}, not text")
             body = response.read(MAX_BYTES + 1)
-    except urllib.error.HTTPError as err:
-        raise ReadRefused(f"the page answered {err.code}") from err
-    except urllib.error.URLError as err:
-        raise ReadRefused(f"the page could not be fetched: {err.reason}") from err
+    except Refused:
+        raise
+    except (urllib.error.URLError, OSError) as err:
+        raise Refused(describe_fetch_error(err)) from err
     if len(body) > MAX_BYTES:
-        raise ReadRefused("the page is larger than 1 MB")
+        raise Refused("the page is larger than 1 MB")
     page = body.decode("utf-8", errors="replace")
     if media == "text/html":
         title = html_title(page) or (parts.netloc + parts.path)
@@ -112,20 +130,33 @@ def _from_url(url: str) -> tuple[str, str, str]:
     return (parts.netloc + parts.path, page, url)
 
 
-def read_source(target: str, is_url: bool, home: str, now_iso: str) -> dict[str, str]:
+def read_source(
+    target: str,
+    is_url: bool,
+    home: str,
+    now_iso: str,
+    person_home: str | None = None,
+) -> dict[str, str]:
     """Reads a file or page, saves its passages as a body file under home, and describes it.
+
+    A file must lie under person_home (the person's home folder, by default) and outside the
+    secret folders (read_guard.deny_list), with symbolic links and .. resolved first.
 
     Returns {"status": "ok", "title", "locator", "date", "count", "where"} or
     {"status": "error", "error": message}. where is the body file's path under home.
     """
+    root = person_home if person_home is not None else account_home()
     try:
-        title, text, locator = _from_url(target) if is_url else _from_file(target)
+        if is_url:
+            title, text, locator = _from_url(target)
+        else:
+            title, text, locator = _from_file(target, root, deny_list(home, root))
         passages = passages_of(text)
         if len(passages) == 0:
-            raise ReadRefused("there is no text in it")
+            raise Refused("there is no text in it")
         if len(passages) > MAX_PASSAGES:
-            raise ReadRefused(f"it has {len(passages)} passages; the limit is {MAX_PASSAGES}")
-    except ReadRefused as refused:
+            raise Refused(f"it has {len(passages)} passages; the limit is {MAX_PASSAGES}")
+    except Refused as refused:
         return {"status": "error", "error": str(refused)}
     body = "\n\n".join(passages).encode("utf-8")
     digest = hashlib.sha256(body).hexdigest()

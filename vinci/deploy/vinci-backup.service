@@ -1,0 +1,8 @@
+[Unit]
+Description=vinci: back up the journal (consistent copy, sha256 manifest, keep 90)
+
+[Service]
+# A one-shot job: the timer starts it. It copies journal.jsonl under the journal's append lock
+# into $VINCI_HOME/backups/journal and keeps the newest 90 copies (docs/development.md).
+Type=oneshot
+ExecStart=%h/.local/bin/vinci backup --keep 90

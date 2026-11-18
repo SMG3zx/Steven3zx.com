@@ -2,8 +2,9 @@
 # writes (src/Journal.cs). Everything vinci knows is a fold over these events.
 
 from std.pathlib import Path
-from std.os import makedirs
+from std.python import Python, PythonObject
 
+from embed_edge import edge_path
 from jsonline import (
     Cursor,
     ascii_lower,
@@ -11,6 +12,7 @@ from jsonline import (
     json_instant,
     json_string,
 )
+from text import ascii_tail
 from timeutil import Instant, ascii_prefix, parse_instant
 
 
@@ -243,6 +245,119 @@ def directory_of(path: String) -> String:
     return String(unsafe_from_utf8=out)
 
 
+def journal_lock_edge() raises -> PythonObject:
+    """vinci_edge.journal_lock, with mojo/py on sys.path. Only the path is set up here:
+    edge_module would also import the index's HTTP module, which the lock does not need.
+    """
+    edge_path()
+    return Python.import_module("vinci_edge.journal_lock")
+
+
+def edge_status(pair: PythonObject, what: String) raises:
+    """Raises when the edge's status pair is not ok. The message is the edge's own text.
+    """
+    if String(pair[0]) != "ok":
+        raise Error(what + String(pair[1]))
+
+
+def next_id_of(events: List[Event], letter: String) raises -> String:
+    """The next free id with a prefix letter (k1, e7 ...), from the ids in events.
+
+    Callers mint under the lock: take the events from a JournalTx that has begun, and append
+    the new line to the same transaction before it commits.
+    """
+    var best = 0
+    for e in events:
+        if e.id is None:
+            continue
+        var id = e.id.value()
+        if id.startswith(letter) and id.byte_length() > 1:
+            try:
+                var n = Int(String(ascii_tail(id, 1)))
+                if n > best:
+                    best = n
+            except:
+                pass
+    return letter + String(best + 1)
+
+
+struct JournalTx(Movable):
+    """One read-then-write transaction on the journal, under its append lock.
+
+    begin() takes the lock; read() gives the journal's events plus what this transaction has
+    not written yet; append() queues a line; flush() writes the queued lines with one fsync
+    and keeps the lock; commit() flushes and releases; abort() drops the queue and releases.
+    The lock is re-entrant in-process, so a read inside a transaction (and a nested
+    transaction on the same file) does not wait for itself. Every raise between begin() and
+    commit() should be followed by abort(); a process that exits drops the lock anyway.
+    """
+
+    var path: String
+    var pending: List[Event]
+    var held: Bool
+
+    def __init__(out self, path: String):
+        self.path = path
+        self.pending = List[Event]()
+        self.held = False
+
+    def begin(mut self) raises:
+        """Takes the lock. The journal's folder is created if it is missing."""
+        if self.held:
+            return
+        var pair = journal_lock_edge().acquire(PythonObject(self.path))
+        edge_status(pair, "")
+        self.held = True
+
+    def read(self) raises -> List[Event]:
+        """The journal's events in file order, then the queued lines. Readers take no lock
+        (Journal.read), so a read inside a transaction is the same as one outside it.
+        """
+        var events = Journal(self.path).read()
+        for e in self.pending:
+            events.append(e.copy())
+        return events^
+
+    def append(mut self, var e: Event) raises:
+        """Queues one line. Nothing is written until flush or commit."""
+        if not self.held:
+            raise Error("journal: a line was queued outside a transaction")
+        self.pending.append(e^)
+
+    def flush(mut self) raises:
+        """Writes the queued lines, in order, with one fsync. The lock stays held.
+        """
+        if len(self.pending) == 0:
+            return
+        if not self.held:
+            raise Error("journal: lines were written outside a transaction")
+        var text = String()
+        for e in self.pending:
+            text += serialize_event(e) + "\n"
+        var pair = journal_lock_edge().append_durable(
+            PythonObject(self.path), PythonObject(text)
+        )
+        edge_status(pair, "")
+        self.pending = List[Event]()
+
+    def commit(mut self) raises:
+        """Flushes and releases the lock."""
+        self.flush()
+        self.release()
+
+    def abort(mut self) raises:
+        """Drops the queued lines and releases the lock. Safe to call twice."""
+        self.pending = List[Event]()
+        self.release()
+
+    def release(mut self) raises:
+        if not self.held:
+            return
+        self.held = False
+        var pair = journal_lock_edge().release(PythonObject(self.path))
+        edge_status(pair, "")
+
+
 struct Journal(Movable):
     """The journal file at a path. Reads whole, appends one line at a time."""
 
@@ -252,11 +367,23 @@ struct Journal(Movable):
         self.path = path
 
     def read(self) raises -> List[Event]:
-        """Every event, in file order. A missing file is an empty journal."""
+        """Every event, in file order. A missing file is an empty journal, and nothing is
+        created. Readers take no lock: a writer appends whole lines, so the only line a reader
+        can see half written is the last one, which has no newline yet. It is left out here and
+        read by the next call. A complete line that does not parse is still an error.
+        """
         var events = List[Event]()
         if not Path(self.path).exists():
             return events^
-        var text = Path(self.path).read_text()
+        var bytes = Path(self.path).read_bytes()
+        var last = -1
+        for i in range(len(bytes)):
+            if bytes[i] == 10:
+                last = i
+        var kept = List[UInt8]()
+        for i in range(last + 1):
+            kept.append(bytes[i])
+        var text = String(unsafe_from_utf8=kept)
         for raw in text.split("\n"):
             var line = String(raw)
             if (
@@ -269,10 +396,14 @@ struct Journal(Movable):
             events.append(parse_event(line))
         return events^
 
-    def append(self, e: Event) raises:
-        """Append one line, creating the parent directories first."""
-        var dir = directory_of(self.path)
-        if dir.byte_length() > 0:
-            makedirs(dir, exist_ok=True)
-        with open(self.path, "a") as f:
-            f.write(serialize_event(e) + "\n")
+    def append(self, var e: Event) raises:
+        """Append one line under the lock, with an fsync. For a read-then-append, use a
+        JournalTx instead, so the id is minted under the same lock."""
+        var tx = JournalTx(self.path)
+        tx.begin()
+        try:
+            tx.append(e^)
+            tx.commit()
+        except err:
+            tx.abort()
+            raise err^

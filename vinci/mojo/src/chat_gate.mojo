@@ -7,26 +7,24 @@
 # result, so it can say that nothing was written. Journal-only turns write without asking.
 
 from chat_edge import read_line
+from command_kinds import chat_runs, command_writes_journal
 from jsonline import ascii_lower
 
-comptime READ_ONLY_COMMANDS = (
-    " help --help -h ideas pipeline next show notes tags sources predictions"
-    " stats issues principles bookmarks watches path "
-)
 comptime REFUSAL = (
     "refused: the person did not allow this write, so nothing was written."
     " Say so, and do not retry it unless the person asks."
 )
 
 
-def is_read_only_command(command: String) -> Bool:
-    """True for a journal command that only reads. Anything else is a write, including sync,
-    which records time in normal use, and review, which appends a review line.
+def is_read_only_command(command: String) raises -> Bool:
+    """True for a journal command that only reads, as command_kinds.mojo classes it. Anything
+    else is a write: sync (the tracker records time in normal use), review (it appends a review
+    line), and any word the table does not know.
     """
-    return (" " + command + " ") in READ_ONLY_COMMANDS
+    return chat_runs(command) and not command_writes_journal(command)
 
 
-def is_write_call(name: String, args: List[String]) -> Bool:
+def is_write_call(name: String, args: List[String]) raises -> Bool:
     """True when the tool call writes. journal writes unless its command only reads; remember
     and read write. recall and open only read. An unknown name is not a write: the tool
     result says there is no such tool."""

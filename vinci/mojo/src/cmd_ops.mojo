@@ -116,7 +116,7 @@ def issue_line(x: Issue) raises -> String:
     return pad_right(x.id, 4) + " " + status + " " + big + x.text
 
 
-def commitment_record(s: Session, kept: Int, missed: Int) raises -> String:
+def commitment_record(mut s: Session, kept: Int, missed: Int) raises -> String:
     """CommitmentRecord: how many commitments were kept, of all answered for."""
     var kept_total = kept
     var not_kept = 0
@@ -223,7 +223,7 @@ def new_principle(
     print(id + " adopted." + closed + ' If it fails: vinci issue "..." ' + id)
 
 
-def issues(s: Session) raises:
+def issues(mut s: Session) raises:
     """Issues: every issue, then where they usually go wrong."""
     if len(s.state.issues) == 0:
         print('No issues logged. vinci issue "what went wrong"')
@@ -269,7 +269,7 @@ def issues(s: Session) raises:
         print(line + ". Most go wrong in " + stage_name(stages[0]) + ".")
 
 
-def principles(s: Session) raises:
+def principles(mut s: Session) raises:
     """Principles: each rule, the issue it came from, and how often it broke."""
     if len(s.state.principles) == 0:
         print("No principles yet. They come from diagnosed issues.")

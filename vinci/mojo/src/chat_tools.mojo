@@ -26,6 +26,7 @@ from chat_action import (
 )
 from chat_edge import read_source, run_vinci
 from chat_gate import ask_write, is_write_call, needs_confirmation, refusal
+from command_kinds import chat_runs
 from chat_open import open_text
 from dates import today_of
 from embed_edge import default_config, env_or
@@ -33,7 +34,7 @@ from handles import lookup
 from index_build import update_from_journal
 from index_store import CITE_MATCH, IndexStore, py_params
 from jsonline import json_string
-from journal import Event, Journal
+from journal import Event, Journal, JournalTx, next_id_of
 from open_view import no_request, parse_lines_arg
 from pack import estimate_counter, pack
 from recall import Settings, feed_hint_line, parse_sources, recall
@@ -82,7 +83,6 @@ read saves a text file (.txt, .md) or a web page that the person named, so recal
 When a write is refused, the tool result says so. Say that nothing was written.
 After a tool runs you will see its result. When you have what you need, reply in plain sentences instead of JSON."""
 comptime CATEGORIES = " fact preference decision procedure episode "
-comptime COMMANDS_NOT_IN_CHAT = " chat serve memory index recall open "
 
 
 def join_path(dir: String, name: String) -> String:
@@ -131,24 +131,6 @@ def chat_index_path(home: String) raises -> String:
     return env_or(ENV_INDEX, join_path(home, "index.sqlite"))
 
 
-def next_id(journal_path: String, letter: String) raises -> String:
-    """The next free id with a prefix letter (k1, e7 ...), from the journal's own ids.
-    """
-    var best = 0
-    for e in Journal(journal_path).read():
-        if e.id is None:
-            continue
-        var id = e.id.value()
-        if id.startswith(letter) and id.byte_length() > 1:
-            try:
-                var n = Int(String(ascii_tail(id, 1)))
-                if n > best:
-                    best = n
-            except:
-                pass
-    return letter + String(best + 1)
-
-
 struct ChatTools(Movable):
     """The tools and what they share: the paths, the clock, and the untrusted flag.
     """
@@ -174,6 +156,42 @@ struct ChatTools(Movable):
         self.exe = exe^
         self.now = now^
         self.untrusted = False
+
+    def append_minted(
+        mut self,
+        letter: String,
+        kind: String,
+        var at: Optional[Instant] = None,
+        var text: Optional[String] = None,
+        var tags: Optional[List[String]] = None,
+        var url: Optional[String] = None,
+        var where_: Optional[String] = None,
+    ) raises -> String:
+        """One journal line with the next free id for letter, minted and written under one
+        lock. The line is at self.now unless at is given."""
+        var tx = JournalTx(self.journal_path)
+        tx.begin()
+        try:
+            var id = next_id_of(tx.read(), letter)
+            var when = self.now.copy()
+            if at is not None:
+                when = at.value().copy()
+            tx.append(
+                Event(
+                    when^,
+                    kind,
+                    id=Optional[String](id),
+                    text=text^,
+                    tags=tags^,
+                    url=url^,
+                    where_=where_^,
+                )
+            )
+            tx.commit()
+            return id
+        except err:
+            tx.abort()
+            raise err^
 
     def index_update(self) raises:
         """The index follows the journal: this is what replaces JournalSync. Not under
@@ -224,7 +242,9 @@ struct ChatTools(Movable):
         if len(args) == 0:
             args.append("help")
         var command = args[0].copy()
-        if (" " + command + " ") in COMMANDS_NOT_IN_CHAT:
+        # The table (command_kinds.mojo) says which words are journal commands. A route, or a
+        # word the table does not know, is refused before anything runs.
+        if not chat_runs(command):
             return (
                 "error: vinci: unknown command '"
                 + command
@@ -238,7 +258,11 @@ struct ChatTools(Movable):
                 json_args += ","
             json_args += json_string(args[i])
         json_args += "]"
-        var ran = run_vinci(self.exe, json_args)
+        # A read-only command runs without the tracker: the tracker writes spent, work and
+        # used lines, and only a command the person allowed may write (command_kinds.mojo).
+        var ran = run_vinci(
+            self.exe, json_args, not is_write_call("journal", args)
+        )
         var code = ran[0]
         var text = String(ran[1].rstrip())
         if is_write_call("journal", args):
@@ -366,17 +390,13 @@ struct ChatTools(Movable):
             category = given.value()
         if not self.allowed("remember", action):
             return refusal()
-        var id = next_id(self.journal_path, "k")
         var tags = List[String]()
         tags.append(category)
-        Journal(self.journal_path).append(
-            Event(
-                self.now.copy(),
-                "remember",
-                id=Optional[String](id),
-                text=Optional[String](content),
-                tags=Optional[List[String]](tags^),
-            )
+        var id = self.append_minted(
+            "k",
+            "remember",
+            text=Optional[String](content),
+            tags=Optional[List[String]](tags^),
         )
         self.index_update()
         return "remembered " + id
@@ -402,17 +422,14 @@ struct ChatTools(Movable):
         var date = String(result["date"])
         var count = String(result["count"])
         var where_ = String(result["where"])
-        var id = next_id(self.journal_path, "d")
         var at = parse_instant(date + "T00:00:00Z")
-        Journal(self.journal_path).append(
-            Event(
-                at^,
-                "read",
-                id=Optional[String](id),
-                text=Optional[String](title),
-                url=Optional[String](locator),
-                where_=Optional[String](where_),
-            )
+        var id = self.append_minted(
+            "d",
+            "read",
+            at=Optional[Instant](at^),
+            text=Optional[String](title),
+            url=Optional[String](locator),
+            where_=Optional[String](where_),
         )
         self.index_update()
         self.untrusted = True

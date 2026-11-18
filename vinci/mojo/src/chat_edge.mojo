@@ -58,11 +58,17 @@ def read_line() raises -> Optional[String]:
     return String(pair[1])
 
 
-def run_vinci(exe: String, args_json: String) raises -> Tuple[Int, String]:
+def run_vinci(
+    exe: String, args_json: String, no_track: Bool
+) raises -> Tuple[Int, String]:
     """Runs the vinci binary exe with a JSON array of arguments. Returns its exit code and
-    its output, standard error included, in order."""
+    its output, standard error included, in order. no_track sets VINCI_NO_TRACK=1 for the
+    child, so a read-only command from the chat cannot write the tracker's lines.
+    """
     var edge = chat_edge()
-    var pair = edge.run_vinci(PythonObject(exe), PythonObject(args_json))
+    var pair = edge.run_vinci(
+        PythonObject(exe), PythonObject(args_json), PythonObject(no_track)
+    )
     return (Int(String(pair[0])), String(pair[1]))
 
 

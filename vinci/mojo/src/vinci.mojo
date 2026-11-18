@@ -13,10 +13,12 @@ from std.sys import argv, exit
 from chat import run_chat
 from cmd_feed import feed_command
 from cmd_index import index_command, open_command, recall_command
+from cmd_backup import backup_command
 from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
 from cmd_ops import dispatch_ops
-from journal import Journal
+from command_kinds import command_writes_journal, find_command
+from journal import JournalTx
 from portal import portal_command
 from session import (
     USER_PREFIX,
@@ -25,6 +27,7 @@ from session import (
 )
 from text import ascii_tail, truncate_div
 from track import activitywatch_server, track_sync
+from verify import verify_command
 from timeutil import (
     DAYS_0001_TO_1970,
     TICKS_PER_DAY,
@@ -194,6 +197,20 @@ def run() raises:
             open_args.append(args[i])
         open_command(open_args, vinci_home())
         return
+    # The backup and verify commands (K0b) read the journal under its lock and never run the
+    # tracker, so a backup or a check leaves the journal as it found it.
+    if args[0] == "backup":
+        var backup_args = List[String]()
+        for i in range(1, len(args)):
+            backup_args.append(args[i])
+        backup_command(backup_args, vinci_home(), journal_path(), now.copy())
+        return
+    if args[0] == "verify":
+        var verify_args = List[String]()
+        for i in range(1, len(args)):
+            verify_args.append(args[i])
+        verify_command(verify_args, vinci_home(), journal_path(), now.copy())
+        return
     if args[0] == "memory":
         # Mark 2 removed the memory service (Neo4j, the C# store and its commands).
         raise user_error(
@@ -202,27 +219,43 @@ def run() raises:
         )
 
     # Program.cs and App.Run: the tracker writes its facts before the command reads the
-    # journal, so every command shows current totals. VINCI_NO_TRACK=1 turns it off.
-    var tracked = List[String]()
-    var no_track = env_value("VINCI_NO_TRACK")
-    if not no_track or no_track.value() != "1":
-        tracked = track_sync(
-            Journal(journal_path()), activitywatch_server(), now.copy()
-        )
-    var session = Session(Journal(journal_path()), now^)
-    session.tracked = tracked^
+    # journal, so every command shows current totals. VINCI_NO_TRACK=1 turns it off. The
+    # tracker's external reads come first and take no lock; it takes the lock only to write
+    # (track.mojo track_sync).
     var cmd = args[0]
     var rest = List[String]()
     for i in range(1, len(args)):
         rest.append(args[i])
+    # An unknown word is refused before anything is read or written.
+    if find_command(cmd) < 0:
+        raise user_error("unknown command '" + cmd + "'. Run 'vinci help'.")
 
-    if dispatch_ideas(session, cmd, rest):
-        return
-    if dispatch_knowledge(session, cmd, rest):
-        return
-    if dispatch_ops(session, cmd, rest):
-        return
-    raise user_error("unknown command '" + cmd + "'. Run 'vinci help'.")
+    var tracked = List[String]()
+    var no_track = env_value("VINCI_NO_TRACK")
+    if not no_track or no_track.value() != "1":
+        tracked = track_sync(journal_path(), activitywatch_server(), now.copy())
+
+    # Only a command that writes takes the journal's append lock, from its first read to its
+    # last append, so each id it mints is its own (journal.mojo JournalTx). A read-only command
+    # reads without the lock and creates nothing.
+    var tx = JournalTx(journal_path())
+    if command_writes_journal(cmd):
+        tx.begin()
+    var session = Session(tx^, now^)
+    session.tracked = tracked^
+
+    try:
+        var ran = dispatch_ideas(session, cmd, rest)
+        if not ran:
+            ran = dispatch_knowledge(session, cmd, rest)
+        if not ran:
+            ran = dispatch_ops(session, cmd, rest)
+        if not ran:
+            raise user_error("unknown command '" + cmd + "'. Run 'vinci help'.")
+        session.commit()
+    except err:
+        session.abort()
+        raise err^
 
 
 def stderr_line(text: String):

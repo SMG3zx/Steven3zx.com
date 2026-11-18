@@ -114,3 +114,19 @@
 {"agent":"M5d","n":8,"pass":true,"first_error":"default binary (no VINCI_RECALL_WEIGHTS) reproduces the scope=semantic lexical 0.25 k 60 row exactly on personal, feed and LongMemEval"}
 {"agent":"M5d","n":9,"pass":true,"first_error":"make -C mojo check: exit 0, 188 test lines ok, 0 errors, ruff format and pyright clean"}
 {"agent":"M5d","n":10,"pass":true,"first_error":"vinci_diff --generated 50 --seed 1: 3633 of 3633 steps, 0 diverged; chat_diff 10 of 10; portal_diff 136 of 136, 0 diverged; sync_diff 10 of 10"}
+{"agent":"K0b","n":1,"pass":true,"first_error":"none: make check exit 0 on the first run (one warning in test_command_kinds, fixed in attempt 2)"}
+{"agent":"K0b","n":2,"pass":true,"first_error":"none: make check exit 0 after removing an unused variable in test_command_kinds; no warnings from K0b files"}
+{"agent":"K0a","n":1,"pass":true,"first_error":"none: make check exit 0 on the first K0a run (the K0b work-in-progress tree, with the golden and gate modules added)"}
+{"agent":"K0b","n":3,"pass":true,"first_error":"none: make check exit 0 after the backup prune-error fix; differential suites rerun on the same binary: main 3613/3613, chat 10/10, portal 136/136, sync 10/10"}
+{"agent":"K0b","n":4,"pass":true,"first_error":"none: final make check exit 0 with my tests on build/test-* paths"}
+{"agent":"K0b","n":5,"pass":false,"first_error":"fmt-check: mojo format wanted changes in src/embed_edge.mojo, src/journal.mojo, src/track.mojo (line wrapping only)"}
+{"agent":"K0a","n":2,"pass":false,"first_error":"py-check: I001 import block un-sorted in py/vinci_edge/backup_edge.py:16 (a K0b file; K0a files are clean)"}
+{"agent":"K0b","n":7,"pass":false,"first_error":"make check exit 2: 0 errors, 0 warnings, 0 informations"}
+{"agent":"K0b","n":8,"pass":true,"first_error":"none: make check exit 0 (ruff import order in backup_edge.py fixed)"}
+{"agent":"K0a","n":3,"pass":true,"first_error":"none: make check exit 0 after K0b fixed the import order in py/vinci_edge/backup_edge.py"}
+{"agent":"K0b","n":6,"pass":false,"first_error":"test_journal_tx: assertion 2 vs 3 after commit, in a fixed build folder shared with another make check run; not reproduced alone (6 of 6 runs pass); fixed in attempt 7 by per-process folders"}
+{"agent":"K0a","n":4,"pass":true,"first_error":"none: make check exit 0 in the sparse clone (fresh-clone check, run 1; the golden step and the smoke test then ran, recall failed only for lack of an index, fixed in run 2)"}
+{"agent":"K0a","n":5,"pass":true,"first_error":"none: make check exit 0 in the sparse clone (fresh-clone check, run 2, with the overlay); FRESH CLONE PASS"}
+{"agent":"K0a","n":6,"pass":false,"first_error":"make gate run 1: check stage failed at fmt-check on K0b's in-progress journal.mojo, track.mojo and embed_edge.mojo (not K0a files); golden and eval stages all PASS"}
+{"agent":"K0a","n":7,"pass":true,"first_error":"none: make gate run 2, check stage passed after K0b formatted their files; GATE PASS"}
+{"agent":"K0a","n":8,"pass":true,"first_error":"none: make gate final run, check stage passed; GATE PASS"}

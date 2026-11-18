@@ -24,7 +24,6 @@ from chat_tools import (
     CHAT_INSTRUCTIONS,
     ChatTools,
     chat_index_path,
-    next_id,
     upfront_enabled,
 )
 from dates import today_of
@@ -32,7 +31,7 @@ from embed_edge import env_or
 from index_build import update_from_journal
 from index_store import IndexStore, py_params
 from jsonline import json_string
-from journal import Event, Journal
+from journal import Event, JournalTx, next_id_of
 from session import Session
 from cmd_ideas import dispatch_ideas
 from text import ascii_tail
@@ -132,9 +131,16 @@ def stderr_line(text: String):
 
 def pipeline(journal_path: String, now: Instant) raises:
     """`vinci pipeline`, run in this process: it prints to standard output."""
-    var s = Session(Journal(journal_path), now.copy())
+    # pipeline only reads, so it takes no lock.
+    var tx = JournalTx(journal_path)
+    var s = Session(tx^, now.copy())
     var rest = List[String]()
-    _ = dispatch_ideas(s, "pipeline", rest)
+    try:
+        _ = dispatch_ideas(s, "pipeline", rest)
+        s.commit()
+    except err:
+        s.abort()
+        raise err^
 
 
 struct Chat(Movable):
@@ -297,20 +303,27 @@ struct Chat(Movable):
     def record(mut self, who: String, text: String, kind: String) raises:
         """One exchange line: who said it, the text, the session, and the message kind.
         """
-        var id = next_id(self.journal_path, "e")
         var tags = List[String]()
         tags.append(kind)
-        Journal(self.journal_path).append(
-            Event(
-                self.now.copy(),
-                "exchange",
-                id=Optional[String](id),
-                text=Optional[String](text),
-                who=Optional[String](who),
-                why=Optional[String](self.session_id),
-                tags=Optional[List[String]](tags^),
+        var tx = JournalTx(self.journal_path)
+        tx.begin()
+        try:
+            var id = next_id_of(tx.read(), "e")
+            tx.append(
+                Event(
+                    self.now.copy(),
+                    "exchange",
+                    id=Optional[String](id),
+                    text=Optional[String](text),
+                    who=Optional[String](who),
+                    why=Optional[String](self.session_id),
+                    tags=Optional[List[String]](tags^),
+                )
             )
-        )
+            tx.commit()
+        except err:
+            tx.abort()
+            raise err^
         self.tools.index_update()
 
 

@@ -14,7 +14,7 @@ from std.pathlib import Path
 from std.python import Python, PythonObject
 
 from embed_edge import edge_module
-from journal import Event, Journal
+from journal import Event, JournalTx
 from state import RETIRED, State, Watch, state_from
 from text import day, pad_right, span, utf16_length
 from timeutil import (
@@ -94,6 +94,65 @@ struct Credit(Copyable, Movable):
     var use: Bool
     var total: Int  # ticks
     var last: Instant
+
+
+@fieldwise_init
+struct Compose(Movable):
+    """What one pass of the tracker produces: the lines to print and the facts to write.
+    """
+
+    var lines: List[String]
+    var events: List[Event]
+
+
+struct TrackReads(Movable):
+    """The external reads one tracker sync makes, keyed by what they ask for. A read is made
+    once per key, so the pass that decides whether to write and the pass that writes (under
+    the lock) share them, and the lock is never held for a read it could have made before.
+    """
+
+    var seen_keys: List[String]
+    var seen: List[Seen]
+    var commit_keys: List[String]
+    var commits: List[List[Commit]]
+
+    def __init__(out self):
+        self.seen_keys = List[String]()
+        self.seen = List[Seen]()
+        self.commit_keys = List[String]()
+        self.commits = List[List[Commit]]()
+
+
+def read_seen(
+    mut reads: TrackReads, server: String, start: Instant, end: Instant
+) raises -> Seen:
+    """fetch_seen, made at most once for the same server and period."""
+    var key = server + "|" + String(start.utc) + "|" + String(end.utc)
+    for i in range(len(reads.seen_keys)):
+        if reads.seen_keys[i] == key:
+            return reads.seen[i].copy()
+    var seen = fetch_seen(server, start.copy(), end.copy())
+    reads.seen_keys.append(key)
+    reads.seen.append(seen.copy())
+    return seen^
+
+
+def read_commits(
+    mut reads: TrackReads, folder: String, after: Optional[Instant]
+) raises -> List[Commit]:
+    """git_commits, made at most once for the same folder and starting moment.
+    """
+    var when = String("latest")
+    if after:
+        when = String(after.value().utc)
+    var key = folder + "|" + when
+    for i in range(len(reads.commit_keys)):
+        if reads.commit_keys[i] == key:
+            return reads.commits[i].copy()
+    var found = git_commits(folder, after)
+    reads.commit_keys.append(key)
+    reads.commits.append(found.copy())
+    return found^
 
 
 def activitywatch_server() raises -> String:
@@ -327,12 +386,14 @@ def fetch_seen(server: String, start: Instant, end: Instant) raises -> Seen:
 
 
 def credit_windows(
-    journal: Journal, s: State, server: String, now: Instant
-) raises -> List[String]:
-    """Tracker.Windows: credit the window time since the last sync, and write the sync.
+    mut reads: TrackReads, s: State, server: String, now: Instant
+) raises -> Compose:
+    """Tracker.Windows: credit the window time since the last sync, and the sync line.
 
-    Returns the lines to print for it, or the not-answered and nothing-watched lines.
+    Returns the lines to print for it (or the not-answered and nothing-watched lines) and the
+    facts to write. Nothing is written here: the caller writes them under the lock.
     """
+    var events = List[Event]()
     var ordered = ordered_watches(s)
     var patterns = List[String]()
     for w in ordered:
@@ -343,11 +404,11 @@ def credit_windows(
     else:
         from_at = s.watching_since.value().copy()
 
-    var seen = fetch_seen(server, from_at, now)
+    var seen = read_seen(reads, server, from_at, now)
     if not seen.answered:
         var none = List[String]()
         none.append(NO_ANSWER)
-        return none^
+        return Compose(none^, events^)
     var to = seen.through.copy() if seen.through.utc < now.utc else now.copy()
 
     # Matching is OrdinalIgnoreCase, so both sides are folded before the search.
@@ -413,7 +474,7 @@ def credit_windows(
                     used_today = True
             if used_today:
                 continue
-            journal.append(
+            events.append(
                 Event(
                     c.last.copy(),
                     "used",
@@ -429,7 +490,7 @@ def credit_windows(
         )
         if minutes <= 0.0:
             continue
-        journal.append(
+        events.append(
             Event(
                 c.last.copy(),
                 "spent",
@@ -443,12 +504,12 @@ def credit_windows(
         )
 
     if len(credits) > 0 or to.utc - from_at.utc > MARK_EVERY:
-        journal.append(Event(to.copy(), "sync"))
+        events.append(Event(to.copy(), "sync"))
     if len(lines) > 0:
-        return lines^
+        return Compose(lines^, events^)
     var empty = List[String]()
     empty.append("No watched window since " + local_minute(from_at) + ".")
-    return empty^
+    return Compose(empty^, events^)
 
 
 def track_fold(texts: List[String]) raises -> List[String]:
@@ -504,7 +565,7 @@ def git_commits(
     return commits^
 
 
-def commit_sync(journal: Journal, s: State) raises -> List[String]:
+def commit_sync(mut reads: TrackReads, s: State) raises -> Compose:
     """Tracker.Commits: a commit under an idea's home is work on that idea.
 
     An idea with no work yet takes its latest commit only. Every other homed idea takes the
@@ -516,13 +577,14 @@ def commit_sync(journal: Journal, s: State) raises -> List[String]:
         if s.ideas[i].home and s.ideas[i].stage != RETIRED:
             homed.append(i)
     var lines = List[String]()
+    var events = List[Event]()
     if len(homed) == 0:
-        return lines^
+        return Compose(lines^, events^)
 
     var found = List[Found]()
     for i in homed:
         if len(s.ideas[i].work) == 0:
-            for c in git_commits(s.ideas[i].home.value(), None):
+            for c in read_commits(reads, s.ideas[i].home.value(), None):
                 found.append(Found(i, c.copy()))
 
     var has_since = False
@@ -540,7 +602,9 @@ def commit_sync(journal: Journal, s: State) raises -> List[String]:
                 if root and not contains_string(roots, root.value()):
                     roots.append(root.value())
         for root in roots:
-            for commit in git_commits(root, Optional[Instant](since.copy())):
+            for commit in read_commits(
+                reads, root, Optional[Instant](since.copy())
+            ):
                 var taken = List[Int]()
                 for file in commit.files:
                     var best = -1
@@ -580,7 +644,7 @@ def commit_sync(journal: Journal, s: State) raises -> List[String]:
                     break
             members.insert(at, f.commit.copy())
         for m in members:
-            journal.append(
+            events.append(
                 Event(
                     m.at.copy(),
                     "work",
@@ -599,22 +663,66 @@ def commit_sync(journal: Journal, s: State) raises -> List[String]:
             + "  "
             + idea.title
         )
-    return lines^
+    return Compose(lines^, events^)
+
+
+def compose(
+    mut reads: TrackReads, s: State, server: String, now: Instant
+) raises -> Compose:
+    """The window credits, then the commits: the lines to print and the facts to write, in
+    the order they are written. Reads go through reads, so a second call with the same state
+    makes no new external read."""
+    var credit = credit_windows(reads, s, server, now)
+    var commits = commit_sync(reads, s)
+    var lines = credit.lines.copy()
+    for line in commits.lines:
+        lines.append(line.copy())
+    var events = credit.events.copy()
+    for e in commits.events:
+        events.append(e.copy())
+    return Compose(lines^, events^)
 
 
 def track_sync(
-    journal: Journal, server: String, now: Instant
+    journal_path: String, server: String, now: Instant
 ) raises -> List[String]:
     """Tracker.Sync: credit the windows, then the commits, and return the lines to print.
 
-    Nothing is read from ActivityWatch or git when nothing is watched.
+    The external reads (ActivityWatch, git) happen first, with no lock: readers never take
+    the lock, and a sync that has nothing to write takes none. The state is folded once
+    without the lock to see whether anything is due. Only then does it take the lock,
+    fold the state again under it, and write the facts in one batch with one fsync. The reads
+    from the first pass are reused, so a write made in between by another process is seen
+    in the state but not read again (nothing is fetched under the lock unless the state's
+    sync point moved, in which case the read is made under the lock, as before).
     """
-    var s = state_from(journal.read())
+    var s0 = state_from(JournalTx(journal_path).read())
     var out = List[String]()
-    if len(s.all_watches()) == 0:
+    if len(s0.all_watches()) == 0:
         out.append(NOTHING_WATCHED)
         return out^
-    out = credit_windows(journal, s, server, now)
-    for line in commit_sync(journal, s):
-        out.append(line.copy())
-    return out^
+    var reads = TrackReads()
+    var first = compose(reads, s0, server, now)
+    var due = len(first.events) > 0
+    var first_lines = first.lines.copy()
+    if not due:
+        return first_lines^
+
+    var tx = JournalTx(journal_path)
+    tx.begin()
+    try:
+        var s1 = state_from(tx.read())
+        if len(s1.all_watches()) == 0:
+            tx.abort()
+            out.append(NOTHING_WATCHED)
+            return out^
+        var fresh = compose(reads, s1, server, now)
+        var fresh_lines = fresh.lines.copy()
+        var fresh_events = fresh.events.copy()
+        for e in fresh_events:
+            tx.append(e.copy())
+        tx.commit()
+        return fresh_lines^
+    except err:
+        tx.abort()
+        raise err^

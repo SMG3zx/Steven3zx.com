@@ -5,7 +5,7 @@ from std.os import makedirs, remove
 from std.pathlib import Path
 from std.testing import assert_equal, assert_true
 
-from journal import Event, Journal
+from journal import Event, Journal, JournalTx
 from session import Session, collapse_spaces, number
 from timeutil import Instant, parse_instant
 
@@ -62,7 +62,7 @@ def test_arg_through_session() raises:
     makedirs(dir, exist_ok=True)
     if Path(PATH).exists():
         remove(PATH)
-    var s = Session(Journal(PATH), parse_instant("2026-11-20T12:00:00-06:00"))
+    var s = Session(JournalTx(PATH), parse_instant("2026-11-20T12:00:00-06:00"))
     var a = List[String]()
     a.append("  two   words ")
     assert_equal(s.arg(a, 0, "title"), "two words")
@@ -71,7 +71,7 @@ def test_arg_through_session() raises:
     var raised = False
     try:
         var s2 = Session(
-            Journal(PATH), parse_instant("2026-11-20T12:00:00-06:00")
+            JournalTx(PATH), parse_instant("2026-11-20T12:00:00-06:00")
         )
         _ = s2.arg(empty, 0, "title")
     except e:
@@ -84,7 +84,7 @@ def test_arg_through_session() raises:
     raised = False
     try:
         var s3 = Session(
-            Journal(PATH), parse_instant("2026-11-20T12:00:00-06:00")
+            JournalTx(PATH), parse_instant("2026-11-20T12:00:00-06:00")
         )
         _ = s3.arg(blank, 0, "title")
     except e:
@@ -99,14 +99,16 @@ def test_next_id() raises:
     if Path(PATH).exists():
         remove(PATH)
     var journal = Journal(PATH)
-    var s0 = Session(Journal(PATH), parse_instant("2026-11-20T12:00:00-06:00"))
+    var s0 = Session(
+        JournalTx(PATH), parse_instant("2026-11-20T12:00:00-06:00")
+    )
     assert_equal(s0.next_id("i"), "i1")
     assert_equal(s0.next_id("r"), "r1")
 
     var at = parse_instant("2026-11-20T12:00:00-06:00")
     journal.append(Event(at.copy(), "idea", "i1", "first"))
     journal.append(Event(at.copy(), "idea", "i2", "second"))
-    var s = Session(Journal(PATH), parse_instant("2026-11-20T12:00:00-06:00"))
+    var s = Session(JournalTx(PATH), parse_instant("2026-11-20T12:00:00-06:00"))
     assert_equal(s.next_id("i"), "i3")
     assert_equal(s.next_id("r"), "r1")
     remove(PATH)
