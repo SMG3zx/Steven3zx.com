@@ -16,13 +16,11 @@ from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
 from cmd_ops import dispatch_ops
 from journal import Journal
-from memory_import import memory_import
 from portal import portal_command
 from session import (
     NOT_PORTED_PREFIX,
     USER_PREFIX,
     Session,
-    not_ported,
     user_error,
 )
 from text import ascii_tail, truncate_div
@@ -190,15 +188,11 @@ def run() raises:
         open_command(open_args, vinci_home())
         return
     if args[0] == "memory":
-        # Only `memory import` is in the port (memory_import.mojo). The rest stays not ported.
-        if len(args) > 1 and args[1] == "import":
-            var importing = Session(Journal(journal_path()), now.copy())
-            var import_args = List[String]()
-            for i in range(2, len(args)):
-                import_args.append(args[i])
-            memory_import(importing, import_args)
-            return
-        raise not_ported("memory")
+        # Mark 2 removed the memory service (Neo4j, the C# store and its commands).
+        raise user_error(
+            "memory was removed in mark 2 (the Neo4j memory service is gone). "
+            "Its notes are in the journal; see docs/memory.md."
+        )
 
     var session = Session(Journal(journal_path()), now^)
     var cmd = args[0]
