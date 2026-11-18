@@ -1,0 +1,27 @@
+{
+  "name": "read-then-write-allowed",
+  "description": "after a read, a write asks; y lets it run (Mojo only)",
+  "stdin": [
+    "Read the glider notes.",
+    "Make an idea called Glider from them.",
+    "y",
+    "/exit"
+  ],
+  "replies": [
+    "{\"tool\": \"read\", \"path\": \"$FILES/glider.md\"}",
+    "I read the notes.",
+    "{\"tool\": \"journal\", \"args\": [\"idea\", \"Glider\"]}",
+    "Recorded the idea Glider."
+  ],
+  "oracle": false,
+  "expect": {
+    "stdout_contains": [
+      "Allow it? [y/N]"
+    ],
+    "journal_kinds": {
+      "read": 1,
+      "idea": 1,
+      "exchange": 2
+    }
+  }
+}

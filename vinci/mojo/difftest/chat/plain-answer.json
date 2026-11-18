@@ -1,0 +1,24 @@
+{
+  "name": "plain-answer",
+  "description": "a question with no tool: the answer, and one exchange line",
+  "stdin": [
+    "hello",
+    "/exit"
+  ],
+  "replies": [
+    "Hello. What would you like to do?"
+  ],
+  "oracle": true,
+  "expect": {
+    "stdout_contains": [
+      "Hello. What would you like to do?"
+    ],
+    "stdout_absent": [
+      "  · journal",
+      "  · recall"
+    ],
+    "journal_kinds": {
+      "exchange": 1
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "unknown-citation",
+  "description": "a citation of an id no tool returned is reported (Mojo only: the C# citation pattern needs type:id, so it never flags a bare id)",
+  "stdin": [
+    "What is in the idea?",
+    "/exit"
+  ],
+  "replies": [
+    "The idea is [i99]."
+  ],
+  "oracle": false,
+  "expect": {
+    "stdout_contains": [
+      "  ! cites [i99], which recall did not return this turn"
+    ],
+    "journal_kinds": {
+      "exchange": 1
+    }
+  }
+}

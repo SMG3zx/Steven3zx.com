@@ -271,3 +271,46 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
       ),
   ]
   ```
+
+## Found in M4a (the chat, twice-hit)
+
+- **`origin` is a reserved word.** It cannot name a function or a variable: `def origin_of` fails with "cannot be used as a function name in this context", and the variables named `origin` and `origins` fail the same way. Hit in the function, then in the variables.
+  ```mojo
+  def source_of(store: IndexStore, cite: String) raises -> String:   # not: origin_of
+      ...
+  ```
+
+- **`mojo format` wraps a call that was one line, so a text edit by script misses it.** A script that replaces `pack(found.results, budget, DEFAULT_WHOLE, estimate_counter())` silently matched nothing once the call was wrapped across lines, and the build then failed on the old name. Run `uv run mojo format <file>` first, then grep for the name before a scripted edit, or edit with the compiler's line.
+  ```sh
+  uv run mojo format src/chat_tools.mojo && grep -n DEFAULT_WHOLE src/chat_tools.mojo
+  ```
+
+- **A chat summary line is the tool name and its arguments as compact JSON, not the arguments alone.** A test expectation of `  · open i1` failed twice (two scripts) against the real `  · open {"id":"i1"}`. Copy the expected line from a run, after checking that the run is right.
+  ```text
+    · open {"id":"i1"}      # not: · open i1
+  ```
+
+- **A .NET HTTP client sends a chunked body, with no Content-Length.** A fake server that reads only Content-Length gets an empty body, returns a 500, and the C# chat then prints its error and exits. Read `Transfer-Encoding: chunked` as well (`mojo/py/vinci_diff/fake_llm.py`).
+
+- **Python edges return a status word instead of raising into Mojo.** The chat's Python calls return `("ok", text)` or `("error", message)`, and `("line", text)` or `("eof", "")` for standard input, so Mojo reads `String(pair[0]) == "ok"` and never parses a Python exception text. Raising across the boundary gave a message that the Mojo side could not match.
+  ```mojo
+  var pair = edge.read_line()
+  if String(pair[0]) == "eof":
+      return None
+  return String(pair[1])
+  ```
+
+## Found in M4b (the portal, twice-hit)
+
+- **A `BaseHTTPRequestHandler` that overrides `handle_one_request` must set what the base class logs from.** `log_request` reads `self.requestline` and `send_response` reads `self.request_version`. Without them each reply fails with an `AttributeError` inside the handler, and the client gets no answer. Set both on each request, and give the class defaults so error paths find them.
+  ```python
+  class Handler(BaseHTTPRequestHandler):
+      requestline = ""
+      request_version = "HTTP/1.1"
+  ```
+
+- **Ruff flags `print("")` (FURB105) and `text[1:] if text.startswith(mark) else text` (FURB188).** Both fired twice in the portal's Python. Write `print()` and `text.removeprefix(mark)`.
+  ```python
+  print()
+  return text.removeprefix("\ufeff")
+  ```

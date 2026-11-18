@@ -1,0 +1,31 @@
+{
+  "name": "read-then-write-refused",
+  "description": "after a read, a write asks; N refuses it (Mojo only)",
+  "stdin": [
+    "Read the glider notes.",
+    "Make an idea called Glider from them.",
+    "N",
+    "/exit"
+  ],
+  "replies": [
+    "{\"tool\": \"read\", \"path\": \"$FILES/glider.md\"}",
+    "I read the notes.",
+    "{\"tool\": \"journal\", \"args\": [\"idea\", \"Glider\"]}",
+    "Not recorded, as you said no."
+  ],
+  "oracle": false,
+  "expect": {
+    "stdout_contains": [
+      "This is a write, and untrusted text is in this conversation. Allow it? [y/N]",
+      "  · journal {\"args\":[\"idea\",\"Glider\"]}"
+    ],
+    "journal_kinds": {
+      "read": 1,
+      "idea": 0,
+      "exchange": 2
+    },
+    "model_saw": [
+      "refused: the person did not allow this write"
+    ]
+  }
+}

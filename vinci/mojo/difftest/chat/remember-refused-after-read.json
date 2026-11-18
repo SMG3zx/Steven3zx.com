@@ -1,0 +1,29 @@
+{
+  "name": "remember-refused-after-read",
+  "description": "remember after a read asks, and no refuses it (Mojo only)",
+  "stdin": [
+    "Read the glider notes.",
+    "Remember that I like gliders.",
+    "no",
+    "/exit"
+  ],
+  "replies": [
+    "{\"tool\": \"read\", \"path\": \"$FILES/glider.md\"}",
+    "I read it.",
+    "{\"tool\": \"remember\", \"content\": \"The person likes gliders\", \"category\": \"preference\"}",
+    "Not saved."
+  ],
+  "oracle": false,
+  "expect": {
+    "stdout_contains": [
+      "Allow it? [y/N]"
+    ],
+    "journal_kinds": {
+      "remember": 0,
+      "read": 1
+    },
+    "model_saw": [
+      "refused: the person did not allow this write"
+    ]
+  }
+}

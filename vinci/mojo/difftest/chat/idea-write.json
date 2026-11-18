@@ -1,0 +1,22 @@
+{
+  "name": "idea-write",
+  "description": "a journal write that is not gated: the idea line matches the C# journal",
+  "stdin": [
+    "Make an idea called Balloon ferry.",
+    "/exit"
+  ],
+  "replies": [
+    "{\"tool\": \"journal\", \"args\": [\"idea\", \"Balloon ferry\"]}",
+    "Recorded the idea Balloon ferry."
+  ],
+  "oracle": true,
+  "expect": {
+    "stdout_contains": [
+      "  · journal {\"args\":[\"idea\",\"Balloon ferry\"]}"
+    ],
+    "journal_kinds": {
+      "idea": 1,
+      "exchange": 1
+    }
+  }
+}

@@ -416,3 +416,50 @@ uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/b
 - **Judge.** The same model, with LongMemEval's `evaluate_qa` prompts by question type, and the abstention prompt for ids ending in `_abs`. The prompts are reconstructed, since the LongMemEval repository is not on this machine. For personal questions the reference is the list of `expectedContains` strings, which the reply must state in any wording. Judging by the answering model is self-judging, so the summary says so.
 - **Output.** One JSON line per answer in `~/.vinci/eval/results/budget-sweep-<date>.jsonl`: configuration, question id, context tokens, prompt and completion tokens for the answer and the judge, the answer, the verdict, seconds for recall, answer and judge, and an `error` field. A rerun skips the keys that finished without an error, so an interrupted run resumes. Errors run again.
 - **Summary.** `--summary` prints a table per set (accuracy, correct/n, errors, mean and median context tokens, mean seconds, mean answer and judge seconds), and a per-type table for LongMemEval.
+
+## Chat (mark 2, M4a)
+
+`vinci` and `vinci chat` run in Mojo (`mojo/src/chat*.mojo`). The chat model is llama-server's `/v1/chat/completions` (`CHAT_BASE_URL`, default `http://127.0.0.1:8080/v1`; `CHAT_MODEL`, `CHAT_THINK=1`, `CHAT_HISTORY_CHARS`). Neo4j is not contacted: the journal and the index replace the memory service.
+
+### Tools
+
+| Tool | Does |
+| --- | --- |
+| `journal` | one vinci command, run as a child process so its output is captured, as the C# tool captures it. `chat`, `serve`, `memory`, `index`, `recall` and `open` are not journal commands here |
+| `recall` | the index, packed under `budget` (default 3000 tokens) with the newest 10 records whole and the rest as pointers (`--whole 10`, the setting the M3 sweep left as the default without tools). An `abstain:` line comes first when recall abstains. The embedding server is optional: without it the answer is lexical and says so |
+| `open` | one id, with `lines=A-B` or `grep=word`. The whole output of one call is capped at 4,000 bytes, and a cut ends with a notice that says how many bytes were not shown and what to open next (`open <id> grep=<word>`, or `lines=` for one fact) |
+| `remember` | a `remember` line (`k<n>`, category as its tag), then an index update |
+| `read` | a text file (`.txt`, `.md`, `.markdown`) or a web page: passages go to `docs/<sha256>.md`, a `read` line (`d<n>`) points at it, then an index update. Web fetches and HTML-to-text are in `mojo/py/vinci_edge/reading_edge.py` |
+
+Each exchange is written as an `exchange` line: the person's message always, the answer only when it is kept (below). Each write is followed by `vinci index update`, so the next recall sees it. A chat start runs the same update, which is what replaced `JournalSync`.
+
+### Citations
+
+Ids are cited as `[id]` (`[i1]`, `[m12]`, `[d1/2]`). The check runs per turn, on this turn's tool results, as the C# check did:
+
+- A cited id that no tool result of the turn contains is reported: `  ! cites [i99], which recall did not return this turn`.
+- A cited document passage (`d<n>` or `d<n>/<k>`) gets a `Sources:` list at the end of the answer, with the title and locator from the index. The model never writes that list. A passage with no document in the index is reported and the answer is not kept.
+- An answer is kept only when it cites something, nothing it cites is unknown, and every passage has a source. Otherwise the exchange is saved without the answer, and the chat says `  · answer not saved`.
+
+The C# citation pattern needs a `type:id` form, so the C# chat never flags a bare id such as `[i99]`; the Mojo check does. The scripted test therefore compares the unknown-citation script on the Mojo side only.
+
+### Write confirmation
+
+Once untrusted text has entered the conversation (the `read` tool ran, or a recall or open returned a line that is not the person's own journal line, `trusted = 0` in the index), a write is printed and needs a yes on standard input before it runs:
+
+```text
+  ? journal {"args":["idea","Glider"]} This is a write, and untrusted text is in this conversation. Allow it? [y/N]
+```
+
+`y` or `yes` runs it. Anything else, and end of input, is a no, and the model gets `refused: the person did not allow this write, so nothing was written.` as the tool result. A write is any `journal` command except the read-only set (`help`, `ideas`, `pipeline`, `next`, `show`, `notes`, `tags`, `sources`, `predictions`, `stats`, `issues`, `principles`, `bookmarks`, `watches`, `path`), plus `remember` and `read`. `sync` and `review` count as writes. Before any untrusted text is in the conversation, writes run without asking, as they do in the C# chat.
+
+### Not in this step
+
+- The summarize step. The M3 sweep showed the chat model reads 2.5k tokens of packed recall, so it waits for a measurement that needs it.
+- Neo4j, the memory API and the worker: removed from the chat, not ported.
+- The `Recorded N journal facts in memory` line, which had no meaning once the index is local.
+
+### Tests
+
+- Unit: `mojo/tests/test_chat_cite.mojo` (citation scanning and the unseen check), `test_chat_gate.mojo` (writes, the gate, yes and no), `test_chat_open.mojo` (the cap, notice, multi-fact cut, grep), `test_chat_args.mojo` (action parsing, accessors, summary).
+- Differential: `cd mojo/py && uv run python -m vinci_diff.chat_diff` runs each script in `mojo/difftest/chat/*.json` against the C# oracle (`mojo/build/oracle/vinci chat`) and the Mojo chat. A fake llama-server (`vinci_diff/fake_llm.py`) replays the script's replies and records what the model was shown. The C# side is compared on stdout and on the journal lines it adds, with the Neo4j notices, the answer-not-saved line and the memory kinds (`exchange`, `remember`, `read`) left out, since those are by design. The Mojo side is checked against each script's expectations. `--show <name>` prints one Mojo transcript.

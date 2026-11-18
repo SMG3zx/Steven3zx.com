@@ -28,3 +28,21 @@
 {"agent":"M3.3a","n":4,"pass":true,"first_error":""}
 {"agent":"M3.3b","n":1,"pass":true,"first_error":""}
 {"agent":"M3.3b","n":2,"pass":true,"first_error":""}
+{"agent":"M4a","n":1,"pass":true,"first_error":""}
+{"agent":"M4a","n":2,"pass":false,"first_error":"fmt-check: src/portal_entities.mojo not formatted (not an M4a file; another agent's portal work in progress)"}
+{"agent":"M4a","n":3,"pass":false,"first_error":"fmt-check: src/portal_entities.mojo, portal_html, portal_io, portal_json, portal_link, portal, portal_page, portal_url not formatted (not M4a files)"}
+{"agent":"M4a","n":4,"pass":false,"first_error":"fmt-check: src/portal_entities.mojo and seven other portal_*.mojo files not formatted (not M4a files)"}
+{"agent": "M4b", "n": 1, "pass": false, "first_error": "portal.mojo: error: aliasing values passed mutably to 'ctx' argument and passed immutably to 'url' argument in 'capture' call"}
+{"agent": "M4b", "n": 2, "pass": false, "first_error": "portal_url.mojo: error: value of type 'Address' cannot be implicitly copied"}
+{"agent": "M4b", "n": 3, "pass": false, "first_error": "portal_html.mojo: error: 'Span' failed to infer parameter 'origin'"}
+{"agent": "M4b", "n": 4, "pass": true, "first_error": ""}
+{"agent": "M4b", "n": 5, "pass": false, "first_error": "harness: oracle and candidate started without 'serve' (vinci: unknown command '<port>')"}
+{"agent": "M4b", "n": 6, "pass": false, "first_error": "DIVERGED staging step 7 double slash: status oracle=404 candidate=200 (http.server collapses a leading //)"}
+{"agent": "M4b", "n": 7, "pass": false, "first_error": "test_portal_json: AssertionError (expectation: escaped key tit\\u006ce; .NET matches it, so the code was right)"}
+{"agent": "M4b", "n": 8, "pass": true, "first_error": ""}
+{"agent": "M4b", "n": 9, "pass": false, "first_error": "candidate handler: AttributeError: '_Handler' object has no attribute 'requestline' (no reply sent)"}
+{"agent": "M4b", "n": 10, "pass": true, "first_error": ""}
+{"agent": "M4b", "n": 11, "pass": false, "first_error": "DIVERGED staging step 57 page, host bare ipv6: status oracle=400 candidate=404"}
+{"agent": "M4b", "n": 12, "pass": true, "first_error": ""}
+{"agent": "M4b", "n": 13, "pass": false, "first_error": "DIVERGED portal step 1 page: //relative.example:9090/x shown as raw text, oracle says not an absolute address"}
+{"agent": "M4b", "n": 14, "pass": true, "first_error": ""}

@@ -10,12 +10,14 @@ from std.pathlib import Path
 from std.python import Python, PythonObject
 from std.sys import argv, exit
 
+from chat import run_chat
 from cmd_index import index_command, open_command, recall_command
 from cmd_ideas import dispatch_ideas
 from cmd_knowledge import dispatch_knowledge
 from cmd_ops import dispatch_ops
 from journal import Journal
 from memory_import import memory_import
+from portal import portal_command
 from session import (
     NOT_PORTED_PREFIX,
     USER_PREFIX,
@@ -125,6 +127,13 @@ def journal_path() raises -> String:
     return join_path(vinci_home(), "journal.jsonl")
 
 
+def self_path() raises -> String:
+    """The absolute path of this binary, which the chat runs for each journal command.
+    """
+    var os = Python.import_module("os")
+    return String(os.path.abspath(PythonObject(String(argv()[0]))))
+
+
 def run() raises:
     var env_file = env_value("VINCI_ENV_FILE")
     if env_file is not None:
@@ -153,9 +162,14 @@ def run() raises:
     # Program.cs routes these before any journal is read. `vinci` with no
     # command is chat in C#, whatever the journal holds.
     if len(args) == 0 or args[0] == "chat":
-        raise not_ported("chat")
+        run_chat(vinci_home(), journal_path(), now.copy(), self_path())
+        return
     if args[0] == "serve":
-        raise not_ported("serve")
+        var serve_args = List[String]()
+        for i in range(1, len(args)):
+            serve_args.append(args[i])
+        portal_command(serve_args, journal_path())
+        return
     # The index and recall read the journal and write only their own index file.
     if args[0] == "index":
         var index_args = List[String]()

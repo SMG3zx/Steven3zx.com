@@ -1,0 +1,28 @@
+{
+  "name": "open-output-cap",
+  "description": "open of a long read document is cut at 4000 bytes with a read-on notice (Mojo only)",
+  "stdin": [
+    "Read the long notes.",
+    "Show me the notes on the wing.",
+    "/exit"
+  ],
+  "replies": [
+    "{\"tool\": \"read\", \"path\": \"$FILES/long-notes.md\"}",
+    "I read the notes.",
+    "{\"tool\": \"open\", \"id\": \"d1\"}",
+    "The notes are long."
+  ],
+  "oracle": false,
+  "expect": {
+    "stdout_contains": [
+      "  · open {\"id\":\"d1\"}"
+    ],
+    "model_saw": [
+      "output cut at 4000 bytes",
+      "read on with open d1 grep="
+    ],
+    "journal_kinds": {
+      "read": 1
+    }
+  }
+}
