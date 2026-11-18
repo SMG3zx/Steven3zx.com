@@ -9,7 +9,7 @@ Some of the main project directories are:
 - `janus/` — Janus services, including `janus/janus-go` (control plane and web UI), with nested Rust and SpacetimeDB projects under `janus/`.
 - `rusty-mines/` — Rust Minecraft server and protocol work, including nested crates and tools.
 - `eve/`, `qwik/`, `skill-level-up-platform/`, and `mein-factory/` — web and application projects.
-- `vinci/` — a C# CLI for ideas, notes and time. It also hosts the portal (`vinci serve`) and the agent memory service (`vinci memory`), which replaced the old `portal/` and `personal-memory/` projects. Read `vinci/README.md` first.
+- `vinci/` — a Mojo CLI for ideas, notes and the journal. It also hosts the portal (`vinci serve`) and chat (`vinci chat`). It replaced the old `portal/` and `personal-memory/` projects, and the C# version lives only in git history. Read `vinci/README.md` first.
 - `tcp-typescript/`, `meingrad/`, and `zig-invaders/` — other standalone projects and utilities.
 
 Top-level folders can also contain local infrastructure, archived material, or generated data. Follow `.gitignore` and the relevant project documentation; do not assume every folder is a buildable application.
