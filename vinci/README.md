@@ -2,15 +2,18 @@
 
 vinci is a general-purpose knowledge partner. It helps you learn, remember and act on what you know. Every fact it keeps has a date and a source, and every answer points to the evidence it used. It also records your predictions and how they turned out, and it helps turn ideas into shipped work when you want that.
 
-Written in C# on .NET 10. The journal commands need nothing else and keep all their data in one file. Only `vinci memory` needs a database (Neo4j).
+Written in Mojo, with small Python edges for the model, the network and the HTTP server. The journal commands need nothing else and keep all their data in one file. There is no database: the search index is a SQLite file rebuilt from the journal. Chat needs a llama-server model (see [docs/chat.md](docs/chat.md)).
 
 ## Install
 
 ```sh
-./install.sh        # runs the tests, builds, and links ~/.local/bin/vinci
-vinci               # the pipeline and the one thing to do next (opens the chat)
+./install.sh        # runs the checks, builds, and installs to ~/.local/share/vinci,
+                    # with ~/.local/bin/vinci linked to it. Needs uv.
+vinci               # opens the chat (the pipeline is `vinci pipeline`)
 vinci help          # every command
 ```
+
+The installed command runs from any directory. It does not need uv or the checkout.
 
 ## The one idea underneath
 
@@ -19,7 +22,7 @@ Every fact is written once, with the time, to an append-only journal (`~/.vinci/
 That gives you, without separate features:
 
 - **Provenance.** Every fact has a date, and a note points at the source it came from.
-- **Time tracking.** Time in an idea's windows and each commit in its folder are facts too, written for you.
+- **Time tracking.** Time in an idea's windows and each commit in its folder are facts too, written for you. This is paused: the Mojo port does not read ActivityWatch or git yet, and `vinci sync` does nothing until the feeds return in M5.
 - **Life tracking.** A measurement is a fact with a number in it.
 - **Self-measurement.** The system's own defects are facts too, so it can chart them.
 - **A tool that fits in a pipe.** The journal is plain JSON lines, so `jq` and `grep` work on it.
@@ -113,7 +116,7 @@ Errors go to standard error and the exit code is 1.
 | Talking to vinci in the chat, and its model setup | [docs/chat.md](docs/chat.md) |
 | Time and commits counted from your windows and folders; ActivityWatch setup | [docs/time-tracking.md](docs/time-tracking.md) |
 | The portal of saved, project and local links (`vinci serve`) | [docs/portal.md](docs/portal.md) |
-| Durable memory for AI agents (`vinci memory`) | [docs/memory.md](docs/memory.md) |
+| Memory: the journal, the index, recall, and what mark 2 removed (`vinci memory`) | [docs/memory.md](docs/memory.md) |
 | Where each part of the method comes from, how vinci improves itself, known weak points, what was left out on purpose | [docs/method.md](docs/method.md) |
 | Code map and tests | [docs/development.md](docs/development.md) |
 

@@ -1,39 +1,14 @@
 # Memory for agents
 
-`vinci memory` is a durable memory for AI agents, kept apart from the journal because it needs a database and runs as long-lived processes. Agents save what happened as **events**, and a worker turns events into **memories**, **entities**, **claims** and **procedures** that all point back at the events they came from. Nothing is deleted: a memory is superseded, archived or retracted, and recall hides it. It replaced the separate `personal-memory` project, rewritten in C#.
+Mark 2 removed the memory service. `vinci memory` now stops with a message that it was removed. What vinci remembers is now three things:
 
-```sh
-docker compose -f deploy/memory/docker-compose.yml up -d    # Neo4j
-export NEO4J_URI=neo4j://127.0.0.1:7687 NEO4J_USERNAME=neo4j NEO4J_PASSWORD=change-me
+- **The journal**, `$VINCI_HOME/journal.jsonl` (default `~/.vinci`), is the store of record. Every fact has a time and a kind. Chat exchanges, facts it was asked to remember, and documents it read are journal lines too (see [the journal kinds](#journal-kinds-for-memory-mark-2)).
+- **The index**, `index.sqlite` beside it, is derived from the journal. `vinci index update` brings it up to date, and `recall` searches it. Words are always searched. Meaning is searched too when the embedding server is up (`EMBEDDING_BASE_URL`, default `http://127.0.0.1:8081/v1`), and the answer says so when it is not. The index is rebuilt from the journal at any time, so deleting it loses nothing.
+- **Chat** (`vinci`) answers from recall, with citations, and writes facts only when the person agrees (see [Chat](#chat-mark-2-m4a)). `open <id>` reads one fact or passage by its id.
 
-vinci memory serve        # REST API and status pages on http://127.0.0.1:4781
-vinci memory worker       # turns queued events into memories
-vinci memory mcp          # the tools for an agent, over standard input and output
-vinci memory backup       # a snapshot of the whole graph
-vinci memory restore <snapshot.json>
-```
+What was removed in M4e, and where it is now: the Neo4j store, the REST API and status pages, the worker, the MCP server, the audit log, the `seed`, `benchmark`, `ablation`, `simulate` and `longmemeval` commands, `vinci memory import`, the units `deploy/memory.service` and `deploy/memory-worker.service`, and the Neo4j compose file and settings example. The C# code is in git history before that commit, under `vinci/src/Memory/`. Mark 2 measured the new index against the old service: the baseline and the design are in the sections below.
 
-`vinci memory help` lists the rest, and `deploy/memory/memory.env.example` lists every setting.
-
-**Recall** looks a question up three ways at once (words, meaning through an embedding service if you run one, and the graph around the entities it names), lets each vote by rank, and orders the result for the kind of question it is: *when* questions favour recent and historical memories, *how* questions favour procedures, *who* and *which* questions favour the graph. It answers `abstain` when the evidence does not contain the question's distinctive words, instead of guessing. `build_context` packs the evidence into a text block with a `[type:id]` marker on every line, and `/v1/answers/validate` checks that an answer cites only what was retrieved.
-
-**Connecting an agent.** The MCP server offers 15 tools (`remember_event`, `recall_memory`, `build_context`, `create_memory`, `retract_memory`, and so on). For Claude Code:
-
-```sh
-claude mcp add vinci-memory -- vinci memory mcp
-```
-
-**Keeping it running:**
-
-```sh
-cp deploy/memory.service deploy/memory-worker.service ~/.config/systemd/user/
-mkdir -p ~/.config/vinci && cp deploy/memory/memory.env.example ~/.config/vinci/memory.env
-systemctl --user enable --now memory memory-worker
-```
-
-**Measuring it.** `vinci memory seed` writes a small fixed world and `vinci memory benchmark` asks it 15 questions (`BENCHMARK_STRICT=1` fails on any miss, so it can gate a change). `ablation` repeats that with each way of retrieving on its own, `simulate` plays an invented history that includes a deleted secret and an instruction hidden in an untrusted document, and `longmemeval` runs a LongMemEval file you have downloaded. All of them talk to the running API.
-
-**What changed in the port.** Cypher and routes are as they were. A clash with an earlier event of the same id now answers 409 instead of 500. The status pages are the originals, embedded in the program. Chat is the terminal `vinci` command, which talks to the llama-server model; the memory service no longer runs a web chat.
+The sections below are the mark 2 record. Where they name the C# binary, Neo4j or `vinci memory`, they describe what existed when they were written.
 
 ## Baseline for mark 2 (M1, 2026-11-16)
 
@@ -101,7 +76,7 @@ What the baseline shows:
 - **Abstention on the abstain type is 6/12** with the default mix.
 - **Vector alone is weak.** It gets 20/48 hits on v2, and 1/10 on multihop.
 
-### How to rerun
+### How to rerun (the personal baseline needs the removed memory service)
 
 - **LongMemEval reference baseline.** `cd mojo/py && uv run python -m vinci_eval.lme_baseline`. It takes minutes. It needs no service except llama-server for token counts. Without llama-server, the token counts fall back to length divided by 4, and the output records that.
 - **Personal baseline.** Start the memory service with `systemctl --user start memory.service`. The journal sync runs when `vinci chat` starts, so run `timeout 180 vinci chat < /dev/null` first to sync the journal. Then `cd mojo/py && uv run python -m vinci_eval.personal_baseline`. The script takes no options. Stop the service afterwards with `systemctl --user stop memory.service`.
@@ -150,7 +125,7 @@ Phase 1 of [the one-journal plan](plan-one-journal-one-index.md) (M3 step 1). Th
 
 ### The import
 
-`vinci memory import <snapshot.json>` in the Mojo binary (`mojo/src/memory_import.mojo`). The snapshot comes from `vinci memory backup`, which only reads Neo4j. Writing goes through the journal serializer. Each record is keyed by its `where`. A record whose `where` is already in the journal is skipped, so a second run appends nothing. Refs are written only when the id they name is in the journal now, which drops a copy's reference to an id from an older journal (one case in the snapshot).
+`vinci memory import <snapshot.json>` in the Mojo binary (`mojo/src/memory_import.mojo`, run once; the command and the module were removed in M4e). The snapshot comes from `vinci memory backup`, which only reads Neo4j. Writing goes through the journal serializer. Each record is keyed by its `where`. A record whose `where` is already in the journal is skipped, so a second run appends nothing. Refs are written only when the id they name is in the journal now, which drops a copy's reference to an id from an older journal (one case in the snapshot).
 
 Counts for the snapshot `personal-memory-2026-11-17T04-27-18-882Z.json` (1,512 nodes, 1,175 relationships), on a copy of the journal in staging:
 

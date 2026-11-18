@@ -41,7 +41,7 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 
 ## What was left out on purpose
 
-- **A database for the journal.** One file does the job. The journal never touches Neo4j; only `vinci memory` does.
+- **A database for the journal.** One file does the job. The journal is plain text. Neo4j was used for memory until mark 2, and was removed.
 - **Editing and deleting facts.** Correct a fact by recording a new one.
 - **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
 - **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.

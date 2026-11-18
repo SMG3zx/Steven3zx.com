@@ -1,6 +1,6 @@
 # Talking to vinci
 
-`vinci` with no command opens the chat. It is the way to do everything: the chat model (Swift-Qwen3.8-27B, IQ3_XXS, served by llama-server) is in the conversation, and the journal, memory and recall are its tools. `vinci chat` does the same. `vinci pipeline` prints the stages on their own.
+`vinci` with no command opens the chat. It is the way to do everything: the chat model (Swift-Qwen3.8-27B, IQ3_XXS, served by llama-server) is in the conversation, and the journal, the index (recall) and `open` are its tools. `vinci chat` does the same. `vinci pipeline` prints the stages on their own.
 
 ```text
 you> Make an idea called Flying machine for one pilot.
@@ -13,15 +13,16 @@ The model replies with one JSON action when it needs a tool, and the harness run
 | Tool | Does |
 | --- | --- |
 | `journal` | runs any journal command, the same code the command line runs |
-| `recall` | searches memory for lines about the question; the model cites them as `[type:id]` |
-| `remember` | saves a durable fact or preference |
+| `recall` | searches the index for lines about the question; the model cites them as `[id]` |
+| `remember` | saves a durable fact or preference as a journal line |
 | `read` | saves a text file (`.txt`, `.md`) or a web page the person named, as a document with its passages, so recall can find them |
+| `open` | reads one fact or passage by its id, with `lines=` or `grep=` |
 
-Sources are attributed. A passage from a document is cited as `[chunk:id]` and carries the title and the path or address it was read from, with the date it was read. vinci lists those sources under the answer itself; the model never writes that list. A cited passage with no source is flagged, and the answer is not saved.
+Sources are attributed. A passage from a document is cited as `[d1/2]` and carries the title and the path or address it was read from, with the date it was read. vinci lists those sources under the answer itself; the model never writes that list. A cited passage with no source is flagged, and the answer is not saved.
 
-Each turn is checked. A citation that recall did not return this turn is flagged on the line below the answer. Each exchange is saved to memory, and each new journal fact is sent to memory once, under its journal id, so recall can find a note or a prediction by what it says.
+Each turn is checked. A citation that recall did not return this turn is flagged on the line below the answer. Each exchange is written to the journal as an `exchange` line: the person's message always, and the answer only when it is kept. An answer is kept only when it cites something recalled and every cited passage has a source; otherwise the chat says `answer not saved`. Each write is followed by an index update, so the next recall sees it.
 
-If the memory service is not running, the chat still works on the journal and says once that exchanges are not being saved.
+Nothing is sent to a memory service. Neo4j and the memory API were removed in mark 2, and the journal and the index replace them.
 
 ## Setup, once
 
@@ -47,7 +48,7 @@ Settings, all optional:
 - `CHAT_MODEL`: default `swift-qwen3.8-27b` (the `--alias` of the chat unit)
 - `CHAT_THINK=1`: let the model reason before it answers (slower, and not needed for journal work)
 - `CHAT_HISTORY_CHARS`: how much recent conversation is sent each turn (default 24000 characters)
-- `MEMORY_API_URL` and `MEMORY_API_KEY`: the memory service. If nothing answers at `MEMORY_API_URL` (default `http://127.0.0.1:4781`), `vinci` runs the memory API and its worker itself for as long as the chat runs. `MEMORY_EMBEDDED=0` turns that off.
-- `VINCI_ENV_FILE`: the settings file `vinci` reads at startup (default `~/.config/vinci/memory.env`). Variables already set in the environment win over it.
+- `EMBEDDING_BASE_URL` and `EMBEDDING_MODEL`: the embedding server for meaning search (default `http://127.0.0.1:8081/v1`, `qwen3-embedding:4b`). Without it, recall is words only, and says so.
+- `VINCI_ENV_FILE`: the settings file `vinci` reads at startup (default `~/.config/vinci/memory.env`; the name is kept from the memory service). Variables already set in the environment win over it.
 
 See also `deploy/models/README.md`.

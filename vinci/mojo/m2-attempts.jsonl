@@ -58,3 +58,7 @@
 {"agent": "M4d", "n": 8, "pass": true, "first_error": ""}
 {"agent": "M4d", "n": 9, "pass": false, "first_error": "preference answers: 0 of 5 correct before the prompt change, 1 of 5 after (38146c39 yes; the answers now give tailored recommendations)"}
 {"agent": "M4d", "n": 10, "pass": true, "first_error": ""}
+{"agent": "M4e", "n": 1, "pass": true, "first_error": ""}
+{"agent": "M4e", "n": 2, "pass": true, "first_error": ""}
+{"agent": "M4e", "n": 3, "pass": true, "first_error": ""}
+{"agent": "M4e", "n": 4, "pass": true, "first_error": ""}
