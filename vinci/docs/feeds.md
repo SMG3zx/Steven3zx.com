@@ -116,6 +116,23 @@ vinci recall --sources journal "..."                       # the default, named
 
 An unknown name is an error (`journal`, `git`, `vaults`, `activity`, or `all`). `all` is the three that were always searched together: `activity` has to be named. The chat's `recall` tool takes the same `sources` argument. The tool instructions tell the model when to use each one: `git` for what changed in the code and when, `vaults` for the notes folders. A line from a feed is labelled with its source in the packed text, `[g220] 2026-11-15 git commit: ...` or `[v1839] ... vault section: ...`, so a commit is not taken for a journal line.
 
+**The merge under `all` (M5c).** The journal is the answer's own pass. Its correction and its abstention are decided on the journal's results alone, as they are with the journal by itself, so feed text cannot turn an abstention into an answer. The feeds are searched in a second pass, and the list is built in this order:
+
+1. the journal's first seven results (`limit - 3`), in their own order,
+2. the feeds' first three results,
+3. the rest of the journal, then the rest of the feeds, so a short journal list is filled from the feeds.
+
+A text that is in both lists is kept once. Feed scores are never compared with journal scores: the two are bm25 values from separate tables (see the measurements below). The reserved slots mean that an `all` answer always carries up to three feed lines, after the journal's. When the journal abstains under `all`, the abstain line still comes first, and the feed lines follow it.
+
+**The hint (M5c).** On the default (journal only), when the journal abstains, the answer counts the feed records that cover at least half of the question's terms, by the abstention's own test (a shared word is not enough). When that count is above zero, one more line is printed:
+
+```text
+abstain: Retrieved evidence did not meet the confidence threshold.
+no journal record; 2 feed records may match: use sources git,vaults
+```
+
+The feed records are not in the results, the answer still abstains, and the chat's packed text carries the line. In JSON the count is `feedHint`, present only when it is above zero. The chat's tool instructions say that the model may ask again with `sources` `git,vaults` when that line appears.
+
 Feed records keep `trusted` false, so the chat's write confirmation applies once one is in the conversation (see [chat](chat.md)).
 
 ## Decisions, and why
@@ -127,6 +144,7 @@ Feed records keep `trusted` false, so the chat's write confirmation applies once
 - **The journal's rewrite check.** The journal's cursor was a byte offset, so a journal rewritten to the same length went unnoticed. The cursor now also holds the SHA-256 of the bytes before the offset. A different prefix means the journal's facts are dropped and read again, and the report says so. A journal *shorter* than the offset is still refused (the existing test): a truncated journal is for the person to decide, with `vinci feed rebuild journal`. An index made before this change has no stored prefix; its first update takes the current prefix as the reference, so a rewrite made before that update is not detected.
 - **Feeds have their own search table.** Feed records are in `fts_feeds`, and the journal stays in `fts`. FTS5 scores a word by how rare it is across the whole table. With feeds in the journal's table, every journal score moved, and so did the answers: the personal set's default answers changed on about half the questions. In a separate table the journal's scores are the ones they were before feeds. An index that had feed rows in `fts` moves them on its first open.
 - **Embedding is not part of a run.** A feed's new records have no vector, and `vinci index embed` embeds them like any fact. A run does not embed, because a run is cheap and an embed is not (see the measurements).
+- **The merge keeps the journal's first places (M5c).** Under `all`, the journal's first seven results keep their places. Feeds take the next three, which pushes the journal's eighth to tenth results down, and a short journal list is filled from the feeds. Why not a score merge: see the measurements. The abstention is the journal's, so a feed record can add evidence to an answer but never decide that it has one.
 
 **Activity.** One record per window per day, not per session. A session record would make one record for every switch of focus, so a busy day is hundreds of small records and a question about a day is answered by many of them. A day's record answers "what was I in on Tuesday", and its ranges answer "when". The cost is that a day's record grows and changes while the day runs: a window on screen now has a new version on each run that sees it. Only the records whose totals changed get one, so a run with nothing new writes nothing.
 
@@ -227,6 +245,45 @@ The two misses under both feed settings are `f-01` (the C# removal commit, whose
 
 Token means are of the unpacked top 10, as the eval counts them, so they are not what the chat reads (the chat packs to a budget).
 
+### The merge rule: candidates and measurements (M5c)
+
+Measured on two scratch copies of the home, lexical route only, with git and vaults loaded (`index_eval`, the same questions as above):
+
+- **staging**: the 342-line staging journal and its index, with git and vaults read into it. This is the copy the 35/48 and 45/60 baseline was measured on, and it reproduces that baseline exactly.
+- **real**: a copy of the home today (372 lines). The journal has grown since the staging copy, so the journal-only numbers there are 34/48 and 43/60. Every before and after comparison is on the same copy.
+
+The candidates were compared over each question's own top-20 lists from each source, with exact bm25 scores from the feed and journal tables. "Moved" counts the personal questions whose top 10 changes, which changes the default's tokens. The feed set is 15 questions, the personal set is 60 (48 answerable).
+
+| Rule | Personal hit (48) | Personal abstain (60) | Personal moved | Feed hit (15) | Result |
+| --- | --- | --- | --- | --- | --- |
+| Journal only (the default before M5c) | 35 | 45 | 0 | 1 | feeds never shown |
+| (a) journal first, feeds fill the empty places | 35 | 45 | 22 | 8 | short journal lists take feeds; a full list (ten weak results) takes none |
+| (a') journal first, three feed places, no fill from feeds | 35 | 45 | 60 | 10 | the fill from the feeds is what gives the last three feed hits |
+| (b) feeds only when the journal abstains | 34 | 45 | 25 | 10 | loses a hit; feeds take places a journal answer needs |
+| (c) per-source score, each source's best = 1.0, feed discount 1.0 / 0.8 / 0.6 / 0.4 | 31 / 33 / 32 / 34 | 45 | 59 / 59 / 53 / 42 | 13 / 13 / 10 / 9 | the two tables' best scores tie, so feeds rank with the journal's top |
+| raw bm25 merge (what `all` was before M5c, measured on the binary) | 25 | 44 (abstain read the feed text) | 60 | 13 | the problem this step set out to fix |
+| (d) word router: commit, docs, code, changed, ... | 30 | 45 | 11 | 9 | the words occur in personal questions too (j-01, j-12, j-31, j-32, j-44) |
+| (e) feed bm25 cut-off -15 / -20 / -25 | 31 / 33 / 35 | 45 | 23 / 7 / 0 | 12 / 8 / 5 | no cut-off moves none and reaches 12 feed hits |
+| (e') feed bm25 per query term cut-off -3.0 / -4.0 / -6.0 | 34 / 35 / 35 | 45 | 14 / 3 / 0 | 13 / 9 / 4 | the same trade |
+| **reserved feed places, journal first (M5c, the winner for `all`)** | **35** | **45** | 60 (all: three feed lines) | **13** | meets the `all` target exactly |
+
+Why the winner, and why it is not the default: the journal keeps its first seven places, so the journal's own answers stay in the top ten, and feeds take the places ranks 8 to 10 used to hold. A feed record that outranks a journal answer by score was the failure in every score rule, and the cut-offs show why no single number works: the feed questions and the personal questions sit on the same scale (j-02 scores -20.9 and f-02 -30.3, and j-09 has every query term in one feed record). The reserved places do not need the scores to agree, so they are the rule. The cost is that every `all` answer carries three feed lines, so it moves the personal set's tokens. Under the default the personal set has to stay exactly where it is, so the default keeps the journal alone and the hint. No rule tried both moves no personal question and reaches 12 feed hits.
+
+Final numbers, the binary before and after (`index_eval`, lexical; tokens are the unpacked top 10, counted by llama-server):
+
+| Data | Sources | Before: hit, abstain, tokens | After: hit, abstain, tokens |
+| --- | --- | --- | --- |
+| staging | personal, default | 35/48, 45/60, 200.6 | 35/48, 45/60, 200.6 (every top 10 identical) |
+| staging | personal, `all` | 25/48, 44/60, 5924.3 | 35/48, 45/60, 3111.1 |
+| staging | feed set, default | 1/15, 6/15, 209.6 | 1/15, 6/15, 209.6 |
+| staging | feed set, `all` | 13/15, 15/15, 2631.5 | 13/15, 6/15, 1244.0 |
+| real | personal, default | 34/48, 43/60, 214.5 | 34/48, 43/60, 214.5 (every top 10 identical) |
+| real | personal, `all` | 26/48, 44/60, 5913.7 | 35/48, 43/60, 3037.6 |
+| real | feed set, default | 4/15, 7/15, 247.8 | 4/15, 7/15, 247.8 (every top 10 identical) |
+| real | feed set, `all` | 13/15, 15/15, 2584.1 | 13/15, 7/15, 1124.5 |
+
+The feed set's abstain column under `all` is now the journal's. Most feed questions are ones the journal abstains on, so 6 and 7 of 15 are "not abstained", and the 13 hits come from the feed lines. Under the default, the hint line appears on 17 of the 60 personal questions and on 9 of the 15 feed questions (8 on the real copy). It is text only: the index_eval results and tokens do not count it.
+
 ## Limits and open decisions
 
 - **Activity: the afk record decides the time.** On this machine the afk watcher wrote no event from 17 Nov 05:26 UTC until 18 Nov 18:18 UTC, and its last `afk` event spans about 36 hours, while the window watcher recorded about 33 hours of focus in that span. The feed drops that time, as the tracker does. Fix the watcher, not the feed ([time-tracking.md](time-tracking.md#when-the-afk-record-is-wrong)).
@@ -237,4 +294,5 @@ Token means are of the unpacked top 10, as the eval counts them, so they are not
 
 
 - Vector recall does not yet see feed records, since they are not embedded. Under `all`, the vector candidates are filtered after the search, so a limit can return fewer records.
-- `all` lowers the journal's score on the personal set. Before feeds join the default, the merge across the two tables needs a rule that keeps journal facts first, or a weight. That is open.
+- **Under `all`, the abstain flag is the journal's (M5c).** A feed question the journal abstains on shows `abstain: true` with feed lines after it. The hits come from the feed lines, but a caller that reads only the flag sees an abstention.
+- **The default does not merge feeds (M5c, open).** No rule tried moves no personal question and reaches 12 feed hits (see the table). The options are: keep the journal alone with the hint (current); take the per-term cut-off at -6.0, which moves no personal question and gives 4 of 15 feed hits, though its threshold is fitted to these same questions; or accept the personal token change that the reserved places make, with the same hits and abstentions. Each is a decision for the person.

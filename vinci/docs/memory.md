@@ -229,6 +229,7 @@ A body is split at markdown headings, which always start a new chunk. Otherwise 
 - **Ranking**: bm25 (`score` is its negation, so higher is better). Only current, active versions. `limit` is applied after the join.
 - **Result**: `id`, `kind`, `text`, `at`, `source`, `trusted`, `score`, `route`, `rowid`. The JSON has `results` (with `content`), `abstain` (always false until 2b) and `routes`.
 - **Routes**: `lexical` and `vector`, fused by reciprocal rank (step 2b, below). Step 2a's single-route refusal is gone.
+- **Sources (M5c).** The journal is searched alone by default, and that pass alone decides the correction and the abstention. `--sources all` adds the feeds after it: the journal's first seven results, the feeds' first three, then the rest of each (`merge_reserved` in `recall.mojo`). Feed scores are never compared with journal scores. When the default abstains and feed records would cover the question, the answer adds a hint line and the abstention stands. The measurements and the open default decision are in [feeds](feeds.md#the-merge-rule-candidates-and-measurements-m5c).
 
 ### Measured (staging journal, 342 lines, 2026-11-16)
 
@@ -401,7 +402,7 @@ uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/b
 | Tool | Does |
 | --- | --- |
 | `journal` | one vinci command, run as a child process so its output is captured, as the C# tool captures it. `chat`, `serve`, `memory`, `index`, `recall` and `open` are not journal commands here |
-| `recall` | the index, packed under `budget` (default 3000 tokens) with the newest 10 records whole and the rest as pointers (`--whole 10`, the setting the M3 sweep left as the default without tools). An `abstain:` line comes first when recall abstains. The embedding server is optional: without it the answer is lexical and says so |
+| `recall` | the index (journal, or `sources` for the feeds, see [feeds](feeds.md)), packed under `budget` (default 3000 tokens) with the newest 10 records whole and the rest as pointers (`--whole 10`, the setting the M3 sweep left as the default without tools). An `abstain:` line comes first when recall abstains. The embedding server is optional: without it the answer is lexical and says so |
 | (up front) | before the first model call of each turn, `recall` runs on the person's own message, verbatim and packed the same way. Its result goes into the context as a recall call the model made, so its ids are evidence for the citation check. It prints nothing (see the M4 step d section) |
 | `open` | one id, with `lines=A-B` or `grep=word`. The whole output of one call is capped at 4,000 bytes, and a cut ends with a notice that says how many bytes were not shown and what to open next (`open <id> grep=<word>`, or `lines=` for one fact) |
 | `remember` | a `remember` line (`k<n>`, category as its tag), then an index update |

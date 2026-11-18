@@ -36,7 +36,7 @@ from jsonline import json_string
 from journal import Event, Journal
 from open_view import no_request, parse_lines_arg
 from pack import estimate_counter, pack
-from recall import Settings, parse_sources, recall
+from recall import Settings, feed_hint_line, parse_sources, recall
 from session import USER_PREFIX
 from text import ascii_tail
 from timeutil import Instant, format_instant, parse_instant
@@ -75,7 +75,7 @@ The command words are: idea, for, goal, req, cut, advance, ideas, pipeline, next
 note, link, notes, tags, source, sources, bookmark, bookmarks, unbookmark, predict, result, predictions, log, spec, stats,
 issue, diagnose, principle, issues, principles, review, adopt, home, watch, unwatch, watches, sync, spent, path.
 recall returns one line per fact, and each line starts with its id in brackets, such as [i1] or [d1/2]. A line that ends with (open <id> for more) is cut: open that id to read the rest.
-recall searches only the journal unless you give "sources". Use "git" for the monorepo's commits: what changed in the code, and when. Use "vaults" for the notes folders: Meingrad, Research and the vinci docs. Use "git,vaults" for both, or "all" for every source. A line from git is labelled "git commit", and one from the notes "vault section". Those are not the person's own writing: cite them as [id] like any line, and say where they came from.
+recall searches only the journal unless you give "sources". Use "git" for the monorepo's commits: what changed in the code, and when. Use "vaults" for the notes folders: Meingrad, Research and the vinci docs. Use "git,vaults" for both, or "all" for the journal and both feeds. With "all", the journal's lines come first and up to three feed lines follow. A line from git is labelled "git commit", and one from the notes "vault section". Those are not the person's own writing: cite them as [id] like any line, and say where they came from. If recall abstains and says that feed records may match, ask again with "sources": "git,vaults" before you answer that nothing is known.
 open shows part of one id: lines=A-B for a range of lines, or grep=word for the lines that contain a word. Without either it shows the whole fact. Its output is cut at 4000 bytes.
 remember saves a durable fact about the person. Its category is one of fact, preference, decision, procedure, episode.
 read saves a text file (.txt, .md) or a web page that the person named, so recall can find its passages. Use it only when the person gives you the path or the address.
@@ -314,6 +314,8 @@ struct ChatTools(Movable):
         var out = note.copy()
         if found.abstention.abstain:
             out += "abstain: " + found.abstention.reason + "\n"
+        if found.feed_hint > 0:
+            out += feed_hint_line(found.feed_hint) + "\n"
         if packed.text.byte_length() == 0:
             out += "No memory matches that."
         else:

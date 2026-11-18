@@ -11,6 +11,7 @@ from abstain import (
     Abstention,
     assess_evidence,
     corrective_query,
+    mentions,
     should_abstain,
 )
 from dates import DateWindow, date_boost, parse_query_dates
@@ -52,6 +53,7 @@ struct Recall(Movable):
     var correction_query: String
     var dates: List[DateWindow]
     var label: String
+    var feed_hint: Int
 
 
 def is_term_byte(b: UInt8) -> Bool:
@@ -185,6 +187,107 @@ def keep_sources(
         if source_in(sources, c.source):
             out.append(c.copy())
     return out^
+
+
+comptime FEED_SLOTS = 3
+# The sources a recall takes from the journal's own pass. Feeds are the rest.
+comptime DEFAULT_FEEDS = "git,vaults"
+
+
+def journal_sources(sources: List[String]) -> List[String]:
+    var out = List[String]()
+    for name in sources:
+        if name == JOURNAL_SOURCE:
+            out.append(name.copy())
+    return out^
+
+
+def feed_sources(sources: List[String]) -> List[String]:
+    var out = List[String]()
+    for name in sources:
+        if name != JOURNAL_SOURCE:
+            out.append(name.copy())
+    return out^
+
+
+def take_unseen(
+    mut out: List[Candidate],
+    mut seen: List[String],
+    items: List[Candidate],
+    start: Int,
+    stop: Int,
+    limit: Int,
+):
+    """Append items[start:stop] to out, skipping a text that is already there, until
+    out holds limit results."""
+    var i = start
+    var last = stop
+    if last > len(items):
+        last = len(items)
+    while i < last and len(out) < limit:
+        var key = content_key(items[i].text)
+        var duplicate = False
+        for s in seen:
+            if s == key:
+                duplicate = True
+                break
+        if not duplicate:
+            seen.append(key)
+            out.append(items[i].copy())
+        i += 1
+
+
+def merge_reserved(
+    journal: List[Candidate], feeds: List[Candidate], limit: Int
+) -> List[Candidate]:
+    """The journal first, with FEED_SLOTS of the top results given to the feeds.
+
+    The journal's first limit - FEED_SLOTS results keep their places. Then the feeds'
+    first FEED_SLOTS, then the rest of the journal, then the rest of the feeds, so a short
+    journal list is filled from the feeds. Each list keeps its own order, and a text
+    already in the output is not repeated. Feed scores are never compared with journal
+    scores: their bm25 tables are not on one scale (docs/feeds.md, the merge).
+    """
+    var top = limit - FEED_SLOTS
+    if top < 1:
+        top = 1
+    var out = List[Candidate]()
+    var seen = List[String]()
+    take_unseen(out, seen, journal, 0, top, limit)
+    take_unseen(out, seen, feeds, 0, FEED_SLOTS, limit)
+    take_unseen(out, seen, journal, top, len(journal), limit)
+    take_unseen(out, seen, feeds, FEED_SLOTS, len(feeds), limit)
+    return out^
+
+
+def feed_matches(feeds: List[Candidate], query: String) -> Int:
+    """How many feed records cover at least half of the question's terms, by the test
+    the abstention uses for the journal. A shared word is not enough. Zero when the
+    question has no terms."""
+    var terms = query_terms(query)
+    if len(terms) == 0:
+        return 0
+    var matches = 0
+    for c in feeds:
+        var text = ascii_lower(c.text)
+        var covered = 0
+        for term in terms:
+            if mentions(text, term):
+                covered += 1
+        if covered > 0 and covered * 2 >= len(terms):
+            matches += 1
+    return matches
+
+
+def feed_hint_line(matches: Int) -> String:
+    """The line that says feed records may answer a question the journal abstained on.
+    """
+    return (
+        "no journal record; "
+        + String(matches)
+        + " feed records may match: use sources "
+        + DEFAULT_FEEDS
+    )
 
 
 @fieldwise_init
@@ -526,18 +629,47 @@ def recall(
     var index = VectorIndex(settings.embed.label)
     if has_route(settings.routes, VECTOR):
         index = load_vectors(store, settings.embed.label, route == "temporal")
-    var results = one_pass(store, query, route, plan, windows, settings, index)
+    # The journal's pass is the answer's pass: its correction, its abstention and its
+    # results come from the journal alone, so no feed text can change them (M5c). With no
+    # journal in the sources, the pass is the feeds' own, as before.
+    var journal = journal_sources(settings.sources)
+    var feeds = feed_sources(settings.sources)
+    var has_journal = len(journal) > 0
+    var first = settings.copy()
+    if has_journal:
+        first.sources = journal.copy()
+    var results = one_pass(store, query, route, plan, windows, first, index)
     var corrected = False
     var second_query = String()
     if assess_evidence(results).needs_correction:
         second_query = corrective_query(query)
         if second_query.byte_length() > 0:
             var again = one_pass(
-                store, second_query, route, plan, windows, settings, index
+                store, second_query, route, plan, windows, first, index
             )
             results = merge_corrected(results, again, settings.limit)
             corrected = True
     var abstention = should_abstain(results, query)
+    var feed_hint = 0
+    if has_journal and len(feeds) > 0:
+        # The journal first, with the feeds' share after it (merge_reserved).
+        var feed_settings = settings.copy()
+        feed_settings.sources = feeds.copy()
+        var feed_results = one_pass(
+            store, query, route, plan, windows, feed_settings, index
+        )
+        results = merge_reserved(results, feed_results, settings.limit)
+    elif has_journal and abstention.abstain:
+        # The default (journal only): the journal abstained, so the feeds are not shown.
+        # A hint says whether feed records may answer the question.
+        var hint_settings = settings.copy()
+        hint_settings.sources = List[String]()
+        for name in DEFAULT_FEEDS.split(","):
+            hint_settings.sources.append(String(name))
+        var hint_results = one_pass(
+            store, query, route, plan, windows, hint_settings, index
+        )
+        feed_hint = feed_matches(hint_results, query)
     return Recall(
         query,
         route,
@@ -549,4 +681,5 @@ def recall(
         second_query,
         windows^,
         settings.embed.label,
+        feed_hint,
     )

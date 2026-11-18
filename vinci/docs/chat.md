@@ -13,7 +13,7 @@ The model replies with one JSON action when it needs a tool, and the harness run
 | Tool | Does |
 | --- | --- |
 | `journal` | runs any journal command, the same code the command line runs |
-| `recall` | searches the index for lines about the question; the model cites them as `[id]`. It searches the journal, unless the model gives `sources`: `git` (the monorepo's commits), `vaults` (the notes folders), `git,vaults` or `all`. A feed line is labelled `git commit` or `vault section`, and it is not the person's own writing, so it is not trusted (see [feeds](feeds.md)) |
+| `recall` | searches the index for lines about the question; the model cites them as `[id]`. It searches the journal, unless the model gives `sources`: `git` (the monorepo's commits), `vaults` (the notes folders), `git,vaults` or `all`. With `all`, the journal's lines come first and up to three feed lines follow. When the journal abstains, a line `no journal record; N feed records may match: use sources git,vaults` says feed records may answer it. A feed line is labelled `git commit` or `vault section`, and it is not the person's own writing, so it is not trusted (see [feeds](feeds.md)) |
 | `remember` | saves a durable fact or preference as a journal line |
 | `read` | saves a text file (`.txt`, `.md`) or a web page the person named, as a document with its passages, so recall can find them |
 | `open` | reads one fact or passage by its id, with `lines=` or `grep=` |

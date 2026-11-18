@@ -29,7 +29,14 @@ from pack import (
     estimate_counter,
     pack,
 )
-from recall import DEFAULT_ROUTES, Recall, Settings, parse_sources, recall
+from recall import (
+    DEFAULT_ROUTES,
+    Recall,
+    Settings,
+    feed_hint_line,
+    parse_sources,
+    recall,
+)
 from session import user_error
 from text import ascii_tail, clip, pad_right
 from vectors import embed_missing
@@ -329,6 +336,8 @@ def recall_json(
     out += ',"abstain":' + ("true" if r.abstention.abstain else "false")
     if r.abstention.reason.byte_length() > 0:
         out += ',"reason":' + json_string(r.abstention.reason)
+    if r.feed_hint > 0:
+        out += ',"feedHint":' + String(r.feed_hint)
     out += ',"corrected":' + ("true" if r.corrected else "false")
     if r.correction_query.byte_length() > 0:
         out += ',"correctionQuery":' + json_string(r.correction_query)
@@ -434,6 +443,8 @@ def recall_command(args: List[String], home: String) raises:
         return
     if found.abstention.abstain:
         print("abstain: " + found.abstention.reason)
+    if found.feed_hint > 0:
+        print(feed_hint_line(found.feed_hint))
     if packed is not None:
         var p = packed.value().copy()
         if p.text.byte_length() > 0:

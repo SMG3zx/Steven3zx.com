@@ -94,3 +94,13 @@
 {"agent": "M5b", "n": 7, "pass": false, "first_error": "test_feed_activity.mojo:167 len(String) not supported (use byte_length)"}
 {"agent": "M5b", "n": 8, "pass": false, "first_error": "e2e deny: a denied term 'journal.cs' removed nothing (terms were not folded like the window text); unit tests had passed folded terms"}
 {"agent": "M5b", "n": 9, "pass": true, "first_error": ""}
+{"agent":"M5c","n":1,"pass":false,"first_error":"(a) fill, journal first then feeds: personal 35/48 45/60 but 22 personal top-10s change (short journal lists); feed 8/15 because 5 feed questions have a full journal list"}
+{"agent":"M5c","n":2,"pass":false,"first_error":"(b) feeds when the journal abstains: personal 34/48 (one hit lost), 25 personal top-10s change; feed 10/15"}
+{"agent":"M5c","n":3,"pass":false,"first_error":"(c) per-source normalised score (each source's best = 1.0): personal 31/48, 59 top-10s change; discounting feeds trades feed hits for personal (d=0.4: 34/48, feed 9/15)"}
+{"agent":"M5c","n":4,"pass":false,"first_error":"(d) word router (commit, docs, code, changed, ...): personal 30/48, 11 top-10s change; the words also occur in personal questions (j-01, j-12, j-31, j-32, j-44)"}
+{"agent":"M5c","n":5,"pass":false,"first_error":"feed bm25 cut-off: <= -15 gives feed 12/15 but moves 23 personal; <= -25 moves none but feed 5/15; per-term normalised cut-off: no value moves none with feed >= 12 (-6: 0 moved, feed 4/15)"}
+{"agent":"M5c","n":6,"pass":true,"first_error":"reserved feed slots (3), journal first: sources all gives personal 35/48 and 45/60 (exact), feed 13/15. Old all: 25/48, 44/60"}
+{"agent":"M5c","n":7,"pass":false,"first_error":"default not made the merge: any admitting rule moves personal default top-10s (tokens); default stays journal only, numbers unchanged, feed hint added"}
+{"agent":"M5c","n":8,"pass":true,"first_error":"make -C mojo check: 0 errors, all tests ok, ruff and format clean (2 new tests: merge order, hint)"}
+{"agent":"M5c","n":9,"pass":true,"first_error":"vinci_diff --generated 50 --seed 1: 3633/3633 steps, 0 diverged; chat_diff 10/10; portal_diff 136/136; sync_diff 10/10"}
+{"agent":"M5c","n":10,"pass":true,"first_error":"default recall JSON identical to pre-change binary on all 60 personal and 15 feed questions (two data copies); only feedHint added where the journal abstains and feeds match"}

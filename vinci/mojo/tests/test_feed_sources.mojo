@@ -9,7 +9,7 @@ from embed_edge import default_config
 from feed_store import feed_record, put_record
 from index_store import Fact, IndexStore, py_params
 from pack import estimate_counter, pack
-from recall import Settings, parse_sources, recall
+from recall import Settings, merge_reserved, parse_sources, recall
 from fusion import Candidate
 
 
@@ -155,6 +155,78 @@ def test_packed_line_names_the_source() raises:
     assert_true(plain.text.find("idea: Ship the lantern") >= 0)
 
 
+def candidate(text: String, source: String) -> Candidate:
+    return Candidate(
+        1,
+        String("x"),
+        String("idea"),
+        text,
+        String(""),
+        String(""),
+        source,
+        source == "journal",
+    )
+
+
+def candidates(prefix: String, count: Int, source: String) -> List[Candidate]:
+    var out = List[Candidate]()
+    for i in range(count):
+        out.append(candidate(prefix + String(i), source))
+    return out^
+
+
+def test_merge_keeps_the_journal_first() raises:
+    # A full journal: the first 7 journal results, then 3 feed results, and no more.
+    var journal = candidates("journal ", 9, "journal")
+    var feeds = candidates("feed ", 4, "git")
+    var out = merge_reserved(journal, feeds, 10)
+    assert_equal(len(out), 10)
+    assert_equal(out[6].text, "journal 6")
+    assert_equal(out[7].text, "feed 0")
+    assert_equal(out[9].text, "feed 2")
+    # A short journal: the feeds fill the rest, in their own order.
+    var short = candidates("journal ", 2, "journal")
+    var filled = merge_reserved(short, candidates("feed ", 5, "git"), 10)
+    assert_equal(len(filled), 7)
+    assert_equal(filled[1].text, "journal 1")
+    assert_equal(filled[2].text, "feed 0")
+    assert_equal(filled[6].text, "feed 4")
+    # A text that is in both lists is kept once, where the journal has it.
+    var same = List[Candidate]()
+    same.append(candidate("shared text", "journal"))
+    var again = List[Candidate]()
+    again.append(candidate("Shared  text", "git"))
+    again.append(candidate("other", "git"))
+    var deduped = merge_reserved(same, again, 10)
+    assert_equal(len(deduped), 2)
+    assert_equal(deduped[0].source, "journal")
+    assert_equal(deduped[1].text, "other")
+
+
+def test_default_hints_at_feeds_when_the_journal_abstains() raises:
+    # "note" and "lantern" are in the vault section, and only "lantern" is in the journal, so
+    # the journal abstains (one of three terms) and the feeds may match (two of three).
+    var store = build_index()
+    var question = "lantern note section"
+    var default = recall(store, question, settings_for(names("journal")))
+    assert_true(default.abstention.abstain)
+    assert_equal(default.feed_hint, 1)
+    for c in default.results:
+        assert_equal(c.source, "journal")
+    var everything = recall(
+        store, question, settings_for(names("journal", "git", "vaults"))
+    )
+    assert_true(everything.abstention.abstain)
+    assert_equal(everything.feed_hint, 0)
+    var has_feed = False
+    for c in everything.results:
+        if c.source != "journal":
+            has_feed = True
+            assert_equal(c.trusted, False)
+    assert_true(has_feed, "all shows the feed records after the journal's")
+    assert_equal(everything.results[0].source, "journal")
+
+
 def main() raises:
     test_parse_sources()
     print("test_parse_sources: ok")
@@ -166,3 +238,7 @@ def main() raises:
     print("test_feeds_on_request_and_all: ok")
     test_packed_line_names_the_source()
     print("test_packed_line_names_the_source: ok")
+    test_merge_keeps_the_journal_first()
+    print("test_merge_keeps_the_journal_first: ok")
+    test_default_hints_at_feeds_when_the_journal_abstains()
+    print("test_default_hints_at_feeds_when_the_journal_abstains: ok")
