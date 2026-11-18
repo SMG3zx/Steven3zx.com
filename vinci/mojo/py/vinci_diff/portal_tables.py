@@ -5,18 +5,19 @@ Two outputs, both checked in:
   mojo/src/portal_assets.mojo   the CSS, the script and the placeholder SVG from src/Portal.cs
 
 The entity table comes from portal_truth/html_entities.tsv, which was written by
-portal_truth/Truth.cs running on .NET 10 (the table is the HTML 4.01 set, and names are
-case-sensitive, with a semicolon). The assets are read from the C# raw string literals,
-with the indentation removed the way the C# compiler removes it.
+Truth.cs running on .NET 10 (archived with the oracle's source, see oracle.py). The table
+is the HTML 4.01 set, and names are case-sensitive, with a semicolon. The assets are read
+from the C# raw string literals, with the indentation removed the way the C# compiler removes it.
 
 Run from mojo/: uv run python -m vinci_diff.portal_tables
 """
 
 from pathlib import Path
 
+from .oracle import ORACLE_SOURCE
+
 MOJO_DIR = Path(__file__).resolve().parents[2]
-REPO_DIR = MOJO_DIR.parent
-PORTAL_CS = REPO_DIR / "src" / "Portal.cs"
+PORTAL_CS = ORACLE_SOURCE / "src" / "Portal.cs"
 TRUTH_TSV = Path(__file__).resolve().parent / "portal_truth" / "html_entities.tsv"
 SRC_DIR = MOJO_DIR / "src"
 

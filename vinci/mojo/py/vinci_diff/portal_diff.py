@@ -12,7 +12,7 @@ body byte for byte. Compared after each run: the journal file and the previews f
 Ground truth that the Mojo side is held to lives in portal_truth/ (.NET 10 results for the
 WebUtility, Uri and JSON details). Run from mojo/py:
 
-    uv run python -m vinci_diff.portal_diff --candidate /abs/path/mojo/build/vinci-portal
+    uv run python -m vinci_diff.portal_diff --candidate /abs/path/mojo/build/vinci
 """
 
 from __future__ import annotations
@@ -33,9 +33,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import cast
 
+from .oracle import ORACLE
+
 MOJO_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_ORACLE = MOJO_DIR / "build" / "oracle" / "vinci"
-DEFAULT_CANDIDATE = MOJO_DIR / "build" / "vinci-portal"
+DEFAULT_ORACLE = ORACLE
+DEFAULT_CANDIDATE = MOJO_DIR / "build" / "vinci"
 DEFAULT_JOURNAL = Path.home() / ".vinci" / "staging" / "journal.jsonl"
 MOJO_PY = MOJO_DIR / "py"
 NOW = "2026-11-18T10:00:00+00:00"

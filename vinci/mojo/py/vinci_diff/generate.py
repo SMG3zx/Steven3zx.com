@@ -1,4 +1,4 @@
-"""Seeded random command sequences built from the grammar in src/App.cs.
+"""Seeded random command sequences built from the grammar in the oracle's src/App.cs.
 
 The generator reads the oracle's journal after every step, so the ids it uses are the ids
 that exist. Most commands are valid; some are deliberately wrong (unknown ids, missing or

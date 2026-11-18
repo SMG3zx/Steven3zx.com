@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import coverage, report
 from .generate import generated_steps
+from .oracle import ORACLE, ORACLE_SOURCE
 from .runner import TIMEOUT_SECONDS, ScenarioReport, run_scenario
 from .scenario import (
     DEFAULT_FOLDERS,
@@ -25,9 +26,8 @@ from .scenario import (
 )
 
 MOJO_DIR = SCENARIO_DIR.parents[1]
-DEFAULT_ORACLE = MOJO_DIR / "build" / "oracle" / "vinci"
 DEFAULT_CANDIDATE = MOJO_DIR / "build" / "vinci"
-APP_CS = MOJO_DIR.parent / "src" / "App.cs"
+APP_CS = ORACLE_SOURCE / "src" / "App.cs"
 GENERATED_LENGTH = (30, 80)
 
 
@@ -59,7 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m vinci_diff",
         description="Compare the C# oracle with a candidate binary, one command at a time.",
     )
-    parser.add_argument("--oracle", type=Path, default=DEFAULT_ORACLE, help="the C# binary")
+    parser.add_argument(
+        "--oracle", type=Path, default=ORACLE, help="the C# binary (default: VINCI_ORACLE)"
+    )
     parser.add_argument(
         "--candidate", type=Path, default=DEFAULT_CANDIDATE, help="the Mojo binary under test"
     )

@@ -29,12 +29,12 @@ from pathlib import Path
 from typing import Final, cast
 
 from .fake_llm import FakeLlm
+from .oracle import ORACLE
 
 MOJO_DIR: Final = Path(__file__).resolve().parents[2]
 SCRIPT_DIR: Final = MOJO_DIR / "difftest" / "chat"
 FILES_DIR: Final = SCRIPT_DIR / "files"
 FIXTURE: Final = MOJO_DIR / "difftest" / "fixtures" / "mid-project.jsonl"
-ORACLE: Final = MOJO_DIR / "build" / "oracle" / "vinci"
 CANDIDATE: Final = MOJO_DIR / "build" / "vinci"
 FIXED_NOW: Final = "2026-11-18T10:00:00-05:00"
 TIMEOUT_S: Final = 180
