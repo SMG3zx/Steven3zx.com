@@ -436,3 +436,42 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
 - **A recall test that checks an order pins the default weights.** Changing the default changes the order, and the expectation has to be worked out by hand again. The route score divides by the peak, so compute each candidate's score from its fused value, not from the sum of its ranks. The test's expected order changed from f1, f3, f2 to f3, f1, f2 on the new default.
 
 - **Eval harnesses write result files under `~/.vinci/eval/results` unless told otherwise.** `index_eval` writes there unless `--out` is given, and `lme_index_eval` writes to its module-level `RESULTS_DIR`. Pass `--out`, or point the module's paths at a copy before calling its `main()`, as the M5d driver does.
+
+## Transactions, parameters and edges
+
+- **A tuple declared with `comptime` cannot be iterated.** `for p in SOURCES` over `comptime SOURCES = ("a", "b")` fails with "does not implement the '__iter__' method" or "cannot materialize comptime value". Build a `List` in a function instead.
+  ```mojo
+  def sources() -> List[String]:
+      var out = List[String]()
+      out.append("src/a.mojo")
+      return out^
+  ```
+
+- **A helper that calls a mutating method needs `mut` on its parameter.** `def helper(s: Session)` calling `s.record(...)` fails with "invalid use of mutating method on rvalue". A `sed` that adds `mut` misses parameter lists that break across lines, so grep for `s: Session` without the `mut`.
+  ```mojo
+  def bookmark(mut s: Session, title: String) raises:
+  ```
+
+- **A default argument that is moved out needs `var`.** `text: Optional[String] = None` followed by `Event(text=text^)` fails with "cannot transfer out of immutable reference". Declare `var text: Optional[String] = None`.
+
+- **`Python.builtins()` does not exist.** Use `Python.import_module("builtins")`, for example to call `len` on a Python list.
+
+- **Import an edge module only after `edge_module()` has put `mojo/py` on `sys.path`.** An import before it is not found. Call `_ = edge_module()` first, every time, as the other edges do.
+
+- **`Path.read_bytes()` gives a `List[UInt8]`, not a Python object.** Pass the text to Python instead, with `PythonObject(Path(p).read_text()).encode()`, when the file is ASCII. Otherwise let the Python edge read the bytes.
+
+- **`flock` is per open file, so one process can block on itself.** Two descriptors on one lock file wait for each other, even in one process. `vinci_edge/journal_lock.py` keeps one descriptor per journal path and counts the nested takes, so a read inside a transaction does not wait.
+
+- **`HOME` is not the account's home.** `os.path.expanduser("~")` follows `$HOME`, which a test harness or a wrapper can change. A boundary such as "files under home" uses `pwd.getpwuid(os.getuid()).pw_dir` (`reading_edge.account_home`).
+
+## Found in K0a (the goldens and the gate, twice-hit)
+
+- **`mojo format` moves a docstring's closing quotes onto a line of their own when the last text line runs past 80 columns.** `fmt-check` then fails on a file that looked right by hand. Run `uv run mojo format <file>` on the file, or keep each docstring line under 80 columns, so the closing `"""` stays on its text.
+  ```mojo
+  """The external reads one tracker sync makes. A read is made once per key, so the
+  pass that decides and the pass that writes share it."""
+  ```
+
+- **`mojo build -o build/vinci` needs `build/` to exist.** In a fresh clone or a `git archive` copy, the compiler stops with "unable to write file ... build does not exist". `make build` creates the folder (`mkdir -p build`); a direct `uv run mojo build` must do the same first.
+
+- **`edge_module()` costs about 20 ms, because it imports the index's HTTP module.** A new edge that needs only its own Python file pays that on every call, and a plain `vinci idea` went from 29 ms to 58 ms. Put the path setup in `edge_path()` (`embed_edge.mojo`), which imports nothing, and import only the module the edge needs. Measure with `PYTHONPROFILEIMPORTTIME=1` on the binary, which shows the imports the embedded interpreter makes.

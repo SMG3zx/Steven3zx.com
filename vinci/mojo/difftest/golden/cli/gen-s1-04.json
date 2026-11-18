@@ -1,0 +1,931 @@
+{
+ "description": "generated: seed 1, scenario 4, 54 steps",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "index": 4,
+ "kind": "generated",
+ "length": 54,
+ "name": "gen-s1-04",
+ "outcomes": [
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "stderr": "vinci: no idea i95\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Wind gear\"}\n",
+    "sha256": "f9a188e8070faa1a1127862476e7c967d78853edbc9edb4ee65f9910cdd51ef4"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "f9a188e8070faa1a1127862476e7c967d78853edbc9edb4ee65f9910cdd51ef4"
+   },
+   "stderr": "vinci: no requirement r91\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T23:00:00+00:00\",\"kind\":\"home\",\"id\":\"i1\",\"text\":\"<WORK>/cwd/canal\"}\n",
+    "sha256": "8406339cc00e9fe5a4e1d028ccadb8ea619084263e72e690621d3df443c17faa"
+   },
+   "stderr": "",
+   "stdout": "i1 lives in <WORK>/cwd/canal. Time in windows titled \"- canal -\" and commits there now count as work.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "8406339cc00e9fe5a4e1d028ccadb8ea619084263e72e690621d3df443c17faa"
+   },
+   "stderr": "",
+   "stdout": "Nothing measured yet. vinci log <metric> <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T23:35:00+00:00\",\"kind\":\"spec\",\"id\":\"distance\",\"value\":71,\"hi\":103}\n",
+    "sha256": "1081431ce0e90cb5cd70831e9630740384b8bbe927e71da89e91b3afc9351821"
+   },
+   "stderr": "",
+   "stdout": "distance is good between 71 and 103.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-19T03:35:00+00:00\",\"kind\":\"predict\",\"id\":\"h1\",\"text\":\"Spar cloth bird pilot\",\"refs\":[\"i1\"],\"value\":79}\n",
+    "sha256": "67a73043afc340df30d5e00a0e8c85a18e0e91977ff0537ffc71e74bacfdc94e"
+   },
+   "stderr": "",
+   "stdout": "h1 predicted at 79%. Test it, then: vinci result h1 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "67a73043afc340df30d5e00a0e8c85a18e0e91977ff0537ffc71e74bacfdc94e"
+   },
+   "stderr": "vinci: no bookmark b97\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T03:48:00+00:00\",\"kind\":\"result\",\"id\":\"h1\",\"text\":\"caf\\u00E9 \\u2265 100 \\u0022quoted\\u0022\",\"value\":1}\n",
+    "sha256": "624a8eead48e8f68ba2938bc1f62361d112061cb7c7080ab03260a9f9c7c2884"
+   },
+   "stderr": "",
+   "stdout": "h1 was right. Keep what you learned: vinci note \"...\" h1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T07:48:00+00:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Check tune\"}\n",
+    "sha256": "558cb305269bd571b5da64fb7f8d22266ded1770e2a29ee359b6c7943d21dd73"
+   },
+   "stderr": "",
+   "stdout": "i2 seeded. Next: vinci for i2 \"who will use it\", then vinci goal i2 ...\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "558cb305269bd571b5da64fb7f8d22266ded1770e2a29ee359b6c7943d21dd73"
+   },
+   "stderr": "vinci: no bookmark b93\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T17:55:00+00:00\",\"kind\":\"bookmark\",\"id\":\"b1\",\"text\":\"Gear flight pilot\",\"why\":\"Lock spar flight draft\",\"url\":\"https://example.org/wind18\"}\n",
+    "sha256": "0a32fe2b3390e8a5e7d3d7e1064a8836a488d67f9a58b4fbee46d68b24a2d2fc"
+   },
+   "stderr": "",
+   "stdout": "b1 saved. It is on the portal: vinci serve\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T18:05:00+00:00\",\"kind\":\"req\",\"id\":\"r1\",\"text\":\"Canal cloth wind tune\",\"refs\":[\"i2\"],\"who\":\"Check\",\"why\":\"Glider wind\"}\n",
+    "sha256": "5c9f49bea4869ff3696c6ff169d7aa7e32d3b0b589f21149c04e911b71c33fee"
+   },
+   "stderr": "",
+   "stdout": "r1 added to i2. Can it be deleted? vinci cut r1 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T18:30:00+00:00\",\"kind\":\"goal\",\"id\":\"i2\",\"text\":\"Flight gear spar\",\"value\":92,\"metric\":\"defects\"}\n",
+    "sha256": "68a473c23480e54d3fa7265541debaed9adc68d5afc0d152f2dbc03ac2a19038"
+   },
+   "stderr": "",
+   "stdout": "i2 goal set. Record progress with: vinci log defects <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T18:39:00+00:00\",\"kind\":\"req\",\"id\":\"r2\",\"text\":\"Cloth test pilot\",\"refs\":[\"i2\"],\"who\":\"Rope\",\"why\":\"Tune hill load\"}\n",
+    "sha256": "5e9d3279f2b77c48cd0721fd73d8eb1feaac99610847292b697307d7ed667bf5"
+   },
+   "stderr": "",
+   "stdout": "r2 added to i2. Can it be deleted? vinci cut r2 \"why\"\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5e9d3279f2b77c48cd0721fd73d8eb1feaac99610847292b697307d7ed667bf5"
+   },
+   "stderr": "vinci: i2 is in Seed. It ships from Build or Tend: vinci advance i2\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T20:39:00+00:00\",\"kind\":\"req\",\"id\":\"r3\",\"text\":\"Check\",\"refs\":[\"i1\"],\"who\":\"Spar\",\"why\":\"Rope gear\"}\n",
+    "sha256": "0f1ba78e44f46192400b1cd1fb7a42a00260a61e7adea7437bd9ddc2476948e1"
+   },
+   "stderr": "",
+   "stdout": "r3 added to i1. Can it be deleted? vinci cut r3 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "0f1ba78e44f46192400b1cd1fb7a42a00260a61e7adea7437bd9ddc2476948e1"
+   },
+   "stderr": "",
+   "stdout": "i1 already lives in <WORK>/cwd/canal.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "0f1ba78e44f46192400b1cd1fb7a42a00260a61e7adea7437bd9ddc2476948e1"
+   },
+   "stderr": "vinci: no issue x93\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-23T21:19:00+00:00\",\"kind\":\"idea\",\"id\":\"i3\",\"text\":\"Wind\"}\n",
+    "sha256": "5543946c30fb5d7d2e364e92da149d991f13346ff80342c651a506a92323b33d"
+   },
+   "stderr": "",
+   "stdout": "i3 seeded. Next: vinci for i3 \"who will use it\", then vinci goal i3 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-24T00:19:00+00:00\",\"kind\":\"predict\",\"id\":\"h2\",\"text\":\"Hill wind spar\",\"value\":87}\n",
+    "sha256": "c647e61c816be211aadcc28a32f1cb01d2086490282957d3e65114570b57f706"
+   },
+   "stderr": "",
+   "stdout": "h2 predicted at 87%. Test it, then: vinci result h2 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-24T00:33:00+00:00\",\"kind\":\"stage\",\"id\":\"i3\",\"text\":\"Prepare\"}\n",
+    "sha256": "6dd1b9c4c32e8d94a66d84d6ff42fe61896bee48649d3d4c9320b313ee8c5ea5"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i3 is for nobody yet. Name who will use it: vinci for i3 \"...\"\nNot ready: i3 has no goal. Set one with a number: vinci goal i3 \"...\" <metric> at-least <n>\ni3 is now in Prepare.\nNext: gather notes (vinci note \"...\" i3), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-24T00:52:00+00:00\",\"kind\":\"source\",\"id\":\"s1\",\"text\":\"Lock bird spar\"}\n",
+    "sha256": "497c4a38502b4c5909fffd1a068fdf2ef21cbc64ea782a1ab06127e05effae32"
+   },
+   "stderr": "",
+   "stdout": "s1 recorded. Cite it with the place: vinci note \"one idea, in your own words\" s1:p.12\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "497c4a38502b4c5909fffd1a068fdf2ef21cbc64ea782a1ab06127e05effae32"
+   },
+   "stderr": "",
+   "stdout": "No principles yet. They come from diagnosed issues.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "497c4a38502b4c5909fffd1a068fdf2ef21cbc64ea782a1ab06127e05effae32"
+   },
+   "stderr": "",
+   "stdout": "i1   work \"- canal -\"  Wind gear\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-25T01:24:00+00:00\",\"kind\":\"spec\",\"id\":\"distance\",\"value\":62,\"hi\":127}\n",
+    "sha256": "b819f8df45beaf3bacd0ea605d42154b8fa9c3d73d2bbe9bc2832e8d35de68eb"
+   },
+   "stderr": "",
+   "stdout": "distance is good between 62 and 127.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-25T01:54:00+00:00\",\"kind\":\"tend\",\"id\":\"i3\",\"text\":\"Load\"}\n",
+    "sha256": "c9d988cace504c72aa1fe141264bd5b522aa9afb5d7dddff90be3513bff7375d"
+   },
+   "stderr": "",
+   "stdout": "i3 tended.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-28T01:54:00+00:00\",\"kind\":\"watch\",\"id\":\"i2\",\"text\":\"Code\"}\n",
+    "sha256": "3307649d7823696e341645d36161c50d02edbd12be85e6b3cdfefc5d69bebd3b"
+   },
+   "stderr": "",
+   "stdout": "Time in a window whose app or title contains \"Code\" now counts for i2.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-28T09:54:00+00:00\",\"kind\":\"log\",\"id\":\"defects\",\"value\":250.44}\n",
+    "sha256": "a78d6851665e349b74b0a871d6eacff61753bcef12380ae3eb42270fd9f216b4"
+   },
+   "stderr": "",
+   "stdout": "defects = 250.44 (measurement 1).\ni2 goal met: needs ≥ 92.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "a78d6851665e349b74b0a871d6eacff61753bcef12380ae3eb42270fd9f216b4"
+   },
+   "stderr": "vinci: nothing logged for 'nothing'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "a78d6851665e349b74b0a871d6eacff61753bcef12380ae3eb42270fd9f216b4"
+   },
+   "stderr": "vinci: i2 is in Seed. It ships from Build or Tend: vinci advance i2\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-28T10:49:00+00:00\",\"kind\":\"idea\",\"id\":\"i4\",\"text\":\"Rope\"}\n",
+    "sha256": "4868db6f7a7d6ca7ad59108cc968f4f3ede0d9792c74acbc4e1a6939fd921eb3"
+   },
+   "stderr": "",
+   "stdout": "i4 seeded. Next: vinci for i4 \"who will use it\", then vinci goal i4 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-28T11:13:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Prepare\"}\n",
+    "sha256": "11b6e26cd3819c6600b4affccea921cf57f83748712f08c87d5901190493629e"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i1 is for nobody yet. Name who will use it: vinci for i1 \"...\"\nNot ready: i1 has no goal. Set one with a number: vinci goal i1 \"...\" <metric> at-least <n>\ni1 is now in Prepare.\nNext: gather notes (vinci note \"...\" i1), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-28T11:24:00+00:00\",\"kind\":\"watch\",\"id\":\"i3\",\"text\":\"Firefox\"}\n",
+    "sha256": "6bf8ff68f6666a2f7e381fa0c0baaaacc2850d61b8c457cf5357d92f99fa7dba"
+   },
+   "stderr": "",
+   "stdout": "Time in a window whose app or title contains \"Firefox\" now counts for i3.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-28T11:47:00+00:00\",\"kind\":\"stage\",\"id\":\"i4\",\"text\":\"Prepare\"}\n",
+    "sha256": "4cef7518a2dd27b04a1a69316b282ab90f864a1464918ccac4ec253effdccc49"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i4 is for nobody yet. Name who will use it: vinci for i4 \"...\"\nNot ready: i4 has no goal. Set one with a number: vinci goal i4 \"...\" <metric> at-least <n>\ni4 is now in Prepare.\nNext: gather notes (vinci note \"...\" i4), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-30T11:47:00+00:00\",\"kind\":\"note\",\"id\":\"n1\",\"text\":\"Cloth lock\",\"refs\":[\"i2\"],\"tags\":[\"rope\"]}\n",
+    "sha256": "34f3ed59b29eb56b52009e0c3b52f257c06032b3bbfb2bd6bee7bfe312bd805b"
+   },
+   "stderr": "",
+   "stdout": "n1 written. No source given, so it is recorded as your own thought.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-30T12:07:00+00:00\",\"kind\":\"req\",\"id\":\"r4\",\"text\":\"Plan test hill draft\",\"refs\":[\"i2\"],\"who\":\"Pilot\",\"why\":\"Tune plan wind\"}\n",
+    "sha256": "eab56f733c1f83b0d897bcc6fd757030e05ca35e828cfffa5b1453f11db6c9d4"
+   },
+   "stderr": "",
+   "stdout": "r4 added to i2. Can it be deleted? vinci cut r4 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-01T12:07:00+00:00\",\"kind\":\"spent\",\"id\":\"i4\",\"value\":568}\n",
+    "sha256": "acbdd609c039732788e821de16b241b8b5feff84d36a78b5c77049dc357a42d7"
+   },
+   "stderr": "",
+   "stdout": "9h28m added to i4.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "acbdd609c039732788e821de16b241b8b5feff84d36a78b5c77049dc357a42d7"
+   },
+   "stderr": "",
+   "stdout": "<WORK>/home/journal.jsonl\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "acbdd609c039732788e821de16b241b8b5feff84d36a78b5c77049dc357a42d7"
+   },
+   "stderr": "",
+   "stdout": "i2   work \"Code\"  Check tune\ni3   work \"Firefox\"  Wind\ni1   work \"- canal -\"  Wind gear\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-01T20:37:00+00:00\",\"kind\":\"link\",\"id\":\"n1\",\"refs\":[\"i3\"]}\n",
+    "sha256": "abbbdb5dd94c0a98bc331128e86cfc385ab66a295e093df1e344f59264345e65"
+   },
+   "stderr": "",
+   "stdout": "n1 → i3\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "abbbdb5dd94c0a98bc331128e86cfc385ab66a295e093df1e344f59264345e65"
+   },
+   "stderr": "vinci: no idea i98\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T01:56:00+00:00\",\"kind\":\"idea\",\"id\":\"i5\",\"text\":\"Bench\"}\n",
+    "sha256": "decc4eea16dbbddc5dc47b3294a51c06262c221c87b32b73230d8c83282f7e5f"
+   },
+   "stderr": "",
+   "stdout": "i5 seeded. Next: vinci for i5 \"who will use it\", then vinci goal i5 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T01:56:00+00:00\",\"kind\":\"watch\",\"id\":\"i5\",\"text\":\"Terminal\"}\n",
+    "sha256": "dd809025ecf9ae3e713be0e74e3c3f31b7f0ebac76ac7a187d3aca6dcf2fdf9d"
+   },
+   "stderr": "",
+   "stdout": "Time in a window whose app or title contains \"Terminal\" now counts for i5.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "dd809025ecf9ae3e713be0e74e3c3f31b7f0ebac76ac7a187d3aca6dcf2fdf9d"
+   },
+   "stderr": "vinci: \"Code\" is already watched for i2\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T08:13:00+00:00\",\"kind\":\"cut\",\"id\":\"r3\",\"text\":\"Pilot spar draft tune\"}\n",
+    "sha256": "cd5a94a02e498f9a884b1b5cfc098ebee9eedc7825825322227c4bc88853cf49"
+   },
+   "stderr": "",
+   "stdout": "r3 cut. i1 has deleted 1 of 1 requirements.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T08:13:00+00:00\",\"kind\":\"predict\",\"id\":\"h3\",\"text\":\"Draft wing load\",\"value\":51}\n",
+    "sha256": "f472cf356b15b31a7696acc50ee6ade7b342bc53ea01c64c5ac9d0e295297158"
+   },
+   "stderr": "",
+   "stdout": "h3 predicted at 51%. Test it, then: vinci result h3 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T08:38:00+00:00\",\"kind\":\"bookmark\",\"id\":\"b2\",\"text\":\"Plan pilot\",\"why\":\"Check\",\"url\":\"https://example.org/draft13\"}\n",
+    "sha256": "b77200a35352ec259cb4fecae00f3befb7590ad01592301ff5de0b9f257f40b8"
+   },
+   "stderr": "",
+   "stdout": "b2 saved. It is on the portal: vinci serve\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T09:38:00+00:00\",\"kind\":\"note\",\"id\":\"n2\",\"text\":\"Check canal\"}\n",
+    "sha256": "cca61286d6b30972c6437bca63d99671129f507757caa8a97d245e5902fa7aca"
+   },
+   "stderr": "",
+   "stdout": "n2 written. No source given, so it is recorded as your own thought.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T09:39:00+00:00\",\"kind\":\"commit\",\"text\":\"Hill pilot check\",\"refs\":[\"i1\"]}\n",
+    "sha256": "8f8e9ff4f9d4f750816e3bed8549790e45b4bb64da7738625b67eea7156ef925"
+   },
+   "stderr": "",
+   "stdout": "Committed. Due 2026-12-09.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T09:54:00+00:00\",\"kind\":\"review\",\"value\":1}\n",
+    "sha256": "8b65f3b8b7c5afcde1fb72dcc5b8c935c546b687c7274aab8b25b7ceae4e3656"
+   },
+   "stderr": "",
+   "stdout": "n2     note connects to nothing: Check canal\n       fix: vinci link n2 <note or idea>\n1 to fix.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T09:56:00+00:00\",\"kind\":\"idea\",\"id\":\"i6\",\"text\":\"Test\"}\n",
+    "sha256": "8a17bd8ded3cc6c35f3700c8ce0adc16839ea5aa725e362deef150e6881c6d1d"
+   },
+   "stderr": "",
+   "stdout": "i6 seeded. Next: vinci for i6 \"who will use it\", then vinci goal i6 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-02T09:56:00+00:00\",\"kind\":\"cut\",\"id\":\"r4\",\"text\":\"Draft\"}\n",
+    "sha256": "cb0af7157b4591976fbbf8b9d0a40d574ced070374314012179cb69847104c7d"
+   },
+   "stderr": "",
+   "stdout": "r4 cut. i2 has deleted 1 of 3 requirements.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-12-05T09:56:00+00:00\",\"kind\":\"result\",\"id\":\"h3\",\"text\":\"Gear cloth load\",\"value\":0}\n",
+    "sha256": "e419c74043d5be071dc427d41f523c6171290355431c46afabac2c720f8a716c"
+   },
+   "stderr": "",
+   "stdout": "h3 was wrong. Keep what you learned: vinci note \"...\" h3\n"
+  }
+ ],
+ "seed": 1,
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "used",
+    "i95",
+    "Test"
+   ],
+   "now": "2026-11-16T09:00:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Wind gear"
+   ],
+   "now": "2026-11-18T09:00:00+00:00"
+  },
+  {
+   "argv": [
+    "cut",
+    "r91",
+    "Canal flight load"
+   ],
+   "now": "2026-11-18T21:00:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i1",
+    "canal"
+   ],
+   "now": "2026-11-18T23:00:00+00:00"
+  },
+  {
+   "argv": [
+    "stats"
+   ],
+   "now": "2026-11-18T23:27:00+00:00"
+  },
+  {
+   "argv": [
+    "spec",
+    "distance",
+    "71",
+    "103"
+   ],
+   "now": "2026-11-18T23:35:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Spar cloth bird pilot",
+    "79",
+    "i1"
+   ],
+   "now": "2026-11-19T03:35:00+00:00"
+  },
+  {
+   "argv": [
+    "unbookmark",
+    "b97"
+   ],
+   "now": "2026-11-19T03:48:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h1",
+    "right",
+    "café ≥ 100 \"quoted\""
+   ],
+   "now": "2026-11-20T03:48:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Check tune"
+   ],
+   "now": "2026-11-20T07:48:00+00:00"
+  },
+  {
+   "argv": [
+    "unbookmark",
+    "b93"
+   ],
+   "now": "2026-11-20T07:55:00+00:00"
+  },
+  {
+   "argv": [
+    "bookmark",
+    "Gear flight pilot",
+    "https://example.org/wind18",
+    "Lock spar flight draft"
+   ],
+   "now": "2026-11-20T17:55:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i2",
+    "Canal cloth wind tune",
+    "Check",
+    "Glider wind"
+   ],
+   "now": "2026-11-20T18:05:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i2",
+    "Flight gear spar",
+    "defects",
+    "at-least",
+    "92"
+   ],
+   "now": "2026-11-20T18:30:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i2",
+    "Cloth test pilot",
+    "Rope",
+    "Tune hill load"
+   ],
+   "now": "2026-11-20T18:39:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i2",
+    "Wing"
+   ],
+   "now": "2026-11-21T18:39:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i1",
+    "Check",
+    "Spar",
+    "Rope gear"
+   ],
+   "now": "2026-11-21T20:39:00+00:00"
+  },
+  {
+   "argv": [
+    "adopt",
+    "canal"
+   ],
+   "now": "2026-11-21T20:55:00+00:00"
+  },
+  {
+   "argv": [
+    "principle",
+    "Test check",
+    "x93"
+   ],
+   "now": "2026-11-23T20:55:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Wind"
+   ],
+   "now": "2026-11-23T21:19:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Hill wind spar",
+    "87"
+   ],
+   "now": "2026-11-24T00:19:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i3"
+   ],
+   "now": "2026-11-24T00:33:00+00:00"
+  },
+  {
+   "argv": [
+    "source",
+    "Lock bird spar"
+   ],
+   "now": "2026-11-24T00:52:00+00:00"
+  },
+  {
+   "argv": [
+    "principles"
+   ],
+   "now": "2026-11-24T01:21:00+00:00"
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-11-24T01:24:00+00:00"
+  },
+  {
+   "argv": [
+    "spec",
+    "distance",
+    "62",
+    "127"
+   ],
+   "now": "2026-11-25T01:24:00+00:00"
+  },
+  {
+   "argv": [
+    "tend",
+    "i3",
+    "Load"
+   ],
+   "now": "2026-11-25T01:54:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i2",
+    "Code"
+   ],
+   "now": "2026-11-28T01:54:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "defects",
+    "250.44"
+   ],
+   "now": "2026-11-28T09:54:00+00:00"
+  },
+  {
+   "argv": [
+    "stats",
+    "nothing"
+   ],
+   "now": "2026-11-28T10:03:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i2",
+    "Hill gear wing tune"
+   ],
+   "now": "2026-11-28T10:33:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Rope"
+   ],
+   "now": "2026-11-28T10:49:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1",
+    "27"
+   ],
+   "now": "2026-11-28T11:13:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i3",
+    "Firefox"
+   ],
+   "now": "2026-11-28T11:24:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i4"
+   ],
+   "now": "2026-11-28T11:47:00+00:00"
+  },
+  {
+   "argv": [
+    "note",
+    "Cloth lock",
+    "i2",
+    "+Rope"
+   ],
+   "now": "2026-11-30T11:47:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i2",
+    "Plan test hill draft",
+    "Pilot",
+    "Tune plan wind"
+   ],
+   "now": "2026-11-30T12:07:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i4",
+    "568"
+   ],
+   "now": "2026-12-01T12:07:00+00:00"
+  },
+  {
+   "argv": [
+    "path"
+   ],
+   "now": "2026-12-01T20:07:00+00:00"
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-12-01T20:07:00+00:00"
+  },
+  {
+   "argv": [
+    "link",
+    "n1",
+    "i3"
+   ],
+   "now": "2026-12-01T20:37:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i98",
+    "Shipped thing"
+   ],
+   "now": "2026-12-02T01:37:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Bench"
+   ],
+   "now": "2026-12-02T01:56:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i5",
+    "Terminal"
+   ],
+   "now": "2026-12-02T01:56:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i3",
+    "Code"
+   ],
+   "now": "2026-12-02T07:56:00+00:00"
+  },
+  {
+   "argv": [
+    "cut",
+    "r3",
+    "Pilot spar draft tune"
+   ],
+   "now": "2026-12-02T08:13:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Draft wing load",
+    "51"
+   ],
+   "now": "2026-12-02T08:13:00+00:00"
+  },
+  {
+   "argv": [
+    "bookmark",
+    "Plan pilot",
+    "https://example.org/draft13",
+    "Check"
+   ],
+   "now": "2026-12-02T08:38:00+00:00"
+  },
+  {
+   "argv": [
+    "note",
+    "Check canal"
+   ],
+   "now": "2026-12-02T09:38:00+00:00"
+  },
+  {
+   "argv": [
+    "commit",
+    "Hill pilot check",
+    "i1"
+   ],
+   "now": "2026-12-02T09:39:00+00:00"
+  },
+  {
+   "argv": [
+    "review"
+   ],
+   "now": "2026-12-02T09:54:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Test"
+   ],
+   "now": "2026-12-02T09:56:00+00:00"
+  },
+  {
+   "argv": [
+    "cut",
+    "r4",
+    "Draft"
+   ],
+   "now": "2026-12-02T09:56:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h3",
+    "wrong",
+    "-"
+   ],
+   "now": "2026-12-05T09:56:00+00:00",
+   "stdin": "Gear cloth load\n"
+  }
+ ]
+}

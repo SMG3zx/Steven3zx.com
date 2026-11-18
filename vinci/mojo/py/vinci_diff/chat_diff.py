@@ -12,11 +12,17 @@ real ~/.vinci. Then:
 - Every script's expectations are checked against the Mojo run: its output, the journal kinds
   it added, and text the model was shown.
 
-Run from mojo/py:  uv run python -m vinci_diff.chat_diff
+By default the C# side comes from the goldens (mojo/difftest/golden/chat/, see golden.py): the
+recorded standard output and journal lines of each oracle script. --oracle runs the C# binary
+live. --record runs it, checks the candidate against the result, and writes the goldens only if
+they agree.
+
+Run from mojo/py:  uv run python -m vinci_diff.chat_diff [--oracle | --record] [SCRIPT]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -29,13 +35,22 @@ from pathlib import Path
 from typing import Final, cast
 
 from .fake_llm import FakeLlm
+from .golden import (
+    GOLDEN_DIR,
+    GoldenError,
+    add_mode_arguments,
+    mode_of,
+    read_file,
+    sha256_file,
+    write_set,
+)
 from .oracle import ORACLE
 
 MOJO_DIR: Final = Path(__file__).resolve().parents[2]
 SCRIPT_DIR: Final = MOJO_DIR / "difftest" / "chat"
 FILES_DIR: Final = SCRIPT_DIR / "files"
 FIXTURE: Final = MOJO_DIR / "difftest" / "fixtures" / "mid-project.jsonl"
-CANDIDATE: Final = MOJO_DIR / "build" / "vinci"
+DEFAULT_CANDIDATE: Final = MOJO_DIR / "build" / "vinci"
 FIXED_NOW: Final = "2026-11-18T10:00:00-05:00"
 TIMEOUT_S: Final = 180
 # Lines the C# chat prints because it talks to Neo4j, which the Mojo chat does not use.
@@ -46,6 +61,7 @@ NEO4J_NOTICE: Final = (
 MEMORY_KINDS: Final = frozenset({"exchange", "remember", "read"})
 ANSWER_NOT_SAVED: Final = "  · answer not saved: it cites no recalled evidence\n"
 ENV_PREFIXES: Final = ("CHAT_", "MEMORY_", "EMBEDDING_", "VINCI_", "NEO4J_")
+GOLDEN_CHAT: Final = GOLDEN_DIR / "chat"
 
 
 @dataclass
@@ -130,6 +146,18 @@ def _child_env(home: Path, vinci_home: Path, base_url: str, env_file: Path) -> d
     return env
 
 
+def _scrub(text: str, side_dir: Path) -> str:
+    """Replaces this run's folder, the fixture folder and the repository by tokens, so a golden
+    holds no path of this machine or checkout. FILES_DIR comes before MOJO_DIR, which contains it."""
+    for needle, token in (
+        (str(side_dir), "<SIDE>"),
+        (str(FILES_DIR), "<FILES>"),
+        (str(MOJO_DIR), "<MOJO>"),
+    ):
+        text = text.replace(needle, token)
+    return text
+
+
 def _run_side(binary: Path, script: Script, root: Path, label: str) -> Side:
     side_dir = root / label
     home = side_dir / "home"
@@ -157,8 +185,8 @@ def _run_side(binary: Path, script: Script, root: Path, label: str) -> Side:
     finally:
         model.stop()
     journal = (vinci_home / "journal.jsonl").read_text(encoding="utf-8").splitlines()
-    added = journal[len(fixture_lines) :]
-    return Side(done.stdout, done.stderr, done.returncode, added, model)
+    added = [_scrub(line, side_dir) for line in journal[len(fixture_lines) :]]
+    return Side(_scrub(done.stdout, side_dir), done.stderr, done.returncode, added, model)
 
 
 def _kind_of(line: str) -> str:
@@ -188,10 +216,28 @@ def _mojo_view(text: str) -> str:
     return _normalize(text)
 
 
-def check(script: Script, root: Path) -> list[str]:
-    """The reasons a script fails. Empty when it passes."""
+def _recorded(golden: Path, script: Script) -> tuple[str, list[str]] | str:
+    """The recorded stdout and journal lines of an oracle script, or a problem as a string."""
+    try:
+        payload = read_file(golden, script.name)
+    except (OSError, ValueError, GoldenError) as exc:
+        return f"golden for {script.name} is unreadable: {exc}"
+    if payload is None:
+        return f"no golden for {script.name} (run --record)"
+    stdout = payload.get("stdout")
+    added = payload.get("journal_added")
+    if not isinstance(stdout, str) or not isinstance(added, list):
+        return f"golden for {script.name} has no stdout or journal_added"
+    return stdout, [str(line) for line in cast("list[object]", added)]
+
+
+def check(
+    script: Script, root: Path, golden: Path | None, candidate: Path, oracle_bin: Path
+) -> list[str]:
+    """The reasons a script fails. Empty when it passes. golden is the directory of recorded
+    oracle outputs, or None to run the C# binary live."""
     problems: list[str] = []
-    mojo = _run_side(CANDIDATE, script, root, "mojo")
+    mojo = _run_side(candidate, script, root, "mojo")
     if mojo.code != script.expect_exit:
         problems.append(f"mojo exit {mojo.code}, expected {script.expect_exit}: {mojo.stderr}")
     for text in script.expect_stdout:
@@ -203,25 +249,31 @@ def check(script: Script, root: Path) -> list[str]:
     counts: dict[str, int] = {}
     for line in mojo.added:
         counts[_kind_of(line)] = counts.get(_kind_of(line), 0) + 1
-    for kind, want in script.expect_kinds.items():
-        if counts.get(kind, 0) != want:
-            problems.append(f"mojo added {counts.get(kind, 0)} {kind} lines, expected {want}")
+    for kind, expected in script.expect_kinds.items():
+        if counts.get(kind, 0) != expected:
+            problems.append(f"mojo added {counts.get(kind, 0)} {kind} lines, expected {expected}")
     shown = mojo.model.contents()
     for text in script.expect_model_saw:
         if text not in shown:
             problems.append(f"the model was not shown {text!r}")
-    if script.oracle:
-        oracle = _run_side(ORACLE, script, root, "oracle")
-        if _oracle_view(oracle.stdout) != _mojo_view(mojo.stdout):
-            problems.append("stdout differs from the C# oracle (see below)")
-            problems.append(_diff(_oracle_view(oracle.stdout), _mojo_view(mojo.stdout)))
-        oracle_added = oracle.added
-        mojo_added = [line for line in mojo.added if _kind_of(line) not in MEMORY_KINDS]
-        if oracle_added != mojo_added:
-            problems.append(
-                f"journal lines differ from the C# oracle: oracle {oracle_added!r}, "
-                f"mojo {mojo_added!r}"
-            )
+    if not script.oracle:
+        return problems
+    mojo_added = [line for line in mojo.added if _kind_of(line) not in MEMORY_KINDS]
+    if golden is None:
+        oracle = _run_side(oracle_bin, script, root, "oracle")
+        want: tuple[str, list[str]] | str = (_oracle_view(oracle.stdout), oracle.added)
+    else:
+        want = _recorded(golden, script)
+    if isinstance(want, str):
+        return [*problems, want]
+    want_stdout, want_added = want
+    if want_stdout != _mojo_view(mojo.stdout):
+        problems.append("stdout differs from the C# oracle (see below)")
+        problems.append(_diff(want_stdout, _mojo_view(mojo.stdout)))
+    if want_added != mojo_added:
+        problems.append(
+            f"journal lines differ from the C# oracle: oracle {want_added!r}, mojo {mojo_added!r}"
+        )
     return problems
 
 
@@ -233,7 +285,65 @@ def _diff(want: str, got: str) -> str:
     )
 
 
-def show(name: str) -> int:
+def record(only: str | None, oracle: Path, candidate: Path) -> int:
+    """Runs every oracle script on the C# binary, checks the candidate against that, and writes
+    the goldens only if the candidate agrees with every one of them."""
+    if not oracle.is_file() or not os.access(oracle, os.X_OK):
+        print(f"chat-diff: oracle is not an executable file: {oracle}", file=sys.stderr)
+        return 2
+    staging = Path(tempfile.mkdtemp(prefix="golden-chat-"))
+    staged = staging / "chat"
+    files: dict[str, dict[str, object]] = {}
+    try:
+        for script in load_scripts(only):
+            if not script.oracle:
+                continue
+            root = Path(tempfile.mkdtemp(prefix=f"chat-record-{script.name}-"))
+            try:
+                side = _run_side(oracle, script, root, "oracle")
+            finally:
+                shutil.rmtree(root, ignore_errors=True)
+            files[script.name] = {
+                "name": script.name,
+                "script_sha256": sha256_file(SCRIPT_DIR / f"{script.name}.json"),
+                "stdout": _oracle_view(side.stdout),
+                "journal_added": side.added,
+            }
+        write_set(
+            staged,
+            files,
+            "chat",
+            oracle,
+            {"scripts": len(files), "normalised": "Neo4j notices, answer-not-saved, memory kinds"},
+        )
+        problems: list[str] = []
+        for script in load_scripts(only):
+            root = Path(tempfile.mkdtemp(prefix=f"chat-check-{script.name}-"))
+            try:
+                found = check(script, root, staged, candidate, oracle)
+            finally:
+                shutil.rmtree(root, ignore_errors=True)
+            if found:
+                problems.append(f"{script.name}:")
+                problems.extend(f"    {p}" for p in found)
+        if problems:
+            print("\n".join(problems))
+            print(
+                "record refused: the candidate disagrees with the oracle or a script failed; "
+                f"the goldens were not written (kept at {staged})",
+                file=sys.stderr,
+            )
+            return 1
+        if GOLDEN_CHAT.exists():
+            shutil.rmtree(GOLDEN_CHAT)
+        shutil.move(str(staged), str(GOLDEN_CHAT))
+        print(f"wrote {len(files)} goldens to {GOLDEN_CHAT}")
+        return 0
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def show(name: str, candidate: Path) -> int:
     """Prints the Mojo run of one script: its standard output, the journal lines it added, and
     what the model was shown in its last request. For reading a transcript, not for a verdict."""
     scripts = load_scripts(name)
@@ -242,7 +352,7 @@ def show(name: str) -> int:
         return 1
     root = Path(tempfile.mkdtemp(prefix=f"chat-show-{name}-"))
     try:
-        mojo = _run_side(CANDIDATE, scripts[0], root, "mojo")
+        mojo = _run_side(candidate, scripts[0], root, "mojo")
         print("--- stdout")
         print(_normalize(mojo.stdout), end="")
         print("--- journal lines added")
@@ -254,11 +364,39 @@ def show(name: str) -> int:
     return 0
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) > 2 and argv[1] == "--show":
-        return show(argv[2])
-    only = argv[1] if len(argv) > 1 else None
-    scripts = load_scripts(only)
+def main(argv: list[str] | None = None) -> int:
+    """Runs the harness. A golden set that does not check out exits 2 with the reason."""
+    try:
+        return _main(argv)
+    except GoldenError as exc:
+        print(f"chat-diff: {exc}", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m vinci_diff.chat_diff")
+    add_mode_arguments(parser)
+    parser.add_argument("script", nargs="?", help="run only this script")
+    parser.add_argument(
+        "--candidate", type=Path, default=DEFAULT_CANDIDATE, help="the Mojo binary under test"
+    )
+    parser.add_argument(
+        "--oracle-binary", type=Path, default=ORACLE, help="the C# binary for --oracle and --record"
+    )
+    parser.add_argument("--show", metavar="SCRIPT", help="print the Mojo run of one script")
+    args = parser.parse_args(argv)
+    if args.show:
+        return show(str(args.show), args.candidate)
+    mode = mode_of(args)
+    if mode == "record":
+        return record(args.script, args.oracle_binary, args.candidate)
+    golden: Path | None = None
+    if mode == "golden":
+        if not (GOLDEN_CHAT / "_meta.json").is_file():
+            print(f"chat-diff: no golden set at {GOLDEN_CHAT}: run with --record", file=sys.stderr)
+            return 2
+        golden = GOLDEN_CHAT
+    scripts = load_scripts(args.script)
     if not scripts:
         print("no scripts match")
         return 1
@@ -266,7 +404,7 @@ def main(argv: list[str]) -> int:
     for script in scripts:
         root = Path(tempfile.mkdtemp(prefix=f"chat-diff-{script.name}-"))
         try:
-            problems = check(script, root)
+            problems = check(script, root, golden, args.candidate, args.oracle_binary)
         finally:
             shutil.rmtree(root, ignore_errors=True)
         if problems:
@@ -275,11 +413,16 @@ def main(argv: list[str]) -> int:
             for problem in problems:
                 print(f"    {problem}")
         else:
-            oracle = "compared with the oracle" if script.oracle else "Mojo only"
-            print(f"PASS {script.name}: {script.description} ({oracle})")
+            if not script.oracle:
+                how = "Mojo only"
+            elif golden is None:
+                how = "compared with the oracle"
+            else:
+                how = "compared with the golden"
+            print(f"PASS {script.name}: {script.description} ({how})")
     print(f"{len(scripts) - failed} of {len(scripts)} scripts pass")
     return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())

@@ -1,0 +1,98 @@
+{
+ "description": "Commits under homes: latest on the first sync, then since; deepest home wins; a retired home is skipped; a tab and a non-ASCII letter in subjects",
+ "name": "git_commits",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Alpha\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"home\",\"id\":\"i1\",\"text\":\"<ROOT>/repos/monorepo/alpha\"}\n{\"at\":\"2026-11-18T09:00:01-06:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Beta\"}\n{\"at\":\"2026-11-18T09:00:01-06:00\",\"kind\":\"home\",\"id\":\"i2\",\"text\":\"<ROOT>/repos/monorepo/alpha/beta\"}\n{\"at\":\"2026-11-18T09:00:02-06:00\",\"kind\":\"idea\",\"id\":\"i3\",\"text\":\"Gamma\"}\n{\"at\":\"2026-11-18T09:00:02-06:00\",\"kind\":\"home\",\"id\":\"i3\",\"text\":\"<ROOT>/repos/monorepo/gamma\"}\n{\"at\":\"2026-11-18T09:00:03-06:00\",\"kind\":\"idea\",\"id\":\"i4\",\"text\":\"Old\"}\n{\"at\":\"2026-11-18T09:00:03-06:00\",\"kind\":\"home\",\"id\":\"i4\",\"text\":\"<ROOT>/repos/monorepo/gamma/old\"}\n{\"at\":\"2026-11-18T09:00:04-06:00\",\"kind\":\"retire\",\"id\":\"i4\",\"text\":\"moved\"}\n{\"at\":\"2026-11-18T15:20:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":10,\"where\":\"window\"}\n{\"at\":\"2026-11-18T09:30:00-06:00\",\"kind\":\"sync\"}\n{\"at\":\"2026-11-17T09:00:00-06:00\",\"kind\":\"work\",\"id\":\"i1\",\"text\":\"both\",\"where\":\"b62743401ff26fc707c4602414ba8647e5652eb9\"}\n{\"at\":\"2026-11-17T09:00:00-06:00\",\"kind\":\"work\",\"id\":\"i2\",\"text\":\"both\",\"where\":\"b62743401ff26fc707c4602414ba8647e5652eb9\"}\n{\"at\":\"2026-11-17T11:00:00-06:00\",\"kind\":\"work\",\"id\":\"i3\",\"text\":\"old thing\",\"where\":\"80cdb89a0217c92bd56132ec9cc0906aae72660a\"}\n",
+    "sha256": "0aa05581c59ba1b556d9a58fb42c2e2fddc0c745e01ab29bd67471ba4fbdbb5d"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T15:30:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "i1   +10m  Alpha\ni1   1 commit  Alpha\ni2   1 commit  Beta\ni3   1 commit  Gamma\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T08:00:00-06:00\",\"kind\":\"work\",\"id\":\"i2\",\"text\":\"beta two\",\"where\":\"69a82f7752307483f077fd806fdcb1156dfe5359\"}\n",
+    "sha256": "0b12f94801b51fd1654a4647e93c47533384a08ef80f13b52c8ad68e3098a517"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:30:00.0000000Z/2026-11-18T15:45:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "No watched window since 2026-11-18 09:30.\ni2   1 commit  Beta\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"work\",\"id\":\"i1\",\"text\":\"alpha two\",\"where\":\"5fb64bf78e89b220404240fc8d7ae55cb8ee98b3\"}\n{\"at\":\"2026-11-18T09:10:00-06:00\",\"kind\":\"work\",\"id\":\"i3\",\"text\":\"old two\",\"where\":\"d2add8bc1420c145b3f8383afbb5be56801693d4\"}\n",
+    "sha256": "4a805f3f5a2d438cb7a2d68160483f8f6969cf682a17bfbd356ba55ca4f14e6d"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:30:00.0000000Z/2026-11-18T16:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "No watched window since 2026-11-18 09:30.\ni1   1 commit  Alpha\ni3   1 commit  Gamma\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "4a805f3f5a2d438cb7a2d68160483f8f6969cf682a17bfbd356ba55ca4f14e6d"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:30:00.0000000Z/2026-11-18T16:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "No watched window since 2026-11-18 09:30.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T11:00:00-06:00\",\"kind\":\"work\",\"id\":\"i3\",\"text\":\"gamma \\u00FC\",\"where\":\"72670c7a8f5d05f3bcdf41d04849d7d718f35bb4\"}\n",
+    "sha256": "0903fb1457a272bd27ab6a6fad53da87d1fba5edaff3a82c11f303fd9f210d09"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:30:00.0000000Z/2026-11-18T17:30:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "No watched window since 2026-11-18 09:30.\ni3   1 commit  Gamma\n"
+  }
+ ],
+ "steps": [
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T09:30:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T09:45:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T10:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T10:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T11:30:00-06:00",
+   "track": true
+  }
+ ]
+}

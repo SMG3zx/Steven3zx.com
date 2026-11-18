@@ -1,0 +1,144 @@
+{
+ "description": "VINCI_NOW with a negative, positive and Z offset, a missing offset, and a space instead of T.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "time-offsets",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:00:00-05:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Offset zone\"}\n",
+    "sha256": "3256c6398ebc670ae392c65acb46051b1b494b076083b3165e7081a8341ad904"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:05:00-05:00\",\"kind\":\"for\",\"id\":\"i1\",\"text\":\"Offset user\"}\n",
+    "sha256": "306b8534f165d7a3f82b04a49e1ea625e451af6a8bf47e210c04d5a62dd61588"
+   },
+   "stderr": "",
+   "stdout": "i1 is for Offset user.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:10:00+09:30\",\"kind\":\"log\",\"id\":\"speed\",\"value\":4}\n",
+    "sha256": "eda1dc30c4e630f813be0a9f528d37d6649e62b881aa960df20838ac70f56cdf"
+   },
+   "stderr": "",
+   "stdout": "speed = 4 (measurement 1).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:12:00+00:00\",\"kind\":\"log\",\"id\":\"speed\",\"value\":5}\n",
+    "sha256": "f80555f102001fcd2aa05061fdc451e7083b53bf30e262b8fb0a58b0f05844b9"
+   },
+   "stderr": "",
+   "stdout": "speed = 5 (measurement 2).\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "f80555f102001fcd2aa05061fdc451e7083b53bf30e262b8fb0a58b0f05844b9"
+   },
+   "stderr": "vinci: VINCI_NOW must be an ISO 8601 time with an offset, got '2026-11-16T09:15:00'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "f80555f102001fcd2aa05061fdc451e7083b53bf30e262b8fb0a58b0f05844b9"
+   },
+   "stderr": "vinci: VINCI_NOW must be an ISO 8601 time with an offset, got '2026-11-16 09:16:00+00:00'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "f80555f102001fcd2aa05061fdc451e7083b53bf30e262b8fb0a58b0f05844b9"
+   },
+   "stderr": "",
+   "stdout": "i1   Seed     touch 0m      age 1d0h    flow 0.0%   Offset zone\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "f80555f102001fcd2aa05061fdc451e7083b53bf30e262b8fb0a58b0f05844b9"
+   },
+   "stderr": "",
+   "stdout": "Seed       i1   Offset zone  (1d0h here)\nPrepare    -\nIncubate   -\nBuild 0/3  -\nTend       -\nSlowest stage: Seed, 1d0h on average. Speed that one up first.\nNext: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  }
+ ],
+ "scenario_sha256": "63ec07c93b9e1f7e8bf8731bc3e49639408c64ab9548e16fec99c85640f9d787",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "idea",
+    "Offset zone"
+   ],
+   "now": "2026-11-16T09:00:00-05:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i1",
+    "Offset user"
+   ],
+   "now": "2026-11-16T09:05:00-05:00"
+  },
+  {
+   "argv": [
+    "log",
+    "speed",
+    "4"
+   ],
+   "now": "2026-11-16T09:10:00+09:30"
+  },
+  {
+   "argv": [
+    "log",
+    "speed",
+    "5"
+   ],
+   "now": "2026-11-16T09:12:00Z"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T09:15:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16 09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-17T09:00:00-05:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-17T09:00:00-05:00"
+  }
+ ]
+}

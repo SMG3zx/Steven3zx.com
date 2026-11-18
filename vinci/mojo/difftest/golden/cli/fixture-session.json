@@ -1,0 +1,411 @@
+{
+ "description": "Reads and writes on the mid-project fixture journal.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "fixture-session",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T12:00:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Flying machine\"}\n{\"at\":\"2026-11-16T15:00:00+00:00\",\"kind\":\"for\",\"id\":\"i1\",\"text\":\"One pilot\"}\n{\"at\":\"2026-11-16T18:00:00+00:00\",\"kind\":\"goal\",\"id\":\"i1\",\"text\":\"Carry 100 m\",\"value\":100,\"metric\":\"distance\"}\n{\"at\":\"2026-11-16T21:00:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Prepare\"}\n{\"at\":\"2026-11-17T00:00:00+00:00\",\"kind\":\"source\",\"id\":\"s1\",\"text\":\"Leonardo da Vinci, Codex, 1505\",\"url\":\"https://example.org/codex\"}\n{\"at\":\"2026-11-17T03:00:00+00:00\",\"kind\":\"note\",\"id\":\"n1\",\"text\":\"Birds steer by weight shift\",\"refs\":[\"s1\",\"i1\"],\"tags\":[\"flight\"],\"where\":\"f.7v\"}\n{\"at\":\"2026-11-17T06:00:00+00:00\",\"kind\":\"req\",\"id\":\"r1\",\"text\":\"Lifts 80 kg\",\"refs\":[\"i1\"],\"who\":\"Leonardo\",\"why\":\"A person has to be on it\"}\n{\"at\":\"2026-11-17T09:00:00+00:00\",\"kind\":\"predict\",\"id\":\"h1\",\"text\":\"A 10 m wing lifts 80 kg\",\"refs\":[\"i1\"],\"value\":70}\n{\"at\":\"2026-11-17T12:00:00+00:00\",\"kind\":\"predict\",\"id\":\"h2\",\"text\":\"Glide lasts 20 s\",\"refs\":[\"i1\"],\"value\":40}\n{\"at\":\"2026-11-17T15:00:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Incubate\",\"value\":2}\n{\"at\":\"2026-11-17T18:00:00+00:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Canal lock\"}\n{\"at\":\"2026-11-17T21:00:00+00:00\",\"kind\":\"for\",\"id\":\"i2\",\"text\":\"Boatmen\"}\n{\"at\":\"2026-11-18T00:00:00+00:00\",\"kind\":\"goal\",\"id\":\"i2\",\"text\":\"Fills in 10 min\",\"hi\":10,\"metric\":\"minutes\"}\n{\"at\":\"2026-11-18T03:00:00+00:00\",\"kind\":\"stage\",\"id\":\"i2\",\"text\":\"Prepare\"}\n{\"at\":\"2026-11-18T06:00:00+00:00\",\"kind\":\"note\",\"id\":\"n2\",\"text\":\"Locks hold water\"}\n{\"at\":\"2026-11-18T09:00:00+00:00\",\"kind\":\"req\",\"id\":\"r2\",\"text\":\"Gate seals\",\"refs\":[\"i2\"],\"who\":\"Lock keeper\",\"why\":\"Leaks waste water\"}\n{\"at\":\"2026-11-18T12:00:00+00:00\",\"kind\":\"predict\",\"id\":\"h3\",\"text\":\"Lock fills in 10 min\",\"refs\":[\"i2\"],\"value\":80}\n{\"at\":\"2026-11-18T15:00:00+00:00\",\"kind\":\"issue\",\"id\":\"x1\",\"text\":\"Gate stuck\",\"refs\":[\"i2\"],\"value\":1}\n{\"at\":\"2026-11-18T18:00:00+00:00\",\"kind\":\"diagnose\",\"id\":\"x1\",\"text\":\"Gate track was dry\"}\n{\"at\":\"2026-11-18T21:00:00+00:00\",\"kind\":\"principle\",\"id\":\"p1\",\"text\":\"Grease the track before each run\",\"refs\":[\"x1\"]}\n{\"at\":\"2026-11-19T00:00:00+00:00\",\"kind\":\"log\",\"id\":\"minutes\",\"value\":12}\n{\"at\":\"2026-11-19T03:00:00+00:00\",\"kind\":\"bookmark\",\"id\":\"b1\",\"text\":\"Codex\",\"why\":\"Scans\",\"url\":\"https://example.org/codex\",\"tags\":[\"history\"]}\n{\"at\":\"2026-11-19T06:00:00+00:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"Code\"}\n{\"at\":\"2026-11-19T09:00:00+00:00\",\"kind\":\"commit\",\"text\":\"Draft the wing frame\",\"refs\":[\"i1\"]}\n",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "i1   Incubate touch 0m      age -178m   flow -      Flying machine\ni2   Prepare  touch 0m      age -1978m  flow -      Canal lock\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "Seed       -\nPrepare    i2   Canal lock  (-2516m here)\nIncubate   i1   Flying machine  (until 2026-11-19)\nBuild 0/3  -\nTend       -\nSlowest stage: Seed, 9h0m on average. Speed that one up first.\nNext: n2: note connects to nothing: Locks hold water\n      vinci link n2 <note or idea>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "i1   work \"Code\"  Flying machine\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "b1   Codex  https://example.org/codex +history  (Scans)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "h1   open   70%  A 10 m wing lifts 80 kg\nh2   open   40%  Glide lasts 20 s\nh3   open   80%  Lock fills in 10 min\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "x1   closed    BIG Gate stuck\nBy stage: Prepare 1. Most go wrong in Prepare.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "p1   Grease the track before each run  (from x1, Prepare)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "i1  Flying machine\nstage   Incubate until 2026-11-19\nfor     One pilot\ngoal    Carry 100 m  [distance not measured yet, needs ≥ 100]\ntime    born 2026-11-16, age -164m, touch 0m, flow -\nwatch   \"Code\"\nstages  Seed 9h0m, Prepare 18h0m, Incubate -1784m\nrequirements\n  r1   Lifts 80 kg  (Leonardo: A person has to be on it)\npredictions\n  h1   open   70%  A 10 m wing lifts 80 kg\n  h2   open   40%  Glide lasts 20 s\nnotes\n  n1   Birds steer by weight shift  [s1:f.7v i1 +flight]\ncredits\n  s1   Leonardo da Vinci, Codex, 1505\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "i2  Canal lock\nstage   Prepare\nfor     Boatmen\ngoal    Fills in 10 min  [not met, minutes 12 needs ≤ 10]\ntime    born 2026-11-17, age -1962m, touch 0m, flow -\nstages  Seed 9h0m, Prepare -2502m\nrequirements\n  r2   Gate seals  (Lock keeper: Leaks waste water)\npredictions\n  h3   open   80%  Lock fills in 10 min\nissues\n  x1   closed    BIG Gate stuck\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "h1   open   70%  A 10 m wing lifts 80 kg\nmade     2026-11-17 about i1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "x1  Gate stuck  (big)\nraised      2026-11-18 on i2 in Prepare\nroot cause  Gate track was dry\nprinciple   p1 Grease the track before each run\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "vinci: nothing has the id 'p1'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "minutes              n 1    mean 12       last 12 on 2026-11-19\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "n1   Birds steer by weight shift  [s1:f.7v i1 +flight]\nn2   Locks hold water\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "+flight               1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "5584c4db7ed8d72e7edb38f688c09b254252fbc619240bce75d9a7ed7e089974"
+   },
+   "stderr": "",
+   "stdout": "s1   Leonardo da Vinci, Codex, 1505 <https://example.org/codex>  (1 notes)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:34:00+00:00\",\"kind\":\"unwatch\",\"id\":\"i1\",\"text\":\"Code\"}\n",
+    "sha256": "6df64fdc035f1d03520a014c3428580c64493264355f19fa5cdbcf33cb2c1251"
+   },
+   "stderr": "",
+   "stdout": "i1 no longer watches \"Code\".\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:36:00+00:00\",\"kind\":\"watch\",\"id\":\"i2\",\"text\":\"Editor\",\"value\":1}\n",
+    "sha256": "e0a1ebcf5618199ea66b431ec0cddc630b13ceca7b00d0d62b6189e1a088901f"
+   },
+   "stderr": "",
+   "stdout": "A window whose app or title contains \"Editor\" now counts as using i2.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:38:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Build\"}\n",
+    "sha256": "66b6da86d1350e1834c84bdebe2a1e240321d1c55e40ad952ece52bf6e6481a0"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i1 is incubating until 2026-11-19. Leave it alone.\ni1 is now in Build.\nNext: vinci home i1 <folder>, then ship the smallest thing that works.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "66b6da86d1350e1834c84bdebe2a1e240321d1c55e40ad952ece52bf6e6481a0"
+   },
+   "stderr": "vinci: i2 is in Prepare. It ships from Build or Tend: vinci advance i2\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "66b6da86d1350e1834c84bdebe2a1e240321d1c55e40ad952ece52bf6e6481a0"
+   },
+   "stderr": "vinci: i2 has not shipped, so there is nothing to use\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:44:00+00:00\",\"kind\":\"result\",\"id\":\"h2\",\"text\":\"It was right\",\"value\":1}\n",
+    "sha256": "d2a7b6de74b453bbc92778f4c2af880ff82f325b559b2c87a1ce12c9332bd27c"
+   },
+   "stderr": "",
+   "stdout": "h2 was right. Keep what you learned: vinci note \"...\" h2\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:46:00+00:00\",\"kind\":\"review\",\"value\":2}\n",
+    "sha256": "4f855117906d33778e4015ebff1fa47bafa594bce495499565e53eca0bf25caf"
+   },
+   "stderr": "",
+   "stdout": "i1     has no home, so its time is not counted: Flying machine\n       fix: vinci home i1 <folder>, or vinci watch i1 \"text in its window titles\"\nn2     note connects to nothing: Locks hold water\n       fix: vinci link n2 <note or idea>\n2 to fix.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:48:00+00:00\",\"kind\":\"kept\"}\n",
+    "sha256": "2d2c5931188d954fedb7eadafd164e55840369e9bcf6f26a30695403612f6d70"
+   },
+   "stderr": "",
+   "stdout": "Kept. 1 of 1 commitments kept. What is next? vinci commit \"...\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "2d2c5931188d954fedb7eadafd164e55840369e9bcf6f26a30695403612f6d70"
+   },
+   "stderr": "",
+   "stdout": "Seed       -\nPrepare    i2   Canal lock  (-2470m here)\nIncubate   -\nBuild 1/3  i1   Flying machine  (12m here, touch 0m; goal distance not measured yet, needs ≥ 100)\nTend       -\nSlowest stage: Seed, 9h0m on average. Speed that one up first.\nNext: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  }
+ ],
+ "scenario_sha256": "98c05ac16aa84df565515750e26dfeb9ee3fffecd387b744e7ae0cbc5d282008",
+ "start": {
+  "file": "fixtures/mid-project.jsonl",
+  "kind": "fixture"
+ },
+ "steps": [
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "bookmarks"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "predictions"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "issues"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "principles"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i2"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "h1"
+   ],
+   "now": "2026-11-16T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "x1"
+   ],
+   "now": "2026-11-16T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "p1"
+   ],
+   "now": "2026-11-16T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "stats"
+   ],
+   "now": "2026-11-16T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "notes"
+   ],
+   "now": "2026-11-16T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "tags"
+   ],
+   "now": "2026-11-16T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "sources"
+   ],
+   "now": "2026-11-16T09:32:00+00:00"
+  },
+  {
+   "argv": [
+    "unwatch",
+    "i1",
+    "Code"
+   ],
+   "now": "2026-11-16T09:34:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i2",
+    "Editor",
+    "use"
+   ],
+   "now": "2026-11-16T09:36:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1"
+   ],
+   "now": "2026-11-16T09:38:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i2",
+    "Shipped on fixture"
+   ],
+   "now": "2026-11-16T09:40:00+00:00"
+  },
+  {
+   "argv": [
+    "used",
+    "i2",
+    "Used it"
+   ],
+   "now": "2026-11-16T09:42:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h2",
+    "right",
+    "It was right"
+   ],
+   "now": "2026-11-16T09:44:00+00:00"
+  },
+  {
+   "argv": [
+    "review"
+   ],
+   "now": "2026-11-16T09:46:00+00:00"
+  },
+  {
+   "argv": [
+    "kept"
+   ],
+   "now": "2026-11-16T09:48:00+00:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-16T09:50:00+00:00"
+  }
+ ]
+}

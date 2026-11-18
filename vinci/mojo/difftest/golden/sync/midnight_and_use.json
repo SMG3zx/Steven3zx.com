@@ -1,0 +1,121 @@
+{
+ "description": "Windows across local midnight; one used fact a local day; a sub-minute use; a use watch on an idea that never shipped",
+ "name": "midnight_and_use",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Glider\"}\n{\"at\":\"2026-11-18T09:05:00-06:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Build\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Other\"}\n{\"at\":\"2026-11-18T09:05:00-06:00\",\"kind\":\"stage\",\"id\":\"i2\",\"text\":\"Build\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"glider\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i2\",\"text\":\"tool\",\"value\":1}\n{\"at\":\"2026-11-18T09:30:00-06:00\",\"kind\":\"ship\",\"id\":\"i1\",\"text\":\"first version\"}\n",
+    "sha256": "3fdc6654baa737ccd173bec5888422e2b5c49a4c5e966089fdb713db4afedb12"
+   },
+   "queries": "",
+   "stderr": "",
+   "stdout": "i1 shipped (#1). Cycle time 30m since inception; touch time 0m in total.\nGoal: no goal.\ni1 is now in Tend. Use it yourself: vinci used i1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:31:00-06:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"dashboard\",\"value\":1}\n",
+    "sha256": "169895d9c55c90ca126f7dea1cd9e98a192a0ec21a773deb1c935360ed0ac319"
+   },
+   "queries": "",
+   "stderr": "",
+   "stdout": "A window whose app or title contains \"dashboard\" now counts as using i1.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-19T15:30:30+00:00\",\"kind\":\"used\",\"id\":\"i1\",\"text\":\"25m on screen\",\"where\":\"window\"}\n{\"at\":\"2026-11-19T06:05:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":10,\"where\":\"window\"}\n{\"at\":\"2026-11-19T10:00:00-06:00\",\"kind\":\"sync\"}\n",
+    "sha256": "8e7c695caecd1e233802557e420e11ca8b2dc818a6418e30c0a95bc601dce111"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-19T16:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "i1   used  Glider\ni1   +10m  Glider\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-19T10:30:00-06:00\",\"kind\":\"sync\"}\n",
+    "sha256": "681035676020fd256c46a34e7cffea4ad417c7dd3fc3a6c3d98092011e3e3984"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-19T16:00:00.0000000Z/2026-11-19T16:30:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "No watched window since 2026-11-19 10:00.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T15:02:00+00:00\",\"kind\":\"used\",\"id\":\"i1\",\"text\":\"2m on screen\",\"where\":\"window\"}\n{\"at\":\"2026-11-20T11:00:00-06:00\",\"kind\":\"sync\"}\n",
+    "sha256": "94574df2201d0f59631672fafd372f5cf97dd5a35e4a9b47fe56b76e6a5dabd9"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-19T16:30:00.0000000Z/2026-11-20T17:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "i1   used  Glider\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-20T13:00:00-06:00\",\"kind\":\"sync\"}\n",
+    "sha256": "c796a660941b58e766a43f4aea3ce017aa9c4cdbce2eee2a89d0555b9f0a7538"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-20T17:00:00.0000000Z/2026-11-20T19:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "No watched window since 2026-11-20 11:00.\n"
+  }
+ ],
+ "steps": [
+  {
+   "argv": [
+    "ship",
+    "i1",
+    "first version"
+   ],
+   "mode": null,
+   "now": "2026-11-18T09:30:00-06:00",
+   "track": false
+  },
+  {
+   "argv": [
+    "watch",
+    "i1",
+    "dashboard",
+    "use"
+   ],
+   "mode": null,
+   "now": "2026-11-18T09:31:00-06:00",
+   "track": false
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-19T10:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-19T10:30:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-20T11:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-20T13:00:00-06:00",
+   "track": true
+  }
+ ]
+}

@@ -1,0 +1,659 @@
+{
+ "description": "cut, tend, retire, ship and used on the wrong stages, and the cut summary.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "retire-cut-tend",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Cut me\"}\n",
+    "sha256": "2411054dc1044e4e49e5cbedc7b24e34eb448962dd937dc093f599ab0c0240e9"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:04:00+00:00\",\"kind\":\"for\",\"id\":\"i1\",\"text\":\"Owner\"}\n",
+    "sha256": "fdce25ed9b2334d6004e35247b616ad12c12ddac2528f419bdf55d28aeca95d3"
+   },
+   "stderr": "",
+   "stdout": "i1 is for Owner.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"req\",\"id\":\"r1\",\"text\":\"Keep this\",\"refs\":[\"i1\"],\"who\":\"Me\",\"why\":\"Core\"}\n",
+    "sha256": "a147aa0c4e3f5ac24e81cb83314bd56927675379ce73742952207552670c9e4b"
+   },
+   "stderr": "",
+   "stdout": "r1 added to i1. Can it be deleted? vinci cut r1 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:08:00+00:00\",\"kind\":\"req\",\"id\":\"r2\",\"text\":\"Drop this\",\"refs\":[\"i1\"],\"who\":\"Me\",\"why\":\"Extra\"}\n",
+    "sha256": "c0b5f4eee752c72e177c346b94d287f5a84dedd014482f02437c03553228e760"
+   },
+   "stderr": "",
+   "stdout": "r2 added to i1. Can it be deleted? vinci cut r2 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:10:00+00:00\",\"kind\":\"req\",\"id\":\"r3\",\"text\":\"Also drop\",\"refs\":[\"i1\"],\"who\":\"Me\",\"why\":\"Extra\"}\n",
+    "sha256": "15900771006f1defdc45dfe28b04a4e006e548cb4cf6d82bb11abe5c398b1c55"
+   },
+   "stderr": "",
+   "stdout": "r3 added to i1. Can it be deleted? vinci cut r3 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:12:00+00:00\",\"kind\":\"cut\",\"id\":\"r2\",\"text\":\"Not needed\"}\n",
+    "sha256": "9e5242f80a682341dc8813bc7ed09e751b5d00cf9e2ccb73e76f4bf53c507704"
+   },
+   "stderr": "",
+   "stdout": "r2 cut. i1 has deleted 1 of 3 requirements.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "9e5242f80a682341dc8813bc7ed09e751b5d00cf9e2ccb73e76f4bf53c507704"
+   },
+   "stderr": "vinci: r2 is already cut\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "9e5242f80a682341dc8813bc7ed09e751b5d00cf9e2ccb73e76f4bf53c507704"
+   },
+   "stderr": "",
+   "stdout": "i1  Cut me\nstage   Seed\nfor     Owner\ngoal    (none)\ntime    born 2026-11-16, age 14m, touch 0m, flow 0.0%\nstages  Seed 14m\nrequirements\n  r1   Keep this  (Me: Core)\n  r2   CUT Drop this  (Not needed)\n  r3   Also drop  (Me: Extra)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:18:00+00:00\",\"kind\":\"cut\",\"id\":\"r3\",\"text\":\"Not needed either\"}\n",
+    "sha256": "8728ac10e150cb6579474bd1dceeae959e3d34edb6d31796b1d1c52c6e528c6b"
+   },
+   "stderr": "",
+   "stdout": "r3 cut. i1 has deleted 2 of 3 requirements.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "8728ac10e150cb6579474bd1dceeae959e3d34edb6d31796b1d1c52c6e528c6b"
+   },
+   "stderr": "",
+   "stdout": "i1  Cut me\nstage   Seed\nfor     Owner\ngoal    (none)\ntime    born 2026-11-16, age 18m, touch 0m, flow 0.0%\nstages  Seed 18m\nrequirements\n  r1   Keep this  (Me: Core)\n  r2   CUT Drop this  (Not needed)\n  r3   CUT Also drop  (Not needed either)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:22:00+00:00\",\"kind\":\"tend\",\"id\":\"i1\",\"text\":\"Nothing shipped yet\"}\n",
+    "sha256": "04df1e4a20d5913dbeb4d9d23a9ac007ea23122c008aa4a9fd54950c543f70ee"
+   },
+   "stderr": "",
+   "stdout": "i1 tended.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "04df1e4a20d5913dbeb4d9d23a9ac007ea23122c008aa4a9fd54950c543f70ee"
+   },
+   "stderr": "vinci: i1 has not shipped, so there is nothing to use\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "04df1e4a20d5913dbeb4d9d23a9ac007ea23122c008aa4a9fd54950c543f70ee"
+   },
+   "stderr": "vinci: i1 is in Seed. It ships from Build or Tend: vinci advance i1\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:28:00+00:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Retire me\"}\n",
+    "sha256": "c21e21accf87952f9a87760dcdcfb5a16cc1926614ad7596b3df48fcc61c6bbe"
+   },
+   "stderr": "",
+   "stdout": "i2 seeded. Next: vinci for i2 \"who will use it\", then vinci goal i2 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:30:00+00:00\",\"kind\":\"retire\",\"id\":\"i2\",\"text\":\"Off the list\"}\n",
+    "sha256": "ee4aa9bac6d941127f53859fc24683f9b41b2247125ea8a01254076f97866167"
+   },
+   "stderr": "",
+   "stdout": "i2 retired on purpose. Its notes stay.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ee4aa9bac6d941127f53859fc24683f9b41b2247125ea8a01254076f97866167"
+   },
+   "stderr": "vinci: i2 is already retired\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ee4aa9bac6d941127f53859fc24683f9b41b2247125ea8a01254076f97866167"
+   },
+   "stderr": "vinci: i2 is retired\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ee4aa9bac6d941127f53859fc24683f9b41b2247125ea8a01254076f97866167"
+   },
+   "stderr": "vinci: i2 is in Retired. It ships from Build or Tend: vinci advance i2\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ee4aa9bac6d941127f53859fc24683f9b41b2247125ea8a01254076f97866167"
+   },
+   "stderr": "vinci: i2 has not shipped, so there is nothing to use\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ee4aa9bac6d941127f53859fc24683f9b41b2247125ea8a01254076f97866167"
+   },
+   "stderr": "vinci: i2 is retired: Off the list\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:42:00+00:00\",\"kind\":\"goal\",\"id\":\"i2\",\"text\":\"Ghost\",\"value\":1,\"metric\":\"x\"}\n",
+    "sha256": "3edd715552f16ebbe48e360aa6ccb4b385223c4c04fbf282c578675c78b63632"
+   },
+   "stderr": "",
+   "stdout": "i2 goal set. Record progress with: vinci log x <value>\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "3edd715552f16ebbe48e360aa6ccb4b385223c4c04fbf282c578675c78b63632"
+   },
+   "stderr": "vinci: i2 is retired\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "3edd715552f16ebbe48e360aa6ccb4b385223c4c04fbf282c578675c78b63632"
+   },
+   "stderr": "vinci: i2 is retired\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "3edd715552f16ebbe48e360aa6ccb4b385223c4c04fbf282c578675c78b63632"
+   },
+   "stderr": "",
+   "stdout": "i2  Retire me\nstage   Retired: Off the list\nfor     (nobody yet)\ngoal    Ghost  [x not measured yet, needs ≥ 1]\ntime    born 2026-11-16, age 20m, touch 0m, flow 0.0%\nstages  Seed 2m\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "3edd715552f16ebbe48e360aa6ccb4b385223c4c04fbf282c578675c78b63632"
+   },
+   "stderr": "",
+   "stdout": "i1   Seed     touch 0m      age 48m     flow 0.0%   Cut me\ni2   Retired  touch 0m      age 22m     flow 0.0%   Retire me\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "3edd715552f16ebbe48e360aa6ccb4b385223c4c04fbf282c578675c78b63632"
+   },
+   "stderr": "",
+   "stdout": "Seed       i1   Cut me  (50m here)\nPrepare    -\nIncubate   -\nBuild 0/3  -\nTend       -\nNext: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:54:00+00:00\",\"kind\":\"idea\",\"id\":\"i3\",\"text\":\"Ship and tend\"}\n",
+    "sha256": "5c4077406f52e9e764beb6cc510d1147a7479b1eb20e9fb1af93a63fc2baa308"
+   },
+   "stderr": "",
+   "stdout": "i3 seeded. Next: vinci for i3 \"who will use it\", then vinci goal i3 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:56:00+00:00\",\"kind\":\"stage\",\"id\":\"i3\",\"text\":\"Prepare\"}\n",
+    "sha256": "b1d9f374b20be4ecf32f3b2176bd4cb042c652ab074e9f899bf92f15d5dafafa"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i3 is for nobody yet. Name who will use it: vinci for i3 \"...\"\nNot ready: i3 has no goal. Set one with a number: vinci goal i3 \"...\" <metric> at-least <n>\ni3 is now in Prepare.\nNext: gather notes (vinci note \"...\" i3), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:58:00+00:00\",\"kind\":\"for\",\"id\":\"i3\",\"text\":\"Users\"}\n",
+    "sha256": "914213a6c4365dee14bf4ad46a62e050cdd560d0a70490f49ec2645482f161dd"
+   },
+   "stderr": "",
+   "stdout": "i3 is for Users.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T10:00:00+00:00\",\"kind\":\"goal\",\"id\":\"i3\",\"text\":\"Shipped\",\"hi\":5,\"metric\":\"score\"}\n",
+    "sha256": "71779e455e975c5a3f3ee4fa5a38df88bcde696a16e45fca29b2d4db5059dc65"
+   },
+   "stderr": "",
+   "stdout": "i3 goal set. Record progress with: vinci log score <value>\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "71779e455e975c5a3f3ee4fa5a38df88bcde696a16e45fca29b2d4db5059dc65"
+   },
+   "stderr": "vinci: i3 is in Prepare. It ships from Build or Tend: vinci advance i3\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "71779e455e975c5a3f3ee4fa5a38df88bcde696a16e45fca29b2d4db5059dc65"
+   },
+   "stderr": "vinci: i3 has not shipped, so there is nothing to use\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "71779e455e975c5a3f3ee4fa5a38df88bcde696a16e45fca29b2d4db5059dc65"
+   },
+   "stderr": "vinci: i3 has not shipped, so there is nothing to use\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T10:08:00+00:00\",\"kind\":\"tend\",\"id\":\"i3\",\"text\":\"Patched\"}\n",
+    "sha256": "b70e5c4b01df68337cb16be88376c507ffc9cf4a1ccf9eccbe189871bdc62a53"
+   },
+   "stderr": "",
+   "stdout": "i3 tended.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "b70e5c4b01df68337cb16be88376c507ffc9cf4a1ccf9eccbe189871bdc62a53"
+   },
+   "stderr": "vinci: i3 is in Prepare. It ships from Build or Tend: vinci advance i3\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T10:12:00+00:00\",\"kind\":\"log\",\"id\":\"score\",\"value\":7}\n",
+    "sha256": "a97bccaf8a6f43136e04773c2f71372859e9959c8183bd3e27786ce55c56410a"
+   },
+   "stderr": "",
+   "stdout": "score = 7 (measurement 1).\ni3 goal not met: needs ≤ 5.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "a97bccaf8a6f43136e04773c2f71372859e9959c8183bd3e27786ce55c56410a"
+   },
+   "stderr": "",
+   "stdout": "i3  Ship and tend\nstage   Prepare\nfor     Users\ngoal    Shipped  [not met, score 7 needs ≤ 5]\ntime    born 2026-11-16, age 20m, touch 0m, flow 0.0%\nstages  Seed 2m, Prepare 18m\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T10:16:00+00:00\",\"kind\":\"review\",\"value\":1}\n",
+    "sha256": "6a4256289e189e63c37c43bed9ee03213815f74142b221c781a61c7413a5cacf"
+   },
+   "stderr": "",
+   "stdout": "week   no commitment for this week\n       fix: vinci commit \"the one thing I will get done\" [idea]\n1 to fix.\n"
+  }
+ ],
+ "scenario_sha256": "4595020fee4ce23aa7a0d13ada8ffb048b60371a98b7dc18b900d78a4518535d",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "idea",
+    "Cut me"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i1",
+    "Owner"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i1",
+    "Keep this",
+    "Me",
+    "Core"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i1",
+    "Drop this",
+    "Me",
+    "Extra"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i1",
+    "Also drop",
+    "Me",
+    "Extra"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "cut",
+    "r2",
+    "Not needed"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "cut",
+    "r2",
+    "Again"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "cut",
+    "r3",
+    "Not needed either"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "tend",
+    "i1",
+    "Nothing shipped yet"
+   ],
+   "now": "2026-11-16T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "used",
+    "i1",
+    "Could not use"
+   ],
+   "now": "2026-11-16T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i1",
+    "Too early"
+   ],
+   "now": "2026-11-16T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Retire me"
+   ],
+   "now": "2026-11-16T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "retire",
+    "i2",
+    "Off the list"
+   ],
+   "now": "2026-11-16T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "retire",
+    "i2",
+    "Again"
+   ],
+   "now": "2026-11-16T09:32:00+00:00"
+  },
+  {
+   "argv": [
+    "tend",
+    "i2",
+    "Too late"
+   ],
+   "now": "2026-11-16T09:34:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i2",
+    "Too late"
+   ],
+   "now": "2026-11-16T09:36:00+00:00"
+  },
+  {
+   "argv": [
+    "used",
+    "i2",
+    "Too late"
+   ],
+   "now": "2026-11-16T09:38:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i2"
+   ],
+   "now": "2026-11-16T09:40:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i2",
+    "Ghost",
+    "x",
+    "at-least",
+    "1"
+   ],
+   "now": "2026-11-16T09:42:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i2",
+    "canal"
+   ],
+   "now": "2026-11-16T09:44:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i2",
+    "Ghost"
+   ],
+   "now": "2026-11-16T09:46:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i2"
+   ],
+   "now": "2026-11-16T09:48:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T09:50:00+00:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-16T09:52:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Ship and tend"
+   ],
+   "now": "2026-11-16T09:54:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i3"
+   ],
+   "now": "2026-11-16T09:56:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i3",
+    "Users"
+   ],
+   "now": "2026-11-16T09:58:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i3",
+    "Shipped",
+    "score",
+    "at-most",
+    "5"
+   ],
+   "now": "2026-11-16T10:00:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i3",
+    "First"
+   ],
+   "now": "2026-11-16T10:02:00+00:00"
+  },
+  {
+   "argv": [
+    "used",
+    "i3"
+   ],
+   "now": "2026-11-16T10:04:00+00:00"
+  },
+  {
+   "argv": [
+    "used",
+    "i3",
+    "Again"
+   ],
+   "now": "2026-11-16T10:06:00+00:00"
+  },
+  {
+   "argv": [
+    "tend",
+    "i3",
+    "Patched"
+   ],
+   "now": "2026-11-16T10:08:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i3",
+    "Second"
+   ],
+   "now": "2026-11-16T10:10:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "score",
+    "7"
+   ],
+   "now": "2026-11-16T10:12:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i3"
+   ],
+   "now": "2026-11-16T10:14:00+00:00"
+  },
+  {
+   "argv": [
+    "review"
+   ],
+   "now": "2026-11-16T10:16:00+00:00"
+  }
+ ]
+}

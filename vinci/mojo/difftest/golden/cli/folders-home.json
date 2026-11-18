@@ -1,0 +1,328 @@
+{
+ "description": "adopt and home: an existing folder, a folder that is missing, a folder already owned, a retired idea.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "folders-home",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"glider\"}\n{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"home\",\"id\":\"i1\",\"text\":\"<WORK>/cwd/glider\"}\n",
+    "sha256": "d70971d166b04a9dddfa98b3aff509d8de5c7b45df5a7d271facfe6a51b2efc7"
+   },
+   "stderr": "",
+   "stdout": "i1 adopted from <WORK>/cwd/glider. Its windows and commits now count as work.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "d70971d166b04a9dddfa98b3aff509d8de5c7b45df5a7d271facfe6a51b2efc7"
+   },
+   "stderr": "",
+   "stdout": "i1 already lives in <WORK>/cwd/glider.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"canal\"}\n{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"home\",\"id\":\"i2\",\"text\":\"<WORK>/cwd/canal\"}\n",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "",
+   "stdout": "i2 adopted from <WORK>/cwd/canal. Its windows and commits now count as work.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "vinci: <WORK>/cwd/nope is not a folder\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "vinci: i1 already lives in <WORK>/cwd/glider\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "vinci: i2 already lives in <WORK>/cwd/canal\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "vinci: no idea i9\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "vinci: <WORK>/cwd/nope is not a folder\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "",
+   "stdout": "i1   Seed     touch 0m      age 16m     flow 0.0%   glider\ni2   Seed     touch 0m      age 12m     flow 0.0%   canal\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "",
+   "stdout": "i1  glider\nstage   Seed\nfor     (nobody yet)\ngoal    (none)\ntime    born 2026-11-16, age 18m, touch 0m, flow 0.0%\nhome    <WORK>/cwd/glider\nwatch   \"- glider -\"\nstages  Seed 18m\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "58f09bac6e5a2972d19bb539e46fcf005c1e9198a7feee778080b33139ec9487"
+   },
+   "stderr": "",
+   "stdout": "i2  canal\nstage   Seed\nfor     (nobody yet)\ngoal    (none)\ntime    born 2026-11-16, age 16m, touch 0m, flow 0.0%\nhome    <WORK>/cwd/canal\nwatch   \"- canal -\"\nstages  Seed 16m\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:24:00+00:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"Editor\"}\n",
+    "sha256": "281527eb0472ddd56affcc46da757da873603709f48ec489460fae96182c838f"
+   },
+   "stderr": "",
+   "stdout": "Time in a window whose app or title contains \"Editor\" now counts for i1.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:26:00+00:00\",\"kind\":\"idea\",\"id\":\"i3\",\"text\":\"Fresh\"}\n",
+    "sha256": "50b81e51da13b5c89e7921ae1d2f47a2249055276ded4ed0beeb4e48d5ad9fa9"
+   },
+   "stderr": "",
+   "stdout": "i3 seeded. Next: vinci for i3 \"who will use it\", then vinci goal i3 ...\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "50b81e51da13b5c89e7921ae1d2f47a2249055276ded4ed0beeb4e48d5ad9fa9"
+   },
+   "stderr": "vinci: i2 already lives in <WORK>/cwd/canal\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:30:00+00:00\",\"kind\":\"retire\",\"id\":\"i3\",\"text\":\"Moved on\"}\n",
+    "sha256": "ca0b30312b0d3524d1f5464dc7835517c9fd0f956dafb56049dfdba315774bf0"
+   },
+   "stderr": "",
+   "stdout": "i3 retired on purpose. Its notes stay.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ca0b30312b0d3524d1f5464dc7835517c9fd0f956dafb56049dfdba315774bf0"
+   },
+   "stderr": "vinci: i3 is retired\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "ca0b30312b0d3524d1f5464dc7835517c9fd0f956dafb56049dfdba315774bf0"
+   },
+   "stderr": "vinci: i3 is retired: Moved on\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:36:00+00:00\",\"kind\":\"bookmark\",\"id\":\"b1\",\"text\":\"Home page\",\"url\":\"https://example.org/home\"}\n",
+    "sha256": "955e6b993ccd7af0f311f7032a593897afa1a1f277a37add350000bcbf479135"
+   },
+   "stderr": "",
+   "stdout": "b1 saved. It is on the portal: vinci serve\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "955e6b993ccd7af0f311f7032a593897afa1a1f277a37add350000bcbf479135"
+   },
+   "stderr": "",
+   "stdout": "Seed       i1   glider  (36m here)\n           i2   canal  (32m here)\nPrepare    -\nIncubate   -\nBuild 0/3  -\nTend       -\nNext: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  }
+ ],
+ "scenario_sha256": "bb0f59ebebd48dbbc7f4ccb19966fb7358628fe9d65b54e39d8fe68d2d01a83a",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "adopt",
+    "glider"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "adopt",
+    "glider"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "adopt",
+    "canal"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "adopt",
+    "nope"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i2",
+    "glider"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i1",
+    "canal"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i9",
+    "canal"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i1",
+    "nope"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i2"
+   ],
+   "now": "2026-11-16T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i1",
+    "Editor"
+   ],
+   "now": "2026-11-16T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Fresh"
+   ],
+   "now": "2026-11-16T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i3",
+    "canal"
+   ],
+   "now": "2026-11-16T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "retire",
+    "i3",
+    "Moved on"
+   ],
+   "now": "2026-11-16T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i3",
+    "glider"
+   ],
+   "now": "2026-11-16T09:32:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i3"
+   ],
+   "now": "2026-11-16T09:34:00+00:00"
+  },
+  {
+   "argv": [
+    "bookmark",
+    "Home page",
+    "https://example.org/home"
+   ],
+   "now": "2026-11-16T09:36:00+00:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-16T09:38:00+00:00"
+  }
+ ]
+}

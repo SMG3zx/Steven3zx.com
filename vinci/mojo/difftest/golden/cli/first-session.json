@@ -1,0 +1,686 @@
+{
+ "description": "The README's 'A first session' end to end, then every read command on its data.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "first-session",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Flying machine\"}\n",
+    "sha256": "1c23272307609ae6d9da4358a5b6abe611beb06c60a6b0284125b64a08203361"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:04:00+00:00\",\"kind\":\"for\",\"id\":\"i1\",\"text\":\"One pilot, launching from a hill\"}\n",
+    "sha256": "867f4b61cb5eaae69f06ee10c2f1c6357a00543046a674cb1062355acfc807c1"
+   },
+   "stderr": "",
+   "stdout": "i1 is for One pilot, launching from a hill.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"goal\",\"id\":\"i1\",\"text\":\"Carry one person 100 m\",\"value\":100,\"metric\":\"distance\"}\n",
+    "sha256": "d56bd635a1257376cc3e54564821cd52662406e6359d138b98b62624fdd16323"
+   },
+   "stderr": "",
+   "stdout": "i1 goal set. Record progress with: vinci log distance <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:08:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Prepare\"}\n",
+    "sha256": "863d35153f522347723aa00bf13732f6afadb3871e98de7d32bad8d1319f1444"
+   },
+   "stderr": "",
+   "stdout": "i1 is now in Prepare.\nNext: gather notes (vinci note \"...\" i1), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:10:00+00:00\",\"kind\":\"source\",\"id\":\"s1\",\"text\":\"Leonardo da Vinci, Codex on the Flight of Birds, 1505\"}\n",
+    "sha256": "e1a2ae8856b43d3177794ab2841c772692318eca5d4a5b05dc165b0b7d158e18"
+   },
+   "stderr": "",
+   "stdout": "s1 recorded. Cite it with the place: vinci note \"one idea, in your own words\" s1:p.12\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:12:00+00:00\",\"kind\":\"note\",\"id\":\"n1\",\"text\":\"A bird steers by shifting its centre of gravity\",\"refs\":[\"s1\",\"i1\"],\"tags\":[\"flight\"],\"where\":\"f.7v\"}\n",
+    "sha256": "50678db3580ec4604124a08fedf8f3afdac23db16589b5c90c22a1da025496ac"
+   },
+   "stderr": "",
+   "stdout": "n1 written.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:14:00+00:00\",\"kind\":\"req\",\"id\":\"r1\",\"text\":\"Lifts 80 kg\",\"refs\":[\"i1\"],\"who\":\"Leonardo\",\"why\":\"A person has to be on it\"}\n",
+    "sha256": "c65cd9a56910275eaaa995b96c729560ad53e17f2e892d4690225a16653023f3"
+   },
+   "stderr": "",
+   "stdout": "r1 added to i1. Can it be deleted? vinci cut r1 \"why\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:16:00+00:00\",\"kind\":\"predict\",\"id\":\"h1\",\"text\":\"A 10 m wing lifts 80 kg\",\"refs\":[\"i1\"],\"value\":70}\n",
+    "sha256": "a000bec5f7f3128faf8d3850f0d0c7f68ad47484d397d904b6770fe7583f6360"
+   },
+   "stderr": "",
+   "stdout": "h1 predicted at 70%. Test it, then: vinci result h1 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:18:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Incubate\",\"value\":3}\n",
+    "sha256": "09a12f3be2cf9bdb1e00181f51366f1c9f3bddcdda957065bd47cdcdebc27d77"
+   },
+   "stderr": "",
+   "stdout": "i1 is incubating until 2026-11-19. Work on something else.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-19T09:20:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Build\"}\n",
+    "sha256": "f3b7a4153d5ab1f82af553dd2ebb665accf996260bd7d74256b18440bf72f48b"
+   },
+   "stderr": "",
+   "stdout": "i1 is now in Build.\nNext: vinci home i1 <folder>, then ship the smallest thing that works.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-19T09:22:00+00:00\",\"kind\":\"commit\",\"text\":\"Build the wing frame\",\"refs\":[\"i1\"]}\n",
+    "sha256": "ffb9a41ed2b30d01bef58780f46e5dcbcea30b8a6efb40df12d76706a9b9fb6b"
+   },
+   "stderr": "",
+   "stdout": "Committed. Due 2026-11-26.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-19T09:24:00+00:00\",\"kind\":\"home\",\"id\":\"i1\",\"text\":\"<WORK>/cwd/glider\"}\n",
+    "sha256": "6a53bd3c069a425b108df391902fb3094891f1e8647f21bd9e28b7835062897b"
+   },
+   "stderr": "",
+   "stdout": "i1 lives in <WORK>/cwd/glider. Time in windows titled \"- glider -\" and commits there now count as work.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:26:00+00:00\",\"kind\":\"ship\",\"id\":\"i1\",\"text\":\"Glider model\"}\n",
+    "sha256": "4f883f3bbf19a95a6825a92ec6a7511eec01b09df17d43784e1bac38aa6d9836"
+   },
+   "stderr": "",
+   "stdout": "i1 shipped (#1). Cycle time 5d0h since inception; touch time 0m in total.\nGoal: distance not measured yet, needs ≥ 100.\nPredictions to settle: h1\ni1 is now in Tend. Use it yourself: vinci used i1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:28:00+00:00\",\"kind\":\"used\",\"id\":\"i1\",\"text\":\"Flew 20 m off the hill\"}\n",
+    "sha256": "0fb975a7034d7b3d1fea58624a55cf768ce3f585ff13c849e4a0889293e1bcb3"
+   },
+   "stderr": "",
+   "stdout": "i1 used 1 times. Anything wrong with it? vinci issue \"...\" i1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:30:00+00:00\",\"kind\":\"log\",\"id\":\"distance\",\"value\":20}\n",
+    "sha256": "8a9f1ab4a560cec46c7432e3ca9eb222aeb28deb5de5cf1d411ebdd27628e6b4"
+   },
+   "stderr": "",
+   "stdout": "distance = 20 (measurement 1).\ni1 goal not met: needs ≥ 100.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:32:00+00:00\",\"kind\":\"result\",\"id\":\"h1\",\"text\":\"Lifted 35 kg\",\"value\":0}\n",
+    "sha256": "c548eb5159fd636baf215ffc4309b1a23e412d830edbee5dad761b18be12936a"
+   },
+   "stderr": "",
+   "stdout": "h1 was wrong. Keep what you learned: vinci note \"...\" h1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:34:00+00:00\",\"kind\":\"note\",\"id\":\"n2\",\"text\":\"Lift did not scale with span alone\",\"refs\":[\"h1\"]}\n",
+    "sha256": "088e5db78cd391b32dcf17a303b698ab540a9a99a97f204795f59ab14976e845"
+   },
+   "stderr": "",
+   "stdout": "n2 written. No source given, so it is recorded as your own thought.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:36:00+00:00\",\"kind\":\"issue\",\"id\":\"x1\",\"text\":\"Wing tore on the first test\",\"refs\":[\"i1\"],\"value\":1}\n",
+    "sha256": "58678851d3103431bd499f6a5196a4f7a44f40b28752965a050c3ae5bbbe6757"
+   },
+   "stderr": "",
+   "stdout": "x1 logged. Do not solve it yet. Find the root cause: vinci diagnose x1 \"...\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:38:00+00:00\",\"kind\":\"diagnose\",\"id\":\"x1\",\"text\":\"Never load-tested the cloth\"}\n",
+    "sha256": "0c0e9f4411b6c29c2d768e9d0dc09e3683f8a9e5fe28004995300dabb12f98e8"
+   },
+   "stderr": "",
+   "stdout": "x1 diagnosed. Now change the machine: vinci principle \"what I do from now on\" x1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-21T09:40:00+00:00\",\"kind\":\"principle\",\"id\":\"p1\",\"text\":\"Test each material alone before building with it\",\"refs\":[\"x1\"]}\n",
+    "sha256": "b4aaf61364e9ebbf28d3e63f52a7be620c64fde2eb99c6d62b8ce46cd9370324"
+   },
+   "stderr": "",
+   "stdout": "p1 adopted. x1 is closed. If it fails: vinci issue \"...\" p1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-22T09:42:00+00:00\",\"kind\":\"review\",\"value\":0}\n",
+    "sha256": "504d4c60ff5a9eca3ed8e1785c15a3b31e00c0f6b59b6c53e86207a97903fbad"
+   },
+   "stderr": "",
+   "stdout": "Nothing to fix.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-22T09:44:00+00:00\",\"kind\":\"kept\"}\n",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "Kept. 1 of 1 commitments kept. What is next? vinci commit \"...\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "i1  Flying machine\nstage   Tend\nfor     One pilot, launching from a hill\ngoal    Carry one person 100 m  [not met, distance 20 needs ≥ 100]\ntime    born 2026-11-16, age 6d0h, touch 0m, flow 0.0%\nhome    <WORK>/cwd/glider\nwatch   \"- glider -\"\nstages  Seed 6m, Prepare 10m, Incubate 3d0h, Build 2d0h, Tend 1d0h\nused    1 times, last 2026-11-21\nrequirements\n  r1   Lifts 80 kg  (Leonardo: A person has to be on it)\npredictions\n  h1   wrong  70%  A 10 m wing lifts 80 kg\nnotes\n  n1   A bird steers by shifting its centre of gravity  [s1:f.7v i1 +flight]\ncredits\n  s1   Leonardo da Vinci, Codex on the Flight of Birds, 1505\nships\n  2026-11-21  Glider model\nissues\n  x1   closed    BIG Wing tore on the first test\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "h1   wrong  70%  A 10 m wing lifts 80 kg\nmade     2026-11-16 about i1\noutcome  Lifted 35 kg\nnotes about it\n  n2   Lift did not scale with span alone  [h1]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "s1  Leonardo da Vinci, Codex on the Flight of Birds, 1505\nrecorded  2026-11-16\nnotes drawn from it\n  n1   A bird steers by shifting its centre of gravity  [s1:f.7v i1 +flight]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "n1  A bird steers by shifting its centre of gravity\nwritten  2026-11-16\ntags     +flight\norigin   s1 Leonardo da Vinci, Codex on the Flight of Birds, 1505, f.7v\nlinks to\n  i1   Flying machine\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "x1  Wing tore on the first test  (big)\nraised      2026-11-21 on i1 in Tend\nroot cause  Never load-tested the cloth\nprinciple   p1 Test each material alone before building with it\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "Seed       -\nPrepare    -\nIncubate   -\nBuild 0/3  -\nTend       i1   Flying machine  (shipped 1, used 1; goal not met, distance 20 needs ≥ 100)\nSlowest stage: Build, 2d0h on average. Speed that one up first.\nNext: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "Next: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "i1   Tend     touch 0m      age 6d0h    flow 0.0%   Flying machine\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "h1   wrong  70%  A 10 m wing lifts 80 kg\nSettled 1: right 0%, average confidence 70%. Too few to judge (1 of 10).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "x1   closed    BIG Wing tore on the first test\nBy stage: Tend 1. Most go wrong in Tend.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "p1   Test each material alone before building with it  (from x1, Tend)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "n1   A bird steers by shifting its centre of gravity  [s1:f.7v i1 +flight]\nn2   Lift did not scale with span alone  [h1]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "n1   A bird steers by shifting its centre of gravity  [s1:f.7v i1 +flight]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "n1   A bird steers by shifting its centre of gravity  [s1:f.7v i1 +flight]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "s1   Leonardo da Vinci, Codex on the Flight of Birds, 1505  (1 notes)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "+flight               1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "distance: 1 measurements, 2026-11-21 to 2026-11-21\nmean     20   min 20   max 20   last 20\nspec     none. Say what good looks like: vinci spec distance <low> <high>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "79ee82bebb9d01881827542c4cf2c22a3b0b5b7bc36add5b0a9d5daf24717114"
+   },
+   "stderr": "",
+   "stdout": "distance             n 1    mean 20       last 20 on 2026-11-21\nvinci.findings       n 1    mean 0        last 0 on 2026-11-22\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-22T10:22:00+00:00\",\"kind\":\"review\",\"value\":1}\n",
+    "sha256": "f659644d2499e929a12df5debb272e5acf003aa83aa6117e5a495ec51913ab5b"
+   },
+   "stderr": "",
+   "stdout": "week   no commitment for this week\n       fix: vinci commit \"the one thing I will get done\" [idea]\n1 to fix. Last review: 0.\n1 of 1 commitments kept.\n"
+  }
+ ],
+ "scenario_sha256": "41cbeb63f80a42be83fa49787e09d2b8cf79c929655811dbc08f05391d596f10",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "idea",
+    "Flying machine"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i1",
+    "One pilot, launching from a hill"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i1",
+    "Carry one person 100 m",
+    "distance",
+    "at-least",
+    "100"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "source",
+    "Leonardo da Vinci, Codex on the Flight of Birds, 1505"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "note",
+    "A bird steers by shifting its centre of gravity",
+    "s1:f.7v",
+    "i1",
+    "+flight"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "req",
+    "i1",
+    "Lifts 80 kg",
+    "Leonardo",
+    "A person has to be on it"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "A 10 m wing lifts 80 kg",
+    "70",
+    "i1"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1",
+    "3"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1"
+   ],
+   "now": "2026-11-19T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "commit",
+    "Build the wing frame",
+    "i1"
+   ],
+   "now": "2026-11-19T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "home",
+    "i1",
+    "glider"
+   ],
+   "now": "2026-11-19T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i1",
+    "Glider model"
+   ],
+   "now": "2026-11-21T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "used",
+    "i1",
+    "Flew 20 m off the hill"
+   ],
+   "now": "2026-11-21T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "distance",
+    "20"
+   ],
+   "now": "2026-11-21T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h1",
+    "wrong",
+    "Lifted 35 kg"
+   ],
+   "now": "2026-11-21T09:32:00+00:00"
+  },
+  {
+   "argv": [
+    "note",
+    "Lift did not scale with span alone",
+    "h1"
+   ],
+   "now": "2026-11-21T09:34:00+00:00"
+  },
+  {
+   "argv": [
+    "issue",
+    "Wing tore on the first test",
+    "i1",
+    "big"
+   ],
+   "now": "2026-11-21T09:36:00+00:00"
+  },
+  {
+   "argv": [
+    "diagnose",
+    "x1",
+    "Never load-tested the cloth"
+   ],
+   "now": "2026-11-21T09:38:00+00:00"
+  },
+  {
+   "argv": [
+    "principle",
+    "Test each material alone before building with it",
+    "x1"
+   ],
+   "now": "2026-11-21T09:40:00+00:00"
+  },
+  {
+   "argv": [
+    "review"
+   ],
+   "now": "2026-11-22T09:42:00+00:00"
+  },
+  {
+   "argv": [
+    "kept"
+   ],
+   "now": "2026-11-22T09:44:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-22T09:46:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "h1"
+   ],
+   "now": "2026-11-22T09:48:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "s1"
+   ],
+   "now": "2026-11-22T09:50:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "n1"
+   ],
+   "now": "2026-11-22T09:52:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "x1"
+   ],
+   "now": "2026-11-22T09:54:00+00:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-22T09:56:00+00:00"
+  },
+  {
+   "argv": [
+    "next"
+   ],
+   "now": "2026-11-22T09:58:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-22T10:00:00+00:00"
+  },
+  {
+   "argv": [
+    "predictions"
+   ],
+   "now": "2026-11-22T10:02:00+00:00"
+  },
+  {
+   "argv": [
+    "issues"
+   ],
+   "now": "2026-11-22T10:04:00+00:00"
+  },
+  {
+   "argv": [
+    "principles"
+   ],
+   "now": "2026-11-22T10:06:00+00:00"
+  },
+  {
+   "argv": [
+    "notes"
+   ],
+   "now": "2026-11-22T10:08:00+00:00"
+  },
+  {
+   "argv": [
+    "notes",
+    "bird"
+   ],
+   "now": "2026-11-22T10:10:00+00:00"
+  },
+  {
+   "argv": [
+    "notes",
+    "+flight"
+   ],
+   "now": "2026-11-22T10:12:00+00:00"
+  },
+  {
+   "argv": [
+    "sources"
+   ],
+   "now": "2026-11-22T10:14:00+00:00"
+  },
+  {
+   "argv": [
+    "tags"
+   ],
+   "now": "2026-11-22T10:16:00+00:00"
+  },
+  {
+   "argv": [
+    "stats",
+    "distance"
+   ],
+   "now": "2026-11-22T10:18:00+00:00"
+  },
+  {
+   "argv": [
+    "stats"
+   ],
+   "now": "2026-11-22T10:20:00+00:00"
+  },
+  {
+   "argv": [
+    "review"
+   ],
+   "now": "2026-11-22T10:22:00+00:00"
+  }
+ ]
+}

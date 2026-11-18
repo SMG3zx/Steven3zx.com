@@ -1,0 +1,26 @@
+{
+ "description": "Minutes round to two places, to even on a half; one tick credits nothing",
+ "name": "rounding",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"A\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"glider\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"B\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i2\",\"text\":\"wing\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i3\",\"text\":\"C\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i3\",\"text\":\"tiny\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i4\",\"text\":\"D\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i4\",\"text\":\"micro\"}\n{\"at\":\"2026-11-18T15:10:07.5+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":0.12,\"where\":\"window\"}\n{\"at\":\"2026-11-18T15:20:22.5+00:00\",\"kind\":\"spent\",\"id\":\"i2\",\"value\":0.38,\"where\":\"window\"}\n{\"at\":\"2026-11-18T15:30:00.5+00:00\",\"kind\":\"spent\",\"id\":\"i3\",\"value\":0.01,\"where\":\"window\"}\n{\"at\":\"2026-11-18T11:00:00-06:00\",\"kind\":\"sync\"}\n",
+    "sha256": "0adcb831981051fe80dff80933b4fef65ae6c88138c9e6ddd820975c41ba4994"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T17:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "i1   +0m  A\ni2   +0m  B\ni3   +0m  C\n"
+  }
+ ],
+ "steps": [
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T11:00:00-06:00",
+   "track": true
+  }
+ ]
+}

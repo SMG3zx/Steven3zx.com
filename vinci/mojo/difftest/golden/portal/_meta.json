@@ -1,0 +1,18 @@
+{
+ "files": 4,
+ "harness": "portal",
+ "journal": "difftest/fixtures/mid-project.jsonl",
+ "kinds": [
+  "staging",
+  "portal",
+  "broken",
+  "crash"
+ ],
+ "oracle": {
+  "oracle_sha256": "4a0060e772b8074a26534121c4636f7d7d5619b30c20386f28fcb10daa635467",
+  "vinci_dll_sha256": "85d3c7777dd3704151ced39e2c9399ed003a5ed2b5fe13ae86824e3c306bdded"
+ },
+ "recorded": "2026-11-18",
+ "repo_commit": "523c77d4117a4065ae88a5f77ab95e2d890a23ed",
+ "requests": 136
+}

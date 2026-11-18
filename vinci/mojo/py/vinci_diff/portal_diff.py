@@ -18,7 +18,10 @@ WebUtility, Uri and JSON details). Run from mojo/py:
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 import hashlib
+import json
 import os
 import shutil
 import socket
@@ -31,14 +34,27 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
+from .golden import (
+    GOLDEN_DIR,
+    META,
+    GoldenError,
+    add_mode_arguments,
+    mode_of,
+    read_json,
+    write_json,
+    write_meta,
+)
 from .oracle import ORACLE
 
 MOJO_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_ORACLE = ORACLE
 DEFAULT_CANDIDATE = MOJO_DIR / "build" / "vinci"
 DEFAULT_JOURNAL = Path.home() / ".vinci" / "staging" / "journal.jsonl"
+# The goldens use this committed fixture as the staging journal: the real one is personal.
+FIXTURE_JOURNAL: Final = MOJO_DIR / "difftest" / "fixtures" / "mid-project.jsonl"
+GOLDEN_PORTAL: Final = GOLDEN_DIR / "portal"
 MOJO_PY = MOJO_DIR / "py"
 NOW = "2026-11-18T10:00:00+00:00"
 TIMEOUT_SECONDS = 20.0
@@ -110,9 +126,9 @@ class _FixtureHandler(BaseHTTPRequestHandler):
 
 
 class _FixtureServer(ThreadingHTTPServer):
-    def __init__(self, kind: str) -> None:
+    def __init__(self, kind: str, port: int = 0) -> None:
         self.kind = kind
-        super().__init__(("127.0.0.1", 0), _FixtureHandler)
+        super().__init__(("127.0.0.1", port), _FixtureHandler)
 
 
 FIXTURE_KINDS = (
@@ -129,11 +145,17 @@ FIXTURE_KINDS = (
 )
 
 
-def start_fixtures() -> dict[str, int]:
-    """One listening server per kind, kept up for the whole run. Returns kind -> port."""
+# The goldens need fixed ports. The portal sorts its cards by their URLs, so a bookmark's port
+# sets its place on the page: random ports would reorder the page on every run.
+GOLDEN_PORT_BASE: Final = 47300
+
+
+def start_fixtures(fixed: bool = False) -> dict[str, int]:
+    """One listening server per kind, kept up for the whole run. Returns kind -> port. With
+    fixed, the kinds take GOLDEN_PORT_BASE + 1 onwards, in FIXTURE_KINDS order."""
     ports: dict[str, int] = {}
-    for kind in FIXTURE_KINDS:
-        server = _FixtureServer(kind)
+    for offset, kind in enumerate(FIXTURE_KINDS, start=1):
+        server = _FixtureServer(kind, GOLDEN_PORT_BASE + offset if fixed else 0)
         ports[kind] = int(server.server_address[1])
         threading.Thread(target=server.serve_forever, daemon=True).start()
     return ports
@@ -507,7 +529,7 @@ def repos_and_journals(
 @dataclass(frozen=True)
 class SideResult:
     replies: tuple[Reply, ...]
-    journal_sha: str
+    journal: bytes
     previews: tuple[tuple[str, str], ...]
     stderr_tail: str
     startup_error: str | None
@@ -515,6 +537,23 @@ class SideResult:
 
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def scrub(data: bytes, base: Path, ports: dict[str, int]) -> bytes:
+    """Replaces what differs between runs and machines: the work directory, and each loopback
+    port (the portal's own and the fixtures', which are random on every run)."""
+    out = data.replace(str(base).encode("utf-8"), b"<BASE>")
+    for name, port in ports.items():
+        out = out.replace(f":{port}".encode(), f":<port {name}>".encode())
+    return out
+
+
+def scrub_reply(reply: Reply, base: Path, ports: dict[str, int]) -> Reply:
+    headers = tuple(
+        (key, scrub(value.encode("utf-8"), base, ports).decode("utf-8", "replace"))
+        for key, value in reply.headers
+    )
+    return Reply(reply.status, headers, scrub(reply.body, base, ports), reply.error)
 
 
 def _previews_state(folder: Path) -> tuple[tuple[str, str], ...]:
@@ -575,7 +614,7 @@ def run_side(
             process.kill()
             _, err = process.communicate()
             tail = err.decode("utf-8", "replace").strip().splitlines()[-3:]
-            return SideResult((), "", (), "\n".join(tail), f"{label} did not listen")
+            return SideResult((), b"", (), "\n".join(tail), f"{label} did not listen")
         time.sleep(0.05)
     replies: list[Reply] = []
     try:
@@ -590,7 +629,7 @@ def run_side(
             _, err = process.communicate()
     return SideResult(
         tuple(replies),
-        _digest((home / "journal.jsonl").read_bytes()),
+        (home / "journal.jsonl").read_bytes(),
         _previews_state(previews),
         err.decode("utf-8", "replace").strip()[-400:],
         None,
@@ -635,55 +674,172 @@ def compare_reply(index: int, name: str, want: Reply, got: Reply) -> list[str]:
     return diffs
 
 
+# --- goldens ----------------------------------------------------------------------------------
+
+
+def _replies_json(
+    names: list[str], replies: tuple[Reply, ...]
+) -> tuple[list[dict[str, object]], list[str]]:
+    """Each request's metadata, and its body in base64 (for the one gzip per kind)."""
+    requests: list[dict[str, object]] = []
+    bodies: list[str] = []
+    for name, reply in zip(names, replies, strict=True):
+        requests.append(
+            {
+                "name": name,
+                "status": reply.status,
+                "error": reply.error,
+                "headers": [list(h) for h in reply.headers],
+                "body_sha256": _digest(reply.body),
+                "body_bytes": len(reply.body),
+            }
+        )
+        bodies.append(base64.b64encode(reply.body).decode("ascii"))
+    return requests, bodies
+
+
+def write_kind(
+    directory: Path,
+    kind: str,
+    names: list[str],
+    replies: tuple[Reply, ...],
+    journal: bytes,
+    previews: tuple[tuple[str, str], ...],
+) -> None:
+    """One kind's golden: the request metadata and the state in a JSON file, and every body in
+    one gzip, so a failure can be read by hand with gunzip."""
+    requests, bodies = _replies_json(names, replies)
+    write_json(
+        directory / f"{kind}.json",
+        {
+            "kind": kind,
+            "requests": requests,
+            "journal_sha256": _digest(journal),
+            "journal_bytes": len(journal),
+            "previews": [list(p) for p in previews],
+        },
+    )
+    raw = gzip.compress(json.dumps(bodies).encode("utf-8"), mtime=0)
+    (directory / f"{kind}-bodies.gz").write_bytes(raw)
+
+
+def read_kind(directory: Path, kind: str) -> tuple[dict[str, object], tuple[Reply, ...]]:
+    """A kind's recorded metadata and replies. Raises GoldenError when a body does not match."""
+    meta = read_json(directory / f"{kind}.json")
+    raw: object = json.loads(gzip.decompress((directory / f"{kind}-bodies.gz").read_bytes()))
+    bodies = [base64.b64decode(str(b)) for b in cast("list[object]", raw)]
+    requests = cast("list[dict[str, object]]", meta["requests"])
+    if len(bodies) != len(requests):
+        raise GoldenError(f"{kind}: {len(requests)} requests but {len(bodies)} bodies")
+    replies: list[Reply] = []
+    for req, body in zip(requests, bodies, strict=True):
+        if _digest(body) != req["body_sha256"]:
+            raise GoldenError(f"{kind}: the body of {req['name']} does not match its sha256")
+        headers = tuple((str(h[0]), str(h[1])) for h in cast("list[list[str]]", req["headers"]))
+        status = req["status"]
+        error = req["error"]
+        replies.append(
+            Reply(
+                int(str(status)) if status is not None else None,
+                headers,
+                body,
+                str(error) if error is not None else None,
+            )
+        )
+    return meta, tuple(replies)
+
+
+# --- main -------------------------------------------------------------------------------------
+
+
+@dataclass
+class KindRun:
+    """One journal kind on one side of a comparison, normalised for comparing."""
+
+    names: list[str]
+    replies: tuple[Reply, ...]
+    journal: bytes
+    previews: tuple[tuple[str, str], ...]
+
+
+def _steps_for(kind: str, fixtures: dict[str, int]) -> Callable[[int], list[Step]]:
+    def steps(p: int) -> list[Step]:
+        return build_steps(p, fixtures) if kind in ("staging", "portal") else short_steps(p)
+
+    return steps
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    """Runs the harness. A golden set that does not check out exits 2 with the reason."""
+    try:
+        return _main(argv)
+    except GoldenError as exc:
+        print(f"portal-diff: {exc}", file=sys.stderr)
+        return 2
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m vinci_diff.portal_diff",
-        description="Compare `vinci serve` in the C# oracle and the Mojo portal, request by request.",
+        description="Compare `vinci serve` request by request: with the goldens (default), with "
+        "the C# oracle live (--oracle), or record the goldens from the oracle (--record).",
     )
-    parser.add_argument("--oracle", type=Path, default=DEFAULT_ORACLE)
+    add_mode_arguments(parser)
+    parser.add_argument("--oracle-binary", type=Path, default=DEFAULT_ORACLE)
     parser.add_argument("--candidate", type=Path, default=DEFAULT_CANDIDATE)
     parser.add_argument(
-        "--journal", type=Path, default=DEFAULT_JOURNAL, help="copied as the staging journal"
+        "--journal",
+        type=Path,
+        default=None,
+        help="copied as the staging journal (live: ~/.vinci/staging; goldens: the fixture)",
     )
-    parser.add_argument(
-        "--kinds", default="staging,portal,broken,crash", help="journal kinds to run"
-    )
+    parser.add_argument("--kinds", default="staging,portal,broken,crash", help="kinds to run")
     parser.add_argument(
         "--work", type=Path, default=None, help="work directory (default: a temp dir)"
     )
     args = parser.parse_args(argv)
-    for label, path in (("oracle", args.oracle), ("candidate", args.candidate)):
+    mode = mode_of(args)
+    binaries = [("candidate", args.candidate)]
+    if mode != "golden":
+        binaries.append(("oracle", args.oracle_binary))
+    for label, path in binaries:
         if not path.is_file() or not os.access(path, os.X_OK):
             print(f"{label} is not an executable file: {path}", file=sys.stderr)
             return 2
+    if mode == "golden" and not (GOLDEN_PORTAL / META).is_file():
+        print(f"portal-diff: no golden set at {GOLDEN_PORTAL}: run with --record", file=sys.stderr)
+        return 2
+    journal_src = args.journal or (DEFAULT_JOURNAL if mode == "live" else FIXTURE_JOURNAL)
+    kinds = [k for k in args.kinds.split(",") if k]
     base = args.work or Path(tempfile.mkdtemp(prefix="portal-diff-"))
     base.mkdir(parents=True, exist_ok=True)
-    fixtures = start_fixtures()
-    port = _free_port()
-    journals = repos_and_journals(base, port, fixtures, args.journal)
-    kinds = [k for k in args.kinds.split(",") if k]
-    divergences: list[tuple[str, Divergence]] = []
+    fixed = mode != "live"
+    try:
+        fixtures = start_fixtures(fixed)
+    except OSError as exc:
+        print(
+            f"portal-diff: the goldens need ports {GOLDEN_PORT_BASE}-{GOLDEN_PORT_BASE + 10} "
+            f"free ({exc}); or use --oracle, which takes random ports",
+            file=sys.stderr,
+        )
+        return 2
+    port = GOLDEN_PORT_BASE if fixed else _free_port()
+    ports = {"own": port, **{f"fixture {k}": v for k, v in fixtures.items()}}
+    journals = repos_and_journals(base, port, fixtures, journal_src)
+    staged = base / "golden-portal"
     rows: list[str] = []
+    divergences: list[tuple[str, Divergence]] = []
     total_steps = 0
     total_matching = 0
     channel_checks = 0
     channel_matching = 0
+    recorded: dict[str, KindRun] = {}
     for kind in kinds:
         journal = journals[kind]
-        original = _digest(journal.read_bytes())
-
-        def steps_for(p: int, kind: str = kind) -> list[Step]:
-            return build_steps(p, fixtures) if kind in ("staging", "portal") else short_steps(p)
-
-        oracle = run_side(
-            f"oracle/{kind}",
-            [str(args.oracle), "serve"],
-            base / "runs" / f"{kind}-oracle",
-            journal,
-            port,
-            steps_for,
-            fixtures,
-        )
+        original = scrub(journal.read_bytes(), base, ports)
+        steps_for = _steps_for(kind, fixtures)
+        names = [step.name for step in steps_for(port)]
+        total_steps += len(names)
         candidate = run_side(
             f"candidate/{kind}",
             [str(args.candidate), "serve"],
@@ -693,31 +849,66 @@ def main(argv: Sequence[str] | None = None) -> int:
             steps_for,
             fixtures,
         )
-        names = [s.name for s in steps_for(port)]
-        matching = 0
-        if oracle.startup_error or candidate.startup_error:
-            rows.append(
-                f"{kind:8} startup failed: oracle={oracle.startup_error or 'ok'} "
-                f"candidate={candidate.startup_error or 'ok'}"
+        got = KindRun(
+            names,
+            tuple(scrub_reply(r, base, ports) for r in candidate.replies),
+            scrub(candidate.journal, base, ports),
+            candidate.previews,
+        )
+        if mode == "golden":
+            meta, want_replies = read_kind(GOLDEN_PORTAL, kind)
+            want = KindRun(
+                [str(r["name"]) for r in cast("list[dict[str, object]]", meta["requests"])],
+                want_replies,
+                b"",
+                tuple((str(p[0]), str(p[1])) for p in cast("list[list[str]]", meta["previews"])),
             )
-            divergences.append(
-                (kind, Divergence(-1, "startup", [oracle.stderr_tail, candidate.stderr_tail]))
+            want_journal_sha = str(meta["journal_sha256"])
+        else:
+            oracle_side = run_side(
+                f"oracle/{kind}",
+                [str(args.oracle_binary), "serve"],
+                base / "runs" / f"{kind}-oracle",
+                journal,
+                port,
+                steps_for,
+                fixtures,
             )
-            total_steps += len(names)
+            want = KindRun(
+                names,
+                tuple(scrub_reply(r, base, ports) for r in oracle_side.replies),
+                scrub(oracle_side.journal, base, ports),
+                oracle_side.previews,
+            )
+            want_journal_sha = _digest(want.journal)
+            if oracle_side.startup_error:
+                divergences.append((kind, Divergence(-1, "startup", [oracle_side.stderr_tail])))
+            if mode == "record":
+                recorded[kind] = want
+        if candidate.startup_error:
+            divergences.append((kind, Divergence(-1, "startup", [candidate.stderr_tail])))
+            rows.append(f"{kind:8} startup failed: candidate={candidate.startup_error}")
             continue
+        if mode == "golden" and names != want.names:
+            divergences.append(
+                (kind, Divergence(-1, "request list", ["the request list changed since recording"]))
+            )
+        matching = 0
         for i, name in enumerate(names):
-            want = oracle.replies[i]
-            got = candidate.replies[i]
-            diffs = compare_reply(i, name, want, got)
+            if i >= len(want.replies) or i >= len(got.replies):
+                divergences.append((kind, Divergence(i, name, ["a reply is missing"])))
+                break
+            diffs = compare_reply(i, name, want.replies[i], got.replies[i])
             if diffs:
                 divergences.append((kind, Divergence(i, name, diffs)))
             else:
                 matching += 1
-        total_steps += len(names)
         total_matching += matching
         channel_checks += 2
-        same_journal = oracle.journal_sha == candidate.journal_sha == original
-        same_previews = oracle.previews == candidate.previews
+        same_journal = _digest(got.journal) == want_journal_sha
+        if mode == "live":
+            same_journal = same_journal and want_journal_sha == _digest(original)
+        same_previews = got.previews == want.previews
         channel_matching += int(same_journal) + int(same_previews)
         if not same_journal:
             divergences.append(
@@ -730,7 +921,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     Divergence(
                         -1,
                         "previews folder after the run",
-                        [f"oracle={oracle.previews}", f"candidate={candidate.previews}"],
+                        [f"want={want.previews}", f"got={got.previews}"],
                     ),
                 )
             )
@@ -740,8 +931,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"previews {'same' if same_previews else 'DIFFERS'}"
         )
     print("portal differential test")
-    print(f"  oracle:    {args.oracle}")
+    print(f"  mode:      {mode}")
     print(f"  candidate: {args.candidate}")
+    if mode != "golden":
+        print(f"  oracle:    {args.oracle_binary}")
     print(f"  work dir:  {base}")
     print()
     for row in rows:
@@ -753,12 +946,53 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"    {line}")
     print()
     print("summary")
-    print(f"  journal kinds:    {len(kinds)}  (each run against the oracle and the candidate)")
+    print(f"  journal kinds:    {len(kinds)}")
     print(f"  requests run:     {total_steps}")
     print(f"  requests matching:{total_matching:>4}")
     print(f"  state checks:     {channel_checks}  matching {channel_matching}")
     print(f"  diverged:         {len(divergences)}")
+    if mode == "record":
+        return _install_goldens(args, recorded, staged, journal_src, divergences, total_steps)
     return 0 if not divergences else 1
+
+
+def _install_goldens(
+    args: argparse.Namespace,
+    recorded: dict[str, KindRun],
+    staged: Path,
+    journal_src: Path,
+    divergences: list[tuple[str, Divergence]],
+    requests: int,
+) -> int:
+    """Writes the recorded kinds, but only when the candidate agreed with every one of them."""
+    if divergences:
+        print(
+            "record refused: the candidate disagrees with the oracle; the goldens were not written",
+            file=sys.stderr,
+        )
+        return 1
+    if staged.exists():
+        shutil.rmtree(staged)
+    staged.mkdir(parents=True)
+    for kind, run in recorded.items():
+        write_kind(staged, kind, run.names, run.replies, run.journal, run.previews)
+    write_meta(
+        staged,
+        "portal",
+        args.oracle_binary,
+        {
+            "kinds": list(recorded),
+            "requests": requests,
+            "journal": "difftest/fixtures/mid-project.jsonl"
+            if journal_src == FIXTURE_JOURNAL
+            else "not the fixture",
+        },
+    )
+    if GOLDEN_PORTAL.exists():
+        shutil.rmtree(GOLDEN_PORTAL)
+    shutil.move(str(staged), str(GOLDEN_PORTAL))
+    print(f"wrote goldens to {GOLDEN_PORTAL}")
+    return 0
 
 
 def _free_port() -> int:

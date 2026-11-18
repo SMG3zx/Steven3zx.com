@@ -1,0 +1,98 @@
+{
+ "description": "Each failed read writes nothing; the next good read covers the same period",
+ "name": "errors_then_recover",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Glider\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"glider\"}\n",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T16:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "ActivityWatch did not answer, so no window time was added. It will be picked up next time.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T16:05:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "ActivityWatch did not answer, so no window time was added. It will be picked up next time.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T16:10:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "ActivityWatch did not answer, so no window time was added. It will be picked up next time.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T16:15:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "ActivityWatch did not answer, so no window time was added. It will be picked up next time.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T15:20:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":10,\"where\":\"window\"}\n{\"at\":\"2026-11-18T11:00:00-06:00\",\"kind\":\"sync\"}\n",
+    "sha256": "e158400d4d4223e68a1a152edaa9956b5598e740dd88131ce62cf4eba572b0ef"
+   },
+   "queries": "{\"query\": [\"window = flood(query_bucket(find_bucket(\\\"aw-watcher-window_\\\")));\", \"afk = flood(query_bucket(find_bucket(\\\"aw-watcher-afk_\\\")));\", \"present = filter_keyvals(afk, \\\"status\\\", [\\\"not-afk\\\"]);\", \"RETURN = {\\\"window\\\": filter_period_intersect(window, present), \\\"afk\\\": afk};\"], \"timeperiods\": [\"2026-11-18T15:00:00.0000000Z/2026-11-18T17:00:00.0000000Z\"]}",
+   "stderr": "",
+   "stdout": "i1   +10m  Glider\n"
+  }
+ ],
+ "steps": [
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": "http500",
+   "now": "2026-11-18T10:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": "notarray",
+   "now": "2026-11-18T10:05:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": "badjson",
+   "now": "2026-11-18T10:10:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": "noafk",
+   "now": "2026-11-18T10:15:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": "ok",
+   "now": "2026-11-18T11:00:00-06:00",
+   "track": true
+  }
+ ]
+}

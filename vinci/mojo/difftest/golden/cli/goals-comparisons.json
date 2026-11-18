@@ -1,0 +1,532 @@
+{
+ "description": "goal at-least, at-most, between: met and not met, goal status in pipeline, show and ship, retired goals.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "goals-comparisons",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Long glide\"}\n",
+    "sha256": "1433f16da9646d45f7265670921eb3aa0e98c268e26a258206ce9f8ff104c54e"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:04:00+00:00\",\"kind\":\"for\",\"id\":\"i1\",\"text\":\"Pilot\"}\n",
+    "sha256": "f03d2675a2c6fe0424bccff68f884e97a822a4633a26ba31789d1fdda7209f21"
+   },
+   "stderr": "",
+   "stdout": "i1 is for Pilot.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"goal\",\"id\":\"i1\",\"text\":\"Glide 100 m\",\"value\":100,\"metric\":\"distance\"}\n",
+    "sha256": "fa8a2e5dccbc2fe5198aa18e82d1449855f4ac760594dab4a72702870e693923"
+   },
+   "stderr": "",
+   "stdout": "i1 goal set. Record progress with: vinci log distance <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:08:00+00:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Quiet rope\"}\n",
+    "sha256": "3b6fad45edd6871fdef2024114cc0c067044623b7d54a8c9ff72920aa835319e"
+   },
+   "stderr": "",
+   "stdout": "i2 seeded. Next: vinci for i2 \"who will use it\", then vinci goal i2 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:10:00+00:00\",\"kind\":\"for\",\"id\":\"i2\",\"text\":\"Rigger\"}\n",
+    "sha256": "4dc3737dbcc6167ed80290ffc30e4f1549eff0de9f64306590100a297e366c1a"
+   },
+   "stderr": "",
+   "stdout": "i2 is for Rigger.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:12:00+00:00\",\"kind\":\"goal\",\"id\":\"i2\",\"text\":\"Few defects\",\"hi\":5,\"metric\":\"defects\"}\n",
+    "sha256": "26bec871e8443c21901798cb274ab1e467eca15e4cfb2807fc9d5a7902812363"
+   },
+   "stderr": "",
+   "stdout": "i2 goal set. Record progress with: vinci log defects <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:14:00+00:00\",\"kind\":\"idea\",\"id\":\"i3\",\"text\":\"Band of loads\"}\n",
+    "sha256": "e4a3aa1496e42aa9f3e56d195fa3b73836cefc7147b27012df17ee7482b988d2"
+   },
+   "stderr": "",
+   "stdout": "i3 seeded. Next: vinci for i3 \"who will use it\", then vinci goal i3 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:16:00+00:00\",\"kind\":\"for\",\"id\":\"i3\",\"text\":\"Engineer\"}\n",
+    "sha256": "6bc837b3e45b07843830702f217ac2d4a6de761b49a41d96ea15c27c0dc0388c"
+   },
+   "stderr": "",
+   "stdout": "i3 is for Engineer.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:18:00+00:00\",\"kind\":\"goal\",\"id\":\"i3\",\"text\":\"Load in band\",\"value\":10,\"hi\":20,\"metric\":\"load\"}\n",
+    "sha256": "42a2bfb754b2b6a45673f029466028c29daefb58d56c86a4e45694cc2eebcbd4"
+   },
+   "stderr": "",
+   "stdout": "i3 goal set. Record progress with: vinci log load <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "42a2bfb754b2b6a45673f029466028c29daefb58d56c86a4e45694cc2eebcbd4"
+   },
+   "stderr": "",
+   "stdout": "i1   Seed     touch 0m      age 18m     flow 0.0%   Long glide\ni2   Seed     touch 0m      age 12m     flow 0.0%   Quiet rope\ni3   Seed     touch 0m      age 6m      flow 0.0%   Band of loads\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:22:00+00:00\",\"kind\":\"log\",\"id\":\"distance\",\"text\":\"good day\",\"value\":120}\n",
+    "sha256": "a049fc8646a1daf9d1c06012b725f828ba18593ed3f2df65cee6fc36a5df38da"
+   },
+   "stderr": "",
+   "stdout": "distance = 120 (measurement 1).\ni1 goal met: needs ≥ 100.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:24:00+00:00\",\"kind\":\"log\",\"id\":\"distance\",\"value\":80}\n",
+    "sha256": "c7fd32d84a7b7dbd17dd9c19419bf86162c47e841205fdb4a4e994ad4c63a65d"
+   },
+   "stderr": "",
+   "stdout": "distance = 80 (measurement 2).\ni1 goal not met: needs ≥ 100.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:26:00+00:00\",\"kind\":\"log\",\"id\":\"defects\",\"value\":7}\n",
+    "sha256": "5e35877ed6323cf619a93e77f9ccfeb9e1ea70733c07a76df2efff07d79a0037"
+   },
+   "stderr": "",
+   "stdout": "defects = 7 (measurement 1).\ni2 goal not met: needs ≤ 5.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:28:00+00:00\",\"kind\":\"log\",\"id\":\"defects\",\"value\":3}\n",
+    "sha256": "a4d1a70cadae33c9e63a451569a384e09e6784ba397552855bfc68f243473468"
+   },
+   "stderr": "",
+   "stdout": "defects = 3 (measurement 2).\ni2 goal met: needs ≤ 5.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:30:00+00:00\",\"kind\":\"log\",\"id\":\"load\",\"value\":15}\n",
+    "sha256": "14d20cb247259749272354651f1a5a20e06757b795832e84e6aaf10b42e99594"
+   },
+   "stderr": "",
+   "stdout": "load = 15 (measurement 1).\ni3 goal met: needs 10..20.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:32:00+00:00\",\"kind\":\"log\",\"id\":\"load\",\"value\":25}\n",
+    "sha256": "94dd8acab69c1e5dbbf21ccd121748047695d6bad9bc9bbdcfff0afaef00a4e6"
+   },
+   "stderr": "",
+   "stdout": "load = 25 (measurement 2).\ni3 goal not met: needs 10..20.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:34:00+00:00\",\"kind\":\"log\",\"id\":\"load\",\"value\":10}\n",
+    "sha256": "b645607808f3284df360c43a50da4d13b6f3b160b4d49e06da2df63c73ee5b88"
+   },
+   "stderr": "",
+   "stdout": "load = 10 (measurement 3).\ni3 goal met: needs 10..20.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "b645607808f3284df360c43a50da4d13b6f3b160b4d49e06da2df63c73ee5b88"
+   },
+   "stderr": "vinci: low must not be above high\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:38:00+00:00\",\"kind\":\"goal\",\"id\":\"i2\",\"text\":\"Few defects again\",\"value\":1,\"hi\":9,\"metric\":\"defects\"}\n",
+    "sha256": "b186077e9d6b800b257639fcabdde41574a2805a13b3d7b39db140ea8ce4b238"
+   },
+   "stderr": "",
+   "stdout": "i2 goal set. Record progress with: vinci log defects <value>\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "b186077e9d6b800b257639fcabdde41574a2805a13b3d7b39db140ea8ce4b238"
+   },
+   "stderr": "",
+   "stdout": "Seed       i1   Long glide  (38m here)\n           i2   Quiet rope  (32m here)\n           i3   Band of loads  (26m here)\nPrepare    -\nIncubate   -\nBuild 0/3  -\nTend       -\nNext: week: no commitment for this week\n      vinci commit \"the one thing I will get done\" [idea]\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "b186077e9d6b800b257639fcabdde41574a2805a13b3d7b39db140ea8ce4b238"
+   },
+   "stderr": "",
+   "stdout": "i1  Long glide\nstage   Seed\nfor     Pilot\ngoal    Glide 100 m  [not met, distance 80 needs ≥ 100]\ntime    born 2026-11-16, age 40m, touch 0m, flow 0.0%\nstages  Seed 40m\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "b186077e9d6b800b257639fcabdde41574a2805a13b3d7b39db140ea8ce4b238"
+   },
+   "stderr": "",
+   "stdout": "i3  Band of loads\nstage   Seed\nfor     Engineer\ngoal    Load in band  [met, load 10 is 10..20. Raise it?]\ntime    born 2026-11-16, age 30m, touch 0m, flow 0.0%\nstages  Seed 30m\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:46:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Prepare\"}\n",
+    "sha256": "5fb78c50cdcaf98f5bce726067617b6a8cd118728f8580c48b506fd1acbbff63"
+   },
+   "stderr": "",
+   "stdout": "i1 is now in Prepare.\nNext: gather notes (vinci note \"...\" i1), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:48:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Incubate\",\"value\":1}\n",
+    "sha256": "44849b9a4a1a31c3dab6edc05c4e35d846aac1e2e0e976893658652d2fd93f6c"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i1 has no notes. Preparation is gathering what is known: vinci note \"...\" <source> i1\nNot ready: i1 has no requirements. State what it must do, who says so, and why: vinci req i1 \"...\" \"name\" \"why\"\nNot ready: i1 has no prediction. Write down what you expect before you test it: vinci predict \"...\" <percent> i1\ni1 is incubating until 2026-11-17. Work on something else.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "44849b9a4a1a31c3dab6edc05c4e35d846aac1e2e0e976893658652d2fd93f6c"
+   },
+   "stderr": "vinci: i1 is in Incubate. It ships from Build or Tend: vinci advance i1\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "44849b9a4a1a31c3dab6edc05c4e35d846aac1e2e0e976893658652d2fd93f6c"
+   },
+   "stderr": "vinci: i1 is in Incubate. It ships from Build or Tend: vinci advance i1\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:54:00+00:00\",\"kind\":\"retire\",\"id\":\"i3\",\"text\":\"No longer needed\"}\n",
+    "sha256": "65f30a50188e0c569b91fe30ce655824b31ed92586f5a49db27a141c13a7a97a"
+   },
+   "stderr": "",
+   "stdout": "i3 retired on purpose. Its notes stay.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:56:00+00:00\",\"kind\":\"log\",\"id\":\"load\",\"value\":12}\n",
+    "sha256": "957eeafa9bf86a9b8fccd7585183b9930b00f489f7d66384d129f6c7932b8e97"
+   },
+   "stderr": "",
+   "stdout": "load = 12 (measurement 4).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "957eeafa9bf86a9b8fccd7585183b9930b00f489f7d66384d129f6c7932b8e97"
+   },
+   "stderr": "",
+   "stdout": "i1   Incubate touch 0m      age 56m     flow 0.0%   Long glide\ni2   Seed     touch 0m      age 50m     flow 0.0%   Quiet rope\ni3   Retired  touch 0m      age 44m     flow 0.0%   Band of loads\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "957eeafa9bf86a9b8fccd7585183b9930b00f489f7d66384d129f6c7932b8e97"
+   },
+   "stderr": "",
+   "stdout": "load: 4 measurements, 2026-11-16 to 2026-11-16\nmean     15.5   min 10   max 25   last 12\ncontrol  -8.44 .. 39.44  (ordinary variation stays inside)\n  stable: no point has a special cause. Changing the result means changing the process.\nspec     none. Say what good looks like: vinci spec load <low> <high>\n"
+  }
+ ],
+ "scenario_sha256": "c0beaf020b030f3c78654bf13ae7e948c45cc8569fffb730e75e068737845323",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "idea",
+    "Long glide"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i1",
+    "Pilot"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i1",
+    "Glide 100 m",
+    "distance",
+    "at-least",
+    "100"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Quiet rope"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i2",
+    "Rigger"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i2",
+    "Few defects",
+    "defects",
+    "at-most",
+    "5"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Band of loads"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i3",
+    "Engineer"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i3",
+    "Load in band",
+    "load",
+    "between",
+    "10",
+    "20"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "distance",
+    "120",
+    "good day"
+   ],
+   "now": "2026-11-16T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "distance",
+    "80"
+   ],
+   "now": "2026-11-16T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "defects",
+    "7"
+   ],
+   "now": "2026-11-16T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "defects",
+    "3"
+   ],
+   "now": "2026-11-16T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "load",
+    "15"
+   ],
+   "now": "2026-11-16T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "load",
+    "25"
+   ],
+   "now": "2026-11-16T09:32:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "load",
+    "10"
+   ],
+   "now": "2026-11-16T09:34:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i2",
+    "Few defects again",
+    "defects",
+    "between",
+    "9",
+    "1"
+   ],
+   "now": "2026-11-16T09:36:00+00:00"
+  },
+  {
+   "argv": [
+    "goal",
+    "i2",
+    "Few defects again",
+    "defects",
+    "between",
+    "1",
+    "9"
+   ],
+   "now": "2026-11-16T09:38:00+00:00"
+  },
+  {
+   "argv": [
+    "pipeline"
+   ],
+   "now": "2026-11-16T09:40:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T09:42:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i3"
+   ],
+   "now": "2026-11-16T09:44:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1"
+   ],
+   "now": "2026-11-16T09:46:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1"
+   ],
+   "now": "2026-11-16T09:48:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i1",
+    "Glider v1"
+   ],
+   "now": "2026-11-16T09:50:00+00:00"
+  },
+  {
+   "argv": [
+    "ship",
+    "i1",
+    "Glider v2"
+   ],
+   "now": "2026-11-16T09:52:00+00:00"
+  },
+  {
+   "argv": [
+    "retire",
+    "i3",
+    "No longer needed"
+   ],
+   "now": "2026-11-16T09:54:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "load",
+    "12"
+   ],
+   "now": "2026-11-16T09:56:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T09:58:00+00:00"
+  },
+  {
+   "argv": [
+    "stats",
+    "load"
+   ],
+   "now": "2026-11-16T10:00:00+00:00"
+  }
+ ]
+}

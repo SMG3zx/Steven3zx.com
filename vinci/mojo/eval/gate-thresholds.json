@@ -1,0 +1,28 @@
+{
+  "_about": "Numbers a change must not fall below, checked by `make gate` (mojo/py/vinci_eval/gate.py). Every number has a from note saying where it was measured. They are floors, not targets: raise one when a measured change is kept. The gate runs on the machine that holds ~/.vinci/eval and ~/.vinci/staging; elsewhere every eval stage is SKIP, which fails the gate unless GATE_ALLOW_SKIP=1.",
+  "personal": {
+    "answerable": 48,
+    "unanswerable": 12,
+    "lexical": {
+      "hit_min": 35,
+      "abstain_min": 45,
+      "from": "docs/feeds.md, personal set table: journal only, no feeds loaded, 35 hits of 48 and 45 abstentions of 60 (the same as the M1 baseline on the staging journal, docs/m3-results.md)"
+    },
+    "lexical+vector": {
+      "hit_min": 36,
+      "abstain_min": 49,
+      "from": "docs/m3-results.md, Recall: lexical + vector 36 of 48 and 49 of 60 with cached vectors (the default routes)"
+    }
+  },
+  "feed": {
+    "sources": "git,vaults",
+    "hit_min": 12,
+    "from": "docs/feeds.md, feed set: 13 of 15 under git,vaults on the staging copy. The floor is one question lower, because the repositories the feeds read keep changing (f-01 and f-15 are the known misses)"
+  },
+  "lme": {
+    "any10_min": 97.8,
+    "any10_from": "docs/m3-results.md: any@10 98.9 (89 of 90 answerable questions). The floor allows one question",
+    "all10_min": 94.4,
+    "all10_from": "docs/m3-results.md: all@10 94.4 (85 of 90) at the old equal fusion weights, which is the M3 record. The current default (0.25:1) measures higher, see docs/m3-results.md and the K0a report"
+  }
+}

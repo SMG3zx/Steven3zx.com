@@ -1,0 +1,173 @@
+{
+ "description": "predictions with fewer than ten settled: 'Too few to judge'.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "predictions-few",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Tiny test\"}\n",
+    "sha256": "01d99fdc8b876a197cfab3051a0c1e47e0e65369445f53f9649216b961422ad6"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:04:00+00:00\",\"kind\":\"predict\",\"id\":\"h1\",\"text\":\"Claim one\",\"refs\":[\"i1\"],\"value\":90}\n",
+    "sha256": "804d68aef3a70b2d5eda552a2fc0193cd986d4b292cba5ae80046f77fb30b0a6"
+   },
+   "stderr": "",
+   "stdout": "h1 predicted at 90%. Test it, then: vinci result h1 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"result\",\"id\":\"h1\",\"text\":\"Observed\",\"value\":1}\n",
+    "sha256": "888d5787a1ad642f048d0b5e3354a791fc634884b391afad849645d54e7b1d94"
+   },
+   "stderr": "",
+   "stdout": "h1 was right. Keep what you learned: vinci note \"...\" h1\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:08:00+00:00\",\"kind\":\"predict\",\"id\":\"h2\",\"text\":\"Claim two\",\"refs\":[\"i1\"],\"value\":40}\n",
+    "sha256": "a96037ae813b85cbbfc82c8dc64179f578c36ed086fdd9488597a2dbbf5c430d"
+   },
+   "stderr": "",
+   "stdout": "h2 predicted at 40%. Test it, then: vinci result h2 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:10:00+00:00\",\"kind\":\"result\",\"id\":\"h2\",\"text\":\"Observed\",\"value\":0}\n",
+    "sha256": "49b98509826d64da0ed9a85633e3dc0143c1ed4cc956a02bcb79249a917c2deb"
+   },
+   "stderr": "",
+   "stdout": "h2 was wrong. Keep what you learned: vinci note \"...\" h2\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:12:00+00:00\",\"kind\":\"predict\",\"id\":\"h3\",\"text\":\"Claim three\",\"refs\":[\"i1\"],\"value\":75}\n",
+    "sha256": "f7859c4fa272c0e4a4c3665e8b0c2e562abf977cb10aebc3d9213cabb6530a20"
+   },
+   "stderr": "",
+   "stdout": "h3 predicted at 75%. Test it, then: vinci result h3 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:14:00+00:00\",\"kind\":\"result\",\"id\":\"h3\",\"text\":\"Observed\",\"value\":1}\n",
+    "sha256": "03b958146844b9a83bf5c41e81696756a1709ab6dc96df5913157480b04fa44f"
+   },
+   "stderr": "",
+   "stdout": "h3 was right. Keep what you learned: vinci note \"...\" h3\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:16:00+00:00\",\"kind\":\"predict\",\"id\":\"h4\",\"text\":\"Still open\",\"value\":50}\n",
+    "sha256": "dc5d63af37add86554aa9b5abb01670173b2614a6f6bfe1c8e988e6d60f5a058"
+   },
+   "stderr": "",
+   "stdout": "h4 predicted at 50%. Test it, then: vinci result h4 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "dc5d63af37add86554aa9b5abb01670173b2614a6f6bfe1c8e988e6d60f5a058"
+   },
+   "stderr": "",
+   "stdout": "h1   right  90%  Claim one\nh2   wrong  40%  Claim two\nh3   right  75%  Claim three\nh4   open   50%  Still open\nSettled 3: right 66.67%, average confidence 68.33%. Too few to judge (3 of 10).\n"
+  }
+ ],
+ "scenario_sha256": "f23f9fde0ae7c366548ddb628e1802c4003f9a65fc3a0bfdeedd8b7f8c319991",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "idea",
+    "Tiny test"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Claim one",
+    "90",
+    "i1"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h1",
+    "right",
+    "Observed"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Claim two",
+    "40",
+    "i1"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h2",
+    "wrong",
+    "Observed"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Claim three",
+    "75",
+    "i1"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "result",
+    "h3",
+    "right",
+    "Observed"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Still open",
+    "50"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "predictions"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  }
+ ]
+}

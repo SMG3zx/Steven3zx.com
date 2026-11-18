@@ -1,5 +1,5 @@
 # vinci Mojo core. Every tool runs through uv, so the pinned versions in pyproject.toml apply.
-# Usage: make build | test | fmt | check
+# Usage: make build | test | fmt | check | gate
 SHELL := /bin/sh
 .DEFAULT_GOAL := check
 
@@ -15,7 +15,7 @@ BINS := $(patsubst src/%.mojo,build/%,$(BIN_SRCS))
 MOJO_SRCS := $(wildcard src/*.mojo)
 TEST_SRCS := $(wildcard tests/test_*.mojo)
 
-.PHONY: build test fmt fmt-check py-check check
+.PHONY: build test fmt fmt-check py-check check gate
 
 build: $(BINS)
 
@@ -44,3 +44,8 @@ py-check:
 	$(UV) ruff format --check py/
 
 check: fmt-check build test py-check
+
+# The regression gate: check, the golden comparisons against a fresh build, and the eval
+# thresholds. One line per stage, then GATE PASS or GATE FAIL (stages). See docs/development.md.
+gate:
+	@sh scripts/gate.sh

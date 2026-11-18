@@ -1,0 +1,447 @@
+{
+ "description": "watch (plain and use), unwatch, watches, spent, show with watch and time lines, and their errors.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "watches-time",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "stderr": "",
+   "stdout": "Nothing is watched. vinci home <idea> <folder>, or vinci watch <idea> \"text in its window titles\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:04:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Glider\"}\n",
+    "sha256": "ddfdee83699e947b79319ae5cfc369faa7035ce58fecaa8a89fd0a3e7b584645"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"idea\",\"id\":\"i2\",\"text\":\"Spar\"}\n",
+    "sha256": "87790674cc091dee6090f4f78e94312679c9bbd87e472da119951ce23036ee9e"
+   },
+   "stderr": "",
+   "stdout": "i2 seeded. Next: vinci for i2 \"who will use it\", then vinci goal i2 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:08:00+00:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"Code\"}\n",
+    "sha256": "5ed260b9ca2c5c731ee974ad1fab5bac4a080274b5f0143b419ae117e943bd2c"
+   },
+   "stderr": "",
+   "stdout": "Time in a window whose app or title contains \"Code\" now counts for i1.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5ed260b9ca2c5c731ee974ad1fab5bac4a080274b5f0143b419ae117e943bd2c"
+   },
+   "stderr": "vinci: \"code\" is already watched for i1\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5ed260b9ca2c5c731ee974ad1fab5bac4a080274b5f0143b419ae117e943bd2c"
+   },
+   "stderr": "vinci: \"CODE\" is already watched for i1\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:14:00+00:00\",\"kind\":\"watch\",\"id\":\"i2\",\"text\":\"Terminal\",\"value\":1}\n",
+    "sha256": "e92dfb8a4d1def0de33de2661fd29b73ee1dcce38e22d297820882a1fdf4076b"
+   },
+   "stderr": "",
+   "stdout": "A window whose app or title contains \"Terminal\" now counts as using i2.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "e92dfb8a4d1def0de33de2661fd29b73ee1dcce38e22d297820882a1fdf4076b"
+   },
+   "stderr": "vinci: after the text comes \"use\" or nothing, got 'sideways'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "e92dfb8a4d1def0de33de2661fd29b73ee1dcce38e22d297820882a1fdf4076b"
+   },
+   "stderr": "vinci: no idea i9\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "e92dfb8a4d1def0de33de2661fd29b73ee1dcce38e22d297820882a1fdf4076b"
+   },
+   "stderr": "",
+   "stdout": "i1   work \"Code\"  Glider\ni2   use  \"Terminal\"  Spar\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:22:00+00:00\",\"kind\":\"unwatch\",\"id\":\"i1\",\"text\":\"Code\"}\n",
+    "sha256": "f67c15d7a29ce91ef186abf223acc227cf83e9dee0c872a695a3ff5bf1e1930e"
+   },
+   "stderr": "",
+   "stdout": "i1 no longer watches \"Code\".\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "f67c15d7a29ce91ef186abf223acc227cf83e9dee0c872a695a3ff5bf1e1930e"
+   },
+   "stderr": "vinci: i1 does not watch \"Code\"\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:26:00+00:00\",\"kind\":\"unwatch\",\"id\":\"i2\",\"text\":\"Terminal\"}\n",
+    "sha256": "2cc4db2fafdf05dc58f4c13a41be29a15966b85eed3d3b9e047d8d16e00d2bfe"
+   },
+   "stderr": "",
+   "stdout": "i2 no longer watches \"Terminal\".\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "2cc4db2fafdf05dc58f4c13a41be29a15966b85eed3d3b9e047d8d16e00d2bfe"
+   },
+   "stderr": "",
+   "stdout": "Nothing is watched. vinci home <idea> <folder>, or vinci watch <idea> \"text in its window titles\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:30:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":90}\n",
+    "sha256": "460ce92fd0bd25750930759d1b1bc9736a9937a613edc8e70fefdf022fbe629c"
+   },
+   "stderr": "",
+   "stdout": "1h30m added to i1.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T12:32:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":45.5}\n",
+    "sha256": "0b4ae3f64329a68b73dad7be6b68cd75b52e4d348965654d6516d69cfc9a5eba"
+   },
+   "stderr": "",
+   "stdout": "45m added to i1.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T12:34:00+00:00\",\"kind\":\"spent\",\"id\":\"i2\",\"value\":15}\n",
+    "sha256": "b43bc6d9e8cd2b0bcfcdf75fff85f313ddd053542c37d7e47668c4365666f5cc"
+   },
+   "stderr": "",
+   "stdout": "15m added to i2.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "b43bc6d9e8cd2b0bcfcdf75fff85f313ddd053542c37d7e47668c4365666f5cc"
+   },
+   "stderr": "",
+   "stdout": "i1   Seed     touch 2h15m   age 3h32m   flow 63.9%  Glider\ni2   Seed     touch 15m     age 3h30m   flow 7.1%   Spar\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "b43bc6d9e8cd2b0bcfcdf75fff85f313ddd053542c37d7e47668c4365666f5cc"
+   },
+   "stderr": "",
+   "stdout": "i1  Glider\nstage   Seed\nfor     (nobody yet)\ngoal    (none)\ntime    born 2026-11-16, age 3h34m, touch 2h15m, flow 63.3%\nstages  Seed 3h34m (touch 2h15m)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "b43bc6d9e8cd2b0bcfcdf75fff85f313ddd053542c37d7e47668c4365666f5cc"
+   },
+   "stderr": "",
+   "stdout": "i2  Spar\nstage   Seed\nfor     (nobody yet)\ngoal    (none)\ntime    born 2026-11-16, age 3h34m, touch 15m, flow 7.0%\nstages  Seed 3h34m (touch 15m)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T12:42:00+00:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"Editor\"}\n",
+    "sha256": "c174dffdefe4c5918e760b715de619ac9fd4362a090662abbf20e54b84746b4c"
+   },
+   "stderr": "",
+   "stdout": "Time in a window whose app or title contains \"Editor\" now counts for i1.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "c174dffdefe4c5918e760b715de619ac9fd4362a090662abbf20e54b84746b4c"
+   },
+   "stderr": "",
+   "stdout": "i1  Glider\nstage   Seed\nfor     (nobody yet)\ngoal    (none)\ntime    born 2026-11-16, age 3h40m, touch 2h15m, flow 61.6%\nwatch   \"Editor\"\nstages  Seed 3h40m (touch 2h15m)\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T12:46:00+00:00\",\"kind\":\"retire\",\"id\":\"i2\",\"text\":\"Enough\"}\n",
+    "sha256": "d75f5eababcd1e53060eae23aa05568f3631b7734d4a493fcf17c7808d84c54f"
+   },
+   "stderr": "",
+   "stdout": "i2 retired on purpose. Its notes stay.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "d75f5eababcd1e53060eae23aa05568f3631b7734d4a493fcf17c7808d84c54f"
+   },
+   "stderr": "vinci: i2 is retired\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "d75f5eababcd1e53060eae23aa05568f3631b7734d4a493fcf17c7808d84c54f"
+   },
+   "stderr": "vinci: i2 does not watch \"Terminal\"\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "d75f5eababcd1e53060eae23aa05568f3631b7734d4a493fcf17c7808d84c54f"
+   },
+   "stderr": "",
+   "stdout": "i1   work \"Editor\"  Glider\n"
+  }
+ ],
+ "scenario_sha256": "55fc5ffe798bfc7e1a32c14de909771f25de7093ad4f95724d13f9bf059fda5f",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Glider"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "idea",
+    "Spar"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i1",
+    "Code"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i1",
+    "code"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i2",
+    "CODE",
+    "use"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i2",
+    "Terminal",
+    "use"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i1",
+    "Firefox",
+    "sideways"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i9",
+    "Editor"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-11-16T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "unwatch",
+    "i1",
+    "Code"
+   ],
+   "now": "2026-11-16T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "unwatch",
+    "i1",
+    "Code"
+   ],
+   "now": "2026-11-16T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "unwatch",
+    "i2",
+    "Terminal"
+   ],
+   "now": "2026-11-16T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-11-16T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "90"
+   ],
+   "now": "2026-11-16T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "45.5"
+   ],
+   "now": "2026-11-16T12:32:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i2",
+    "15"
+   ],
+   "now": "2026-11-16T12:34:00+00:00"
+  },
+  {
+   "argv": [
+    "ideas"
+   ],
+   "now": "2026-11-16T12:36:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T12:38:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i2"
+   ],
+   "now": "2026-11-16T12:40:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i1",
+    "Editor"
+   ],
+   "now": "2026-11-16T12:42:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T12:44:00+00:00"
+  },
+  {
+   "argv": [
+    "retire",
+    "i2",
+    "Enough"
+   ],
+   "now": "2026-11-16T12:46:00+00:00"
+  },
+  {
+   "argv": [
+    "watch",
+    "i2",
+    "Browser"
+   ],
+   "now": "2026-11-16T12:48:00+00:00"
+  },
+  {
+   "argv": [
+    "unwatch",
+    "i2",
+    "Terminal"
+   ],
+   "now": "2026-11-16T12:50:00+00:00"
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "now": "2026-11-16T12:52:00+00:00"
+  }
+ ]
+}

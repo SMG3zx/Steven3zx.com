@@ -1,0 +1,1116 @@
+{
+ "journal_bytes": 2048,
+ "journal_sha256": "35e6b390a12127dbdf8817037e699afd9b0f3c025364362d0a1430aae6e4e85b",
+ "kind": "portal",
+ "previews": [
+  [
+   "local-47301.png",
+   "b01c268498c7688cf34c192a42e7150b2818372cf66d06817f3cbe07344ab1c3"
+  ],
+  [
+   "qwik-docs.png",
+   "036fee0c25416985e4e093182addfc76bc7cdcd8d12842ebb03fd26289340a25"
+  ]
+ ],
+ "requests": [
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page again (scan cached)",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page with query",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page with fragment",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "index.html",
+   "status": 404
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "unknown route",
+   "status": 404
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "double slash",
+   "status": 404
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "dot segments to root",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "dot segments",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "dot and empty segment",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "backslash path",
+   "status": 404
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "trailing slash after png",
+   "status": 404
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "previews folder",
+   "status": 404
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "previews bare dot png",
+   "status": 200
+  },
+  {
+   "body_bytes": 70,
+   "body_sha256": "036fee0c25416985e4e093182addfc76bc7cdcd8d12842ebb03fd26289340a25",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "70"
+    ],
+    [
+     "content-type",
+     "image/png"
+    ]
+   ],
+   "name": "preview seeded",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview seeded, escaped title",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview seeded, lower escaped",
+   "status": 200
+  },
+  {
+   "body_bytes": 71,
+   "body_sha256": "b01c268498c7688cf34c192a42e7150b2818372cf66d06817f3cbe07344ab1c3",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "71"
+    ],
+    [
+     "content-type",
+     "image/png"
+    ]
+   ],
+   "name": "preview discovered and seeded",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview discovered, not seeded",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview unknown slug",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview escaped letter",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview escaped slash",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview escaped unicode",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview raw utf-8",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview bad escape",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview dot escape",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview tilde escape",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview lowercase escape kept",
+   "status": 200
+  },
+  {
+   "body_bytes": 573,
+   "body_sha256": "20288d87c898f99d2f1cadb463e96291d24421c80ce65fb5fe6149110f07f3a6",
+   "error": null,
+   "headers": [
+    [
+     "cache-control",
+     "no-store"
+    ],
+    [
+     "content-length",
+     "573"
+    ],
+    [
+     "content-type",
+     "image/svg+xml"
+    ]
+   ],
+   "name": "preview html chars",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "preview not png",
+   "status": 404
+  },
+  {
+   "body_bytes": 70,
+   "body_sha256": "036fee0c25416985e4e093182addfc76bc7cdcd8d12842ebb03fd26289340a25",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "70"
+    ],
+    [
+     "content-type",
+     "image/png"
+    ]
+   ],
+   "name": "preview with query",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "long query",
+   "status": 200
+  },
+  {
+   "body_bytes": 64,
+   "body_sha256": "bef3712bf80f79b4ae80af601a51cf75cebe4ba8a16229532f40349a4bce7dfa",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "59"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "star target",
+   "status": 400
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "POST page",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "POST bookmark route",
+   "status": 404
+  },
+  {
+   "body_bytes": 70,
+   "body_sha256": "036fee0c25416985e4e093182addfc76bc7cdcd8d12842ebb03fd26289340a25",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "70"
+    ],
+    [
+     "content-type",
+     "image/png"
+    ]
+   ],
+   "name": "POST preview",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "PUT page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "DELETE page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "OPTIONS page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "PATCH page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "FOO page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "lower-case get",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "HEAD page",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "70"
+    ],
+    [
+     "content-type",
+     "image/png"
+    ]
+   ],
+   "name": "HEAD preview",
+   "status": 200
+  },
+  {
+   "body_bytes": 0,
+   "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "error": null,
+   "headers": [
+    [
+     "transfer-encoding",
+     "chunked"
+    ]
+   ],
+   "name": "HEAD unknown",
+   "status": 404
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "GET with body",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ],
+    [
+     "keep-alive",
+     "true"
+    ]
+   ],
+   "name": "HTTP/1.0 page",
+   "status": 200
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "extra header",
+   "status": 200
+  },
+  {
+   "body_bytes": 30,
+   "body_sha256": "2ce85feab4c533aaca4705cbe0af05f323e21fb2c30aff8f3a2526e5ed509968",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "30"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host localhost",
+   "status": 404
+  },
+  {
+   "body_bytes": 30,
+   "body_sha256": "2ce85feab4c533aaca4705cbe0af05f323e21fb2c30aff8f3a2526e5ed509968",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "30"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host LOCALHOST upper",
+   "status": 404
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page, host 127.0.0.1 no port",
+   "status": 200
+  },
+  {
+   "body_bytes": 30,
+   "body_sha256": "2ce85feab4c533aaca4705cbe0af05f323e21fb2c30aff8f3a2526e5ed509968",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "30"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host localhost no port",
+   "status": 404
+  },
+  {
+   "body_bytes": 30,
+   "body_sha256": "2ce85feab4c533aaca4705cbe0af05f323e21fb2c30aff8f3a2526e5ed509968",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "30"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host other name",
+   "status": 404
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page, host other port",
+   "status": 200
+  },
+  {
+   "body_bytes": 56,
+   "body_sha256": "c971f2e5bf34adacf0a0bb0f1691ffaa59888059e3d9e51a8f863927976d10d5",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "51"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host ipv6 literal",
+   "status": 400
+  },
+  {
+   "body_bytes": 40,
+   "body_sha256": "67e2fb64a8a047aa4b6a4e037c17207e015920d93080b27ed6a3c4832e9e88c7",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "40"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host empty",
+   "status": 400
+  },
+  {
+   "body_bytes": 55,
+   "body_sha256": "052fc71b74c24c3a81437ab39c0a1a17660920b55c07e8f06fdbb8f6b92326d0",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "50"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host bare ipv6",
+   "status": 400
+  },
+  {
+   "body_bytes": 55,
+   "body_sha256": "052fc71b74c24c3a81437ab39c0a1a17660920b55c07e8f06fdbb8f6b92326d0",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "50"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, host bare ipv6 with port",
+   "status": 400
+  },
+  {
+   "body_bytes": 40,
+   "body_sha256": "67e2fb64a8a047aa4b6a4e037c17207e015920d93080b27ed6a3c4832e9e88c7",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "40"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, no host header",
+   "status": 400
+  },
+  {
+   "body_bytes": 17235,
+   "body_sha256": "6b486826bee1ef835e3b7928244f0a6713c1ceb81aed0556cc7943ad30632836",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "17015"
+    ],
+    [
+     "content-type",
+     "text/html; charset=utf-8"
+    ]
+   ],
+   "name": "page over ipv6 loopback",
+   "status": 200
+  },
+  {
+   "body_bytes": 78,
+   "body_sha256": "91279ffbe93694527c0c444ae2cd8d73a311b54623b768b137c7a3a3042fdbc0",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "73"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "preview over ipv6 loopback",
+   "status": 400
+  },
+  {
+   "body_bytes": 52,
+   "body_sha256": "f8c8ef3ee586331107d2d2ec1ee7f9a6a6dce0a33880bb5976e6d2ee12d09f00",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "52"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ],
+    [
+     "keep-alive",
+     "true"
+    ]
+   ],
+   "name": "bogus request line",
+   "status": 400
+  },
+  {
+   "body_bytes": 64,
+   "body_sha256": "6456ba8096be156936a91257cd35ad8ec532a377e7134f0f704f6316edeee2b3",
+   "error": null,
+   "headers": [
+    [
+     "content-length",
+     "64"
+    ],
+    [
+     "content-type",
+     "text/html"
+    ]
+   ],
+   "name": "page, no host, bad version",
+   "status": 505
+  }
+ ]
+}

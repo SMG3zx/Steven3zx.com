@@ -1,0 +1,82 @@
+{
+ "description": "ActivityWatch refuses the connection: no window time, commits still read",
+ "name": "no_server",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Glider\"}\n{\"at\":\"2026-11-18T09:00:00-06:00\",\"kind\":\"watch\",\"id\":\"i1\",\"text\":\"glider\"}\n",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "",
+   "stderr": "",
+   "stdout": "ActivityWatch did not answer, so no window time was added. It will be picked up next time.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "",
+   "stderr": "",
+   "stdout": "ActivityWatch did not answer, so no window time was added. It will be picked up next time.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "488b4b6c7b41ae081c60481954dc028d5a38efec8790b18ac095639765852c48"
+   },
+   "queries": "",
+   "stderr": "",
+   "stdout": "i1   work \"glider\"  Glider\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-18T11:05:00-06:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":5}\n",
+    "sha256": "696cbd52df4b6cc3a0fb2854e2313ba2f540dbfb617a65df394dd5414b05af3e"
+   },
+   "queries": "",
+   "stderr": "",
+   "stdout": "5m added to i1.\n"
+  }
+ ],
+ "steps": [
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T11:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "sync"
+   ],
+   "mode": null,
+   "now": "2026-11-18T11:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "watches"
+   ],
+   "mode": null,
+   "now": "2026-11-18T11:00:00-06:00",
+   "track": true
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "5"
+   ],
+   "mode": null,
+   "now": "2026-11-18T11:05:00-06:00",
+   "track": true
+  }
+ ]
+}

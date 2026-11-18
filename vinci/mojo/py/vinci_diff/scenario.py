@@ -114,7 +114,7 @@ def _parse_start(raw: object, where: str) -> Start:
     raise ValueError(f"{where}: unknown start kind '{kind}'")
 
 
-def _parse_step(raw: object, where: str) -> Step:
+def parse_step(raw: object, where: str) -> Step:
     obj = as_object(raw, where)
     argv = tuple(as_text(x, where) for x in as_list(obj.get("argv"), where))
     if not argv:
@@ -139,7 +139,7 @@ def load_scenario(path: Path) -> Scenario:
             if folders is not None
             else DEFAULT_FOLDERS
         ),
-        steps=tuple(_parse_step(x, where) for x in as_list(obj.get("steps"), where)),
+        steps=tuple(parse_step(x, where) for x in as_list(obj.get("steps"), where)),
     )
 
 

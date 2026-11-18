@@ -77,7 +77,10 @@ DEFAULT_BINARY: Final = MOJO_DIR / "build" / "vinci"
 EVAL_DIR: Final = Path.home() / ".vinci" / "eval"
 INDEX_DIR: Final = EVAL_DIR / "lme-index"
 RESULTS_DIR: Final = EVAL_DIR / "results"
-GPU_CACHE: Final = EVAL_DIR / "cache" / "lme-embed-gpu.sqlite"
+# The gate points this at a copy (VINCI_LME_GPU_CACHE), so the real cache is never written.
+GPU_CACHE: Final = Path(
+    os.environ.get("VINCI_LME_GPU_CACHE") or EVAL_DIR / "cache" / "lme-embed-gpu.sqlite"
+)
 LABEL: Final = "qwen3-embedding:4b@gpu"
 CLOSED_URL: Final = "http://127.0.0.1:9/v1"
 CPU_URL: Final = "http://127.0.0.1:8081/v1"
@@ -86,10 +89,6 @@ AGREEMENT_CACHE: Final = EVAL_DIR / "cache" / "agreement-cpu.sqlite"
 AGREEMENT_SAMPLE: Final = 20
 EXPECTED_ROWS: Final = 46507
 SKIPPED_LOG: Final = EVAL_DIR / "cache" / "embed-skipped.jsonl"
-RUN2_LOG: Final = Path(
-    "/tmp/claude-1000/-home-steven3zx-Steven3zx-com-vinci/98147f36-9685-4f34-8f8e-b2ab2ed148a5/scratchpad/gpu-run/run2.log"
-)
-RESTORE_DONE: Final = "[restore] done"
 LEFT_OUT: Final = re.compile(r"embed: (\d+) facts have no vector")
 STAGING_HOME: Final = Path("~/.vinci/staging").expanduser()
 ROUTES: Final = ("lexical", "vector", "lexical,vector")
@@ -110,12 +109,17 @@ def skipped_keys() -> set[str]:
     return keys
 
 
-def gate_state() -> tuple[int, int, bool]:
-    """(rows in the cache, rows the complete cache must have, GPU job finished)."""
+def gate_state() -> tuple[int, int]:
+    """(rows in the cache with the GPU label, rows the complete cache must have)."""
     rows = cache_rows(GPU_CACHE, LABEL) if GPU_CACHE.exists() else 0
     required = EXPECTED_ROWS - len(skipped_keys())
-    finished = RUN2_LOG.exists() and RESTORE_DONE in RUN2_LOG.read_text(encoding="utf-8")
-    return rows, required, finished
+    return rows, required
+
+
+def session_of(row: dict[str, object]) -> str:
+    """The LongMemEval session of a result. Records are stored under source journal, with
+    id = session:turn index, so the session is the id without its last field."""
+    return str(row.get("id")).rsplit(":", 1)[0]
 
 
 def cache_rows(path: Path, label: str | None = None) -> int:
@@ -168,7 +172,9 @@ def question_records(question: dict[str, object]) -> list[dict[str, object]]:
         for index, turn in enumerate(turns):
             records.append(
                 {
-                    "source": session_id,
+                    # Stored as journal facts (the default --sources), so recall finds them;
+                    # the session is kept in the id (see session_of).
+                    "source": "journal",
                     "id": f"{session_id}:{index}",
                     "at": at,
                     "kind": "turn",
@@ -295,7 +301,7 @@ def score(
     top = results[:TOP_K]
     ranked: list[str] = []
     for row in results:
-        session = str(row.get("source"))
+        session = session_of(row)
         if session not in ranked:
             ranked.append(session)
     text = "\n".join(str(row.get("content")) for row in top)
@@ -426,18 +432,19 @@ def main() -> int:
     parser.add_argument("--score", action="store_true", help="run and score the routes")
     parser.add_argument("--limit", type=int, help="only the first N questions of the subset")
     parser.add_argument("--allow-partial", action="store_true", help="skip the row-count check")
+    parser.add_argument("--out", type=Path, help="JSON result file (default: the results dir)")
     args = parser.parse_args()
     binary: Path = args.binary
     if not (args.prepare or args.warm or args.score or args.agreement):
         args.prepare = args.warm = args.score = True
 
-    rows, required, finished = gate_state()
+    rows, required = gate_state()
     print(
         f"GPU cache {GPU_CACHE}: {rows} rows, complete at {required} "
-        f"({EXPECTED_ROWS} minus {len(skipped_keys())} skipped), GPU job finished: {finished}"
+        f"({EXPECTED_ROWS} minus {len(skipped_keys())} skipped)"
     )
-    if (rows != required or not finished) and not args.allow_partial:
-        print("the cache is not complete or the GPU job has not finished; nothing was run")
+    if rows != required and not args.allow_partial:
+        print("the cache is not complete; nothing was run")
         return 1
 
     digest = sha256_file(args.dataset)
@@ -516,6 +523,11 @@ def main() -> int:
                 if response.get("abstain") is True:
                     abstained += 1
                 results.append(score(response, question, qtype, is_abstention, count_tokens))
+            if not any(r.context_turns > 0 for r in results):
+                raise RuntimeError(
+                    f"route {name}: no question returned any result; the harness is not "
+                    "reading the index (check the source of the facts, see session_of)"
+                )
             seconds[name] = time.monotonic() - begun
             per_route[name] = results
             abstain_count[name] = abstained
@@ -567,7 +579,7 @@ def main() -> int:
         }
         print("cache rows before and after the scored runs:", rows_before_score, rows_after_score)
 
-    out = RESULTS_DIR / f"lme-index-{datetime.date.today().isoformat()}.json"
+    out = args.out or (RESULTS_DIR / f"lme-index-{datetime.date.today().isoformat()}.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         json.dumps(report, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8"

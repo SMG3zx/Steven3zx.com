@@ -1,0 +1,538 @@
+{
+ "description": "Number formats: exponents, signs, decimals, NaN, Infinity, hex, separators; percent and minutes limits.",
+ "folders": [
+  "glider",
+  "canal"
+ ],
+ "kind": "hand",
+ "name": "numbers",
+ "outcomes": [
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:02:00+00:00\",\"kind\":\"idea\",\"id\":\"i1\",\"text\":\"Numbers\"}\n",
+    "sha256": "e8ad0371eef3fd53cac8e933ee6486b820ba6dbe7b9bc24cc8c20b770de1e805"
+   },
+   "stderr": "",
+   "stdout": "i1 seeded. Next: vinci for i1 \"who will use it\", then vinci goal i1 ...\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:04:00+00:00\",\"kind\":\"for\",\"id\":\"i1\",\"text\":\"Checker\"}\n",
+    "sha256": "34026fff97fd66c49867cf41dc8ad63ec937e6f121277350d777ce5105580ab8"
+   },
+   "stderr": "",
+   "stdout": "i1 is for Checker.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:06:00+00:00\",\"kind\":\"predict\",\"id\":\"h1\",\"text\":\"Lower edge\",\"refs\":[\"i1\"],\"value\":1}\n",
+    "sha256": "787a51e402c7af3a64707bb64b6762522237b30b2b7ff8ba6de849cd8fc173e5"
+   },
+   "stderr": "",
+   "stdout": "h1 predicted at 1%. Test it, then: vinci result h1 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:08:00+00:00\",\"kind\":\"predict\",\"id\":\"h2\",\"text\":\"Upper edge\",\"refs\":[\"i1\"],\"value\":99}\n",
+    "sha256": "c06f8a9d21bca873b85389ccc8bc533175c6bedc20f488edd2297fe5ce7ce2be"
+   },
+   "stderr": "",
+   "stdout": "h2 predicted at 99%. Test it, then: vinci result h2 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:10:00+00:00\",\"kind\":\"predict\",\"id\":\"h3\",\"text\":\"Exponent\",\"refs\":[\"i1\"],\"value\":10}\n",
+    "sha256": "bce2b8c3807aec5b2a868b13e8e90f4a33ea0b96e823d7bfd9d33c5ca08e04a1"
+   },
+   "stderr": "",
+   "stdout": "h3 predicted at 10%. Test it, then: vinci result h3 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:12:00+00:00\",\"kind\":\"predict\",\"id\":\"h4\",\"text\":\"Plus sign\",\"refs\":[\"i1\"],\"value\":5}\n",
+    "sha256": "baf62fd9c583aa7b8f71b3f4e9be8a72c5fb1db4de7c3459a77df3cb1423ab3a"
+   },
+   "stderr": "",
+   "stdout": "h4 predicted at 5%. Test it, then: vinci result h4 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:14:00+00:00\",\"kind\":\"predict\",\"id\":\"h5\",\"text\":\"Leading dot\",\"refs\":[\"i1\"],\"value\":50}\n",
+    "sha256": "db902ec728735f65ad043bd415cde81e7f98c0ed17f746b18d3e9513e9ac1bfe"
+   },
+   "stderr": "",
+   "stdout": "h5 predicted at 50%. Test it, then: vinci result h5 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:16:00+00:00\",\"kind\":\"predict\",\"id\":\"h6\",\"text\":\"Decimal\",\"refs\":[\"i1\"],\"value\":50.5}\n",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "",
+   "stdout": "h6 predicted at 50.5%. Test it, then: vinci result h6 right|wrong \"what happened\"\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "vinci: confidence is a percent from 1 to 99\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "vinci: confidence is a percent from 1 to 99\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "vinci: <confidence percent> must be a number, got 'NaN'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "vinci: <confidence percent> must be a number, got 'Infinity'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "vinci: <confidence percent> must be a number, got '0x10'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "5c66b1a874ad90e86ac8ce6a3f7ec2d40d1e0c47f3c0bddbf286467b74eadb1f"
+   },
+   "stderr": "vinci: <confidence percent> must be a number, got '1,000'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:30:00+00:00\",\"kind\":\"log\",\"id\":\"temp\",\"value\":100}\n",
+    "sha256": "5a96eae82d5c26a885e3ed7b38bea78c8798291647dec90f46edf56cc62459ce"
+   },
+   "stderr": "",
+   "stdout": "temp = 100 (measurement 1).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:32:00+00:00\",\"kind\":\"log\",\"id\":\"temp\",\"value\":-3.25}\n",
+    "sha256": "52d51b69337f292c17e1044e1a7c2c7887e2079b5e8bdb3e6a863b8795f1a69b"
+   },
+   "stderr": "",
+   "stdout": "temp = -3.25 (measurement 2).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:34:00+00:00\",\"kind\":\"log\",\"id\":\"temp\",\"value\":0}\n",
+    "sha256": "9e01cdf01fb444e4022b3d3d7145b640225cd225b83a75e93a8371305b78428b"
+   },
+   "stderr": "",
+   "stdout": "temp = 0 (measurement 3).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:36:00+00:00\",\"kind\":\"log\",\"id\":\"temp\",\"value\":2.345}\n",
+    "sha256": "d3a19e600203f69a7b3a86e4e39c7aee4027dfa72a76316792b076dcf9aa7863"
+   },
+   "stderr": "",
+   "stdout": "temp = 2.35 (measurement 4).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:38:00+00:00\",\"kind\":\"log\",\"id\":\"temp\",\"value\":1000000}\n",
+    "sha256": "0372da472953ff578f0c14b24956e4b6f083824f596ceff30d8291c222cc65de"
+   },
+   "stderr": "",
+   "stdout": "temp = 1000000 (measurement 5).\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "0372da472953ff578f0c14b24956e4b6f083824f596ceff30d8291c222cc65de"
+   },
+   "stderr": "vinci: <value> must be a number, got 'NaN'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "0372da472953ff578f0c14b24956e4b6f083824f596ceff30d8291c222cc65de"
+   },
+   "stderr": "vinci: <value> must be a number, got '-Infinity'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:44:00+00:00\",\"kind\":\"spec\",\"id\":\"temp\",\"value\":5,\"hi\":5}\n",
+    "sha256": "e7d8672a189c64531b1f14ffbd2be93bc60553cfe5512ee23d87359377af4703"
+   },
+   "stderr": "",
+   "stdout": "temp is good between 5 and 5.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:46:00+00:00\",\"kind\":\"spec\",\"id\":\"temp\",\"value\":-10,\"hi\":10}\n",
+    "sha256": "68fb79bdefa227d1bbc9ac934a0fdc1c2ecad908368f83148569c75b6842885b"
+   },
+   "stderr": "",
+   "stdout": "temp is good between -10 and 10.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "68fb79bdefa227d1bbc9ac934a0fdc1c2ecad908368f83148569c75b6842885b"
+   },
+   "stderr": "",
+   "stdout": "temp: 5 measurements, 2026-11-16 to 2026-11-16\nmean     200019.82   min -3.25   max 1000000   last 1000000\ncontrol  -465051 .. 865090.64  (ordinary variation stays inside)\n  special cause: 1000000 on 2026-11-16\nspec     -10 .. 10: 2 of 5 outside\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:50:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":100}\n",
+    "sha256": "ffc44e66a6f4828332ddd02019491f3c3d8a61f444211aadfce6601eebec50b9"
+   },
+   "stderr": "",
+   "stdout": "1h40m added to i1.\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:52:00+00:00\",\"kind\":\"spent\",\"id\":\"i1\",\"value\":0.5}\n",
+    "sha256": "3eafe0e3f3d7a7024f00506414aa1cdff753401e8b0b1110eb19f092eb1a487d"
+   },
+   "stderr": "",
+   "stdout": "0m added to i1.\n"
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "3eafe0e3f3d7a7024f00506414aa1cdff753401e8b0b1110eb19f092eb1a487d"
+   },
+   "stderr": "vinci: minutes must be positive\n",
+   "stdout": ""
+  },
+  {
+   "exit": 1,
+   "journal": {
+    "append": "",
+    "sha256": "3eafe0e3f3d7a7024f00506414aa1cdff753401e8b0b1110eb19f092eb1a487d"
+   },
+   "stderr": "vinci: <minutes> must be a number, got 'Infinity'\n",
+   "stdout": ""
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "{\"at\":\"2026-11-16T09:58:00+00:00\",\"kind\":\"stage\",\"id\":\"i1\",\"text\":\"Prepare\"}\n",
+    "sha256": "d1aaccc7917fee27112e746ca6c2e82dcaf4529bce57cd08844cdd4b381f3499"
+   },
+   "stderr": "",
+   "stdout": "Not ready: i1 has no goal. Set one with a number: vinci goal i1 \"...\" <metric> at-least <n>\ni1 is now in Prepare.\nNext: gather notes (vinci note \"...\" i1), question every requirement (vinci req), and say what you expect (vinci predict).\n"
+  },
+  {
+   "exit": 0,
+   "journal": {
+    "append": "",
+    "sha256": "d1aaccc7917fee27112e746ca6c2e82dcaf4529bce57cd08844cdd4b381f3499"
+   },
+   "stderr": "",
+   "stdout": "i1  Numbers\nstage   Prepare\nfor     Checker\ngoal    (none)\ntime    born 2026-11-16, age 58m, touch 1h40m, flow 173.3%\nstages  Seed 56m (touch 1h40m), Prepare 2m\npredictions\n  h1   open    1%  Lower edge\n  h2   open   99%  Upper edge\n  h3   open   10%  Exponent\n  h4   open    5%  Plus sign\n  h5   open   50%  Leading dot\n  h6   open  50.5%  Decimal\n"
+  }
+ ],
+ "scenario_sha256": "15c24dec63562dd73c8e00abb5d018f4157d9cdf50008392e61297cc976cbb39",
+ "start": {
+  "kind": "empty"
+ },
+ "steps": [
+  {
+   "argv": [
+    "idea",
+    "Numbers"
+   ],
+   "now": "2026-11-16T09:02:00+00:00"
+  },
+  {
+   "argv": [
+    "for",
+    "i1",
+    "Checker"
+   ],
+   "now": "2026-11-16T09:04:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Lower edge",
+    "1",
+    "i1"
+   ],
+   "now": "2026-11-16T09:06:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Upper edge",
+    "99",
+    "i1"
+   ],
+   "now": "2026-11-16T09:08:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Exponent",
+    "1e1",
+    "i1"
+   ],
+   "now": "2026-11-16T09:10:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Plus sign",
+    "+5",
+    "i1"
+   ],
+   "now": "2026-11-16T09:12:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Leading dot",
+    ".5e2",
+    "i1"
+   ],
+   "now": "2026-11-16T09:14:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Decimal",
+    "50.5",
+    "i1"
+   ],
+   "now": "2026-11-16T09:16:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Over",
+    "99.5",
+    "i1"
+   ],
+   "now": "2026-11-16T09:18:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Under",
+    "0.5",
+    "i1"
+   ],
+   "now": "2026-11-16T09:20:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Nan",
+    "NaN",
+    "i1"
+   ],
+   "now": "2026-11-16T09:22:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Infinity",
+    "Infinity",
+    "i1"
+   ],
+   "now": "2026-11-16T09:24:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Hex",
+    "0x10",
+    "i1"
+   ],
+   "now": "2026-11-16T09:26:00+00:00"
+  },
+  {
+   "argv": [
+    "predict",
+    "Thousands",
+    "1,000",
+    "i1"
+   ],
+   "now": "2026-11-16T09:28:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "1e2"
+   ],
+   "now": "2026-11-16T09:30:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "-3.25"
+   ],
+   "now": "2026-11-16T09:32:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "0"
+   ],
+   "now": "2026-11-16T09:34:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "2.345"
+   ],
+   "now": "2026-11-16T09:36:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "1000000"
+   ],
+   "now": "2026-11-16T09:38:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "NaN"
+   ],
+   "now": "2026-11-16T09:40:00+00:00"
+  },
+  {
+   "argv": [
+    "log",
+    "temp",
+    "-Infinity"
+   ],
+   "now": "2026-11-16T09:42:00+00:00"
+  },
+  {
+   "argv": [
+    "spec",
+    "temp",
+    "5",
+    "5"
+   ],
+   "now": "2026-11-16T09:44:00+00:00"
+  },
+  {
+   "argv": [
+    "spec",
+    "temp",
+    "-10",
+    "10"
+   ],
+   "now": "2026-11-16T09:46:00+00:00"
+  },
+  {
+   "argv": [
+    "stats",
+    "temp"
+   ],
+   "now": "2026-11-16T09:48:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "1e2"
+   ],
+   "now": "2026-11-16T09:50:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "0.5"
+   ],
+   "now": "2026-11-16T09:52:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "-0"
+   ],
+   "now": "2026-11-16T09:54:00+00:00"
+  },
+  {
+   "argv": [
+    "spent",
+    "i1",
+    "Infinity"
+   ],
+   "now": "2026-11-16T09:56:00+00:00"
+  },
+  {
+   "argv": [
+    "advance",
+    "i1",
+    "1e1"
+   ],
+   "now": "2026-11-16T09:58:00+00:00"
+  },
+  {
+   "argv": [
+    "show",
+    "i1"
+   ],
+   "now": "2026-11-16T10:00:00+00:00"
+  }
+ ]
+}
