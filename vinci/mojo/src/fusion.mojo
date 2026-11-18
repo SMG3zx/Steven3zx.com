@@ -2,16 +2,18 @@
 # Retrieval.RouteScore in src/Memory/Retrieval.cs, and the content dedupe in
 # Neo4jStore.Recall. Raw scores (bm25, cosine) are not comparable across routes, so
 # each route votes by rank: a candidate at rank i (0-based) in route r adds
-# weight_r / (60 + i + 1). The sum is the fused score.
+# weight_r / (k + i + 1), with k = RRF_K = 60 unless an eval sets another. The sum is the
+# fused score.
 
 from std.math import pow
 from std.python import Python, PythonObject
 
-from timeutil import TICKS_PER_DAY, parse_instant
 from route import ROUTE_GRAPH, ROUTE_PROCEDURAL, ROUTE_SEMANTIC, ROUTE_TEMPORAL
+from session import user_error
+from timeutil import TICKS_PER_DAY, parse_instant
 
 comptime RRF_K = 60
-comptime DEFAULT_SEMANTIC = "0.4,0.4,0.2"
+comptime DEFAULT_SEMANTIC = "0.25,1.0,0.2"
 comptime DEFAULT_HALF_LIFE_DAYS = 90.0
 comptime ROUTE_BOOST = 0.1
 comptime RETENTION_WEIGHT = 0.025
@@ -68,16 +70,30 @@ struct Candidate(Copyable, Movable):
 
 struct Weights(Copyable, Movable):
     """Retrieval's RankFusion.Weights. graph is kept for the table; no graph route runs.
+
+    rrf_k is the reciprocal-rank constant (RRF_K unless an eval sets another).
+    semantic_only limits an eval override to route semantic (scope=semantic).
     """
 
     var lexical: Float64
     var vector: Float64
     var graph: Float64
+    var rrf_k: Int
+    var semantic_only: Bool
 
-    def __init__(out self, lexical: Float64, vector: Float64, graph: Float64):
+    def __init__(
+        out self,
+        lexical: Float64,
+        vector: Float64,
+        graph: Float64,
+        rrf_k: Int = RRF_K,
+        semantic_only: Bool = False,
+    ):
         self.lexical = lexical
         self.vector = vector
         self.graph = graph
+        self.rrf_k = rrf_k
+        self.semantic_only = semantic_only
 
     def of(self, method: String) -> Float64:
         if method == "lexical":
@@ -89,7 +105,9 @@ struct Weights(Copyable, Movable):
 
 def semantic_weights() raises -> Weights:
     """The weights for route semantic: FUSION_SEMANTIC "lexical,vector,graph" when it
-    is three numbers, else 0.4, 0.4, 0.2 (RankFusion.Weights.Semantic)."""
+    is three numbers, else 0.25, 1.0, 0.2. The C# port had 0.4, 0.4, 0.2 (equal weights);
+    M5 step d measured the lexical share down to 0.25 (docs/memory.md, Fusion weights).
+    """
     var os = Python.import_module("os")
     var raw = String(
         os.environ.get(PythonObject("FUSION_SEMANTIC"), DEFAULT_SEMANTIC)
@@ -104,7 +122,68 @@ def semantic_weights() raises -> Weights:
             )
         except:
             pass
-    return Weights(0.4, 0.4, 0.2)
+    return Weights(0.25, 1.0, 0.2)
+
+
+def parse_weights(text: String) raises -> Weights:
+    """The eval-only fusion override: "lexical=W,vector=W" and optionally ",k=K", from
+    the recall flag --weights or the environment variable VINCI_RECALL_WEIGHTS.
+
+    Both weights are needed, neither may be negative, and their sum must be above zero.
+    Only their ratio matters to the ordering, since route scores divide by the peak. k is
+    the RRF constant (RRF_K when absent) and must be at least 1. Anything else is an error,
+    so a typo is not a silent default.
+    """
+    var lexical = Float64(-1)
+    var vector = Float64(-1)
+    var rrf_k = RRF_K
+    var semantic_only = False
+    for raw in text.split(","):
+        var part = String(raw)
+        var pair = List[String]()
+        for piece in part.split("="):
+            pair.append(String(piece))
+        if len(pair) != 2:
+            raise user_error(
+                "weights: each item is name=value, got '" + part + "'"
+            )
+        var name = pair[0]
+        var value_text = pair[1]
+        if name == "k":
+            try:
+                rrf_k = Int(value_text)
+            except:
+                raise user_error("weights: k must be a whole number")
+            if rrf_k < 1:
+                raise user_error("weights: k must be at least 1")
+        elif name == "scope":
+            if value_text == "semantic":
+                semantic_only = True
+            elif value_text != "all":
+                raise user_error("weights: scope is all or semantic")
+        elif name == "lexical" or name == "vector":
+            var value: Float64
+            try:
+                value = Float64(value_text)
+            except:
+                raise user_error("weights: " + name + " must be a number")
+            if value < 0:
+                raise user_error("weights: " + name + " must not be negative")
+            if name == "lexical":
+                lexical = value
+            else:
+                vector = value
+        else:
+            raise user_error(
+                "weights: unknown name '"
+                + name
+                + "' (lexical, vector, k, scope)"
+            )
+    if lexical < 0 or vector < 0:
+        raise user_error("weights: give both lexical=W and vector=W")
+    if lexical + vector <= 0:
+        raise user_error("weights: lexical and vector cannot both be zero")
+    return Weights(lexical, vector, 0.0, rrf_k, semantic_only)
 
 
 def weights_for(route: String) raises -> Weights:
@@ -138,7 +217,9 @@ def fuse(
             ranked = vector.copy()
         var contribution_weight = weights.of(method)
         for i in range(len(ranked)):
-            var contribution = contribution_weight / Float64(RRF_K + i + 1)
+            var contribution = contribution_weight / Float64(
+                weights.rrf_k + i + 1
+            )
             var rowid = ranked[i].rowid
             if rowid not in position:
                 var first = ranked[i].copy()

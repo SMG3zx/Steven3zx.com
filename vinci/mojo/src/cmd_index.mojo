@@ -9,7 +9,7 @@ from std.python import Python, PythonObject
 
 from dates import clock_now, today_of
 from embed_edge import EmbedConfig, default_config
-from fusion import Candidate
+from fusion import Candidate, Weights, parse_weights
 from handles import lookup
 from index_build import BuildReport, load_records, update_from_journal
 from index_store import IndexStore
@@ -63,6 +63,7 @@ struct Options(Movable):
     var whole: Int
     var tokenizer_url: Optional[String]
     var sources: List[String]
+    var weights: Optional[Weights]
 
 
 def join_path(dir: String, name: String) -> String:
@@ -89,6 +90,7 @@ def parse_options(args: List[String]) raises -> Options:
         DEFAULT_WHOLE,
         None,
         List[String](),
+        None,
     )
     var i = 0
     while i < len(args):
@@ -109,6 +111,7 @@ def parse_options(args: List[String]) raises -> Options:
             or a == "--whole"
             or a == "--tokenizer-url"
             or a == "--sources"
+            or a == "--weights"
         ):
             if i + 1 >= len(args):
                 raise user_error(a + " needs a value")
@@ -132,6 +135,8 @@ def parse_options(args: List[String]) raises -> Options:
                 opts.tokenizer_url = Optional[String](value)
             elif a == "--sources":
                 opts.sources = parse_sources(value)
+            elif a == "--weights":
+                opts.weights = Optional[Weights](parse_weights(value))
             elif a == "--budget":
                 try:
                     opts.budget = Optional[Int](Int(value))
@@ -402,6 +407,13 @@ def method_of(c: Candidate) -> String:
     return "lexical"
 
 
+def weights_from_env() raises -> String:
+    """VINCI_RECALL_WEIGHTS as written, or empty. Eval only; see parse_weights.
+    """
+    var os = Python.import_module("os")
+    return String(os.environ.get(PythonObject("VINCI_RECALL_WEIGHTS"), ""))
+
+
 def recall_command(args: List[String], home: String) raises:
     """vinci recall: the best current versions for a question, as text or JSON.
     """
@@ -409,7 +421,7 @@ def recall_command(args: List[String], home: String) raises:
     if len(opts.rest) == 0:
         raise user_error(
             "usage: vinci recall [--json] [--limit N] [--routes lexical]"
-            " [--index PATH] <query...>"
+            " [--index PATH] [--weights lexical=W,vector=W[,k=K]] <query...>"
         )
     var query = String()
     for i in range(len(opts.rest)):
@@ -429,6 +441,14 @@ def recall_command(args: List[String], home: String) raises:
         embed_config(opts),
     )
     settings.sources = opts.sources.copy()
+    # Eval only: the fusion override comes from --weights, or from the environment for
+    # harnesses that cannot pass a flag. Chat does not read either, so it keeps the defaults.
+    if opts.weights:
+        settings.fusion = opts.weights.copy()
+    else:
+        var env_weights = weights_from_env()
+        if env_weights.byte_length() > 0:
+            settings.fusion = Optional[Weights](parse_weights(env_weights))
     var found = recall(store, query, settings)
     var packed = Optional[Packed](None)
     if opts.budget is not None:

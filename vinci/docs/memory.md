@@ -506,3 +506,79 @@ Question vectors: 30 gpu cache hits, 10 cpu-cached, 4 cpu-live, 0 lexical fallba
 
 Gates: `make -C mojo check` passes; `chat_diff` 10 of 10; `vinci_diff` (`--generated 50 --seed 1`) 74 scenarios, 3633 of 3633 steps matching, 0 diverged (the M3 note's "683 of 683" was a smaller scenario set). `portal_diff` reports 22 diverged requests, all the same page: the portal's "links" count is 40 on the candidate and 39 on the oracle, because the portal scans local ports and one more local server now serves a page. The portal binary and portal code are unchanged, so this is the environment, not this change.
 
+
+## Fusion weights (M5 step d)
+
+Status: **measured on all three sets, default changed for route semantic.** The semantic route now weighs the lexical list at 0.25 against the vector list at 1.0 (RRF k = 60). Before, both were 0.4 (the C# port's `RankFusion.Weights.Semantic`). Setting `FUSION_SEMANTIC=0.4,0.4,0.2` gives the old default back. The other routes keep their own mixes (temporal 0.45 / 0.2, procedural 0.5 / 0.2, graph 0.25 / 0.2).
+
+**Why.** Equal weights were worse than vector alone on LongMemEval (all@10 94.4 against 98.9) and on the feed set (13 of 15 against 15, the misses f-01 and f-15, both temporal route). A lexical-only candidate at rank 1 weighs as much as a vector-only one at rank 1, so lexical noise displaces vector hits. On the personal set fusion already beats vector alone (36 of 48 against 34).
+
+**Eval-only override** (`vinci recall`, not chat):
+
+```sh
+vinci recall --weights lexical=0.25,vector=1[,k=60][,scope=semantic|all] <query...>
+VINCI_RECALL_WEIGHTS=lexical=0.25,vector=1 vinci recall <query...>     # the flag wins
+```
+
+- `lexical` and `vector` are both needed, neither negative, the sum above zero. Only the ratio orders results, since route scores divide by the peak. `k` is the RRF constant.
+- `scope=all` (the default for the override) replaces the weights of every route. `scope=semantic` replaces route semantic only. Anything else is an error, so a typo does not run the default.
+- Chat does not read either setting. Its recall calls use the defaults.
+- Code: `parse_weights` in `fusion.mojo`, `Settings.fusion` in `recall.mojo`, the flag and the environment read in `cmd_index.mojo`. Tests: `tests/test_fusion_abstain.mojo`.
+
+**Measured settings** (every row is the lexical+vector route unless marked, `index_eval` for the personal and feed sets, the LongMemEval harness for LongMemEval; tokens are llama-server counts over the top 10). Each row is reproducible with `VINCI_RECALL_WEIGHTS` set to the setting. The sweep scripts were scratch files, not committed.
+
+The default is `0.25:1, k=60` under scope=semantic. Its row is bold. The first table is scope=semantic, the one the default uses. The second table is scope=all, which replaces every route's weights; it is shown because it reaches the vector-alone numbers on LongMemEval and the feed set, and its cost is explained below.
+
+| setting | v2 hit | v2 abst | v2 tok | feed hit | feed abst | feed tok | LME any@10 % | LME all@10 % | LME tok |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.1:1 | 36/48 | 49/60 | 281.1 | 13/15 | 15/15 | 2597.9 | 98.9 | 95.6 | 1845.3 |
+| 0.25:1 (default) | 36/48 | 49/60 | 277.3 | 13/15 | 15/15 | 2666.1 | 98.9 | 95.6 | 2007.0 |
+| 0.5:1 | 36/48 | 49/60 | 276.7 | 13/15 | 15/15 | 2636.5 | 98.9 | 95.6 | 2121.1 |
+| 0.75:1 | 36/48 | 49/60 | 276.2 | 13/15 | 15/15 | 2636.5 | 98.9 | 94.4 | 2174.3 |
+| 1.5:1 | 36/48 | 49/60 | 272.2 | 13/15 | 15/15 | 2732.8 | 97.8 | 92.2 | 2229.4 |
+| 2:1 | 36/48 | 49/60 | 272.5 | 13/15 | 15/15 | 2732.8 | 97.8 | 92.2 | 2253.0 |
+| 0.5:1, k=10 | 36/48 | 49/60 | 279.2 | 13/15 | 15/15 | 2615.0 | 98.9 | 95.6 | 1985.7 |
+| 0.5:1, k=20 | 36/48 | 49/60 | 278.5 | 13/15 | 15/15 | 2636.5 | 98.9 | 95.6 | 2015.9 |
+| 0.5:1, k=30 | 36/48 | 49/60 | 277.1 | 13/15 | 15/15 | 2636.5 | 98.9 | 95.6 | 2032.8 |
+| 0.5:1, k=90 | 36/48 | 49/60 | 276.7 | 13/15 | 15/15 | 2636.5 | 98.9 | 95.6 | 2153.8 |
+| 0.5:1, k=120 | 36/48 | 49/60 | 276.7 | 13/15 | 15/15 | 2636.5 | 98.9 | 94.4 | 2178.0 |
+| 0.25:1, k=20 | 36/48 | 49/60 | 280.6 | 13/15 | 15/15 | 2616.5 | 98.9 | 95.6 | 1942.2 |
+| 0.25:1, k=120 | 36/48 | 49/60 | 278.0 | 13/15 | 15/15 | 2636.5 | 98.9 | 95.6 | 2065.0 |
+| 1:1, k=20 | 36/48 | 49/60 | 275.1 | 13/15 | 15/15 | 2677.5 | 98.9 | 95.6 | 2157.1 |
+| 1:1, k=120 | 36/48 | 49/60 | 275.4 | 13/15 | 15/15 | 2673.3 | 98.9 | 94.4 | 2239.8 |
+
+| setting | v2 hit | v2 abst | v2 tok | feed hit | feed abst | feed tok | LME any@10 % | LME all@10 % | LME tok |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1:1 (equal, all routes) | 35/48 | 49/60 | 279.4 | 15/15 | 15/15 | 2902.9 | 98.9 | 95.6 | 2121.9 |
+| 0.1:1 | 34/48 | 49/60 | 294.8 | 15/15 | 15/15 | 2445.5 | 98.9 | 98.9 | 1631.3 |
+| 0.25:1 | 35/48 | 49/60 | 291.4 | 15/15 | 15/15 | 2833.5 | 98.9 | 98.9 | 1850.0 |
+| 0.5:1 | 35/48 | 49/60 | 289.7 | 15/15 | 15/15 | 2768.7 | 98.9 | 98.9 | 2020.5 |
+| 0.75:1 | 35/48 | 49/60 | 287.3 | 15/15 | 15/15 | 2625.7 | 98.9 | 96.7 | 2103.5 |
+| 1.5:1 | 35/48 | 49/60 | 270.2 | 13/15 | 15/15 | 2675.5 | 97.8 | 92.2 | 2208.1 |
+| 2:1 | 36/48 | 49/60 | 270.5 | 13/15 | 15/15 | 2710.5 | 97.8 | 92.2 | 2283.0 |
+| 0.5:1, k=10 | 35/48 | 49/60 | 291.3 | 15/15 | 15/15 | 2551.3 | 98.9 | 98.9 | 1850.0 |
+| 0.5:1, k=20 | 35/48 | 49/60 | 291.0 | 15/15 | 15/15 | 2859.8 | 98.9 | 98.9 | 1893.7 |
+| 0.5:1, k=30 | 35/48 | 49/60 | 291.2 | 15/15 | 15/15 | 2846.0 | 98.9 | 98.9 | 1928.3 |
+| 0.5:1, k=90 | 35/48 | 49/60 | 289.7 | 15/15 | 15/15 | 2768.7 | 98.9 | 97.8 | 2060.1 |
+| 0.5:1, k=120 | 35/48 | 49/60 | 289.7 | 15/15 | 15/15 | 2768.7 | 98.9 | 96.7 | 2085.8 |
+| 0.25:1, k=20 | 35/48 | 49/60 | 294.3 | 15/15 | 15/15 | 2489.4 | 98.9 | 98.9 | 1757.0 |
+| 0.25:1, k=120 | 35/48 | 49/60 | 292.8 | 15/15 | 15/15 | 2752.4 | 98.9 | 98.9 | 1935.1 |
+| 1:1, k=20 | 35/48 | 49/60 | 278.9 | 15/15 | 15/15 | 2801.3 | 98.9 | 96.7 | 2101.4 |
+| 1:1, k=120 | 35/48 | 49/60 | 279.3 | 15/15 | 15/15 | 2937.9 | 98.9 | 96.7 | 2185.9 |
+
+**Flat region (scope=semantic).** LongMemEval all@10 is 95.6 at lexical:vector from 0.1 to 0.5 with k = 60, and at lexical 0.5 for every k from 10 to 90. At 0.25:1 the neighbours are 0.1:1 (95.6), 0.5:1 (95.6), k = 20 (95.6) and k = 120 (95.6), so the chosen point sits inside a flat region in both directions. The edges fall off: 0.75:1 is 94.4 (the old default), and 1.5:1 and 2:1 are 92.2. The personal hit and abstention counts (36/48, 49/60) are the same at every setting in this table, and feed is 13/15 at every setting. What moves is LongMemEval (one question out of 90 answerable, from 85 to 86, at the default against the old one) and tokens (LongMemEval 2007 against 2178, an 8% cut).
+
+**The trade-off that stops the bigger gain.** Scope=all reaches vector-alone on LongMemEval all@10 (98.9 at 0.25:1, k = 60) and on the feed set (15/15). It does so by overriding the temporal, procedural and graph mixes, and that costs one personal question: j-38 (temporal) is answered by the default and missed by every scope=all setting. Feed f-01 and f-15 are also temporal-route questions, so the feed gain comes from the same override. Most scope=all settings also raise personal tokens (about 280 to 295, against 275). So no scope=all setting meets the bar. Every setting that reaches the feed and LongMemEval gains loses j-38, and the one that keeps j-38 (2:1) falls to 92.2 on LongMemEval all@10, below equal weights. Whether that one personal question is worth the feed gain is a decision for the person, not something the grid settles.
+
+**Recorded facts that matter for the next step.**
+
+- The k constant is not only a fusion constant. Route score is `fused / peak + boosts`, so k changes how the vector-only route orders its own candidates. With scope=semantic, a k other than 60 changes the vector-alone route's per-question results (the `vec+lex same` column in the grid). That is why the k rows are not a pure fusion effect.
+- The absolute fused values change with the weights, but abstention and the corrective query do not. The abstention thresholds (0.18 and 0.25) are unreachable at any weight in the grid (the largest fused value at 0.25:1 is 1.25/61 = 0.02), so every answer's abstention and correction are decided as before.
+- The LongMemEval harness does not run on the current default as committed. M5c made `journal` the default source, and the harness stores each turn's session id as the fact's source, so every recall returned nothing and every route abstained (0 of 100). The M5d numbers load each turn with source `journal` and map the session back from the result's id, in a driver outside the repository (not committed); the scoring is the harness's own. Its reproduced baseline matches the M3 record exactly (lexical+vector all@10 94.4, vector 98.9, tokens 2177.6 and 1591.3), so the driver changes nothing else. The committed harness needs the same fix before its next run.
+- The lexical and vector routes alone do not depend on the weights at scope=semantic. Their per-question results are identical to the defaults at every setting with k = 60.
+
+**Method.** Scratch copies only (the `~/.vinci` folders were read, never written): the staging journal and its index; the feed scratch index with `@gpu` vectors and its query cache; the LongMemEval per-question indexes and the GPU vector cache, with the corrective queries from the CPU cache; the personal embedding cache. The GPU server (8082) was down, so every query had to be in a cache: all were. Harness commands: `index_eval --home <copy> --questions ... --label` (personal `qwen3-embedding:4b` on the CPU server, feed `@gpu` with the closed port), and the LongMemEval driver. The identity checks before the sweep: the untouched binary reproduced the personal (36/48, 49/60, 275.4), feed (13/15, 15/15, 2650.9) and LongMemEval (94.4, 98.9, 2177.6) numbers exactly, and the first build with the flag and no setting gave a byte-identical LongMemEval per-question result.
+
+**Selection rule and what it touched.** The rule was written down before the grid was run: among settings that match or beat equal-weight RRF on LongMemEval (all@10 at least 94.4, any@10 at least 98.9) and on the feed set (at least 13/15 with 15/15 abstentions), choose the flat-region centre, then check personal (hit at least 36/48, abstention at least 49/60). The rule was applied to the first grid (scope=all) and found it passes on LongMemEval and the feed set, but not on personal, so no scope=all setting is the winner. Scope=semantic was added after the j-38 loss was seen, so the personal set was not a clean holdout for that variant. Its row was chosen by the same LongMemEval rule, and the personal set confirmed it. The gain is small, so treat it as a tie that leans one way, not as a large effect.
+
+Gates on the final default: `make -C mojo check` exit 0 (188 test lines ok, 0 errors, ruff and pyright clean; the fusion tests are 17 of 17). `vinci_diff --generated 50 --seed 1`: 3633 of 3633 steps, 0 diverged. `chat_diff` 10 of 10. `portal_diff` 136 of 136 requests, 0 diverged (the 22 divergences in the portal note above did not recur on this run). `sync_diff` 10 of 10.

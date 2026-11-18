@@ -414,3 +414,25 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   ```sh
   VINCI_HOME="$scratch" VINCI_EVAL_EMBED_CACHE="$scratch/embed-cache.sqlite" ./build/vinci recall "word"
   ```
+
+## Found in M5d (fusion weights, twice-hit)
+
+- **A vector label that does not match returns no vectors, and no error.** `index_eval --label qwen3-embedding:4b@gpu` against an index whose vectors are labelled `@gpu` gave the vector route 0 of 15 and the same lexical results, with no warning. Check the label the index stores before a run.
+  ```sh
+  python3 -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute('SELECT label, COUNT(*) FROM vectors GROUP BY label').fetchall())" index.sqlite
+  ```
+
+- **A recall whose facts do not have source `journal` returns nothing since M5c.** The default `--sources` is `journal`, so a fact stored under any other source is dropped in SQL. An eval that loads documents with the session id as the source gets `results: []` and abstains on every question. Load them with source `journal`, or pass `--sources` with a name the index holds.
+
+- **An unused first value makes a warning.** `var value = Float64(0)` followed by an assignment in `try` warns "assignment ... was never used". Declare the variable and assign it inside the `try` instead.
+  ```mojo
+  var value: Float64
+  try:
+      value = Float64(value_text)
+  except:
+      raise user_error("weights: " + name + " must be a number")
+  ```
+
+- **A recall test that checks an order pins the default weights.** Changing the default changes the order, and the expectation has to be worked out by hand again. The route score divides by the peak, so compute each candidate's score from its fused value, not from the sum of its ranks. The test's expected order changed from f1, f3, f2 to f3, f1, f2 on the new default.
+
+- **Eval harnesses write result files under `~/.vinci/eval/results` unless told otherwise.** `index_eval` writes there unless `--out` is given, and `lme_index_eval` writes to its module-level `RESULTS_DIR`. Pass `--out`, or point the module's paths at a copy before calling its `main()`, as the M5d driver does.

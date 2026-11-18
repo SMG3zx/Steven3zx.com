@@ -16,7 +16,14 @@ from abstain import (
 )
 from dates import DateWindow, date_boost, parse_query_dates
 from embed_edge import EmbedConfig
-from fusion import Candidate, content_key, fuse, route_score, weights_for
+from fusion import (
+    Candidate,
+    Weights,
+    content_key,
+    fuse,
+    route_score,
+    weights_for,
+)
 from index_store import IndexStore, py_params
 from jsonline import ascii_lower
 from route import Plan, plan_of, route_query
@@ -456,6 +463,10 @@ struct Settings(Copyable, Movable):
     var today: String
     var embed: EmbedConfig
     var sources: List[String]
+    # Eval only (--weights, VINCI_RECALL_WEIGHTS): replaces the per-route fusion weights
+    # for every route, or for route semantic alone with scope=semantic. None is the
+    # default, the route's own weights.
+    var fusion: Optional[Weights]
 
     def __init__(
         out self,
@@ -473,6 +484,7 @@ struct Settings(Copyable, Movable):
         # The journal only, as before the feeds. Other sources are named explicitly.
         self.sources = List[String]()
         self.sources.append(JOURNAL_SOURCE)
+        self.fusion = None
 
 
 def has_route(routes: List[String], name: String) -> Bool:
@@ -534,8 +546,13 @@ def one_pass(
     if use_vectors:
         query_vector = embed_text_for_query(settings.embed, query)
         vector_hits = index.search(query_vector, candidates_limit)
+    var weights = weights_for(route)
+    if settings.fusion:
+        var override = settings.fusion.value().copy()
+        if not override.semantic_only or route == "semantic":
+            weights = override^
     var fused = keep_sources(
-        fuse(lexical_hits, vector_hits, weights_for(route)), settings.sources
+        fuse(lexical_hits, vector_hits, weights), settings.sources
     )
     if use_vectors:
         for i in range(len(fused)):

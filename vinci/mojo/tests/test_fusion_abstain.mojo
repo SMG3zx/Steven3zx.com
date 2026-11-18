@@ -16,6 +16,7 @@ from fusion import (
     Weights,
     content_key,
     fuse,
+    parse_weights,
     route_score,
     weights_for,
 )
@@ -66,6 +67,9 @@ def test_fusion_is_reciprocal_rank_with_stable_ties() raises:
 
 
 def test_route_weights_match_rank_fusion() raises:
+    var semantic = weights_for("semantic")
+    assert_equal(semantic.lexical, 0.25)
+    assert_equal(semantic.vector, 1.0)
     var temporal = weights_for("temporal")
     assert_equal(temporal.lexical, 0.45)
     assert_equal(temporal.vector, 0.2)
@@ -175,7 +179,116 @@ def test_corrective_query_keeps_distinct_terms_in_order() raises:
     assert_equal(corrective_query("alpha beta alpha gamma"), "alpha beta gamma")
 
 
+def near(a: Float64, b: Float64) -> Bool:
+    var d = a - b
+    if d < 0:
+        d = -d
+    return d < 1e-12
+
+
+def test_weighted_fusion_lets_the_vector_list_lead() raises:
+    # Lexical ranks A, B; vector ranks C, D. Weights lexical 0.25, vector 1.0, k 60:
+    # C (vector rank 1) = 1/61 = 0.0163934    D (vector rank 2) = 1/62 = 0.0161290
+    # A (lexical rank 1) = 0.25/61 = 0.0040984  B (lexical rank 2) = 0.25/62 = 0.0040323
+    # So the order is C, D, A, B. Equal weights 0.4, 0.4 tie A with C (both 0.4/61), and
+    # A is seen first, so that order is A, C, B, D.
+    var lexical = List[Candidate]()
+    lexical.append(cand(1, "A", "alpha"))
+    lexical.append(cand(2, "B", "beta"))
+    var vector = List[Candidate]()
+    vector.append(cand(3, "C", "gamma"))
+    vector.append(cand(4, "D", "delta"))
+    var weighted = fuse(lexical, vector, Weights(0.25, 1.0, 0.0))
+    assert_equal(len(weighted), 4)
+    assert_equal(weighted[0].id, "C")
+    assert_equal(weighted[1].id, "D")
+    assert_equal(weighted[2].id, "A")
+    assert_equal(weighted[3].id, "B")
+    assert_true(near(weighted[0].fused, 1.0 / 61.0))
+    assert_true(near(weighted[2].fused, 0.25 / 61.0))
+    assert_true(weighted[2].in_lexical and not weighted[2].in_vector)
+    var equal = fuse(lexical, vector, Weights(0.4, 0.4, 0.2))
+    assert_equal(equal[0].id, "A")
+    assert_equal(equal[1].id, "C")
+
+
+def test_weighted_fusion_sums_a_candidate_in_both_lists() raises:
+    # C is lexical rank 3 and vector rank 1, as in the stable-ties test. With lexical 0.5
+    # and vector 1.0: C = 0.5/63 + 1.0/61 = 0.0079365 + 0.0163934.
+    var lexical = List[Candidate]()
+    lexical.append(cand(1, "A", "alpha"))
+    lexical.append(cand(2, "B", "beta"))
+    lexical.append(cand(3, "C", "gamma"))
+    var vector = List[Candidate]()
+    vector.append(cand(3, "C", "gamma"))
+    var fused = fuse(lexical, vector, Weights(0.5, 1.0, 0.0))
+    assert_equal(fused[0].id, "C")
+    assert_true(near(fused[0].fused, 0.5 / 63.0 + 1.0 / 61.0))
+    assert_true(fused[0].in_lexical and fused[0].in_vector)
+
+
+def test_rrf_k_sets_every_contribution() raises:
+    # With k = 20 the first vector rank is worth 1/21, not 1/61. A zero lexical weight
+    # adds nothing, so only the vector list counts.
+    var vector = List[Candidate]()
+    vector.append(cand(1, "C", "gamma"))
+    var at_20 = fuse(List[Candidate](), vector, Weights(0.0, 1.0, 0.0, 20))
+    assert_true(near(at_20[0].fused, 1.0 / 21.0))
+    var at_60 = fuse(List[Candidate](), vector, Weights(0.0, 1.0, 0.0))
+    assert_true(near(at_60[0].fused, 1.0 / 61.0))
+    assert_equal(Weights(0.4, 0.4, 0.2).rrf_k, 60)
+
+
+def test_parse_weights_reads_the_ratio_and_k() raises:
+    var w = parse_weights("lexical=0.25,vector=1")
+    assert_true(near(w.lexical, 0.25))
+    assert_true(near(w.vector, 1.0))
+    assert_equal(w.rrf_k, 60)
+    var k = parse_weights("vector=1,k=20,lexical=0.5")
+    assert_true(near(k.lexical, 0.5))
+    assert_equal(k.rrf_k, 20)
+    assert_false(k.semantic_only)
+    var scoped = parse_weights("lexical=0.5,vector=1,scope=semantic")
+    assert_true(scoped.semantic_only)
+    assert_false(parse_weights("lexical=0.5,vector=1,scope=all").semantic_only)
+
+
+def refused(text: String) raises -> Bool:
+    try:
+        _ = parse_weights(text)
+    except:
+        return True
+    return False
+
+
+def test_parse_weights_refuses_what_it_cannot_read() raises:
+    # Each of these is a mistake an eval could make: a missing half, an unknown name, a
+    # sign, a non-number, a k below one, an empty pair, or a separator other than "=".
+    assert_true(refused("lexical=1"))
+    assert_true(refused("vector=1"))
+    assert_true(refused("lexical=0,vector=0"))
+    assert_true(refused("lexical=-1,vector=1"))
+    assert_true(refused("lexical=x,vector=1"))
+    assert_true(refused("lexical=1,vector=1,k=0"))
+    assert_true(refused("lexical=1,vector=1,k=abc"))
+    assert_true(refused("lexical=1,vector=1,graph=1"))
+    assert_true(refused("lexical=1;vector=1"))
+    assert_true(refused("lexical=1,vector="))
+    assert_true(refused("lexical=1,vector=1,scope=temporal"))
+    assert_false(refused("lexical=0,vector=1"))
+
+
 def main() raises:
+    test_weighted_fusion_lets_the_vector_list_lead()
+    print("test_weighted_fusion_lets_the_vector_list_lead: ok")
+    test_weighted_fusion_sums_a_candidate_in_both_lists()
+    print("test_weighted_fusion_sums_a_candidate_in_both_lists: ok")
+    test_rrf_k_sets_every_contribution()
+    print("test_rrf_k_sets_every_contribution: ok")
+    test_parse_weights_reads_the_ratio_and_k()
+    print("test_parse_weights_reads_the_ratio_and_k: ok")
+    test_parse_weights_refuses_what_it_cannot_read()
+    print("test_parse_weights_refuses_what_it_cannot_read: ok")
     test_fusion_is_reciprocal_rank_with_stable_ties()
     print("test_fusion_is_reciprocal_rank_with_stable_ties: ok")
     test_route_weights_match_rank_fusion()

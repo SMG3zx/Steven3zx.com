@@ -197,16 +197,19 @@ def test_recall_fuses_the_vector_and_lexical_routes() raises:
     var now = parse_instant(NOW).utc
     var settings = Settings(10, routes^, now, "2026-11-16", cfg^)
     var answer = recall(store, "portal migration plan", settings)
-    # Fused: f1 = 0.4/61 + 0.4/63, f3 = 0.4/62 + 0.4/62, f2 = 0.4/61 (vector only, so
-    # it gets the method boost). Order: f1, f3, f2.
+    # The semantic route's weights are lexical 0.25, vector 1.0 (the default, M5 step d).
+    # Fused: f1 = 0.25/61 + 1/63 = 0.0199714 (lexical rank 1, vector rank 3), f3 = 0.25/62
+    # + 1/62 = 0.0201613 (lexical rank 2, vector rank 2), f2 = 1/61 = 0.0163934 (vector
+    # rank 1 only). Route scores divide by the peak, f3: 1.0, f1: 0.99058, and f2 gets the
+    # method boost: 0.81319 + 0.1 = 0.91319. Order: f3, f1, f2.
     assert_equal(len(answer.results), 3)
-    assert_equal(answer.results[0].id, "f1")
-    assert_equal(answer.results[1].id, "f3")
+    assert_equal(answer.results[0].id, "f3")
+    assert_equal(answer.results[1].id, "f1")
     assert_equal(answer.results[2].id, "f2")
     assert_equal(answer.results[2].in_vector, True)
     assert_equal(answer.results[2].in_lexical, False)
-    assert_true(answer.results[1].has_cosine)
-    var diff = answer.results[1].cosine - 0.8
+    assert_true(answer.results[0].has_cosine)
+    var diff = answer.results[0].cosine - 0.8
     if diff < 0:
         diff = -diff
     assert_true(diff < 1e-5)
