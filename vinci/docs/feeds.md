@@ -71,7 +71,20 @@ The number is given once, when the record is first stored, and every later versi
 
 `vinci open` takes either form: `open g220`, or the record id `open <sha10>` for a commit and `open <path>.md#<slug>` for a section. `open` shows the stored text (the snapshot), not the file again. The reasons are below.
 
-Recall returns feed records with `trusted` false. The chat's write confirmation then applies to any write that follows (see [chat](chat.md)).
+## Recall and the chat
+
+Recall searches the journal only, unless it is asked for more. That is the default of `vinci recall`, of the chat's own recall on the person's words, and of the chat's `recall` tool when it gets no `sources`. So loading feeds does not change any answer about the journal.
+
+```sh
+vinci recall --sources git "when did the index change"     # git only
+vinci recall --sources git,vaults "..."                    # the two feeds
+vinci recall --sources all "..."                           # journal, git and vaults
+vinci recall --sources journal "..."                       # the default, named
+```
+
+An unknown name is an error (`journal`, `git`, `vaults`, or `all`). The chat's `recall` tool takes the same `sources` argument. The tool instructions tell the model when to use each one: `git` for what changed in the code and when, `vaults` for the notes folders. A line from a feed is labelled with its source in the packed text, `[g220] 2026-11-15 git commit: ...` or `[v1839] ... vault section: ...`, so a commit is not taken for a journal line.
+
+Feed records keep `trusted` false, so the chat's write confirmation applies once one is in the conversation (see [chat](chat.md)).
 
 ## Decisions, and why
 
@@ -80,6 +93,7 @@ Recall returns feed records with `trusted` false. The chat's write confirmation 
 - **The text is the snapshot.** FTS needs the text in the table, so the text is stored anyway. `open` reads it, rather than the file, for three reasons: the citation then shows the text that recall ranked, not a later edit; a deleted section can still be opened and seen as retracted; and an unchanged index never reads the vaults. `body_path` stays as provenance, so the file can be found. The cost is index size: this run added about 7.5 MB for 2,376 records (about 2 MB of text).
 - **Retraction is a version, not a delete.** The same rule as journal retraction. The history stays, so `open` can say what was retracted, and a rewrite of the history leaves the old commit readable.
 - **The journal's rewrite check.** The journal's cursor was a byte offset, so a journal rewritten to the same length went unnoticed. The cursor now also holds the SHA-256 of the bytes before the offset. A different prefix means the journal's facts are dropped and read again, and the report says so. A journal *shorter* than the offset is still refused (the existing test): a truncated journal is for the person to decide, with `vinci feed rebuild journal`. An index made before this change has no stored prefix; its first update takes the current prefix as the reference, so a rewrite made before that update is not detected.
+- **Feeds have their own search table.** Feed records are in `fts_feeds`, and the journal stays in `fts`. FTS5 scores a word by how rare it is across the whole table. With feeds in the journal's table, every journal score moved, and so did the answers: the personal set's default answers changed on about half the questions. In a separate table the journal's scores are the ones they were before feeds. An index that had feed rows in `fts` moves them on its first open.
 - **Embedding is not part of a run.** A feed's new records have no vector, and `vinci index embed` embeds them like any fact. A run does not embed, because a run is cheap and an embed is not (see the measurements).
 
 ## Configuration
@@ -129,13 +143,33 @@ Embedding the 2,376 feed records has not been done. A single call per record too
 - **Lexical recall sees feed text immediately. Vectors do not, until embedded.** So feed records compete with journal facts for words, but not for meaning.
 - **Nothing runs feeds on a schedule.** The chat's own index update reads only the journal.
 
-## What recall does with them now
+## Measured: what the sources change
 
-This matters before a run is scheduled. With the feeds loaded, the personal set (60 questions, lexical route) changes:
+Scratch copy with feeds loaded (`real-home`, 2026-11-18), lexical route only, `vinci_eval.index_eval`:
 
-| Route | Hit (48 answerable) | Abstain (12 unanswerable) |
+Personal set (60 questions, the journal's own):
+
+| Sources | Hit (48 answerable) | Abstain (12 unanswerable) | Tokens mean |
+| --- | --- | --- | --- |
+| journal only, no feeds loaded | 35 | 45 of 60 | 200.6 |
+| default, feeds loaded | 35 | 45 of 60 | 200.6 (identical per question) |
+| `all`, feeds loaded | 25 | 44 of 60 | 5,880 (unpacked top 10) |
+
+The default equals the journal-only run question by question. `all` is worse than the journal on this set: vault and commit text shares ordinary words with the personal questions, and feed scores in the merged list can outrank journal lines.
+
+Feed set (`mojo/eval/feed-questions.json`, 15 answerable questions, eight about commits and seven about notes; each expected string was checked by hand against its commit or file):
+
+| Sources | Hit (15) | Tokens mean |
 | --- | --- | --- |
-| journal only | 35 | 11 |
-| journal and feeds | 29 | 1 |
+| journal (default) | 1 | 210 |
+| `git,vaults` | 13 | 2,724 |
+| `all` | 13 | 2,698 |
 
-Vault and git text shares ordinary words with the journal (`journal`, `memory`, `vinci`), so every question has feed records in its top 10, and 40 have one at rank 1. Ten abstention questions now get answers from vault or commit text. Ranking or a separate route is needed before feeds join the default recall. That decision is open.
+The two misses under both feed settings are `f-01` (the C# removal commit, whose text is in the index) and `f-15` (the `fn` note in the gotchas, also in the index). Both are ranking misses, not missing text: the answer is in the index but not in the top 10 for that wording. One expected string, `60%`, appears in 123 feed records, so that question is a weak test.
+
+Token means are of the unpacked top 10, as the eval counts them, so they are not what the chat reads (the chat packs to a budget).
+
+## Limits and open decisions
+
+- Vector recall does not yet see feed records, since they are not embedded. Under `all`, the vector candidates are filtered after the search, so a limit can return fewer records.
+- `all` lowers the journal's score on the personal set. Before feeds join the default, the merge across the two tables needs a rule that keeps journal facts first, or a weight. That is open.

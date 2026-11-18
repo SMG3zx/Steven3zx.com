@@ -76,3 +76,12 @@
 {"agent": "M5a", "n": 12, "pass": false, "first_error": "chat_diff run with --candidate: no scripts match (flag read as a filter)"}
 {"agent": "M5a", "n": 13, "pass": true, "first_error": ""}
 {"agent": "M5a", "n": 14, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 15, "pass": false, "first_error": "recall.mojo: field 'only_journal.candidates' destroyed out of the middle of a value (move from a returned struct)"}
+{"agent": "M5a", "n": 16, "pass": false, "first_error": "recall.mojo: same error for the feed table return"}
+{"agent": "M5a", "n": 17, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 18, "pass": false, "first_error": "test_feed_sources.mojo: invalid call to 'put': mutating method on an rvalue (store not passed mut)"}
+{"agent": "M5a", "n": 19, "pass": true, "first_error": ""}
+{"agent": "M5a", "n": 20, "pass": false, "first_error": "make check: test_index_recall.mojo: invalid call to 'lexical': missing required argument 'sources'"}
+{"agent": "M5a", "n": 21, "pass": false, "first_error": "make check: test_index_recall.mojo:126 AssertionError left 0 right 1 (test facts had source 'test', not journal)"}
+{"agent": "M5a", "n": 22, "pass": false, "first_error": "make check: test_index_recall.mojo:210 AssertionError left 'journal' right 'test' (source assertion)"}
+{"agent": "M5a", "n": 23, "pass": true, "first_error": ""}

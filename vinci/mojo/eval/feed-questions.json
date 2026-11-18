@@ -1,0 +1,182 @@
+[
+ {
+  "id": "f-01",
+  "query": "When was the C# project removed, and what went with it?",
+  "expectedContains": [
+   "neo4j memory service"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "382c0fe"
+  ]
+ },
+ {
+  "id": "f-02",
+  "query": "Which commit put the GitHub backup behind a Gitea CI job?",
+  "expectedContains": [
+   "gate the github backup"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "eebb4b8"
+  ]
+ },
+ {
+  "id": "f-03",
+  "query": "What was the mirror secret renamed to?",
+  "expectedContains": [
+   "mirror_token"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "952e7c3"
+  ]
+ },
+ {
+  "id": "f-04",
+  "query": "Which commit made Gitea the canonical remote?",
+  "expectedContains": [
+   "canonical remote"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "01f7136"
+  ]
+ },
+ {
+  "id": "f-05",
+  "query": "When did the docs say vinci is Mojo only?",
+  "expectedContains": [
+   "document vinci as mojo only"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "384f5ae"
+  ]
+ },
+ {
+  "id": "f-06",
+  "query": "When did chat and embeddings move from Ollama to llama-server?",
+  "expectedContains": [
+   "instead of ollama"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "ae3bf98"
+  ]
+ },
+ {
+  "id": "f-07",
+  "query": "What bug was fixed in vector loading?",
+  "expectedContains": [
+   "use-after-free"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "8a9245f"
+  ]
+ },
+ {
+  "id": "f-08",
+  "query": "Which commit made vinci memory a removed-command error?",
+  "expectedContains": [
+   "removed-command error"
+  ],
+  "shouldAbstain": false,
+  "type": "commit",
+  "evidence": [
+   "ee42ded"
+  ]
+ },
+ {
+  "id": "f-09",
+  "query": "What does the monorepo extraction map assume another tool means?",
+  "expectedContains": [
+   "means `meingrad`"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "Research/monorepo-extraction-map.md"
+  ]
+ },
+ {
+  "id": "f-10",
+  "query": "What share of agent changes must compile by the third try for Mojo to stay?",
+  "expectedContains": [
+   "60%"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "vinci/docs/mark2-plan.md"
+  ]
+ },
+ {
+  "id": "f-11",
+  "query": "How many ports does the author of hexagonal architecture favour?",
+  "expectedContains": [
+   "two to four"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "Research/hexagonal-ports-and-adapters.md"
+  ]
+ },
+ {
+  "id": "f-12",
+  "query": "What is swarm intelligence?",
+  "expectedContains": [
+   "decentralized, self-organized systems"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "Meingrad/Swarm Intelligence.md"
+  ]
+ },
+ {
+  "id": "f-13",
+  "query": "What are autonomous agents?",
+  "expectedContains": [
+   "without the need for direct human intervention"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "Meingrad/Autonomous Agents.md"
+  ]
+ },
+ {
+  "id": "f-14",
+  "query": "Which address does the embedding server default to?",
+  "expectedContains": [
+   "127.0.0.1:8081"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "vinci/docs/memory.md"
+  ]
+ },
+ {
+  "id": "f-15",
+  "query": "What happens when Mojo code uses fn?",
+  "expectedContains": [
+   "has been removed"
+  ],
+  "shouldAbstain": false,
+  "type": "vault",
+  "evidence": [
+   "vinci/docs/mojo-gotchas.md"
+  ]
+ }
+]

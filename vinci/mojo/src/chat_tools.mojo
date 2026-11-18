@@ -36,7 +36,7 @@ from jsonline import json_string
 from journal import Event, Journal
 from open_view import no_request, parse_lines_arg
 from pack import estimate_counter, pack
-from recall import Settings, recall
+from recall import Settings, parse_sources, recall
 from session import USER_PREFIX
 from text import ascii_tail
 from timeutil import Instant, format_instant, parse_instant
@@ -61,6 +61,7 @@ comptime FALLBACK_NOTE = (
 comptime CHAT_INSTRUCTIONS = """You have five tools. To use one, reply with only a JSON object and nothing else:
 {"tool": "journal", "args": ["idea", "Flying machine"]}
 {"tool": "recall", "query": "what did I say about gliders"}
+{"tool": "recall", "query": "when did the index change", "sources": "git"}
 {"tool": "open", "id": "i1"}
 {"tool": "open", "id": "i1", "grep": "wing"}
 {"tool": "remember", "content": "The person prefers short answers", "category": "preference"}
@@ -73,7 +74,8 @@ Each call runs one command. To do two things, make two calls.
 The command words are: idea, for, goal, req, cut, advance, ideas, pipeline, next, show, commit, kept, missed, ship, used, tend, retire,
 note, link, notes, tags, source, sources, bookmark, bookmarks, unbookmark, predict, result, predictions, log, spec, stats,
 issue, diagnose, principle, issues, principles, review, adopt, home, watch, unwatch, watches, sync, spent, path.
-recall searches the journal, notes, sources and what was read. It returns one line per fact, and each line starts with its id in brackets, such as [i1] or [d1/2]. A line that ends with (open <id> for more) is cut: open that id to read the rest.
+recall returns one line per fact, and each line starts with its id in brackets, such as [i1] or [d1/2]. A line that ends with (open <id> for more) is cut: open that id to read the rest.
+recall searches only the journal unless you give "sources". Use "git" for the monorepo's commits: what changed in the code, and when. Use "vaults" for the notes folders: Meingrad, Research and the vinci docs. Use "git,vaults" for both, or "all" for every source. A line from git is labelled "git commit", and one from the notes "vault section". Those are not the person's own writing: cite them as [id] like any line, and say where they came from.
 open shows part of one id: lines=A-B for a range of lines, or grep=word for the lines that contain a word. Without either it shows the whole fact. Its output is cut at 4000 bytes.
 remember saves a durable fact about the person. Its category is one of fact, preference, decision, procedure, episode.
 read saves a text file (.txt, .md) or a web page that the person named, so recall can find its passages. Use it only when the person gives you the path or the address.
@@ -252,22 +254,32 @@ struct ChatTools(Movable):
         )
         if budget < 1:
             raise Error("budget must be at least 1")
-        return self.recall_query(query, budget)
+        var named = optional_text_arg(action, "sources")
+        var sources = List[String]()
+        if named is not None:
+            sources = parse_sources(named.value())
+        else:
+            sources.append("journal")
+        return self.recall_query(query, budget, sources)
 
     def upfront_recall(mut self, query: String) raises -> String:
         """The recall that runs before the first model call of a turn, on the person's own
         words, packed as the recall tool packs. Empty when it cannot run: the model can still
         call recall itself, so nothing is raised."""
         try:
+            var journal = List[String]()
+            journal.append("journal")
             return self.recall_query(
-                query, env_int(ENV_RECALL_BUDGET, DEFAULT_BUDGET)
+                query, env_int(ENV_RECALL_BUDGET, DEFAULT_BUDGET), journal
             )
         except:
             return String()
 
-    def recall_query(mut self, query: String, budget: Int) raises -> String:
-        """recall: the index searched for query, packed under budget, with the lexical
-        fallback when the embedding server cannot answer."""
+    def recall_query(
+        mut self, query: String, budget: Int, sources: List[String]
+    ) raises -> String:
+        """recall: the index searched for query in the named sources, packed under budget,
+        with the lexical fallback when the embedding server cannot answer."""
         var store = IndexStore(self.index_path)
         var settings = Settings(
             RECALL_LIMIT,
@@ -276,6 +288,7 @@ struct ChatTools(Movable):
             today_of(self.now.copy()),
             default_config(),
         )
+        settings.sources = sources.copy()
         try:
             return self.recall_text(store, query, settings, budget, "")
         except e:

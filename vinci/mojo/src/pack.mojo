@@ -101,8 +101,19 @@ def joined(head: String, line: String) -> String:
     return head + "\n" + line
 
 
+def label_of(c: Candidate) -> String:
+    """The kind as the packed line shows it. A feed record says where it came from, so
+    the model does not take a commit for a journal line: "git commit", "vault section".
+    """
+    if c.source == "git":
+        return "git " + c.kind
+    if c.source == "vaults":
+        return "vault " + c.kind
+    return c.kind
+
+
 def whole_line(c: Candidate) -> String:
-    return "[" + c.id + "] " + date_of(c.at) + " " + c.kind + ": " + c.text
+    return "[" + c.id + "] " + date_of(c.at) + " " + label_of(c) + ": " + c.text
 
 
 def pointer_line(c: Candidate) raises -> String:
@@ -115,7 +126,7 @@ def pointer_line(c: Candidate) raises -> String:
         + "] "
         + date_of(c.at)
         + " "
-        + c.kind
+        + label_of(c)
         + ": "
         + digest_of(c.text)
     )

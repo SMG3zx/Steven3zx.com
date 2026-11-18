@@ -372,3 +372,13 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   ```sh
   VINCI_MOJO_PY=/home/steven3zx/Steven3zx.com/vinci/mojo/py "$scratch/vinci" feed run journal
   ```
+
+## Found in M5a-2 (recall by source, twice-hit)
+
+- **A field cannot be moved out of a value that is returned in pieces.** `return f(...).candidates^`, and a local whose field is moved with `^`, both fail with "field ... destroyed out of the middle of a value". Hit twice in one function. Return a copy, or return the struct and let the caller read the field.
+  ```mojo
+  var only = lexical_table(store, "fts", match_expr, limit, status, journal)
+  return only.candidates.copy()      # not: return only.candidates^
+  ```
+
+- **A SQL filter does not change FTS5 scores.** bm25 uses the whole table's word counts, so rows that a `WHERE` removes still move the scores of the rows it keeps. Rows that should not affect the search need their own FTS table. The personal set's default answers changed on about half the questions when feed rows shared the journal's table.

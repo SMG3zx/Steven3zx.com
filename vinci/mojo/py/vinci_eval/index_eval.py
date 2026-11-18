@@ -76,13 +76,18 @@ def run_recall(
     cache: Path,
     budget: int | None = None,
     whole: int | None = None,
+    sources: str | None = None,
 ) -> dict[str, object]:
     """One `vinci recall --json` call against the index in home. With a budget, the
-    response also carries the packed context, with `whole` records in whole form."""
+    response also carries the packed context, with `whole` records in whole form.
+    sources is the --sources value (journal, git, vaults, or a comma list or all); None
+    leaves the binary's default, which is the journal."""
     env = dict(os.environ)
     env["VINCI_HOME"] = str(home)
     env["EMBEDDING_BASE_URL"] = base_url
     budget_args: list[str] = []
+    if sources is not None:
+        budget_args += ["--sources", sources]
     if budget is not None:
         budget_args += ["--budget", str(budget)]
     if whole is not None:
@@ -362,6 +367,17 @@ def main() -> int:
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--out", type=Path, help="JSON result file (default: results dir)")
     parser.add_argument(
+        "--sources",
+        default=None,
+        help="recall sources: journal (the binary's default), git, vaults, a comma list, or all",
+    )
+    parser.add_argument(
+        "--questions",
+        type=Path,
+        default=QUESTIONS,
+        help="question set (default: the personal v2 set)",
+    )
+    parser.add_argument(
         "--budget",
         help="comma-separated token budgets: run the packed-context sweep instead",
     )
@@ -370,7 +386,9 @@ def main() -> int:
     home: Path = args.home
     specs: list[str] = [spec.strip() for spec in str(args.routes).split(",") if spec.strip()]
 
-    questions = load_questions(QUESTIONS)
+    questions_path: Path = args.questions
+    questions = load_questions(questions_path)
+    sources_arg: str | None = args.sources
     if args.budget is not None:
         budgets = [int(part) for part in str(args.budget).split(",") if part.strip()]
         # One route mix for the sweep, written with "+" as --routes writes it. The default
@@ -413,7 +431,14 @@ def main() -> int:
         begun = datetime.datetime.now(datetime.UTC)
         for question in questions:
             response = run_recall(
-                binary, home, routes, question.query, args.label, args.base_url, args.cache
+                binary,
+                home,
+                routes,
+                question.query,
+                args.label,
+                args.base_url,
+                args.cache,
+                sources=sources_arg,
             )
             outcomes.append(score_question(question, response, mode))
         timings[spec] = (datetime.datetime.now(datetime.UTC) - begun).total_seconds()
@@ -432,8 +457,9 @@ def main() -> int:
         "label": args.label,
         "token_method": mode,
         "question_set": {
-            "path": str(QUESTIONS),
-            "sha256": sha256_of(QUESTIONS),
+            "path": str(questions_path),
+            "sha256": sha256_of(questions_path),
+            "sources": sources_arg if sources_arg is not None else "default (journal)",
             "questions": len(questions),
         },
         "routes": {spec: route_json(summary) for spec, summary in summaries},

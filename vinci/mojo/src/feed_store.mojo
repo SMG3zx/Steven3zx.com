@@ -224,6 +224,13 @@ def delete_source_rows(mut store: IndexStore, source: String) raises:
         py_params(PythonObject(source)),
     )
     _ = store.conn.execute(
+        (
+            "DELETE FROM fts_feeds WHERE rowid IN"
+            " (SELECT rowid FROM facts WHERE source = ?)"
+        ),
+        py_params(PythonObject(source)),
+    )
+    _ = store.conn.execute(
         "DELETE FROM facts WHERE source = ?", py_params(PythonObject(source))
     )
 

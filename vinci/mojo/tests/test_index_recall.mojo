@@ -27,7 +27,7 @@ def fact(
     var tags = List[String]()
     var refs = List[String]()
     return Fact(
-        "test",
+        "journal",
         record_id,
         version_hash,
         kind,
@@ -207,7 +207,7 @@ def test_result_holds_the_citation_and_the_text() raises:
     assert_equal(r.kind, "memory")
     assert_equal(r.text, "Bun runtime notes")
     assert_equal(r.at, "2026-03-04T05:06:07Z")
-    assert_equal(r.source, "test")
+    assert_equal(r.source, "journal")
     assert_false(r.trusted)
     # The raw route has no fused score yet: fusion sets it.
     assert_equal(r.fused, 0.0)

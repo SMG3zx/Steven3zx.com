@@ -9,6 +9,9 @@
 #                                    cite is the journal-style id ("m12"), line the journal line.
 #   keys(fact, key)                  extra search keys per fact, filled by consolidation (step 3)
 #   fts (FTS5: text, keys)           rowid = facts.rowid. Every version is indexed; search filters.
+#                                    Journal facts only.
+#   fts_feeds (FTS5: text, keys)     the same for feed records (git, vaults), in a table of their
+#                                    own, so the journal's bm25 scores do not change with feeds.
 #   vectors(fact, label, dims, vec)  embeddings, filled in step 2b
 #   handles(id, created, source, text, digest)  text too long for a context, saved under a t id
 #                                    (step 3a, handles.mojo). Not a fact: the text is not indexed.
@@ -174,6 +177,23 @@ struct IndexStore(Movable):
         _ = self.conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(text, keys)"
         )
+        # Added in M5 step a2: the feeds' search table. An index that has feed rows in fts
+        # (from step a) moves them here once, when this table is first created.
+        var feeds_table = self.table_exists("fts_feeds")
+        _ = self.conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS fts_feeds USING fts5(text,"
+            " keys)"
+        )
+        if not feeds_table:
+            _ = self.conn.execute(
+                "INSERT INTO fts_feeds (rowid, text, keys) SELECT fts.rowid,"
+                " fts.text, fts.keys FROM fts JOIN facts AS f ON f.rowid ="
+                " fts.rowid WHERE f.source <> 'journal'"
+            )
+            _ = self.conn.execute(
+                "DELETE FROM fts WHERE rowid IN"
+                " (SELECT rowid FROM facts WHERE source <> 'journal')"
+            )
         _ = self.conn.execute(
             "CREATE TABLE IF NOT EXISTS vectors ("
             " fact INTEGER NOT NULL, label TEXT NOT NULL,"
@@ -205,6 +225,13 @@ struct IndexStore(Movable):
                 + SCHEMA_VERSION
                 + "; delete the file and run vinci index rebuild"
             )
+
+    def table_exists(self, name: String) raises -> Bool:
+        var row = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            py_params(PythonObject(name)),
+        ).fetchone()
+        return not Bool(row == Python.none())
 
     def begin(self) raises:
         _ = self.conn.execute("BEGIN IMMEDIATE")
@@ -358,8 +385,11 @@ struct IndexStore(Movable):
             ),
         )
         var rowid = cur.lastrowid
+        var table = String("fts")
+        if f.source != "journal":
+            table = "fts_feeds"
         _ = self.conn.execute(
-            "INSERT INTO fts (rowid, text, keys) VALUES (?, ?, '')",
+            "INSERT INTO " + table + " (rowid, text, keys) VALUES (?, ?, '')",
             py_params(rowid, PythonObject(f.text)),
         )
         return Int(String(rowid))

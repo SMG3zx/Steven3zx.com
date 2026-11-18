@@ -19,6 +19,7 @@ from fusion import Candidate, content_key, fuse, route_score, weights_for
 from index_store import IndexStore, py_params
 from jsonline import ascii_lower
 from route import Plan, plan_of, route_query
+from session import user_error
 from vectors import VectorIndex, embed_text_for_query, load_vectors
 
 comptime LEXICAL = "lexical"
@@ -135,31 +136,99 @@ def fts_query(query: String) raises -> String:
     return out
 
 
-def lexical(
-    store: IndexStore,
-    query: String,
-    limit: Int,
-    include_superseded: Bool,
-) raises -> List[Candidate]:
-    """Candidates from FTS5, best bm25 first. Current and active versions only, or,
-    for the temporal route, superseded and active versions too."""
+comptime JOURNAL_SOURCE = "journal"
+comptime GIT_SOURCE = "git"
+comptime VAULTS_SOURCE = "vaults"
+comptime SOURCES_ALL = "journal,git,vaults"
+
+
+def parse_sources(text: String) raises -> List[String]:
+    """The sources a recall searches: a comma list of journal, git and vaults, or all.
+    The journal is the default. An unknown name is an error, so a typo is not a silent
+    empty search."""
+    var out = List[String]()
+    if text == "all":
+        return parse_sources(String(SOURCES_ALL))
+    for raw in text.split(","):
+        var name = String(raw)
+        if (
+            name != JOURNAL_SOURCE
+            and name != GIT_SOURCE
+            and name != VAULTS_SOURCE
+        ):
+            raise user_error(
+                "unknown source '" + name + "' (journal, git, vaults, or all)"
+            )
+        if name not in out:
+            out.append(name)
+    return out^
+
+
+def source_in(sources: List[String], source: String) -> Bool:
+    for s in sources:
+        if s == source:
+            return True
+    return False
+
+
+def keep_sources(
+    items: List[Candidate], sources: List[String]
+) -> List[Candidate]:
+    """The candidates whose source is one of sources, in their order."""
     var out = List[Candidate]()
-    var match_expr = fts_query(query)
-    if match_expr.byte_length() == 0 or limit <= 0:
-        return out^
-    var status_clause = "f.valid_until IS NULL AND f.status = 'active'"
-    if include_superseded:
-        status_clause = "f.status IN ('active', 'superseded')"
+    for c in items:
+        if source_in(sources, c.source):
+            out.append(c.copy())
+    return out^
+
+
+@fieldwise_init
+struct Scored(Movable):
+    """Candidates from one FTS table, best first, with their bm25 scores (lower is better).
+    """
+
+    var candidates: List[Candidate]
+    var scores: List[Float64]
+
+
+def lexical_table(
+    store: IndexStore,
+    table: String,
+    match_expr: String,
+    limit: Int,
+    status_clause: String,
+    sources: List[String],
+) raises -> Scored:
+    """One FTS table, filtered to the named sources. The journal's table holds only journal
+    facts, and the feeds' table only feed records, so their bm25 scores never see each other.
+    """
+    var quoted = String()
+    for i in range(len(sources)):
+        if i > 0:
+            quoted += ","
+        quoted += "'" + sources[i] + "'"
     var rows = store.conn.execute(
         (
             "SELECT f.rowid, f.cite, f.kind, f.text, f.at, f.valid_from,"
-            " f.source, f.trusted FROM fts JOIN facts AS f ON f.rowid ="
-            " fts.rowid WHERE fts MATCH ? AND "
+            " f.source, f.trusted, bm25("
+            + table
+            + ") FROM "
+            + table
+            + " JOIN facts AS f ON f.rowid = "
+            + table
+            + ".rowid WHERE "
+            + table
+            + " MATCH ? AND "
             + status_clause
-            + " ORDER BY bm25(fts) LIMIT ?"
+            + " AND f.source IN ("
+            + quoted
+            + ") ORDER BY bm25("
+            + table
+            + ") LIMIT ?"
         ),
         py_params(PythonObject(match_expr), PythonObject(limit)),
     ).fetchall()
+    var out = Scored(List[Candidate](), List[Float64]())
     for row in rows:
         var c = Candidate(
             Int(String(row[0])),
@@ -172,7 +241,82 @@ def lexical(
             String(row[7]) == "1",
         )
         c.in_lexical = True
-        out.append(c^)
+        out.candidates.append(c^)
+        out.scores.append(Float64(String(row[8])))
+    return out^
+
+
+def lexical(
+    store: IndexStore,
+    query: String,
+    limit: Int,
+    include_superseded: Bool,
+) raises -> List[Candidate]:
+    """The journal's lexical candidates, as before feeds (see lexical_from)."""
+    var journal = List[String]()
+    journal.append(JOURNAL_SOURCE)
+    return lexical_from(store, query, limit, include_superseded, journal)
+
+
+def lexical_from(
+    store: IndexStore,
+    query: String,
+    limit: Int,
+    include_superseded: Bool,
+    sources: List[String],
+) raises -> List[Candidate]:
+    """Candidates from FTS5, best bm25 first. Current and active versions only, or,
+    for the temporal route, superseded and active versions too.
+
+    The journal and the feeds are two FTS tables (index_store.mojo), so the journal's scores
+    are the same as they were before feeds existed. When both are asked for, their lists are
+    merged by score. The source names are checked by parse_sources, so they are safe in SQL.
+    """
+    var out = List[Candidate]()
+    var match_expr = fts_query(query)
+    if match_expr.byte_length() == 0 or limit <= 0 or len(sources) == 0:
+        return out^
+    var status_clause = "f.valid_until IS NULL AND f.status = 'active'"
+    if include_superseded:
+        status_clause = "f.status IN ('active', 'superseded')"
+    var journal = List[String]()
+    var feeds = List[String]()
+    for name in sources:
+        if name == JOURNAL_SOURCE:
+            journal.append(name.copy())
+        else:
+            feeds.append(name.copy())
+    if len(feeds) == 0:
+        var only_journal = lexical_table(
+            store, "fts", match_expr, limit, status_clause, journal
+        )
+        return only_journal.candidates.copy()
+    if len(journal) == 0:
+        var only_feeds = lexical_table(
+            store, "fts_feeds", match_expr, limit, status_clause, feeds
+        )
+        return only_feeds.candidates.copy()
+
+    var first = lexical_table(
+        store, "fts", match_expr, limit, status_clause, journal
+    )
+    var second = lexical_table(
+        store, "fts_feeds", match_expr, limit, status_clause, feeds
+    )
+    var i = 0
+    var j = 0
+    while len(out) < limit and (
+        i < len(first.candidates) or j < len(second.candidates)
+    ):
+        var take_first = j >= len(second.candidates)
+        if i < len(first.candidates) and j < len(second.candidates):
+            take_first = first.scores[i] <= second.scores[j]
+        if take_first:
+            out.append(first.candidates[i].copy())
+            i += 1
+        else:
+            out.append(second.candidates[j].copy())
+            j += 1
     return out^
 
 
@@ -188,6 +332,7 @@ struct Settings(Copyable, Movable):
     var now_utc: Int
     var today: String
     var embed: EmbedConfig
+    var sources: List[String]
 
     def __init__(
         out self,
@@ -202,6 +347,9 @@ struct Settings(Copyable, Movable):
         self.now_utc = now_utc
         self.today = today^
         self.embed = embed^
+        # The journal only, as before the feeds. Other sources are named explicitly.
+        self.sources = List[String]()
+        self.sources.append(JOURNAL_SOURCE)
 
 
 def has_route(routes: List[String], name: String) -> Bool:
@@ -254,14 +402,18 @@ def one_pass(
     var temporal = route == "temporal"
     var lexical_hits = List[Candidate]()
     if has_route(settings.routes, LEXICAL):
-        lexical_hits = lexical(store, query, candidates_limit, temporal)
+        lexical_hits = lexical_from(
+            store, query, candidates_limit, temporal, settings.sources
+        )
     var vector_hits = List[Candidate]()
     var query_vector = List[Float32]()
     var use_vectors = has_route(settings.routes, VECTOR) and index.count() > 0
     if use_vectors:
         query_vector = embed_text_for_query(settings.embed, query)
         vector_hits = index.search(query_vector, candidates_limit)
-    var fused = fuse(lexical_hits, vector_hits, weights_for(route))
+    var fused = keep_sources(
+        fuse(lexical_hits, vector_hits, weights_for(route)), settings.sources
+    )
     if use_vectors:
         for i in range(len(fused)):
             if not fused[i].has_cosine:

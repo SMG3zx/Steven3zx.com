@@ -29,7 +29,7 @@ from pack import (
     estimate_counter,
     pack,
 )
-from recall import DEFAULT_ROUTES, Recall, Settings, recall
+from recall import DEFAULT_ROUTES, Recall, Settings, parse_sources, recall
 from session import user_error
 from text import ascii_tail, clip, pad_right
 from vectors import embed_missing
@@ -55,6 +55,7 @@ struct Options(Movable):
     var budget: Optional[Int]
     var whole: Int
     var tokenizer_url: Optional[String]
+    var sources: List[String]
 
 
 def join_path(dir: String, name: String) -> String:
@@ -80,6 +81,7 @@ def parse_options(args: List[String]) raises -> Options:
         None,
         DEFAULT_WHOLE,
         None,
+        List[String](),
     )
     var i = 0
     while i < len(args):
@@ -99,6 +101,7 @@ def parse_options(args: List[String]) raises -> Options:
             or a == "--budget"
             or a == "--whole"
             or a == "--tokenizer-url"
+            or a == "--sources"
         ):
             if i + 1 >= len(args):
                 raise user_error(a + " needs a value")
@@ -120,6 +123,8 @@ def parse_options(args: List[String]) raises -> Options:
                 opts.fallback_url = Optional[String](value)
             elif a == "--tokenizer-url":
                 opts.tokenizer_url = Optional[String](value)
+            elif a == "--sources":
+                opts.sources = parse_sources(value)
             elif a == "--budget":
                 try:
                     opts.budget = Optional[Int](Int(value))
@@ -151,6 +156,8 @@ def parse_options(args: List[String]) raises -> Options:
     if len(opts.routes) == 0:
         for name in DEFAULT_ROUTES.split(","):
             opts.routes.append(String(name))
+    if len(opts.sources) == 0:
+        opts.sources.append("journal")
     return opts^
 
 
@@ -412,6 +419,7 @@ def recall_command(args: List[String], home: String) raises:
         today_of(now),
         embed_config(opts),
     )
+    settings.sources = opts.sources.copy()
     var found = recall(store, query, settings)
     var packed = Optional[Packed](None)
     if opts.budget is not None:
