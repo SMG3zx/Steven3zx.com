@@ -5,9 +5,8 @@
 # appends a few events with record(). The state is never refolded within a
 # command, as in C#.
 #
-# Errors are raised with one of two markers, which vinci.mojo's main maps to exit codes:
+# A mistake in what was typed is raised with a marker, which vinci.mojo's main maps to an exit code:
 #   user_error("text")     -> "user:text"       stderr "vinci: text", exit 1
-#   not_ported("what")     -> "notported:what"  stderr "vinci: what is not in the Mojo port yet", exit 2
 # Any other error is a bug or a broken journal: stderr, exit 3.
 
 from std.math import isfinite
@@ -25,17 +24,11 @@ from text import (
 from timeutil import Instant
 
 comptime USER_PREFIX = "user:"
-comptime NOT_PORTED_PREFIX = "notported:"
 
 
 def user_error(message: String) -> Error:
     """A mistake in what was typed: printed as "vinci: <message>", exit 1."""
     return Error(USER_PREFIX + message)
-
-
-def not_ported(what: String) -> Error:
-    """A command the Mojo port does not have yet: exit 2."""
-    return Error(NOT_PORTED_PREFIX + what)
 
 
 def is_space(cp: Int) -> Bool:

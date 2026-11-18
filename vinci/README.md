@@ -43,7 +43,7 @@ Seed ──► Prepare ──► Incubate ──► Build ──► Tend
 
 `vinci advance <idea>` moves an idea one stage. If the gate is not met it says what is missing, and still moves: the gates are advice, and the choice is yours.
 
-`vinci` with no command prints the pipeline:
+`vinci pipeline` prints the pipeline (`vinci` alone opens the chat):
 
 ```
 Seed       i2   Bridge  (4d0h here)

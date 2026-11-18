@@ -73,8 +73,8 @@ For each part: the question, the strongest attack on the current answer, what re
 | Option | Claim | Fit for this machine (RTX 3060 12 GB, 30 GB RAM) |
 | --- | --- | --- |
 | Multi-token prediction (MTP) in llama.cpp mainline | 1.7× on a dense Qwen 3.6 27B; no speedup on MoE | Needs a GGUF with the MTP head. Cheap to test if one exists for our model |
-| 30B-class MoE with expert offload (`--n-cpu-moe`) | About 32 to 43 tok/s for Qwen3.6-35B-A3B at Q4 on a 3060 | Needs about 24 GB of RAM. Fits if Neo4j is stopped and the embed server is small |
-| Qwen3.8-Flash-Next on Strata | 125B total, about 6B active. 94 tok/s on a 12 GB RTX 5070 with **64 GB RAM**; 11 to 15 tok/s with 32 GB, because experts stream from SSD | **Does not fit at 30 GB.** Becomes interesting only after a RAM upgrade |
+| 30B-class MoE with expert offload (`--n-cpu-moe`) | About 32 to 43 tok/s for Qwen3.6-35B-A3B at Q4 on a 3060 | Needs about 24 GB of RAM. About 8 GB of RAM is free while the desktop runs, so it fits only with the desktop closed (overnight). Neo4j uses only about 0.45 GB, so stopping it does not help |
+| Qwen3.8-Flash-Next on Strata | 125B total, about 6B active. 94 tok/s on a 12 GB RTX 5070 with **64 GB RAM**; 11 to 15 tok/s with 32 GB, because experts stream from SSD | **The headline setup does not fit at 30 GB, and the RAM upgrade is ruled out (D2).** You still want it tested, so E5 below tests what fits |
 | Thinking mode on the current model | Test-time compute helps long-memory reasoning in research, but I found no direct LongMemEval ablation | Our server disables it today (`enable_thinking` false). Free to test |
 
 *Verdict.* **Run the model lab (K3) before any more chat-side work.** Five experiments, each with a rule fixed in advance:
@@ -83,7 +83,7 @@ For each part: the question, the strongest attack on the current answer, what re
 - **E2, whole journal in context** (the delete test from 2.3).
 - **E3, MTP:** same outputs at temperature 0, tokens/s measured. Adopt if at least 1.4× and identical or better accuracy.
 - **E4, a MoE model with offload:** tokens/s, accuracy, RAM headroom. Adopt if accuracy is not lower and speed is at least 2×.
-- **E5, a RAM upgrade to 64 GB for Flash-Next:** decide only after E4. It is a purchase; the question is whether speed or quality limits you more.
+- **E5, a Strata test** (replaces the cancelled RAM upgrade): install a pinned release in a contained directory, serve a model that fits in 12 GB VRAM and the free RAM, and measure it like E4. Which model and quant comes from the research pass (the report is tracked in section 3, K3). The headline Flash-Next setup needs about 64 GB and is not testable here.
 
 All use the existing harnesses (`budget_sweep`, `chat_eval`) and 500 LongMemEval questions, not 100 (section 2.7). GPU windows are scheduled when you are not using chat; each model swap takes the chat server down for about 10 minutes.
 
@@ -147,7 +147,7 @@ Estimates are agent work plus your review, from this project's own rate [V]. Any
 | **K0: clean and gate** | The audit's delete list; golden files; `make gate`; `vinci backup`/`verify`; append lock; write-path audit; LME harness fix; fresh-clone test; doc fixes; `.gitignore` | `make gate` passes on a fresh clone with no .NET and nothing outside the repo; the 342-line journal round-trips through backup and verify | 1 day |
 | **K1: goals** | **You** enter commitments for your top 3 to 5 ideas (`for`, `goal`, `req`, deadlines) and answer a short interview about a normal day. An agent helps draft. | The journal has real commitments the brief can cite | 1 hour of yours |
 | **K2: brief v0** | `vinci brief` (morning, evening): ideas state, what is stuck, time and commits since last time, feed health. Deterministic, every line cites an id. A systemd timer, a Waybar status file, a 1-to-5 keystroke logged as a `brief` line. An LLM-written variant is added as an A/B arm after a week. | 10 rated briefs. Median rating at least 3. If not, the operator only speaks on request (mark 2, section 8) | 1 to 2 days to build, 2 weeks to run |
-| **K3: model lab** | E1 to E5 with their decision rules. Runs in parallel with K2, in GPU windows | Each experiment has a recorded adopt-or-drop decision on the 500-question set | 2 to 3 days, GPU time overnight |
+| **K3: model lab** | E1 to E5 with their decision rules, and a research pass first on the best model for this hardware. One combined set of overnight GPU windows, with the desktop closed for the RAM-heavy tests. Runs in parallel with K2 | Each experiment has a recorded adopt-or-drop decision on the 500-question set | 2 to 3 days, GPU time overnight |
 | **K4: proposals** | Journal kinds `proposal`, `accept`, `reject`, `dismiss`, `missed-proposal`; the operator on a timer (at most 3 proposals a day to start); the scorecard command; the Rule of Two enforced in code | A month of precision and kept-rate data | 3 days to build, a month to run |
 | **K5: calendar, then mail** | An `.ics` feed, read-only, with a quiet-source check. Mail only if briefs show a gap. | Calendar items appear in the brief; second run adds nothing | 1 day each |
 | **K6: learn and train** | A Mojo module **you** write with an agent as tutor (the first candidate is a small reranker or scorer, since only a user-written kernel serves the learning goal). Fine-tuning only after the data gate in 2.10 | You can explain and change the module; a measured gain or the change is reverted | Open |
@@ -166,17 +166,31 @@ Estimates are agent work plus your review, from this project's own rate [V]. Any
 | # | Decision | Default if you do not decide |
 | --- | --- | --- |
 | D1 | Your commitments and deadlines for K1 | K2 waits |
-| D2 | A RAM upgrade to 64 GB, once E4 says speed or quality limits you | No purchase |
-| D3 | Whether Claude Code may query vinci's memory (this sends results to Anthropic's API) | Off |
+| D2 | A RAM upgrade to 64 GB | **Decided 2026-11-18: no.** The hardware is fixed at 12 GB VRAM and 30 GB RAM |
+| D3 | Whether Claude Code may query vinci's memory (this sends results to Anthropic's API) | **Decided 2026-11-18: no, local only** |
 | D4 | Whether mail ever comes in, and from which account | Not before K5 |
-| D5 | Whether to keep the old C# oracle after golden files exist | Archive for a month, then delete |
-| D6 | Neo4j: stop the container now (it still holds RAM, and E4 needs the RAM) | Running |
+| D5 | Whether to keep the old C# oracle after golden files exist | **Decided 2026-11-18: archive for a month after `make gate` passes on a fresh clone, then delete** |
+| D6 | Neo4j: stop the container | **Decided 2026-11-18: ignore for now.** It uses about 0.45 GB of RAM; it still listens on all network interfaces |
+
+## 5b. Decisions made in the grilling session (2026-11-18)
+
+1. The target is a COO that runs your commitments, with the one-week goals rule as the exit (section 4).
+2. K0 is approved. The two untracked files (the `.bak` with Neo4j keys, `portal-ci.yml`) are listed for deletion but the automatic permission check blocked removing them, so they wait for an explicit go-ahead.
+3. Neo4j keeps running for now (D6).
+4. The model lab is one combined set of overnight GPU windows, including a Strata test within the hardware that exists, plus research on the best model for it.
+5. No RAM purchase (D2).
+6. Claude Code does not query vinci's memory (D3).
+7. You will hand-label 40 answers (about 20 minutes) after K0, to calibrate the judge.
+8. Haiku writes implementation and Opus reviews; Sonnet or Opus may do research, audits and planning.
+9. `AGENTS.md` records the temporary rule: push straight to `github`, Gitea paused.
+10. The C# oracle retires a month after the gate passes on a fresh clone (D5).
+11. You will spend about 2 hours a week writing Mojo yourself, starting after K0 (K6).
 
 ## 6. What to delete and what stays
 
 From the audit and this review, in order of safety:
 
-- **Delete now:** `tune_results/scratch/memory.env.bak` (holds the Neo4j password keys, untracked and not ignored); the untracked `.gitea/workflows/portal-ci.yml` (points at a folder that is gone); `not_ported` and its exit-code branch; the stale `deploy/memory.service` header line in `~/.config/vinci/memory.env`.
+- **Delete now:** `tune_results/scratch/memory.env.bak` (holds the Neo4j password keys; now git-ignored, deletion pending approval); the untracked `.gitea/workflows/portal-ci.yml` (points at a folder that is gone); `not_ported` and its exit-code branch; the stale `deploy/memory.service` header line in `~/.config/vinci/memory.env`.
 - **Delete after K0:** the C# oracle and `portal_truth/` with the generated entity tables (about 600 lines, replaced by golden files); `mojo/calibration/` (tag first; keep `attempt.sh` and the attempts-log format, because agent pass rate is a measure we still use).
 - **Delete from the plan:** the web queue, mail before evidence, activity text in default search, a reranker, an embedding fine-tune, Mojo GPU kernels, the summarize step.
 - **Stays, though it looks deletable:** `mojo/py/vinci_diff/` until goldens exist; `docs/mojo-gotchas.md`; the eval question files; the write gate; `Swift-Qwen3.8-27B_GGUF.py` (the 12 GB tuner, needed again by K3); the `memory` removed-command stub.

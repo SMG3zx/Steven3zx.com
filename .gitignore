@@ -63,3 +63,8 @@ GITEA/gitea-repositories/
 GITEA/log/
 GITEA/*.db
 janus/janus-go/.gocache
+# vinci: model weights, tuner scratch output and backups are local-only.
+vinci/models/
+vinci/tune_results/
+**/*.bak
+**/*.gguf

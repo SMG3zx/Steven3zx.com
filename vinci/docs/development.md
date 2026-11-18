@@ -49,7 +49,7 @@ Nothing in the repository builds the oracle. The C# source is in git history bef
 Two environment variables let the oracle and the Mojo binary run on the same journal with the same clock. Both are read by the Mojo binary too:
 
 - `VINCI_NOW` (an ISO 8601 time with an offset) replaces the clock.
-- `VINCI_NO_TRACK=1` skips the window and git reads in the C# binary. The Mojo binary accepts it and ignores it, because it does not track.
+- `VINCI_NO_TRACK=1` skips the window and git reads (the sync that runs before commands). Both binaries honour it, and the differential tests set it.
 
 The differential tests are run from `mojo/py`:
 

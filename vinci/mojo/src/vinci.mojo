@@ -1,10 +1,10 @@
-# vinci: the Mojo port of the vinci command line. The reference is the C# binary:
-# src/Program.cs (settings, clock, routing) and src/App.cs (Dispatch).
+# vinci: the command line. It was ported from the C# program (Program.cs for settings,
+# clock and routing, App.cs for Dispatch), whose source and binary are archived under
+# ~/.local/share/vinci-csharp-oracle and used by the differential tests (docs/development.md).
 # Commands live in cmd_ideas.mojo, cmd_knowledge.mojo and cmd_ops.mojo; the
 # shared helpers live in session.mojo.
 #
-# Exit codes: 0 ok; 1 a user error ("vinci: <message>", as App.Run);
-# 2 a command the Mojo port does not have yet; 3 any other failure.
+# Exit codes: 0 ok; 1 a user error ("vinci: <message>", as App.Run); 3 any other failure.
 
 from std.pathlib import Path
 from std.python import Python, PythonObject
@@ -19,7 +19,6 @@ from cmd_ops import dispatch_ops
 from journal import Journal
 from portal import portal_command
 from session import (
-    NOT_PORTED_PREFIX,
     USER_PREFIX,
     Session,
     user_error,
@@ -242,11 +241,6 @@ def report_and_exit(message: String):
     if message.startswith(USER_PREFIX):
         stderr_line("vinci: " + ascii_tail(message, 5))
         exit(1)
-    if message.startswith(NOT_PORTED_PREFIX):
-        stderr_line(
-            "vinci: " + ascii_tail(message, 10) + " is not in the Mojo port yet"
-        )
-        exit(2)
     stderr_line("vinci: " + message)
     exit(3)
 

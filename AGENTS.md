@@ -22,7 +22,8 @@ Any folder named `cold-storage` holds ideas for much later. Do not read, search,
 - `github` is a backup remote: `https://github.com/SMG3zx/Steven3zx.com.git`. `.gitea/workflows/mirror-github.yml` pushes `master` to it after the gate passes.
 - Check `git status`, `git diff`, and `git log` before and after making changes.
 - At the end of agent work, before handing back to the human, commit the work with a descriptive message. Do not leave finished changes uncommitted in the working tree. Do not combine incomplete or unrelated changes in one commit; split them into focused commits. Stage only the paths that belong to each change.
-- Fetch from `origin` before integrating remote changes, then push the intended branch with `git push origin <branch>`. GitHub is updated only by the `mirror-github` workflow after the gate on `origin` passes, so do not push to `github` directly.
+- **Temporary rule (2026-11-18, until Gitea authentication works from the shell): Gitea is paused. Push `master` straight to `github` with `git push github master` (fetch `github` first, fast-forward only). Do not wait for `origin`: it answers 401 and a fetch hangs.** When Gitea auth is fixed, delete this bullet and use the rule below again.
+- Normal rule: fetch from `origin` before integrating remote changes, then push the intended branch with `git push origin <branch>`. GitHub is updated only by the `mirror-github` workflow after the gate on `origin` passes, so do not push to `github` directly.
 - Do not force-push a remote branch unless explicitly asked.
 - Keep commits focused on the requested work. Do not include local secrets, environment files, build outputs, or unrelated project changes.
 
