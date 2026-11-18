@@ -11,6 +11,7 @@ from recall import Settings, recall
 from timeutil import parse_instant
 from embed_edge import embed_question
 from vectors import embed_missing, floats_of, load_vectors
+from vector_scan import normalize
 
 comptime DEAD_URL = "http://127.0.0.1:9/v1"
 comptime LABEL = "test-label"
@@ -297,6 +298,55 @@ def test_query_lookup_order_main_then_fallback_then_miss() raises:
     assert_true(raised)
 
 
+def test_loaded_rows_are_the_stored_vectors() raises:
+    """Every loaded row equals its stored vector, normalised, at the production width of
+    2560 dimensions, on two loads in a row. This guards the copy in load_vectors. It does
+    not reproduce the SIGSEGV of M4d: it passed on the broken code too, so the gate for that
+    crash is the chat_eval repro (the crashing qids, 0 errors).
+    """
+    set_py_path()
+    var array = Python.import_module("array")
+    var dims = 2560
+    var rows = 463
+    var store = IndexStore(temp_dir() + "/vectors.sqlite")
+    var expected = List[List[Float32]]()
+    store.begin()
+    for r in range(rows):
+        _ = store.put(
+            fact(
+                "v" + String(r),
+                "h" + String(r),
+                "vector " + String(r),
+                "active",
+            )
+        )
+        var raw = List[Float32]()
+        var py_values = Python.list()
+        for j in range(dims):
+            var x = Float32(((r * 31 + j * 17) % 97) - 48) / 50
+            raw.append(x)
+            py_values.append(PythonObject(Float64(x)))
+        var blob = array.array(PythonObject("f"), py_values).tobytes()
+        store.put_vector(r + 1, LABEL, blob, dims)
+        normalize(raw)
+        expected.append(raw^)
+    store.commit()
+    store.conn.commit()
+    # Two loads in a row, as the chat's second recall does; each must match.
+    for _ in range(2):
+        var index = load_vectors(store, LABEL, False)
+        assert_equal(index.count(), rows)
+        var bad = 0
+        for r in range(rows):
+            for j in range(dims):
+                var diff = index.matrix.data[r * dims + j] - expected[r][j]
+                if diff < 0:
+                    diff = -diff
+                if diff > 1e-5:
+                    bad += 1
+        assert_equal(bad, 0)
+
+
 def main() raises:
     test_embed_skips_facts_that_already_have_a_vector()
     print("test_embed_skips_facts_that_already_have_a_vector: ok")
@@ -312,3 +362,5 @@ def main() raises:
     print("test_embed_leaves_an_unembeddable_fact_out_and_counts_it: ok")
     test_query_lookup_order_main_then_fallback_then_miss()
     print("test_query_lookup_order_main_then_fallback_then_miss: ok")
+    test_loaded_rows_are_the_stored_vectors()
+    print("test_loaded_rows_are_the_stored_vectors: ok")

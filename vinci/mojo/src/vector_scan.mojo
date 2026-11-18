@@ -58,8 +58,9 @@ struct Matrix(Movable):
     def insert_from_address(mut self, addr: Int) raises:
         """Append one row read from `dim` packed little-endian Float32s at addr.
 
-        The caller keeps the bytes object that owns addr alive for the call. The
-        copy is element by element: the pointer is a plain load, with no interop.
+        The caller must keep the bytes object that owns addr alive for the whole
+        call. vectors.insert_blob does that for a PythonObject; do not take addr from
+        a temporary. The copy is element by element: a plain load, no interop.
         """
         var src = Pointer[Float32, MutAnyOrigin](unsafe_from_address=addr)
         var v = List[Float32](length=self.dim, fill=0)

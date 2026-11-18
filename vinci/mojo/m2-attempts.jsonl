@@ -48,3 +48,13 @@
 {"agent": "M4b", "n": 14, "pass": true, "first_error": ""}
 {"agent": "M4c", "n": 1, "pass": true, "first_error": ""}
 {"agent": "M4c", "n": 2, "pass": true, "first_error": ""}
+{"agent": "M4d", "n": 1, "pass": false, "first_error": "vinci chat exited -11 (SIGSEGV) on the second recall of 0bb5a684; the trace shows only main (+0x2839b)"}
+{"agent": "M4d", "n": 2, "pass": false, "first_error": "gdb: fault at vector_scan.mojo insert_from_address reading a bytes buffer past the heap end; it passed the same ctypes readback in Python"}
+{"agent": "M4d", "n": 3, "pass": false, "first_error": "regression test test_loaded_rows_are_the_stored_vectors passes on the broken code: synthetic rows do not reproduce the freed read"}
+{"agent": "M4d", "n": 4, "pass": true, "first_error": ""}
+{"agent": "M4d", "n": 5, "pass": true, "first_error": ""}
+{"agent": "M4d", "n": 6, "pass": true, "first_error": ""}
+{"agent": "M4d", "n": 7, "pass": false, "first_error": "portal_diff: diverged 22; a localhost port the portal scan finds now serves a page (links 40 vs 39); the portal binary is unchanged, so this is the environment"}
+{"agent": "M4d", "n": 8, "pass": true, "first_error": ""}
+{"agent": "M4d", "n": 9, "pass": false, "first_error": "preference answers: 0 of 5 correct before the prompt change, 1 of 5 after (38146c39 yes; the answers now give tailored recommendations)"}
+{"agent": "M4d", "n": 10, "pass": true, "first_error": ""}

@@ -51,6 +51,9 @@ comptime RECALL_LIMIT = 10
 comptime ENV_RECALL_BUDGET = "VINCI_CHAT_RECALL_BUDGET"
 comptime ENV_RECALL_WHOLE = "VINCI_CHAT_RECALL_WHOLE"
 comptime ENV_INDEX = "VINCI_CHAT_INDEX"
+# Eval only (the M4 step d evaluation): VINCI_CHAT_UPFRONT=0 turns off the recall that runs
+# on the person's own words before the first model call of each turn (chat.mojo).
+comptime ENV_UPFRONT = "VINCI_CHAT_UPFRONT"
 comptime FALLBACK_NOTE = (
     "note: the embedding server did not answer, so this recall is lexical"
     " only.\n"
@@ -112,6 +115,12 @@ def env_int(name: String, fallback: Int) raises -> Int:
         return Int(text)
     except:
         raise Error(name + " must be a whole number")
+
+
+def upfront_enabled() raises -> Bool:
+    """True unless VINCI_CHAT_UPFRONT is 0: the chat recalls on the person's words first.
+    """
+    return env_or(ENV_UPFRONT, "1") != "0"
 
 
 def chat_index_path(home: String) raises -> String:
@@ -243,6 +252,22 @@ struct ChatTools(Movable):
         )
         if budget < 1:
             raise Error("budget must be at least 1")
+        return self.recall_query(query, budget)
+
+    def upfront_recall(mut self, query: String) raises -> String:
+        """The recall that runs before the first model call of a turn, on the person's own
+        words, packed as the recall tool packs. Empty when it cannot run: the model can still
+        call recall itself, so nothing is raised."""
+        try:
+            return self.recall_query(
+                query, env_int(ENV_RECALL_BUDGET, DEFAULT_BUDGET)
+            )
+        except:
+            return String()
+
+    def recall_query(mut self, query: String, budget: Int) raises -> String:
+        """recall: the index searched for query, packed under budget, with the lexical
+        fallback when the embedding server cannot answer."""
         var store = IndexStore(self.index_path)
         var settings = Settings(
             RECALL_LIMIT,

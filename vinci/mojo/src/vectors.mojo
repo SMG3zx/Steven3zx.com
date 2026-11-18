@@ -14,12 +14,25 @@ comptime FLOAT_BYTES = 4
 
 
 def address_of(blob: PythonObject) raises -> Int:
-    """The address of a bytes object's buffer. Valid while the object is alive.
+    """The address of a bytes object's buffer. Valid only while the object is alive, so
+    never keep it past the call that owns the object. Use insert_blob or floats_of, which
+    take the object as an argument and read it inside the same call.
     """
     var ctypes = Python.import_module("ctypes")
     return Int(
         String(ctypes.cast(ctypes.c_char_p(blob), ctypes.c_void_p).value)
     )
+
+
+def insert_blob(mut matrix: Matrix, blob: PythonObject) raises:
+    """Append one row from a packed float32 bytes object.
+
+    The copy reads the buffer while `blob` is borrowed, so the caller's reference is
+    alive for the whole copy. Passing `address_of(row[9])` instead took the address from a
+    temporary that was destroyed before the copy: the bytes were freed, and the copy read
+    freed memory (SIGSEGV in the second recall of a chat, vinci chat over LongMemEval).
+    """
+    matrix.insert_from_address(address_of(blob))
 
 
 def floats_of(blob: PythonObject) raises -> List[Float32]:
@@ -135,7 +148,7 @@ def load_vectors(
             String(row[6]),
             String(row[7]) == "1",
         )
-        out.matrix.insert_from_address(address_of(row[9]))
+        insert_blob(out.matrix, row[9])
         out.position[rowid] = len(out.meta)
         out.meta.append(c^)
     return out^

@@ -314,3 +314,22 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
   print()
   return text.removeprefix("\ufeff")
   ```
+
+## Found in M4d (the chat crash, twice-hit)
+
+- **A bytes object's address is valid only while its PythonObject is alive, and a temporary dies after its last use.** `insert_from_address(address_of(row[9]))` took the address from a temporary that was destroyed inside that expression, so the copy read freed memory. The chat died with SIGSEGV on the second recall of 32 of 200 LongMemEval conversations (24 qids). gdb showed the free coming from `PythonObject.__deinit__` at the line that took the address. Pass the object itself into the function that reads it (`insert_blob(matrix, row[9])`), so the caller's reference lives for the whole copy. Never return a raw address from a function that owns the object.
+  ```mojo
+  insert_blob(out.matrix, row[9])            # not: out.matrix.insert_from_address(address_of(row[9]))
+  ```
+
+- **A crash that disappears when you add a debug line is a lifetime bug, not a fixed one.** Keeping one more reference, or printing `row[9]`, hid the crash in several runs. Check that the object is alive for the whole read; do not trust a run that stopped crashing after a change elsewhere.
+
+- **`mojo build -O0 -g` gives the source line of a crash; the default build gives only `main (+0x2839b)`.** Build a debug copy of the sources in the scratchpad and run it under gdb, with `VINCI_MOJO_PY` pointing at `mojo/py` (the binary cannot find the Python edges from another directory). A `free` breakpoint for one address needs `set breakpoint pending on`, because libc is not loaded when the script starts: `break free if $rdi == 0x...`.
+  ```sh
+  uv run mojo build -I src -O0 -g src/vinci.mojo -o "$scratch/vinci"
+  gdb -batch -ex 'set breakpoint pending on' -ex 'break free if $rdi == 0x555556f693e0' -ex run --args "$scratch/vinci" chat
+  ```
+
+- **A unit test with synthetic blobs can pass on code that crashes in production.** `test_loaded_rows_are_the_stored_vectors` (463 rows, two loads, a file-backed store) passed on the broken code, so it does not reproduce the freed read. The gate for this bug is the eval repro: `chat_eval --qids` on the qid that crashed, with 0 errors.
+
+- **`mojo run` and a built binary run the chat on the real home unless the eval environment is set.** Set `VINCI_HOME`, `VINCI_ENV_FILE` and `VINCI_CHAT_INDEX` before every manual `vinci chat` run, in the same command. `chat_eval` sets them for each conversation; a bare `./build/vinci chat` writes to `~/.vinci`.

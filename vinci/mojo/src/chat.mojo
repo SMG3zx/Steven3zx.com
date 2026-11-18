@@ -20,7 +20,13 @@ from chat_cite import (
     unseen_cites,
 )
 from chat_edge import complete, read_line
-from chat_tools import CHAT_INSTRUCTIONS, ChatTools, chat_index_path, next_id
+from chat_tools import (
+    CHAT_INSTRUCTIONS,
+    ChatTools,
+    chat_index_path,
+    next_id,
+    upfront_enabled,
+)
 from dates import today_of
 from embed_edge import env_or
 from index_build import update_from_journal
@@ -50,6 +56,7 @@ comptime SYSTEM_RULES = """How to work:
 - If a recall line ends with (open <id> for more) and the answer needs the rest of it, use open with that id.
 - Passages from documents are cited the same way, as [d1/2]. Do not write a sources list: vinci adds one from the titles of the documents.
 - If recall finds nothing relevant, say you do not know. Do not fill the gap.
+- When the person asks for a suggestion, a recommendation or advice, base it on what the journal says they like, prefer, have done or have said about the subject. Tailor the answer to those facts, cite them, and say which ones you used. A stated preference is an answer to such a question, even when no list of options is stored.
 - When the person states a durable fact or preference, save it with remember.
 - When asked to record or change something, do it with the journal, then say in one line what you recorded.
 - Be brief. Plain sentences. No headings unless asked.
@@ -208,6 +215,23 @@ struct Chat(Movable):
         var answer = String()
         var answered = False
         var rounds = 0
+        if upfront_enabled():
+            # Recall on the person's own words first, in the context as a recall call the
+            # model made. Its ids are evidence for the citation check, and it is silent.
+            var found = self.tools.upfront_recall(user_text)
+            if found.byte_length() > 0:
+                evidence += found + "\n"
+                self.history.append(
+                    Message(
+                        "assistant",
+                        '{"tool": "recall", "query": '
+                        + json_string(user_text)
+                        + "}",
+                    )
+                )
+                self.history.append(
+                    Message("user", "Result of recall:\n" + found)
+                )
         while rounds < MAX_ROUNDS and not answered:
             rounds += 1
             var reply = self.ask()

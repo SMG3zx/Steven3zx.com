@@ -427,6 +427,7 @@ uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/b
 | --- | --- |
 | `journal` | one vinci command, run as a child process so its output is captured, as the C# tool captures it. `chat`, `serve`, `memory`, `index`, `recall` and `open` are not journal commands here |
 | `recall` | the index, packed under `budget` (default 3000 tokens) with the newest 10 records whole and the rest as pointers (`--whole 10`, the setting the M3 sweep left as the default without tools). An `abstain:` line comes first when recall abstains. The embedding server is optional: without it the answer is lexical and says so |
+| (up front) | before the first model call of each turn, `recall` runs on the person's own message, verbatim and packed the same way. Its result goes into the context as a recall call the model made, so its ids are evidence for the citation check. It prints nothing (see the M4 step d section) |
 | `open` | one id, with `lines=A-B` or `grep=word`. The whole output of one call is capped at 4,000 bytes, and a cut ends with a notice that says how many bytes were not shown and what to open next (`open <id> grep=<word>`, or `lines=` for one fact) |
 | `remember` | a `remember` line (`k<n>`, category as its tag), then an index update |
 | `read` | a text file (`.txt`, `.md`, `.markdown`) or a web page: passages go to `docs/<sha256>.md`, a `read` line (`d<n>`) points at it, then an index update. Web fetches and HTML-to-text are in `mojo/py/vinci_edge/reading_edge.py` |
@@ -482,6 +483,7 @@ uv run python -m vinci_eval.chat_eval --summary --out ~/.vinci/eval/results/chat
 - **Eval-only hooks** (all unset by default; defaults unchanged):
   - `VINCI_CHAT_RECALL_BUDGET`, `VINCI_CHAT_RECALL_WHOLE` (chat_tools.mojo): the recall packing.
   - `VINCI_CHAT_INDEX` (chat_tools.mojo): the index file the chat reads, and then the chat never updates it from the journal.
+  - `VINCI_CHAT_UPFRONT=0` (chat_tools.mojo `upfront_enabled`): turns off the up-front recall. On by default.
   - `VINCI_EVAL_EMBED_LABEL`, `_CACHE`, `_FALLBACK_LABEL`, `_FALLBACK_URL` (embed_edge.mojo `default_config`).
   - `VINCI_CHAT_USAGE_LOG` (vinci_edge/chat_edge.py): one JSON line per model call with the token counts, the reply and the lexical-fallback flag.
   - `VINCI_CHAT_TEMPERATURE` (chat_edge.py): sent with the request when set. The chat sends no temperature by default, while M3 used 0, so the eval sets 0.
@@ -506,3 +508,25 @@ Question vectors: 1 GPU-cache hit, 7 live CPU embeds, 0 CPU-cached, 0 lexical fa
 - (a) The model answered without a tool: not seen. All 12 conversations called recall, and 1 of the 6 w2 conversations also used open.
 - (b) Answers not saved because they cite no id: fixed in the citation check above. Before the fix, the LME answers cited `[answer_d8e33f5c_2:0]`, which the journal-shaped check never read, so they were not saved. Now 0 of 12 are not saved.
 - (c) Single-session-preference: not seen. No such question was in the first three of each set.
+
+### Chat fixes (M4 step d)
+
+The first full evaluation (`chat-eval-2026-11-18.jsonl`) found three faults. Each is fixed here, and the rest of the evaluation is still to run (Opus runs it).
+
+**1. The crash (SIGSEGV on the second recall).** 32 of 200 LongMemEval conversations died with `vinci chat exited -11`, 24 qids in both configurations. Root cause: `vectors.load_vectors` took a raw address from `address_of(row[9])`, where `row[9]` was a temporary PythonObject. The temporary was destroyed inside that call, and the bytes it referred to were freed before `insert_from_address` read them (gdb: the `free` came from `PythonObject.__deinit__` at that line, on a row whose only remaining reference was the temporary). The copy then read freed memory, which in one heap state was unmapped. Fix: `vectors.insert_blob(matrix, row[9])` passes the PythonObject as a borrowed argument, so the reference lives for the whole copy. The raw address now never leaves the function that reads it. The reference-count drop itself was not traced to a single Mojo line; the gotchas file records the probes. Regression test: `tests/test_index_vectors.mojo` `test_loaded_rows_are_the_stored_vectors` (463 rows at 2560 dimensions, two loads, every row compared with its normalised stored value). It passes on the broken code too, so it does not reproduce the crash; the gate is `chat_eval --qids` on the crashing qids, which now gives 0 errors in both configurations (48 conversations, the 24 qids).
+
+**2. Up-front recall.** Before the first model call of each turn, the chat runs `recall` on the person's message verbatim, packed as the recall tool packs (`chat_tools.mojo` `upfront_recall`, which calls `recall_query`, the body the tool uses, with the same lexical fallback). The chat adds it to the history as an assistant `recall` call and a `Result of recall:` user message (`chat.mojo` `turn`). Its ids count as evidence for the citation check, and its trust feeds the write gate, because `recall_text` sets the untrusted flag. It prints nothing, so the C# comparison holds for the three scripts that compare with C# (`plain-answer`, `idea-write`, `bad-journal-args`). If recall cannot run, the turn goes on without it, and the model can still call recall. On by default; `VINCI_CHAT_UPFRONT=0` turns it off. In the first evaluation only 7 of 371 question vectors matched the cached question, because the model rewrote its queries. With the up-front recall the person's own words are the first query, and in the check run each conversation's question vector came from the GPU cache. `chat_diff` passes 10 of 10 unchanged, so no script expectation needed a change.
+
+**3. Preference answers.** The judge is not the fault: `PREFERENCE_JUDGE` in `budget_sweep.py` is LongMemEval's preference prompt (the response satisfies the rubric, yes or no), and it stays as it was. The fault was the answer prompt. Its rule "answer only from the excerpts, and say you do not know when they do not contain the answer" made the model read "suggest events this weekend" as a question about events in memory, so it answered "I don't know" even when the journal held the person's preference (38146c39: "turbinado sugar adds a richer flavor"; 32260d93: "stand-up comedy with storytelling on Netflix"). The chat's system prompt (`chat.mojo` `SYSTEM_RULES`) now has a rule for suggestions and advice: base them on what the journal says the person likes or has done, tailor the answer, cite those facts, and count a stated preference as an answer. On the five preference questions the chat-w10 result went from 0/5 to 1/5, and the answers now give tailored recommendations with citations. `budget_sweep.py`'s `SYSTEM_PROMPT` has the same rule missing, but it is left as it was so the M3 numbers stay comparable.
+
+**Check run** (`chat_eval --set both --limit-questions 10 --configs chat-w10`, scratch output, not the full run):
+
+| set | correct | errors | used a tool | mean tool calls | used open | answer not saved | cite flagged | mean total tokens | mean seconds | same 10 qids in the first run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| LongMemEval | 4/10 (40%) | 0 | 2/10 | 0.30 | 1/10 | 0/10 | 0/10 | 5,026 | 15.9 | 3/9 (one row crashed) |
+| personal | 7/10 (70%) | 0 | 0/10 | 0.00 | 0/10 | 0/10 | 0/10 | 1,418 | 3.5 | 6/10 |
+
+Question vectors: 30 gpu cache hits, 10 cpu-cached, 4 cpu-live, 0 lexical fallbacks over 20 conversations. The up-front recall is why the tool columns fell: most answers come from the packed recall alone. Ten questions per set is too few to read accuracy; the full run is the measurement.
+
+Gates: `make -C mojo check` passes; `chat_diff` 10 of 10; `vinci_diff` (`--generated 50 --seed 1`) 74 scenarios, 3633 of 3633 steps matching, 0 diverged (the M3 note's "683 of 683" was a smaller scenario set). `portal_diff` reports 22 diverged requests, all the same page: the portal's "links" count is 40 on the candidate and 39 on the oracle, because the portal scans local ports and one more local server now serves a page. The portal binary and portal code are unchanged, so this is the environment, not this change.
+
