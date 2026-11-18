@@ -66,26 +66,41 @@ For each part: the question, the strongest attack on the current answer, what re
 
 ### 2.4 The reader: model, speed and hardware
 
-*Attack.* "Make 12 GB work" was a stated goal, but the current setup gives about 8 tokens/s and 65% on LongMemEval, and every answer takes 8 to 12 seconds [V]. The most useful lever is the one mark 2 treated as fixed.
+*Attack.* "Make 12 GB work" was a stated goal, but the current setup answers in 8 to 12 seconds and gets 65% on LongMemEval [V]. The most useful lever is the one mark 2 treated as fixed.
 
-*Research [R, mostly community reports and aggregator sites; every number must be re-measured here].*
+*Facts about this machine, from a research pass on 2026-11-18 (read-only; nothing was downloaded or run) [V unless tagged].*
+- Ryzen 5 7600X (6 cores, 12 threads, AVX-512), RTX 3060 12 GB, 30 GB RAM. The RAM purchase is ruled out (D2), so the hardware is fixed.
+- llama.cpp is at commit d81235049 (2026-10-05). Its server lists `--spec-type draft-mtp` (and `draft-dflash`), `--n-cpu-moe`, `--reasoning on|off|auto`, `--reasoning-budget` and `--chat-template-kwargs`. So MTP, MoE offload and thinking control all exist in the build we run. MTP needs `-np 1`, which the service already uses.
+- The current model file is **11.67 GiB**, not the 9.4 GiB the plan said. With `-ngl 60`, about 4 layers run on the CPU, and the card sits at 11.4 of 12.3 GB.
+- The tuner recorded 13.7 tokens/s decode and 484 tokens/s prefill for this quant; you observe about 8. **The gap is unexplained**, so step 0 of the lab re-measures it. Prefill is probably half of every answer (4k prompt tokens at 484/s is about 8 s), so decode-only speedups cut less than they appear to.
 
-| Option | Claim | Fit for this machine (RTX 3060 12 GB, 30 GB RAM) |
-| --- | --- | --- |
-| Multi-token prediction (MTP) in llama.cpp mainline | 1.7× on a dense Qwen 3.6 27B; no speedup on MoE | Needs a GGUF with the MTP head. Cheap to test if one exists for our model |
-| 30B-class MoE with expert offload (`--n-cpu-moe`) | About 32 to 43 tok/s for Qwen3.6-35B-A3B at Q4 on a 3060 | Needs about 24 GB of RAM. About 8 GB of RAM is free while the desktop runs, so it fits only with the desktop closed (overnight). Neo4j uses only about 0.45 GB, so stopping it does not help |
-| Qwen3.8-Flash-Next on Strata | 125B total, about 6B active. 94 tok/s on a 12 GB RTX 5070 with **64 GB RAM**; 11 to 15 tok/s with 32 GB, because experts stream from SSD | **The headline setup does not fit at 30 GB, and the RAM upgrade is ruled out (D2).** You still want it tested, so E5 below tests what fits |
-| Thinking mode on the current model | Test-time compute helps long-memory reasoning in research, but I found no direct LongMemEval ablation | Our server disables it today (`enable_thinking` false). Free to test |
+*What the research says (MEASURED = a named person on named hardware; CLAIMED = vendor or model card; ESTIMATED = inference). Quality ranking for vinci's workload is ESTIMATED, because no source tests dates, counts, abstention and citing ids together.*
 
-*Verdict.* **Run the model lab (K3) before any more chat-side work.** Five experiments, each with a rule fixed in advance:
+| # | Candidate | Why it is on the list | Caveat |
+| --- | --- | --- | --- |
+| 1 | The current model at **IQ4_XS** (15.7 GB local file) | Best quality in the family you run; tuner measured 8.1 tok/s at 32k | It is the slow one: more of the model on the CPU |
+| 2 | A **smaller quant that fits fully in VRAM**: byteshape Qwen3.8-27B IQ3_XXS 2.88 bpw (9.9 GB) or Swift 1.5 IQ3_XXS (10.1 GB) | No layers on the CPU, so ESTIMATED 18 to 25 tok/s. Swift 1.5 also CLAIMS 58.5% fewer thinking tokens, and has an MTP variant | byteshape is Apache-2.0. Swift 1.5 uses a licence I could not read, and its page says access is gated |
+| 3 | **Qwen3.6-35B-A3B-MTP** (MoE, about 3B active), `UD-IQ4_XS` 18.2 GB, with `--n-cpu-moe` | MEASURED on an RTX 3060 (Xeon, 31 GB RAM): 22.9 tok/s with 7.1 GB VRAM and 7.7 GB RAM at IQ3_XXS. MTP gave 1.28× on a laptop 3060 | Expect lower accuracy than the 27B on multi-record reasoning (ESTIMATED). Blog figures of 32 to 80 tok/s are not measurements |
+| 4 | **Qwen3.8-Flash-Next on Strata** | MEASURED by one user on a 3060 with 32 GB: 38.7 to 51.4 tok/s decode | Needs about 47 GB of RAM plus VRAM, and **prefill is only 104 to 141 tok/s**, so a 4k prompt takes 30 to 40 s. Not a reader for us |
+| Dropped | 9B to 14B dense (Qwen3.5-9B, Gemma 12B) | Fast and small | A lower ceiling for multi-record temporal reasoning (ESTIMATED) |
 
-- **E1, thinking mode:** answer LongMemEval and the personal set with thinking on. Adopt for temporal and multi-session routes if it gains at least 8 points at no more than 3× the time.
-- **E2, whole journal in context** (the delete test from 2.3).
-- **E3, MTP:** same outputs at temperature 0, tokens/s measured. Adopt if at least 1.4× and identical or better accuracy.
-- **E4, a MoE model with offload:** tokens/s, accuracy, RAM headroom. Adopt if accuracy is not lower and speed is at least 2×.
-- **E5, a Strata test** (replaces the cancelled RAM upgrade): install a pinned release in a contained directory, serve a model that fits in 12 GB VRAM and the free RAM, and measure it like E4. Which model and quant comes from the research pass (the report is tracked in section 3, K3). The headline Flash-Next setup needs about 64 GB and is not testable here.
+*Strata, assessed.* MIT licence; an engine with its own CUDA and AVX-512 kernels plus parts of llama.cpp; built around Flash-Next, and it also supports Qwen3.6-35B-A3B and "Swift 1.5" packs. I found no sign that it runs the dense 27B you use. The repository is 8 weeks old with 45k stars and 1,643 open issues; five releases in 12 days; I could not verify the stars are organic. Its installer checks sha256 against a manifest from the same origin, which guards against corruption, not a malicious release. Its docs say no telemetry, 127.0.0.1 only, and a once-daily update check you can turn off. Whether it exposes `/tokenize`, `usage` and `chat_template_kwargs` (what our harnesses need) is not documented, and an open issue reports tool calls emitted as text on a 3060. **Verdict: test it last and narrowly.** The only question worth asking is whether its engine beats llama.cpp on Qwen3.6-35B-A3B on this box (claimed 59.7 tok/s against a measured 23 to 36 for llama.cpp). Not as the Flash-Next reader.
 
-All use the existing harnesses (`budget_sweep`, `chat_eval`) and 500 LongMemEval questions, not 100 (section 2.7). GPU windows are scheduled when you are not using chat; each model swap takes the chat server down for about 10 minutes.
+*Containment for the Strata test:* a dedicated directory on the NVMe (not under `~/.vinci`), a release fetched by tag with its SHA256SUMS and commit hash recorded, `install.sh` read in full and `strata launch --plan` run first, `STRATA_UPDATE_CHECK=0`, the normal user with no extra capabilities, a port other than 8080 checked with `ss -ltnp`, and no outbound network after the first download if you can set a firewall rule.
+
+*Verdict.* **Run the model lab (K3) before any more chat-side work.** Experiments in order of information per hour, each with a rule fixed in advance. All need chat down, except where noted; the CPU embed server can stay up.
+
+| Order | Experiment | GPU hours | Download | Adopt if |
+| --- | --- | --- | --- | --- |
+| 0 | **Re-measure the baseline** (prefill and decode on a fixed 4k prompt at temperature 0) | 0.3 | none | n/a: it explains the 8 vs 13.7 tok/s gap |
+| 1 | **E0, a fully-in-VRAM quant** (byteshape or Swift 1.5) | 0.5 + 1.2 eval | about 10 GB | Accuracy within the minimum detectable difference and decode at least 1.3× |
+| 2 | **E3, MTP** on the E0 file (`--spec-type draft-mtp --spec-draft-n-max 2`) | 0.5 + 1.2 eval | none | Decode at least 1.4×, **per-answer wall time at least 1.3× lower** (MTP halved prefill in one report and cost about 2.5 GiB VRAM), accuracy equal or better |
+| 3 | **E1, thinking mode** (`--reasoning on --reasoning-budget 2048`) on the best of E0/E3 | 3.5 to 4 | none | At least 8 points on the temporal and multi-session routes at no more than 3× the time. Three seeds, not temperature 0 |
+| 4 | **E2, the whole journal in context** (about 18k tokens), personal set only | 0.5 | none | Accuracy within noise of recall: then retrieval is shelved until the journal passes about half the context. LongMemEval cannot run here (its haystacks are far larger than 32k) |
+| 5 | **E4, Qwen3.6-35B-A3B-MTP** `UD-IQ4_XS`, `--n-cpu-moe` swept 20/25/30, desktop closed | 1.5 + 1.2 eval | 18.2 GB | Accuracy not lower and at least 2× faster. Consolation rule: if within noise at 2× speed, use it for brief writing only |
+| 6 | **E5, Strata** on the same Qwen3.6 pack | 1.5 | about 23 GB plus the engine | At least 1.5× over E4 with equal accuracy, the API fields our harnesses need present, and it ran with no network after install |
+
+About 12 to 13 GPU hours over roughly three nights, and 28 to 52 GB of downloads. Accuracy is measured with `budget_sweep` and `chat_eval` on 500 LongMemEval questions plus the personal set (section 2.7). **Harness change needed first:** `budget_sweep.py` hardcodes thinking off and temperature 0, so E1 needs an environment switch. `chat_eval` sends no template arguments and follows the server's default, so E1 there is a server restart.
 
 ### 2.5 Ingestion: feeds, mail and calendar
 
