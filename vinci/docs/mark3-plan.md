@@ -1,6 +1,8 @@
 # vinci mark 3
 
-Status: written 2026-11-18, after M0 to M5 of [mark 2](mark2-plan.md). It replaces mark 2's M5 remainder, M6 and M7. Everything in mark 2 that was built stays built; this plan says what to do next, what to stop doing, and what to measure before deciding.
+Status: written 2026-11-18, after M0 to M5 of [mark 2](history/mark2-plan.md). It replaces mark 2's M5 remainder, M6 and M7. Everything in mark 2 that was built stays built; this plan says what to do next, what to stop doing, and what to measure before deciding.
+
+Corrections, 2026-11-21 (checked against the machine): the daily backup timer is installed and ran on 11-19 and 11-20; Neo4j ports 7474 and 7687 still listen on all interfaces (D6); the journal has 379 lines and the Mojo source 17,362 lines; the live index has no vectors, so live recall is lexical-only until `vinci index embed` is run.
 
 Tags on claims: **[V]** measured or read in this repo. **[R]** from research, with the source in section 9. Most 2026 sources are blogs, vendor posts and aggregator pages, so [R] claims are leads to test, not facts. **[E]** an estimate.
 
@@ -232,4 +234,4 @@ Tags: P = paper or official post; V = vendor claim; B = blog or aggregator (weak
 - Read-only email for agents: [let Claude search your email without sending or deleting (B)](https://hackernoon.com/how-to-let-claude-search-your-email-without-letting-it-send-or-delete)
 - Proactive assistants and chiefs of staff: [background agents and the notification budget (B, weak)](https://tianpan.co/blog/2026/05/13/background-agents-notification-budget-attention-economy), [Edwin](https://github.com/bwelker/edwin), [claude-chief-of-staff](https://www.sourcepulse.org/projects/24805494)
 - Judge bias: [Self-preference bias in LLM-as-a-judge (P)](https://arxiv.org/abs/2410.21819)
-- Mark 2 and the memory plan: [mark2-plan.md](mark2-plan.md), [plan-one-journal-one-index.md](plan-one-journal-one-index.md), [m3-results.md](m3-results.md), [m4-results.md](m4-results.md), [feeds.md](feeds.md)
+- Mark 2 and the memory plan: [mark2-plan.md](history/mark2-plan.md), [plan-one-journal-one-index.md](history/plan-one-journal-one-index.md), [m3-results.md](history/m3-results.md), [m4-results.md](history/m4-results.md), [feeds.md](feeds.md)

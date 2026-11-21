@@ -37,7 +37,7 @@ The C# binary is the oracle. Two environment variables let both sides run on the
 | `VINCI_NOW` | Replaces the clock. An ISO 8601 time with an offset. |
 | `VINCI_NO_TRACK` | Skips the window and git reads, so a run only appends what the command writes. |
 
-Both are in [development.md](development.md).
+Both are in [development.md](../development.md).
 
 ## The differential test
 
@@ -88,7 +88,7 @@ Totals: first try 0 of 5. Passed by third try 5 of 5.
 
 Note on W1: its second attempt is logged as failed. The cause was another agent's unfinished Python, which broke `make check`. W1's Mojo steps passed on that attempt. The log has four gate passes and one Mojo-only pass.
 
-Gotchas from these failures are in [mojo-gotchas.md](mojo-gotchas.md).
+Gotchas from these failures are in [mojo-gotchas.md](../mojo-gotchas.md).
 
 ## Stop conditions
 
@@ -116,4 +116,4 @@ Each gap is from the agents' reports.
 
 ## Next
 
-M3: memory. The index in Mojo, measured against the M1 baseline in [memory.md](memory.md). The C# binary stays installed until M4.
+M3: memory. The index in Mojo, measured against the M1 baseline in [memory.md](../memory.md). The C# binary stays installed until M4.

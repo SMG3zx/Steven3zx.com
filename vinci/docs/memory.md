@@ -84,7 +84,7 @@ What the baseline shows:
 
 ## Journal kinds for memory (mark 2)
 
-Phase 1 of [the one-journal plan](plan-one-journal-one-index.md) (M3 step 1). The journal becomes the store of record for what memory holds. This section is the mapping. It uses only the existing Event fields (`at`, `kind`, `id`, `text`, `refs`, `value`, `hi`, `who`, `why`, `url`, `metric`, `tags`, `where`), so the C# binary still reads the journal: it skips these kinds, and the fold is kept for recall in `state.memory_records`.
+Phase 1 of [the one-journal plan](history/plan-one-journal-one-index.md) (M3 step 1). The journal becomes the store of record for what memory holds. This section is the mapping. It uses only the existing Event fields (`at`, `kind`, `id`, `text`, `refs`, `value`, `hi`, `who`, `why`, `url`, `metric`, `tags`, `where`), so the C# binary still reads the journal: it skips these kinds, and the fold is kept for recall in `state.memory_records`.
 
 ### The four kinds
 
@@ -144,7 +144,7 @@ Phase 2 reads these lines into the index. The index reads `remember`, `memory`, 
 
 ## The index (mark 2, M3 step 2a)
 
-Step 2a of [the one-journal plan](plan-one-journal-one-index.md), phase 2: lexical recall in Mojo. Vectors, fusion, abstention, the corrective query and date ranges are step 2b. The index is derived data: delete it and `vinci index rebuild` makes it again.
+Step 2a of [the one-journal plan](history/plan-one-journal-one-index.md), phase 2: lexical recall in Mojo. Vectors, fusion, abstention, the corrective query and date ranges are step 2b. The index is derived data: delete it and `vinci index rebuild` makes it again.
 
 ```sh
 vinci index rebuild                       # delete and rebuild from the journal
@@ -257,7 +257,7 @@ Abstention, the corrective query, date ranges, the vector route and fusion are b
 
 ### Index vs baseline (M3 step 2b)
 
-Step 2b of [the one-journal plan](plan-one-journal-one-index.md), phase 2: vectors, fusion, abstention, the corrective query and date boosts. Status: **both sets are measured.** Verdict below: phase 2's done-when is met on both sets. Tokens per answer are higher than M1 on the personal set, and phase 3 is where they get cut.
+Step 2b of [the one-journal plan](history/plan-one-journal-one-index.md), phase 2: vectors, fusion, abstention, the corrective query and date boosts. Status: **both sets are measured.** Verdict below: phase 2's done-when is met on both sets. Tokens per answer are higher than M1 on the personal set, and phase 3 is where they get cut.
 
 **Personal set** (v2, 60 questions, staging journal of 342 lines, 281 facts, `vinci recall --limit 10`, tokens from llama-server `/tokenize`):
 
@@ -298,7 +298,7 @@ The index abstained on 2 of the 10 abstention questions in every route mix. The 
 
 ## Handles, open and budgeted recall (mark 2, M3 step 3a)
 
-Items 1 and 2 of phase 3 of [the one-journal plan](plan-one-journal-one-index.md), with the packing from item 2. Items 3 to 5 are the budget sweep for answers, the summarize step and the write confirmation. The sweep, the summarize step and the confirmation are not built.
+Items 1 and 2 of phase 3 of [the one-journal plan](history/plan-one-journal-one-index.md), with the packing from item 2. Items 3 to 5 are the budget sweep for answers, the summarize step and the write confirmation. The sweep, the summarize step and the confirmation are not built.
 
 ```sh
 vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]
@@ -376,7 +376,7 @@ Exact counts were checked on four questions at budgets 40, 100 and 180: llama-se
 
 ### Budget sweep (M3 step 3b)
 
-Step 3b of [the one-journal plan](plan-one-journal-one-index.md), phase 3, item 3: does budgeted recall keep **answer** accuracy while spending fewer tokens? Recall numbers (3a) do not answer that. The sweep sends each packed context and the question to the chat model, and judges the reply. This section is the method; the results are in [m3-results.md](m3-results.md).
+Step 3b of [the one-journal plan](history/plan-one-journal-one-index.md), phase 3, item 3: does budgeted recall keep **answer** accuracy while spending fewer tokens? Recall numbers (3a) do not answer that. The sweep sends each packed context and the question to the chat model, and judges the reply. This section is the method; the results are in [m3-results.md](history/m3-results.md).
 
 ```sh
 cd mojo/py

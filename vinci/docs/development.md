@@ -87,8 +87,8 @@ The toolchain is pinned in `mojo/pyproject.toml` (Mojo 1.2.0, Python 3.13) and r
 | `mojo/scripts/` | `attempt.sh` (one calibration attempt, logged), `fmt-check.sh`, the gate (`gate.sh`), its selftest (`gate-selftest.sh`) and the fresh-clone check (`fresh-clone-check.sh`) |
 | `mojo/m2-attempts.jsonl` | The agent attempt log |
 | `docs/mojo-gotchas.md` | Mojo mistakes that agents make twice, with a correct snippet for each. Read it first |
-| `docs/mark2-plan.md` | The mark 2 plan: the phases, the gates, and what each phase removed |
-| `docs/m0-results.md`, `m2-results.md`, `m3-results.md`, `m4-results.md` | The results of mark 2's phases M0, M2, M3 and M4 |
+| `docs/history/mark2-plan.md` | The mark 2 plan: the phases, the gates, and what each phase removed |
+| `docs/history/` (`m0-results.md`, `m2-results.md`, `m3-results.md`, `m4-results.md`) | The results of mark 2's phases M0, M2, M3 and M4 |
 | `deploy/llm/` | The systemd user units for llama-server: the chat model and the embedding model |
 | `deploy/models/` | The Modelfile that builds the chat model, and how to set up both models |
 | `deploy/portal.service` | The systemd user unit that runs `vinci serve` |
@@ -96,7 +96,7 @@ The toolchain is pinned in `mojo/pyproject.toml` (Mojo 1.2.0, Python 3.13) and r
 
 ## Backup and verify
 
-`vinci backup [--dir DIR] [--keep N]` copies `journal.jsonl` to `$VINCI_HOME/backups/journal/` as `journal-<UTC time>.jsonl`, with a `.sha256` manifest that `sha256sum -c` reads. Backup reads without the lock and cuts the copy after the journal's last newline, so a line being written is left out. The bytes are checked before the copy gets its name, and an existing file is never replaced. `--keep N` removes only older copies of this name pattern. `vinci verify [--index] [--strict]` checks the journal without writing: the lines, the ids that must be unique, unknown kinds and future times. `--index` also compares the stored index with a rebuild in a temporary folder. The daily timer is `deploy/vinci-backup.timer`; it is in the repository and is not installed.
+`vinci backup [--dir DIR] [--keep N]` copies `journal.jsonl` to `$VINCI_HOME/backups/journal/` as `journal-<UTC time>.jsonl`, with a `.sha256` manifest that `sha256sum -c` reads. Backup reads without the lock and cuts the copy after the journal's last newline, so a line being written is left out. The bytes are checked before the copy gets its name, and an existing file is never replaced. `--keep N` removes only older copies of this name pattern. `vinci verify [--index] [--strict]` checks the journal without writing: the lines, the ids that must be unique, unknown kinds and future times. `--index` also compares the stored index with a rebuild in a temporary folder. The daily timer is `deploy/vinci-backup.timer`; it is installed and enabled on this machine (it ran on 2026-11-19 and 2026-11-20).
 
 ## The oracle
 

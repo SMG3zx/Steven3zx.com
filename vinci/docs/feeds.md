@@ -1,6 +1,6 @@
 # Feeds
 
-Feeds read outside sources into the index, so recall and `open` can find them. This is M5 steps a and b of [mark 2](mark2-plan.md), section 5: the contract, the journal as a feed, git, vaults, and the activity feed (the window time ActivityWatch recorded). Mail, calendar and Linear come later.
+Feeds read outside sources into the index, so recall and `open` can find them. This is M5 steps a and b of [mark 2](history/mark2-plan.md), section 5: the contract, the journal as a feed, git, vaults, and the activity feed (the window time ActivityWatch recorded). Mail, calendar and Linear come later.
 
 ```sh
 vinci feed run [journal|git|vaults|activity ...]    # every enabled feed by default

@@ -38,7 +38,7 @@ Mean tokens for chat cover every model call in the turn, the system prompt inclu
 - The C# binary is archived at `~/.local/share/vinci-csharp-oracle/` (it needs the .NET 10 runtime), with its source in `source/`. The three harnesses read it through `VINCI_ORACLE`. Against the archive: commands 3,633/3,633, portal 136/136, chat 10/10.
 - `install.sh` checks and builds the Mojo binary and installs it to `~/.local/share/vinci/`, with its runtime libraries and the Python edge. A launcher pins the interpreter from `mojo/.venv`, so the installed command still depends on the checkout's venv. `portal.service` now runs the Mojo binary.
 - On the machine: the old C# install was moved to `~/.local/share/vinci-csharp-installed-2026-11-18`. The memory units were stopped and removed. `~/.config/vinci/memory.env` keeps only the model and embedding settings (the full original is in `~/.vinci/backups/`). The memory audit and sync files were moved to `~/.vinci/backups/`. The user's uncommitted `Tracker.cs` edit is saved there as a patch.
-- The Neo4j container is stopped by the user, and its volume is kept for now.
+- The Neo4j container was reported stopped. Correction 2026-11-21: ports 7474 and 7687 were still listening on all interfaces; see mark3-plan D6.
 
 ## Open after M4
 
