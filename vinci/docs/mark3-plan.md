@@ -2,7 +2,7 @@
 
 Status: written 2026-11-18, after M0 to M5 of [mark 2](history/mark2-plan.md). It replaces mark 2's M5 remainder, M6 and M7. Everything in mark 2 that was built stays built; this plan says what to do next, what to stop doing, and what to measure before deciding.
 
-Corrections, 2026-11-21 (checked against the machine): the daily backup timer is installed and ran on 11-19 and 11-20; Neo4j ports 7474 and 7687 still listen on all interfaces (D6); the journal has 379 lines and the Mojo source 17,362 lines; the live index has no vectors, so live recall is lexical-only until `vinci index embed` is run.
+Corrections, 2026-11-21 (checked against the machine): the daily backup timer is installed and ran on 11-19 and 11-20; Neo4j ports 7474 and 7687 listened on all interfaces until the container was stopped later that day (D6 is now moot; its health check used the default password); the journal has 379 lines, 188 of them imported from Neo4j, and the Mojo source 17,362 lines; the live index has no vectors, so live recall is lexical-only until `vinci index embed` is run.
 
 Tags on claims: **[V]** measured or read in this repo. **[R]** from research, with the source in section 9. Most 2026 sources are blogs, vendor posts and aggregator pages, so [R] claims are leads to test, not facts. **[E]** an estimate.
 
