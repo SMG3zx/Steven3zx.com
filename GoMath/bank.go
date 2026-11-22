@@ -252,6 +252,8 @@ var Worksheet = []WorksheetEntry{
 	{"system_1.png", "(2,-5); y = 6x - 17; 7x + 3y = -1", OpCheckPoint, "Yes", 0, nil},
 	{"system_2.png", "x + y = 6; y = -4x", OpSystem, "{(-2, 8)}", 0, nil},
 	{"system_3.png", "2x + 3y = -4; -2x - 8y = 14", OpSystem, "{(1, -2)}", 0, nil},
+	// x is the number of $28 tickets and y the number of $40 tickets.
+	{"system_4.png", "x + y = 6000; 28x + 40y = 190800", OpSystem, "{(4100, 1900)}", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
