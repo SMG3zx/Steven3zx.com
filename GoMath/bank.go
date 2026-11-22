@@ -241,6 +241,8 @@ var Worksheet = []WorksheetEntry{
 	{"table_1.png", "y = x + 1; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-2, -1, 0, 1, 2, 3, 4", 0, nil},
 	{"inequality_2.png", "-6x >= 48", OpInequality, "(-∞, -8]", 0, nil},
 	{"inequality_3.png", "-1 < x + 8 < 1", OpInequality, "(-9, -7)", 0, nil},
+	{"line_1.png", "(-5,0) and (0,5)", OpPointSlope, "y - 0 = 1(x + 5)", 0, nil},
+	{"line_1.png", "(-5,0) and (0,5)", OpSlopeIntercept, "y = x + 5", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
