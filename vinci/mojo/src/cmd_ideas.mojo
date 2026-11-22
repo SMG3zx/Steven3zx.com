@@ -47,11 +47,11 @@ comptime GOAL_USAGE = (
     'goal <idea> "goal" <metric> at-least <n> | at-most <n> | between <low>'
     " <high>"
 )
-# Int64.MaxValue, the most ticks a TimeSpan holds.
+# Maximum ticks for TimeSpan.
 comptime TICKS_MAX = 9223372036854775807
 # 2^63 as a Float64: a FromMinutes product at or past it overflows.
 comptime TICKS_OVERFLOW_F = 9223372036854775808.0
-# DateTime.MaxValue in ticks since 0001-01-01, and the same as a Float64.
+# Maximum ticks since 0001-01-01, as a Float64.
 comptime DATE_TICKS_MAX = 3155378975999999999
 comptime DATE_TICKS_MAX_F = 3155378975999999999.0
 

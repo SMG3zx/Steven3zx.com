@@ -210,10 +210,10 @@ def run() raises:
         verify_command(verify_args, vinci_home(), journal_path(), now.copy())
         return
     if args[0] == "memory":
-        # Mark 2 removed the memory service.
+        # Mark 2 removed the memory service. Notes from that system are now in the journal.
         raise user_error(
-            "memory was removed in mark 2 (the Neo4j memory service is gone). "
-            "Its notes are in the journal; see docs/memory.md."
+            "memory was removed in mark 2. Its notes are in the journal; see"
+            " docs/memory.md."
         )
 
     # The tracker writes its facts before the command reads the

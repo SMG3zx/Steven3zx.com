@@ -28,9 +28,8 @@ def insert_blob(mut matrix: Matrix, blob: PythonObject) raises:
     """Append one row from a packed float32 bytes object.
 
     The copy reads the buffer while `blob` is borrowed, so the caller's reference is
-    alive for the whole copy. Passing `address_of(row[9])` instead took the address from a
-    temporary that was destroyed before the copy: the bytes were freed, and the copy read
-    freed memory (SIGSEGV in the second recall of a chat, vinci chat over LongMemEval).
+    alive for the whole copy. Use this function instead of taking the address directly,
+    to avoid using freed memory.
     """
     matrix.insert_from_address(address_of(blob))
 

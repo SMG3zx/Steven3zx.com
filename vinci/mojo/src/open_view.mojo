@@ -49,7 +49,7 @@ def no_request() -> Request:
 
 
 def parse_lines_arg(value: String, mut req: Request) raises:
-    """lines=A-B: sets req's range. Errors name the form, so a typo is easy to fix.
+    """Lines=A-B: sets req's range. Errors name the form, so a typo is easy to fix.
     """
     var dash = value.find("-")
     if dash < 1 or dash == value.byte_length() - 1:
