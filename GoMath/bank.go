@@ -249,6 +249,7 @@ var Worksheet = []WorksheetEntry{
 	{"variation_1.png", "y varies directly as x; y = 98 when x = 7; find y when x = 17", OpVariation, "238", 0, nil},
 	// The solver reads "inversely as z^2"; it does not read "inversely as the square of z".
 	{"variation_2.png", "y varies directly as x and inversely as z^2; y = 32 when x = 64 and z = 4; find y when x = 3 and z = 12", OpVariation, "1/6", 0, nil},
+	{"system_1.png", "(2,-5); y = 6x - 17; 7x + 3y = -1", OpCheckPoint, "Yes", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
