@@ -243,6 +243,8 @@ var Worksheet = []WorksheetEntry{
 	{"inequality_3.png", "-1 < x + 8 < 1", OpInequality, "(-9, -7)", 0, nil},
 	{"line_1.png", "(-5,0) and (0,5)", OpPointSlope, "y - 0 = 1(x + 5)", 0, nil},
 	{"line_1.png", "(-5,0) and (0,5)", OpSlopeIntercept, "y = x + 5", 0, nil},
+	{"line_2.png", "parallel to y = 5x through (-4,3)", OpPointSlope, "y - 3 = 5(x + 4)", 0, nil},
+	{"line_2.png", "parallel to y = 5x through (-4,3)", OpSlopeIntercept, "y = 5x + 23", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
