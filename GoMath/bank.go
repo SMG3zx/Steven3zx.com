@@ -236,6 +236,8 @@ var Worksheet = []WorksheetEntry{
 	{"unit6_23.png", "3x + 5y = 36; 4x + 3y = 26; eliminate x; multiply first by 4", OpEliminate, "-3", 0, nil},
 	{"unit6_24.png", "x + y = 6000; 24x + 40y = 182400", OpSystem, "{(3600, 2400)}", 0, nil},
 	{"unit6_25.png", "x + y = 23; 2x + 4y = 76", OpSystem, "{(8, 15)}", 0, nil},
+	// expression_1.png is a word problem: the bank holds the expression for the monthly cost.
+	{"expression_1.png", "4 + 0.18x", OpSimplify, "0.18x + 4", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
