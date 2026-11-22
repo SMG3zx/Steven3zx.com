@@ -215,8 +215,14 @@ type line struct {
 // readLine reads "(6,2) and (7,6)" or "slope 3 through (3,2)". For two points
 // it reports vertical when they share an x-value, with no slope.
 func readLine(ascii string, steps *[]Step) (l line, vertical bool, err error) {
-	if compact := strings.Join(strings.Fields(ascii), ""); relativePattern.MatchString(compact) {
+	compact := strings.Join(strings.Fields(ascii), "")
+	if relativePattern.MatchString(compact) {
 		return readRelativeLine(compact, steps)
+	}
+	if strings.Contains(compact, "=") {
+		if l, vertical, ok, err := readEquationLine(compact, steps); ok {
+			return l, vertical, err
+		}
 	}
 	pts := pointPattern.FindAllStringSubmatch(ascii, -1)
 	num := func(s string) float64 { v, _ := strconv.ParseFloat(s, 64); return v }
@@ -676,4 +682,86 @@ func solveLineForms(ascii string, steps *[]Step) (rep Report) {
 	rep.Result = strings.Join(forms, "; ")
 	*steps = append(*steps, Step{"Result", "All forms", "Each form is listed below"})
 	return rep
+}
+
+// The equation patterns read a line written in point-slope or slope-intercept
+// form, with the spaces removed. A term is a sign and a number, optionally
+// fractional and in parentheses, as in "+2", "-1/2" or "(-1/2)".
+const (
+	signedNum = `[+-]\(?-?[\d.]+(?:/\d+)?\)?`
+	plainNum  = `\(?-?[\d.]+(?:/\d+)?\)?`
+)
+
+var (
+	// pointSlopeEquation reads y + 2 = 3(x - 2), with either term optional.
+	pointSlopeEquation = regexp.MustCompile(`^y(` + signedNum + `)?=(` + plainNum + `)\(x(` + signedNum + `)?\)$`)
+	// slopeInterceptEquation reads y = 3x - 8, y = -x + 5, or y = (-1/2)x + 5.
+	slopeInterceptEquation = regexp.MustCompile(`^y=(` + plainNum + `|-|)x(` + signedNum + `)?$`)
+	// constantEquation reads y = 4, a horizontal line.
+	constantEquation = regexp.MustCompile(`^y=(` + plainNum + `)$`)
+	// verticalEquation reads x = 2.
+	verticalEquation = regexp.MustCompile(`^x=(` + plainNum + `)$`)
+)
+
+// ratValue reads a term such as "+2", "(-1/2)" or "-8" as an exact rational.
+// An empty term is 0.
+func ratValue(term string) (*big.Rat, bool) {
+	term = strings.NewReplacer("(", "", ")", "", "+", "").Replace(term)
+	if term == "" {
+		return new(big.Rat), true
+	}
+	return new(big.Rat).SetString(term)
+}
+
+// readEquationLine reads a line given as an equation. For point-slope form the
+// point is the one the equation names. For slope-intercept form the point is
+// the y-intercept (0, b), since the equation names no other point. ok is false
+// when the text is not one of these equations.
+func readEquationLine(compact string, steps *[]Step) (l line, vertical bool, ok bool, err error) {
+	if g := verticalEquation.FindStringSubmatch(compact); g != nil {
+		v, _ := ratValue(g[1])
+		x, _ := v.Float64()
+		return line{x1: x, y1: 0}, true, true, nil
+	}
+	if g := pointSlopeEquation.FindStringSubmatch(compact); g != nil {
+		m, okM := ratValue(g[2])
+		yTerm, _ := ratValue(g[1])
+		xTerm, _ := ratValue(g[3])
+		if !okM {
+			return l, false, false, nil
+		}
+		// y - y1 = m(x - x1), so the terms of the equation are the negated point.
+		y1 := new(big.Rat).Neg(yTerm)
+		x1 := new(big.Rat).Neg(xTerm)
+		l = ratLine(m, x1, y1)
+		*steps = append(*steps, Step{"Compute", "Point and slope from the equation", fmt.Sprintf("(%s, %s), m = %s", ratText(x1), ratText(y1), ratText(m))})
+		return l, false, true, nil
+	}
+	if g := slopeInterceptEquation.FindStringSubmatch(compact); g != nil {
+		m, _ := ratValue(g[1])
+		if g[1] == "-" {
+			m = big.NewRat(-1, 1)
+		} else if g[1] == "" {
+			m = big.NewRat(1, 1)
+		}
+		b, _ := ratValue(g[2])
+		l = ratLine(m, new(big.Rat), b)
+		*steps = append(*steps, Step{"Compute", "Y-intercept gives a point", fmt.Sprintf("(0, %s), m = %s", ratText(b), ratText(m))})
+		return l, false, true, nil
+	}
+	if g := constantEquation.FindStringSubmatch(compact); g != nil {
+		b, _ := ratValue(g[1])
+		l = ratLine(new(big.Rat), new(big.Rat), b)
+		*steps = append(*steps, Step{"Compute", "Y-intercept gives a point", fmt.Sprintf("(0, %s), m = 0", ratText(b))})
+		return l, false, true, nil
+	}
+	return l, false, false, nil
+}
+
+// ratLine builds a line from exact values.
+func ratLine(m, x1, y1 *big.Rat) line {
+	mf, _ := m.Float64()
+	xf, _ := x1.Float64()
+	yf, _ := y1.Float64()
+	return line{m: mf, x1: xf, y1: yf, mText: m.RatString()}
 }

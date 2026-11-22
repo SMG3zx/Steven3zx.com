@@ -522,3 +522,36 @@ func TestLineFormsGivesEveryForm(t *testing.T) {
 		}
 	}
 }
+
+func TestLineFormsFromAnEquation(t *testing.T) {
+	cases := []struct {
+		input string
+		want  []string
+	}{
+		{"y + 2 = 3(x - 2)", []string{"y + 2 = 3(x - 2)", "y = 3x - 8", "3x - y = 8"}},
+		{"y - 4 = (-1/2)(x - 2)", []string{"y - 4 = (-1/2)(x - 2)", "y = (-1/2)x + 5", "x + 2y = 10"}},
+		{"y = 3x - 8", []string{"y + 8 = 3(x - 0)", "y = 3x - 8", "3x - y = 8"}},
+		{"y = -x + 5", []string{"y - 5 = -1(x - 0)", "y = -x + 5", "x + y = 5"}},
+		{"y = (-1/2)x + 5", []string{"y - 5 = (-1/2)(x - 0)", "y = (-1/2)x + 5", "x + 2y = 10"}},
+		{"y = 4", []string{"y - 4 = 0(x - 0)", "y = 4"}},
+		{"x = 2", []string{"x = 2"}},
+	}
+	for _, c := range cases {
+		rep := Solve(c.input, OpLineForms)
+		if rep.Err != nil {
+			t.Fatalf("%s: %v", c.input, rep.Err)
+		}
+		if strings.Join(rep.Forms, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: forms %q, want %q", c.input, rep.Forms, c.want)
+		}
+	}
+}
+
+func TestPointSlopeAndSlopeInterceptConvert(t *testing.T) {
+	if got := Solve("y + 2 = 3(x - 2)", OpSlopeIntercept).Result; got != "y = 3x - 8" {
+		t.Errorf("slope-intercept of point-slope: %q, want y = 3x - 8", got)
+	}
+	if got := Solve("y = 3x - 8", OpPointSlope).Result; got != "y + 8 = 3(x - 0)" {
+		t.Errorf("point-slope of slope-intercept: %q, want y + 8 = 3(x - 0)", got)
+	}
+}
