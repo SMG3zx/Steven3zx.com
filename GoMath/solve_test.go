@@ -499,3 +499,26 @@ func TestGraph(t *testing.T) {
 		t.Error("a 10000-unit graph returned no error")
 	}
 }
+
+func TestLineFormsGivesEveryForm(t *testing.T) {
+	cases := []struct {
+		input string
+		want  []string
+	}{
+		{"parallel to y = 3x through (2,-2)", []string{"y + 2 = 3(x - 2)", "y = 3x - 8", "3x - y = 8"}},
+		{"perpendicular to y = 2x through (2,4)", []string{"y - 4 = (-1/2)(x - 2)", "y = (-1/2)x + 5", "x + 2y = 10"}},
+		{"(6,2) and (7,6)", []string{"y - 2 = 4(x - 6)", "y = 4x - 22", "4x - y = 22"}},
+		{"slope 1/3 through (3,-1)", []string{"y + 1 = (1/3)(x - 3)", "y = (1/3)x - 2", "x - 3y = 6"}},
+		{"(0,4) and (3,4)", []string{"y - 4 = 0(x - 0)", "y = 4"}},
+		{"(2,1) and (2,5)", []string{"x = 2"}},
+	}
+	for _, c := range cases {
+		rep := Solve(c.input, OpLineForms)
+		if rep.Err != nil {
+			t.Fatalf("%s: %v", c.input, rep.Err)
+		}
+		if strings.Join(rep.Forms, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: forms %q, want %q", c.input, rep.Forms, c.want)
+		}
+	}
+}

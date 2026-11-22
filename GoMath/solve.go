@@ -52,6 +52,8 @@ const (
 	OpCheckPoint
 	// OpEliminate gives the multiplier that makes a variable cancel by addition.
 	OpEliminate
+	// OpLineForms writes a line in every form it has: point-slope, slope-intercept, and standard.
+	OpLineForms
 )
 
 func (o Operation) String() string {
@@ -96,6 +98,8 @@ func (o Operation) String() string {
 		return "check a solution"
 	case OpEliminate:
 		return "elimination multiplier"
+	case OpLineForms:
+		return "all line forms"
 	}
 	return "unknown"
 }
@@ -112,6 +116,8 @@ type Step struct {
 type Report struct {
 	Steps  []Step
 	Result string
+	// Forms lists every form of the answer, one per line, when the operation has more than one.
+	Forms  []string
 	Degree int
 	Err    error
 	// Scenes holds the parser's state for each Parse step, keyed by step index.
@@ -180,6 +186,8 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 		return solveLineForm(ascii, false, &steps)
 	case OpSlopeIntercept:
 		return solveLineForm(ascii, true, &steps)
+	case OpLineForms:
+		return solveLineForms(ascii, &steps)
 	case OpTable:
 		return solveTable(ascii, &steps)
 	case OpSolveFor:

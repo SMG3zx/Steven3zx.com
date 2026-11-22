@@ -57,6 +57,7 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Excluded numbers | ctrl+d | Lists the numbers a rational expression must exclude from its domain, which are the roots of its denominators. Answers `all real numbers` when no denominator can reach 0. | `4/(x + 6)` gives `{-6}`. `1/(x^2 + 4)` gives `all real numbers`. |
 | Inequality | ctrl+o | Solves a linear or compound inequality and writes interval notation. | `2x + 4 > 10` gives `(3, ∞)`. `3 < 2x + 1 <= 9` gives `(1, 4]`. |
 | Slope | ctrl+o | Gives the slope through two points and whether the line rises, falls, is horizontal, or is vertical. | `(6,2) and (7,6)` gives `4 (rises)`. |
+| All line forms | ctrl+l | Writes a line in every form it has: point-slope, slope-intercept, and standard form `Ax + By = C` with whole numbers and A positive. Vertical lines give `x = a`. | `parallel to y = 3x through (2,-2)` gives `y + 2 = 3(x - 2)`, `y = 3x - 8`, and `3x - y = 8`. |
 | Point-slope / slope-intercept | ctrl+o | Writes the line through two points, through a point with a given slope, or through a point parallel or perpendicular to `y = px/q`. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. `perpendicular to y = 2x through (2,4)` gives `y - 4 = (-1/2)(x - 2)`. |
 | Graph | ctrl+e | Lists the points of `y = expression` and draws them on axes. Without `; x = a, b, c` it uses x from -3 to 3. | `y = x - 2` gives `(-3, -5), ... (3, 1)` and a plot. |
 | Table of values | ctrl+o | Gives y for each listed x. | `y = x - 2; x = -3, -2, -1` gives `-5, -4, -3`. |
@@ -67,7 +68,7 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Elimination multiplier | ctrl+o | Answers the blank in the addition method. The input fixes one equation's multiplier and gives the other's, so the chosen variable cancels. | `x + 5y = 2; 5x + 4y = -11; eliminate x; multiply second by 1` gives `-5`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |
 
-Keys with `ctrl+o` have no footer key. Press ctrl+o in the input for the full list of operations. The footer keys are bright when their operation accepts the input, and dim when it does not. Pressing a dim key still runs it and shows why it fails.
+Keys with `ctrl+o` have no footer key. The all-line-forms operation is on ctrl+l, and the result view lists each form on its own line. Press ctrl+o in the input for the full list of operations. The footer keys are bright when their operation accepts the input, and dim when it does not. Pressing a dim key still runs it and shows why it fails.
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.
 

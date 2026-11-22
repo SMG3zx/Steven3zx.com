@@ -36,12 +36,13 @@ var inputKeys = []keyedOp{
 	{"ctrl+s", OpSolve, tea.KeyCtrlS},
 	{"ctrl+d", OpDomain, tea.KeyCtrlD},
 	{"ctrl+e", OpGraph, tea.KeyCtrlE},
+	{"ctrl+l", OpLineForms, tea.KeyCtrlL},
 }
 
 // allOps lists every operation in declaration order, for the ctrl+o picker.
 var allOps = func() []Operation {
 	var ops []Operation
-	for op := OpSimplify; op <= OpEliminate; op++ {
+	for op := OpSimplify; op <= OpLineForms; op++ {
 		ops = append(ops, op)
 	}
 	return ops
@@ -455,7 +456,13 @@ func (m model) viewSteps(sb *strings.Builder) {
 	sb.WriteString("\n")
 
 	if m.step == len(m.report.Steps)-1 && !m.animating() {
-		sb.WriteString(center(boldStyle.Render("result: " + m.report.Result)))
+		if len(m.report.Forms) > 0 {
+			for _, f := range m.report.Forms {
+				sb.WriteString(center(boldStyle.Render(f)))
+			}
+		} else {
+			sb.WriteString(center(boldStyle.Render("result: " + m.report.Result)))
+		}
 	}
 	if m.checked && !m.animating() {
 		if m.checkOK {

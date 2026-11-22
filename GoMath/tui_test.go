@@ -345,12 +345,39 @@ func TestTUIPickEscReturnsToInput(t *testing.T) {
 }
 
 func TestEveryOperationHasAPickerEntry(t *testing.T) {
-	if len(allOps) != int(OpEliminate)+1 {
-		t.Fatalf("picker has %d operations, want %d", len(allOps), int(OpEliminate)+1)
+	if len(allOps) != int(OpLineForms)+1 {
+		t.Fatalf("picker has %d operations, want %d", len(allOps), int(OpLineForms)+1)
 	}
 	for _, k := range inputKeys {
 		if keyFor(k.op) != k.key {
 			t.Errorf("keyFor(%v) = %q, want %q", k.op, keyFor(k.op), k.key)
+		}
+	}
+}
+
+func TestTUIAllLineFormsShowsEveryForm(t *testing.T) {
+	var m tea.Model = newModel()
+	m = send(m, typed("parallel to y = 3x through (2,-2)"))
+	if !m.(model).avail[OpLineForms] {
+		t.Fatalf("footer does not light ctrl+l for a line")
+	}
+	m = send(m, key(tea.KeyCtrlL))
+	got := m.(model)
+	if got.mode != modeSteps || got.op != OpLineForms {
+		t.Fatalf("ctrl+l gave mode %v op %v, want modeSteps and all line forms", got.mode, got.op)
+	}
+	for len(got.report.Steps) > 0 && got.step < len(got.report.Steps)-1 {
+		m = send(m, key(tea.KeyRight))
+		got = m.(model)
+	}
+	for got.animating() {
+		m = send(m, key(tea.KeyRight))
+		got = m.(model)
+	}
+	view := m.View()
+	for _, want := range []string{"y + 2 = 3(x - 2)", "y = 3x - 8", "3x - y = 8"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("result view is missing %q:\n%s", want, view)
 		}
 	}
 }

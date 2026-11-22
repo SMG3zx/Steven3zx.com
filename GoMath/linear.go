@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -575,5 +576,104 @@ func solveFor(ascii string, steps *[]Step) (rep Report) {
 	}
 	rep.Result = target + " = " + text
 	*steps = append(*steps, Step{"Result", "Solved for " + target, rep.Result})
+	return rep
+}
+
+// standardForm writes Ax + By = C with whole-number coefficients, A positive,
+// and no common factor. It returns "" for a horizontal line, whose slope-intercept
+// form already is its equation, and for a line whose slope cannot be read exactly.
+func standardForm(l line) string {
+	m, ok := new(big.Rat).SetString(l.mText)
+	if !ok {
+		m = new(big.Rat).SetFloat64(l.m)
+	}
+	if m == nil || m.Sign() == 0 {
+		return ""
+	}
+	x1 := new(big.Rat).SetFloat64(l.x1)
+	y1 := new(big.Rat).SetFloat64(l.y1)
+	if x1 == nil || y1 == nil {
+		return ""
+	}
+	// b is the y-intercept, from y1 = m*x1 + b.
+	b := new(big.Rat).Sub(y1, new(big.Rat).Mul(m, x1))
+
+	// m*x - y = -b, multiplied through by the least common denominator L.
+	L := lcmBig(m.Denom(), b.Denom())
+	A := new(big.Int).Mul(m.Num(), new(big.Int).Quo(L, m.Denom()))
+	B := new(big.Int).Neg(L)
+	C := new(big.Int).Neg(new(big.Int).Mul(b.Num(), new(big.Int).Quo(L, b.Denom())))
+
+	g := new(big.Int).GCD(nil, nil, new(big.Int).Abs(A), new(big.Int).Abs(B))
+	g.GCD(nil, nil, g, new(big.Int).Abs(C))
+	if g.Sign() != 0 {
+		A.Quo(A, g)
+		B.Quo(B, g)
+		C.Quo(C, g)
+	}
+	if A.Sign() < 0 {
+		A.Neg(A)
+		B.Neg(B)
+		C.Neg(C)
+	}
+	return coefficientTerm(A, "x") + signedTerm(B, "y") + " = " + C.String()
+}
+
+// lcmBig is the least common multiple of two positive integers.
+func lcmBig(a, b *big.Int) *big.Int {
+	g := new(big.Int).GCD(nil, nil, a, b)
+	return new(big.Int).Mul(new(big.Int).Quo(a, g), b)
+}
+
+// coefficientTerm writes c*name, leaving out a coefficient of 1 or -1.
+func coefficientTerm(c *big.Int, name string) string {
+	if c.Cmp(big.NewInt(1)) == 0 {
+		return name
+	}
+	if c.Cmp(big.NewInt(-1)) == 0 {
+		return "-" + name
+	}
+	return c.String() + name
+}
+
+// signedTerm writes the term c*name after an operator, as in " + 2y" or " - y".
+func signedTerm(c *big.Int, name string) string {
+	abs := new(big.Int).Abs(c)
+	op := " + "
+	if c.Sign() < 0 {
+		op = " - "
+	}
+	if abs.Cmp(big.NewInt(1)) == 0 {
+		return op + name
+	}
+	return op + abs.String() + name
+}
+
+// solveLineForms writes the line in every form it has: point-slope, then
+// slope-intercept, then standard form when the line is not horizontal or vertical.
+func solveLineForms(ascii string, steps *[]Step) (rep Report) {
+	l, vertical, err := readLine(ascii, steps)
+	if err != nil {
+		rep.Err = err
+		return rep
+	}
+	if vertical {
+		rep.Result = "x = " + formatValue(l.x1)
+		rep.Forms = []string{rep.Result}
+		*steps = append(*steps, Step{"Result", "Vertical line", rep.Result})
+		return rep
+	}
+	forms := []string{pointSlopeForm(l), slopeInterceptForm(l)}
+	labels := []string{"Point-slope form", "Slope-intercept form"}
+	if std := standardForm(l); std != "" {
+		forms = append(forms, std)
+		labels = append(labels, "Standard form")
+	}
+	for i, f := range forms {
+		*steps = append(*steps, Step{"Compute", labels[i], f})
+	}
+	rep.Forms = forms
+	rep.Result = strings.Join(forms, "; ")
+	*steps = append(*steps, Step{"Result", "All forms", "Each form is listed below"})
 	return rep
 }
