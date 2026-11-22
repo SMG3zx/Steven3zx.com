@@ -1,11 +1,10 @@
-# Web addresses for the portal: what System.Uri.TryCreate(url, UriKind.Absolute) accepts,
-# and the Host and Port the portal reads from it, plus the path a request asks for.
-# The reference is src/Portal.cs (IsWebAddress, HostOf, LocalPortOf) and the .NET 10
-# behaviour recorded in mojo/py/vinci_diff/portal_truth/ (the cases are in the harness).
+# Web addresses for the portal: which text counts as an absolute address, and the host and
+# port the portal reads from it, plus the path a request asks for. The cases are in
+# mojo/py/vinci_diff/portal_truth/ and the harness.
 #
 # Only web addresses from the journal and from portal.json reach the page through this
 # parser. Schemes other than http, https and ftp get no default port, so a hand-edited
-# mailto or file address can show another host or port than .NET would.
+# mailto or file address can show an unexpected host or port.
 
 from jsonline import ascii_lower
 from session import is_space
@@ -165,10 +164,10 @@ def canonical_ipv4(host: String) -> String:
 
 
 def parse_address(text: String) raises -> Optional[Address]:
-    """System.Uri.TryCreate(text, Absolute), for the parts the portal uses.
+    """Parse an absolute address, for the parts the portal uses.
 
-    None where .NET says the text is not an absolute address. Leading and trailing white
-    space is ignored, as .NET ignores it.
+    None where the text is not an absolute address. Leading and trailing white
+    space is ignored.
     """
     var points = utf8_code_points(text)
     var lo = 0
@@ -182,7 +181,7 @@ def parse_address(text: String) raises -> Optional[Address]:
         cps.append(points[i])
     var n = len(cps)
     if n > 0 and cps[0] == 47:
-        # .NET reads a leading slash as a file address: "/x" has no host, "//host/x" has one.
+        # A leading slash is a file address: "/x" has no host, "//host/x" has one.
         if n == 1 or cps[1] != 47:
             return Optional(Address("file", "", -1))
         return _authority(cps, 2, "file", -1)
@@ -205,7 +204,7 @@ def parse_address(text: String) raises -> Optional[Address]:
     if scheme == "http" or scheme == "https":
         return None
     if scheme == "mailto":
-        # .NET reads the host after the last @ and uses the SMTP port.
+        # The host is read after the last @, with the SMTP port.
         var at_sign = last_index_of(cps, after, n, 64)
         if at_sign < 0:
             return Optional(Address(scheme, "", 25))
@@ -249,7 +248,7 @@ def _authority(
         var colon_at = index_of(cps, host_start, end, 58)
         if colon_at >= 0:
             if scheme == "file":
-                # A file address takes no port, so .NET does not read one with a colon.
+                # A file address takes no port, so a colon is not read as one.
                 return None
             host_end = colon_at
             port_from = colon_at + 1
@@ -280,7 +279,7 @@ def _authority(
 
 
 def is_web_address(url: String) raises -> Bool:
-    """Portal.IsWebAddress: an absolute http or https address."""
+    """Whether the text is an absolute http or https address."""
     var parsed = parse_address(url)
     if parsed is None:
         return False
@@ -289,7 +288,7 @@ def is_web_address(url: String) raises -> Bool:
 
 
 def host_of(url: String) raises -> String:
-    """Portal.HostOf: the host without a leading www., or the text itself when it is not
+    """The host without a leading www., or the text itself when it is not
     an address."""
     var parsed = parse_address(url)
     if parsed is None:
@@ -301,8 +300,7 @@ def host_of(url: String) raises -> String:
 
 
 def local_port_of(url: String) raises -> Optional[Int]:
-    """Portal.LocalPortOf: the port when the address names localhost, 127.0.0.1 or [::1].
-    """
+    """The port when the address names localhost, 127.0.0.1 or [::1]."""
     var parsed = parse_address(url)
     if parsed is None:
         return None
@@ -321,7 +319,7 @@ def unreserved(c: Int) -> Bool:
 
 
 def raw_allowed(c: Int) -> Bool:
-    """The ASCII that .NET leaves as it is in a path. Everything else is percent-escaped.
+    """The ASCII that stays as it is in a path. Everything else is percent-escaped.
     """
     if is_alnum(c):
         return True
@@ -341,7 +339,7 @@ def upper_hex_pair(value: Int) -> String:
 
 
 def escape_path(raw: String) -> String:
-    """The path .NET keeps. A %XX escape of an unreserved character is decoded; any other
+    """The path as the portal keeps it. A %XX escape of an unreserved character is decoded; any other
     escape stays as typed; a lone % becomes %25; a backslash is a slash; every other byte
     outside the allowed ASCII is escaped with uppercase hex."""
     var b = raw.as_bytes()
@@ -396,8 +394,7 @@ def drop_last_segment(path: String) -> String:
 
 
 def remove_dot_segments(path: String) -> String:
-    """RFC 3986 section 5.2.4, the way .NET resolves "." and ".." in a request path.
-    """
+    """RFC 3986 section 5.2.4, for "." and ".." in a request path."""
     var input = path
     var output = String("")
     while input.byte_length() > 0:

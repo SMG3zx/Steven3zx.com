@@ -1,7 +1,7 @@
-# Abstention and the corrective query, ported from Retrieval.ShouldAbstain,
-# Retrieval.CorrectiveQuery and Retrieval.AssessEvidence in src/Memory/Retrieval.cs.
-# A candidate's vector cosine is the real cosine here (the C# converted Neo4j's
-# (1 + cos) / 2 score back to one), so VECTOR_EVIDENCE_COSINE has the same meaning.
+# Abstention and the corrective query: when the retrieved evidence is too weak to
+# answer from, recall says so, and a second query is built from the question's own terms.
+# A candidate's vector cosine is the real cosine, in -1 to 1, so VECTOR_EVIDENCE_COSINE
+# is a threshold on cosine.
 
 from recall import query_terms
 from fusion import Candidate

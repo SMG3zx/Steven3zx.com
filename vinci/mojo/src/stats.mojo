@@ -1,6 +1,5 @@
-# Shewhart's control limits for a process: a port of src/Stats.cs. The sums run
-# in the same order as the C# (LINQ Sum and Average add left to right), so the
-# limits match to the last digit.
+# Shewhart's control limits for a process. The sums run left to right, so the
+# limits are stable to the last digit.
 
 
 @fieldwise_init

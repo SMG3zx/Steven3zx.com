@@ -1,7 +1,7 @@
-# JSON as System.Text.Json writes and reads it for vinci's journal. Writing
-# follows JsonSerializerDefaults.Web with the default encoder, which the probe in
-# docs/mojo-gotchas.md checked against .NET 10 byte for byte. Reading accepts what
-# the C# reader accepts for these fields, and skips unknown fields.
+# The JSON of vinci's journal, one object per line. The journal is an append-only file that
+# already holds lines in this format, so writing keeps it byte for byte:
+# HTML-safe escaping, shortest round-trip floats (docs/mojo-gotchas.md). Reading
+# matches field names without regard to case and skips unknown fields.
 
 from text import (
     ascii_tail,
@@ -32,7 +32,7 @@ comptime CR = 13
 
 
 def hex4(code: Int) -> String:
-    """Four uppercase hex digits, as the C# encoder writes \\uXXXX."""
+    """Four uppercase hex digits, as the journal writes \\uXXXX."""
     var hex = "0123456789ABCDEF".as_bytes()
     var out = List[UInt8]()
     for k in range(4):
@@ -92,7 +92,7 @@ def json_instant(at: Instant) -> String:
 
 
 def format_json_double(v: Float64) raises -> String:
-    """A double the way System.Text.Json writes it: shortest round-trip digits.
+    """A double as the journal writes it: shortest round-trip digits.
 
     Plain notation when the decimal exponent is from -4 to 16, otherwise
     E notation with a sign and at least two exponent digits (1E-07, 1E+21).
@@ -182,8 +182,8 @@ struct Cursor(Movable):
     def read_string(mut self) raises -> String:
         """A JSON string with its escapes decoded to UTF-8.
 
-        A lone surrogate is refused. The C# writer never produces one, since it
-        writes U+FFFD for them.
+        A lone surrogate is refused. The journal never holds one: writing
+        replaces them with U+FFFD.
         """
         self.expect(QUOTE)
         var out = List[UInt8]()

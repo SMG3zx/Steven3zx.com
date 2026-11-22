@@ -1,7 +1,7 @@
-# A chat reply that asks for a tool (Conversation.TryAction in src/Chat/Conversation.cs).
+# A chat reply that asks for a tool.
 # A reply that is one JSON object with a "tool" name is an action; anything else is the
 # answer. The arguments are kept in order, with each value as a string, a list of strings,
-# or other JSON text, so the summary shown to the person reads as the C# one does.
+# or other JSON text, so the summary shown to the person keeps the model's own order.
 
 from jsonline import Cursor, ascii_lower, json_string
 
@@ -206,8 +206,8 @@ def int_arg(a: Action, key: String, fallback: Int) raises -> Int:
 
 
 def compact_json(a: Action) raises -> String:
-    """The arguments as one line of JSON, the way the C# Summary writes them: keys in
-    order, no spaces, the tool name left out."""
+    """The arguments as one line of JSON: keys in order, no spaces, the tool name
+    left out."""
     var out = String("{")
     for i in range(len(a.values)):
         if i > 0:

@@ -385,7 +385,7 @@ def update_from_journal(
     is refused: it was truncated, which is for the person to decide (vinci feed rebuild).
 
     Only complete lines are read: a last line without its newline is left for the next run,
-    in case the C# binary is still writing it.
+    in case another process is still writing it.
     """
     var report = BuildReport()
     var time = Python.import_module("time")

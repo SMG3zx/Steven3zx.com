@@ -1,6 +1,4 @@
-# Reciprocal-rank fusion and the final ordering, ported from RankFusion and
-# Retrieval.RouteScore in src/Memory/Retrieval.cs, and the content dedupe in
-# Neo4jStore.Recall. Raw scores (bm25, cosine) are not comparable across routes, so
+# Reciprocal-rank fusion, the final ordering, and the content dedupe. Raw scores (bm25, cosine) are not comparable across routes, so
 # each route votes by rank: a candidate at rank i (0-based) in route r adds
 # weight_r / (k + i + 1), with k = RRF_K = 60 unless an eval sets another. The sum is the
 # fused score.
@@ -105,7 +103,7 @@ struct Weights(Copyable, Movable):
 
 def semantic_weights() raises -> Weights:
     """The weights for route semantic: FUSION_SEMANTIC "lexical,vector,graph" when it
-    is three numbers, else 0.25, 1.0, 0.2. The C# port had 0.4, 0.4, 0.2 (equal weights);
+    is three numbers, else 0.25, 1.0, 0.2. The first version had 0.4, 0.4, 0.2 (equal weights);
     M5 step d measured the lexical share down to 0.25 (docs/memory.md, Fusion weights).
     """
     var os = Python.import_module("os")

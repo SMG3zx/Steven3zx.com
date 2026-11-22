@@ -1,5 +1,4 @@
-# Brute-force cosine top-k over one contiguous N x D Float32 buffer. Ported from
-# calibration/c3-simd-cosine/cosine.mojo. Rows are normalised on insert, so the
+# Brute-force cosine top-k over one contiguous N x D Float32 buffer. Rows are normalised on insert, so the
 # cosine of a row and a query is their dot product. A scan of a few thousand
 # rows is milliseconds, which is why there is no ANN index (plan section 3).
 

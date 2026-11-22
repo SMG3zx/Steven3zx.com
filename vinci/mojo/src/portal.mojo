@@ -1,10 +1,9 @@
-# `vinci serve [port]`: the page of saved links on localhost. The reference is src/Portal.cs
-# (Saved, Merge, Parse, Discovered, Capture, Answer) and Program.cs (the port argument).
+# `vinci serve [port]`: the page of saved links on localhost.
 #
-# The process is Mojo. Each request reads the journal again, as C# does. The HTTP layer is
-# Python's http.server (portal_io.mojo, portal_edge.py); this file decides every answer.
-# Requests are answered one at a time. C# answers them concurrently, but the answers match:
-# a scan or a capture that is still running is waited for, or read later, as C# does.
+# Each request reads the journal again. The HTTP layer is Python's http.server
+# (portal_io.mojo, portal_edge.py); this file decides every answer.
+# Requests are answered one at a time. A scan or a capture that is still running is
+# waited for, or read later.
 
 from std.os import makedirs
 from std.pathlib import Path
@@ -207,7 +206,7 @@ def _trim(text: String) raises -> String:
 
 
 def saved_links(journal_file: String) raises -> List[Link]:
-    """Portal.Saved: the bookmarks in the journal, then the portal.json files tracked in each
+    """The bookmarks in the journal, then the portal.json files tracked in each
     repository an idea lives in. The first link to a URL wins. cold-storage is never read.
     """
     var state = state_from(Journal(journal_file).read())
@@ -264,7 +263,7 @@ def saved_links(journal_file: String) raises -> List[Link]:
 
 
 def listening_ports() raises -> List[Int]:
-    """Ports listening on loopback or any address, from /proc/net/tcp and tcp6 (Portal.ListeningPorts).
+    """Ports listening on loopback or any address, from /proc/net/tcp and tcp6.
     """
     var loopback = List[String]()
     loopback.append("0100007F")
@@ -342,7 +341,7 @@ def scan_ports(own: Int) raises -> List[Int]:
 
 
 def discovered_links(hits: PythonObject) raises -> List[Link]:
-    """Portal.Probe for each answering port: its title, or localhost:<port>."""
+    """One link for each answering port: its title, or localhost:<port>."""
     var links = List[Link]()
     for hit in hits:
         var port = Int(String(hit[0]))
@@ -376,7 +375,7 @@ def consume_probe(mut ctx: Context) raises:
 
 
 def discovered(mut ctx: Context) raises -> List[Link]:
-    """Portal.Discovered: after the first scan, the last result is returned at once and a
+    """The discovered links: after the first scan, the last result is returned at once and a
     stale one is refreshed in the background, so a slow port never holds the page.
     """
     if ctx.has_probe and is_true(ctx.probe.done()):
@@ -393,7 +392,7 @@ def discovered(mut ctx: Context) raises -> List[Link]:
 def merge(
     saved: List[Link], found: List[Link], own_port: Int
 ) raises -> List[Link]:
-    """Portal.Merge: the saved links, then each discovered link whose port no saved link or
+    """The saved links, then each discovered link whose port no saved link or
     the portal itself already covers."""
     var covered = List[Int]()
     covered.append(own_port)
@@ -425,7 +424,7 @@ def remember_address(mut ctx: Context, slug_name: String, url: String):
 def capture(
     mut ctx: Context, slug_name: String, url: String, file: String
 ) raises:
-    """Portal.Capture: start a screenshot unless the browser is missing or this page was
+    """Start a screenshot unless the browser is missing or this page was
     tried within the hour. The picture is taken in the background."""
     var now = clock()
     if not Path(ctx.chromium).is_file():
@@ -472,11 +471,11 @@ def answer(
     target: String,
     loopback: String,
 ) raises -> Reply:
-    """Portal.Answer, with the checks HttpListener makes before it.
+    """Answer one request.
 
-    HttpListener answers a socket only for the host name of its own prefix: 127.0.0.1 on
-    the IPv4 socket, localhost on the IPv6 one. The port in Host is not checked. Its 400
-    and 404 bodies are reproduced as they are.
+    A socket is answered only for its own host name: 127.0.0.1 on the IPv4 socket,
+    localhost on the IPv6 one. The port in Host is not checked. The 400 and 404 bodies
+    are fixed text.
     """
     var port_text = String(ctx.port)
     if not has_host or host.byte_length() == 0:
@@ -486,7 +485,7 @@ def answer(
             "<h1>Bad Request (Invalid host name)</h1>",
         )
     if host.startswith("[") or host.count(":") >= 2:
-        # An IPv6 literal in Host is not read as a name: HttpListener builds the URL from the
+        # An IPv6 literal in Host is not read as a name: the URL is built from the
         # port alone, with a bracket when the host began with one.
         var open_bracket = "[" if host.startswith("[") else ""
         return text_reply(
@@ -560,8 +559,7 @@ def send(req: PythonObject, reply: Reply) raises:
 
 
 def serve(port: Int, journal_file: String) raises:
-    """Portal.Run: make the previews folder, listen on loopback, answer until stopped.
-    """
+    """Make the previews folder, listen on loopback, answer until stopped."""
     var previews = join_path(
         directory_of(absolute_path(journal_file)), "previews"
     )
@@ -580,7 +578,7 @@ def serve(port: Int, journal_file: String) raises:
             var reply = answer(ctx, host, has_host, target, loopback)
             send(req, reply)
         except e:
-            # Portal.Answer throws here in C#: the request is closed with an empty chunked 200.
+            # An answer that fails closes the request with an empty chunked 200.
             _ = e
             send(
                 req,

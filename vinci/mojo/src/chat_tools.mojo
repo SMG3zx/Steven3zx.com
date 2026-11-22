@@ -1,8 +1,7 @@
-# The chat's tools (src/Chat/Tools.cs), with the memory service replaced by the journal and the
-# index. Each tool returns the text the model reads next, and never raises: a failure is
-# "error: <message>", as ChatTools.Run returns it.
+# The chat's tools, over the journal and the index. Each tool returns the text the model reads next, and never raises: a failure is
+# "error: <message>".
 #
-#   journal   one vinci command, run as a child process so its output is captured as C# does
+#   journal   one vinci command, run as a child process so its output is captured
 #   recall    the index, packed under a budget (default 3000 tokens, whole 10)
 #   open      part of one id: lines=A-B or grep=word, capped in total
 #   remember  a `remember` journal line, then an index update

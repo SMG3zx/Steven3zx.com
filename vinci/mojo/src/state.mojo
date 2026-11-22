@@ -1,21 +1,18 @@
 # The fold over the journal: everything vinci knows right now, rebuilt on every
-# run. A port of src/State.cs. The names are the same in snake_case, and the
-# lists keep the order the C# lists keep, because commands print in that order.
+# run. The lists keep journal order, because commands print in that order.
 #
-# Where C# holds null, a String field here holds "" only for fields C# always
-# fills from a required journal field. Optional fields are Optional[...] and
-# match C#'s nullable types exactly.
+# A String field holds "" only when it is filled from a required journal field.
+# Optional fields are Optional[...].
 #
-# C# looks things up with Find and returns null when they are absent. Here each
-# lookup returns an index into the list, or -1 when nothing matches. C# code that
-# dereferences a null (`Idea(id)!`) raises here instead.
+# Each lookup returns an index into the list, or -1 when nothing matches. A command
+# that needs the item raises when the lookup finds nothing.
 
 from journal import Event
 from jsonline import ascii_lower
 from text import ascii_tail, num
 from timeutil import Instant, minutes_to_ticks
 
-# Stage, as Enum values in src/State.cs. The order is the order of the enum.
+# Stage codes, in pipeline order.
 comptime SEED = 0
 comptime PREPARE = 1
 comptime INCUBATE = 2
@@ -76,8 +73,8 @@ def home_pattern(home: String) -> String:
 def first_with_prefix(
     refs: List[String], prefix: UInt8
 ) raises -> Optional[String]:
-    """The first reference whose first byte is prefix. An empty reference raises,
-    as r[0] does in C#."""
+    """The first reference whose first byte is prefix. An empty reference raises.
+    """
     for r in refs:
         var b = r.as_bytes()
         if len(b) == 0:
@@ -694,7 +691,7 @@ struct State(Movable):
         elif kind == "work":
             var i = self.require_idea(id)
             self.ideas[i].work.append(TimedText(at.copy(), text))
-            # A HashSet in C#: the same pair twice is kept once.
+            # The same pair twice is kept once.
             var hash = e.where_.copy().or_else("")
             if not self.has_commit(id, hash):
                 self.commits.append(CommitKey(id, hash))
@@ -851,7 +848,7 @@ struct State(Movable):
 
 
 def required_value(value: Optional[Float64]) raises -> Float64:
-    """A field C# reads with `!.Value`: a missing one is an error."""
+    """A field the event must carry: a missing one is an error."""
     if value is None:
         raise Error("journal: event is missing its value")
     return value.value()

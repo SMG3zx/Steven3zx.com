@@ -1,9 +1,8 @@
-# One command's working set, and the helpers App.cs keeps for every command group.
-# The reference is Session and its helpers at the end of src/App.cs.
+# One command's working set, and the helpers every command group shares.
 #
 # A command reads the state folded once at start, checks its arguments, and
 # appends a few events with record(). The state is never refolded within a
-# command, as in C#.
+# command.
 #
 # A mistake in what was typed is raised with a marker, which vinci.mojo's main maps to an exit code:
 #   user_error("text")     -> "user:text"       stderr "vinci: text", exit 1
@@ -32,7 +31,7 @@ def user_error(message: String) -> Error:
 
 
 def is_space(cp: Int) -> Bool:
-    """Char.IsWhiteSpace, the test string.Split(null) uses in C#."""
+    """Whether a code point is white space, by the Unicode White_Space set."""
     if cp == 32 or (cp >= 9 and cp <= 13):
         return True
     if cp == 0x85 or cp == 0xA0 or cp == 0x1680:
@@ -105,7 +104,7 @@ def is_number_text(text: String) -> Bool:
 
 
 def number(text: String, name: String) raises -> Float64:
-    """Number: invariant-culture NumberStyles.Float, and finite. Otherwise a user error.
+    """A finite number in plain or exponent notation, read with no locale. Otherwise a user error.
     """
     if is_number_text(text):
         var v = Float64(text.strip())
@@ -115,7 +114,7 @@ def number(text: String, name: String) raises -> Float64:
 
 
 def pad_left(s: String, width: Int) raises -> String:
-    """C#'s {x,n} for a positive n: spaces before, never cut."""
+    """Right-aligned: spaces before, never cut. Width counts UTF-16 units."""
     var out = String()
     for _ in range(width - utf16_length(s)):
         out += " "
@@ -169,7 +168,7 @@ struct Session(Movable):
 
     def __init__(out self, var journal: JournalTx, var now: Instant) raises:
         """Reads the journal once, under the transaction's lock. A broken journal fails here,
-        even for help, as in C#. The caller commits or aborts the transaction.
+        even for help. The caller commits or aborts the transaction.
         """
         self.state = state_from(journal.read())
         self.journal = journal^

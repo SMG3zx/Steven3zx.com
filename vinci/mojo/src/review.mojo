@@ -1,40 +1,40 @@
 # The review loop: what needs fixing now, the one thing to do next, and where ideas
-# sit longest. A port of src/Review.cs. Nothing here prints; callers format the result.
+# sit longest. Nothing here prints; callers format the result.
 #
 # Public API (for the ideas agent's pipeline and next commands, and for cmd_ops):
 #
-#   comptime BUILD_LIMIT = 3                 ideas that may be in Build at once (Review.BuildLimit)
-#   comptime COMMITMENT_LENGTH = 7 days     in ticks (Review.CommitmentLength); a commit is due
+#   comptime BUILD_LIMIT = 3                 ideas that may be in Build at once
+#   comptime COMMITMENT_LENGTH = 7 days     in ticks; a commit is due
 #                                            at now.add_ticks(COMMITMENT_LENGTH)
 #
 #   struct Finding(rank, subject, problem, fix)
 #   def findings(state: State, now: Instant) raises -> List[Finding]
-#       Review.Run: every defect, lowest rank first. Ranks are 1 to 10. Within a
-#       rank the order is the C# order (commitment, ideas, issues, principles,
-#       predictions, metrics, notes).
+#       Every defect, lowest rank first. Ranks are 1 to 10. Within a
+#       rank the order is: commitment, ideas, issues, principles,
+#       predictions, metrics, notes.
 #
 #   struct NextStep(what, how)
 #   def next_step(state: State, now: Instant) raises -> NextStep
-#       Review.Next: the worst finding, else the idea in Build that waited longest,
+#       The worst finding, else the idea in Build that waited longest,
 #       else the early idea that was touched longest ago, else the Tend idea whose
 #       goal is unmet, else "nothing is waiting on you". `what` and `how` are the two
 #       lines `Next:` and `      ` print.
 #
-#   struct SlowestStage(stage, average)     average is in ticks (TimeSpan)
+#   struct SlowestStage(stage, average)     average is in ticks
 #   def slowest_stage(state: State, now: Instant) raises -> Optional[SlowestStage]
-#       Review.SlowestStage: the stage of Seed, Prepare or Build where ideas sit
+#       The stage of Seed, Prepare or Build where ideas sit
 #       longest on average, counting every idea that ever entered it. None when no
 #       idea has entered one of the three. The caller prints it when average is at
-#       least TICKS_PER_HOUR. Ties keep the earlier stage, as C# does.
+#       least TICKS_PER_HOUR. Ties keep the earlier stage.
 #
 # Stages are the Int codes from state.mojo (SEED, PREPARE, INCUBATE, BUILD, TEND,
-# RETIRED). Text pieces use text.mojo (span, clip, day, num), so output matches C#.
+# RETIRED). Text pieces use text.mojo (span, clip, day, num), so the output is laid out the same everywhere.
 
 from state import BUILD, INCUBATE, PREPARE, RETIRED, SEED, TEND, State
 from text import clip, day, num, span
 from timeutil import Instant, TICKS_PER_DAY
 
-# Review.cs limits. Every one is a first guess; change one when a logged issue says so.
+# Limits. Every one is a first guess; change one when a logged issue says so.
 comptime BUILDING_IDLE_LIMIT = 14 * TICKS_PER_DAY
 comptime TENDING_IDLE_LIMIT = 30 * TICKS_PER_DAY
 comptime UNUSED_LIMIT = 14 * TICKS_PER_DAY
@@ -125,8 +125,8 @@ def contains_text(items: List[String], want: String) -> Bool:
 
 
 def links_out(refs: List[String]) raises -> Bool:
-    """Note.Refs.Exists(r => r[0] is 'n' or 'i' or 'h'). An empty reference raises,
-    as r[0] does in C#."""
+    """Whether any reference starts with 'n', 'i' or 'h'. An empty reference raises.
+    """
     for r in refs:
         var b = r.as_bytes()
         if len(b) == 0:
@@ -138,7 +138,7 @@ def links_out(refs: List[String]) raises -> Bool:
 
 def live_by_touch(state: State) -> List[Int]:
     """Indices of the ideas not retired, by last touch, oldest first. A stable
-    sort, as LINQ OrderBy is: equal times keep their journal order."""
+    sort: equal times keep their journal order."""
     var order = List[Int]()
     for i in range(len(state.ideas)):
         if state.ideas[i].stage != RETIRED:
@@ -158,8 +158,7 @@ def live_by_touch(state: State) -> List[Int]:
 
 
 def findings(state: State, now: Instant) raises -> List[Finding]:
-    """Review.Run: every defect, lowest rank first, in C#'s order within a rank.
-    """
+    """Every defect, lowest rank first, in a fixed order within a rank."""
     var found = List[Finding]()
 
     var open_index = state.open_commitment_index()
@@ -423,12 +422,11 @@ def next_step(state: State, now: Instant) raises -> NextStep:
 
 
 def slowest_stage(state: State, now: Instant) raises -> Optional[SlowestStage]:
-    """Review.SlowestStage over Seed, Prepare and Build. Every idea that ever
-    entered a stage counts, retired ones included, as in C#.
+    """The slowest of Seed, Prepare and Build. Every idea that ever entered a stage
+    counts, retired ones included.
 
-    The average is computed in seconds, as C# does with TotalSeconds, then cut to
-    whole ticks. FromSeconds may round differently at the sub-millisecond level,
-    which no span shows.
+    The average is computed in seconds, then cut to whole ticks. The conversion may
+    round differently at the sub-millisecond level, which no span shows.
     """
     var best_stage = -1
     var best_average = 0

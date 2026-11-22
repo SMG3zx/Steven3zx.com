@@ -1,11 +1,10 @@
-# The links in a portal.json: an array of { title, url, description?, tags? }, read the way
-# src/Portal.cs Parse reads it with System.Text.Json.
+# The links in a portal.json: an array of { title, url, description?, tags? }.
 #
-# Two passes, as JsonDocument.Parse then the element reads work. The first checks the whole
+# Two passes. The first checks the whole
 # text against the JSON grammar, with nesting up to 64 levels; a text that fails it gives no
 # links. The second reads the entries. A property that appears twice takes its last value.
-# A lone surrogate escape in a string the portal reads makes .NET throw during the read, so
-# that request fails (see portal.mojo); it is an error here too, with the marker below.
+# A lone surrogate escape in a string the portal reads fails the request (see portal.mojo);
+# it is an error here, with the marker below.
 
 from text import utf8_append
 
@@ -326,7 +325,7 @@ def portal_entries(text: String) raises -> List[PortalEntry]:
     """The entries of a portal.json. A text that is not JSON, or not an array, gives none.
 
     Raises SURROGATE_MARKER when a string the portal reads holds a lone surrogate escape:
-    .NET throws there, and the request fails.
+    The request fails.
     """
     var checker = JsonScan(text)
     try:

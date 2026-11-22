@@ -1,5 +1,5 @@
-# The append-only journal: one JSON object per line, the same file the C# vinci
-# writes (src/Journal.cs). Everything vinci knows is a fold over these events.
+# The append-only journal: one JSON object per line. Everything vinci knows is a fold
+# over these events.
 
 from std.pathlib import Path
 from std.python import Python, PythonObject
@@ -17,10 +17,10 @@ from timeutil import Instant, ascii_prefix, parse_instant
 
 
 struct Event(Copyable, Movable):
-    """One fact. Fields follow Event in src/Journal.cs, in the same order.
+    """One fact. Fields are written in this order.
 
     At and Kind are always present. The rest are optional, and an absent field
-    is left out of the line, as the C# serializer does with WhenWritingNull.
+    is left out of the line.
     """
 
     var at: Instant
@@ -137,7 +137,7 @@ def read_list_or_null(mut c: Cursor) raises -> Optional[List[String]]:
 
 
 def parse_event(line: String) raises -> Event:
-    """Parse one line. Field names match case-insensitively, as the C# reader does.
+    """Parse one line. Field names match case-insensitively.
 
     Unknown fields are skipped whatever their value. A null is the same as an
     absent field. A missing or null at is an error, because DateTimeOffset cannot

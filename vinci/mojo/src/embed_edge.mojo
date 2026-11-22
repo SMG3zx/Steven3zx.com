@@ -1,6 +1,6 @@
 # The Python edge of the index's vectors: calls into vinci_edge.index_embed, which
-# goes through vinci_edge.embed (the same client and cache as lme_embed.py and the
-# C# side). Interop is kept to a few calls per command. Floats cross as bytes.
+# goes through vinci_edge.embed (the same client and cache as lme_embed.py).
+# Interop is kept to a few calls per command. Floats cross as bytes.
 
 from std.python import Python, PythonObject
 from std.sys import argv

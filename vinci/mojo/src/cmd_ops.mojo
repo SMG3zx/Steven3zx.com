@@ -5,9 +5,9 @@
 #
 # sync prints the lines the window and git tracker (track.mojo) wrote before this command.
 #
-# The unknown-command branch is not here: C# Dispatch ends with it, so vinci.mojo does too.
+# The unknown-command branch is not here: vinci.mojo ends the dispatch with it.
 #
-# `args` is the list after the command name (C#'s `a`). Return True when the command
+# `args` is the list after the command name. Return True when the command
 # was handled, False to let the next group try it.
 
 from journal import Event
@@ -16,7 +16,7 @@ from session import Session, user_error
 from state import FINDINGS_METRIC, Issue, stage_name
 from text import day, num, pad_right
 
-# Dispatch's Help text (App.cs), byte for byte. `vinci help` prints it with no extra newline.
+# The help text. `vinci help` prints it with no extra newline.
 comptime HELP = """vinci: one journal for ideas, knowledge, time and measurements.
 Run it with no command, or as "vinci chat", to talk to the chat model, which does
 everything below through its tools. "vinci pipeline" shows the stages and the one
@@ -96,7 +96,7 @@ Window time comes from ActivityWatch at $VINCI_ACTIVITYWATCH (default http://127
 
 
 def tail(args: List[String], start: Int) -> List[String]:
-    """The arguments from start on, as a new list (C#'s a[start..])."""
+    """The arguments from start on, as a new list."""
     var out = List[String]()
     for i in range(start, len(args)):
         out.append(args[i])
@@ -394,7 +394,7 @@ def dispatch_ops(
         print(s.journal.path)
         return True
     if cmd == "sync":
-        # Program.cs's Tracker.Sync already ran (vinci.mojo): print what it wrote.
+        # The tracker already ran (vinci.mojo): print what it wrote.
         for line in s.tracked:
             print(line)
         return True

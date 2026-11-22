@@ -1,10 +1,8 @@
-# vinci: the command line. It was ported from the C# program (Program.cs for settings,
-# clock and routing, App.cs for Dispatch), whose source and binary are archived under
-# ~/.local/share/vinci-csharp-oracle and used by the differential tests (docs/development.md).
+# vinci: the command line: settings, clock, routing and dispatch.
 # Commands live in cmd_ideas.mojo, cmd_knowledge.mojo and cmd_ops.mojo; the
 # shared helpers live in session.mojo.
 #
-# Exit codes: 0 ok; 1 a user error ("vinci: <message>", as App.Run); 3 any other failure.
+# Exit codes: 0 ok; 1 a user error ("vinci: <message>"); 3 any other failure.
 
 from std.pathlib import Path
 from std.python import Python, PythonObject
@@ -104,7 +102,7 @@ def local_now() raises -> Instant:
 
 
 def parse_now(text: String) raises -> Instant:
-    """App.TryParseNow. The offset is required, so the same text names one moment everywhere.
+    """Parse the time given in VINCI_NOW. The offset is required, so the same text names one moment everywhere.
     """
     try:
         return parse_instant(text)
@@ -117,7 +115,7 @@ def parse_now(text: String) raises -> Instant:
 
 
 def vinci_home() raises -> String:
-    """Program.cs: $VINCI_HOME, or ~/.vinci when it is not set."""
+    """$VINCI_HOME, or ~/.vinci when it is not set."""
     var home = env_value("VINCI_HOME")
     if home is not None:
         return home.value()
@@ -125,7 +123,7 @@ def vinci_home() raises -> String:
 
 
 def journal_path() raises -> String:
-    """Program.cs: $VINCI_HOME (default ~/.vinci) plus journal.jsonl."""
+    """$VINCI_HOME (default ~/.vinci) plus journal.jsonl."""
     return join_path(vinci_home(), "journal.jsonl")
 
 
@@ -160,8 +158,8 @@ def run() raises:
     for i in range(1, len(argv_all)):
         args.append(String(argv_all[i]))
 
-    # Program.cs routes these before any journal is read. `vinci` with no
-    # command is chat in C#, whatever the journal holds.
+    # These are routed before any journal is read. `vinci` with no command is
+    # chat, whatever the journal holds.
     if len(args) == 0 or args[0] == "chat":
         run_chat(vinci_home(), journal_path(), now.copy(), self_path())
         return
@@ -212,13 +210,13 @@ def run() raises:
         verify_command(verify_args, vinci_home(), journal_path(), now.copy())
         return
     if args[0] == "memory":
-        # Mark 2 removed the memory service (Neo4j, the C# store and its commands).
+        # Mark 2 removed the memory service.
         raise user_error(
             "memory was removed in mark 2 (the Neo4j memory service is gone). "
             "Its notes are in the journal; see docs/memory.md."
         )
 
-    # Program.cs and App.Run: the tracker writes its facts before the command reads the
+    # The tracker writes its facts before the command reads the
     # journal, so every command shows current totals. VINCI_NO_TRACK=1 turns it off. The
     # tracker's external reads come first and take no lock; it takes the lock only to write
     # (track.mojo track_sync).
@@ -269,8 +267,7 @@ def stderr_line(text: String):
 
 
 def report_and_exit(message: String):
-    """Print the error the way App.Run and the Mojo markers describe, then exit with its code.
-    """
+    """Print the error as its marker describes, then exit with its code."""
     if message.startswith(USER_PREFIX):
         stderr_line("vinci: " + ascii_tail(message, 5))
         exit(1)

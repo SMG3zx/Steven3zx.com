@@ -1,8 +1,7 @@
-# Recall over the index (M3 step 2b): lexical (FTS5) and vector routes, fused by
-# reciprocal rank, then abstention, the corrective query and date boosts, as the C#
-# recall in src/Memory/Service.cs and src/Memory/Neo4jStore.cs does them.
+# Recall over the index: lexical (FTS5) and vector routes, fused by reciprocal rank,
+# then abstention, the corrective query and date boosts.
 #
-# Tokens are Retrieval.Terms (below). The routes, fusion, and the ordering are in
+# Tokens are the query terms (below). The routes, fusion, and the ordering are in
 # route.mojo, fusion.mojo, vectors.mojo and dates.mojo; abstention in abstain.mojo.
 
 from std.python import Python, PythonObject
@@ -35,7 +34,7 @@ comptime VECTOR = "vector"
 comptime DEFAULT_ROUTES = "lexical,vector"
 comptime MIN_CANDIDATES = 20
 
-# Retrieval.cs StopWords, in its order. A term in this list is not searched for.
+# Stop words. A term in this list is not searched for.
 comptime STOP_WORDS = (
     "a an and are about after again all any at be been before between by can"
     " did do does during for from had has have how i if in into is it its me"
@@ -87,7 +86,7 @@ def query_terms(query: String) -> List[String]:
     """Retrieval.Terms: lowercase, then runs [a-z0-9][a-z0-9_-]{2,}, minus stop words.
 
     Runs shorter than three bytes are dropped, as the regular expression drops them.
-    Non-ASCII letters are not terms, as in the C# pattern.
+    Non-ASCII letters are not terms.
     """
     var out = List[String]()
     var src = ascii_lower(query).as_bytes()
@@ -122,8 +121,7 @@ def quote_phrase(word: String) raises -> String:
 def fts_query(query: String) raises -> String:
     """The FTS5 MATCH expression for a question: its terms, quoted and joined with OR.
 
-    Neo4j's full-text index joins a Lucene query's words with OR by default, and
-    the C# route passes its terms on that way, so OR is kept. When no term is left
+    The terms are joined with OR, so any one of them matches. When no term is left
     (only stop words, or no letters), the question's own words are quoted instead.
     Empty when there is nothing to search for.
     """
@@ -527,8 +525,7 @@ def one_pass(
 ) raises -> List[Candidate]:
     """One lookup: the routes, fusion, the route ordering, and the content dedupe.
 
-    This is Neo4jStore.Recall for one question. The cut is at limit * 4 before the
-    dedupe and at limit after it, as in the C#.
+    The cut is at limit * 4 before the dedupe and at limit after it.
     """
     var limit = settings.limit
     var candidates_limit = limit * plan.candidate_multiplier

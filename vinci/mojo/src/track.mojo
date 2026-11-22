@@ -1,13 +1,12 @@
-# The window and git tracker: a port of src/Tracker.cs. Program.cs runs it before every
-# command that App.Run dispatches (not serve, and not the index, recall, open or feed
-# commands, which the C# never had). It credits the window time since the last sync as
+# The window and git tracker. It runs before every journal command (not serve, and not
+# the index, recall, open or feed commands). It credits the window time since the last sync as
 # "spent" facts dated when that time ended, at most one "used" fact a day for what was
 # shipped, and commits under an idea's home as "work" facts, then writes one "sync" fact.
 # `vinci sync` prints the lines it wrote.
 #
 # The reads from outside (ActivityWatch's query, git, the machine's UTC offset, the case
-# folding OrdinalIgnoreCase uses) are in py/vinci_edge/track_edge.py. A failed read is the
-# C#'s null: no window time is added and the sync line says so, but commits are still read.
+# folding) are in py/vinci_edge/track_edge.py. A failed read is "not answered": no window
+# time is added and the sync line says so, but commits are still read.
 
 from std.math import floor
 from std.pathlib import Path
@@ -30,7 +29,7 @@ from timeutil import (
     zero_pad,
 )
 
-# Tracker.NothingWatched, shown by sync and by watches when nothing is watched.
+# Shown by sync and by watches when nothing is watched.
 comptime NOTHING_WATCHED = (
     "Nothing is watched. vinci home <idea> <folder>, or vinci watch <idea>"
     ' "text in its window titles"'
@@ -57,8 +56,8 @@ struct Activity(Copyable, Movable):
 
 @fieldwise_init
 struct Seen(Copyable, Movable):
-    """What the watcher reported for a period. answered is False when the read failed,
-    which is the C# null."""
+    """What the watcher reported for a period. answered is False when the read failed.
+    """
 
     var answered: Bool
     var activities: List[Activity]
@@ -156,7 +155,7 @@ def read_commits(
 
 
 def activitywatch_server() raises -> String:
-    """VINCI_ACTIVITYWATCH, or the default server, as Program.cs reads it."""
+    """VINCI_ACTIVITYWATCH, or the default server."""
     var os = Python.import_module("os")
     var value = os.environ.get(PythonObject("VINCI_ACTIVITYWATCH"))
     if Bool(value == Python.none()):
@@ -292,9 +291,9 @@ def local_minute(at: Instant) raises -> String:
 
 
 def utc_o(at: Instant) -> String:
-    """DateTime.UtcDateTime.ToString("O"): seven fraction digits, always, then Z.
+    """ISO 8601 in UTC: seven fraction digits, always, then Z.
 
-    The request's period is written this way, and the probe showed .NET keeps the zeros.
+    The request's period is written this way, and the zeros are kept.
     """
     var ticks = at.utc
     var days = ticks // TICKS_PER_DAY
@@ -323,7 +322,7 @@ def utc_o(at: Instant) -> String:
 
 
 def round_minutes(minutes: Float64) -> Float64:
-    """Math.Round(minutes, 2): the scaled value rounds to even on a half, as .NET does.
+    """Minutes rounded to two decimals: the scaled value rounds to even on a half.
     """
     var scaled = minutes * 100.0
     var low = floor(scaled)
@@ -350,10 +349,10 @@ def ordered_watches(s: State) raises -> List[Watch]:
 
 
 def fetch_seen(server: String, start: Instant, end: Instant) raises -> Seen:
-    """ActivityWatch.At: the windows and the afk record for one period, or not answered.
+    """The windows and the afk record for one period, or not answered.
 
     Every failure is not answered: a refused connection, a non-2xx reply, a body that is
-    not the expected JSON, and a timestamp .NET would not read.
+    not the expected JSON, and a timestamp that does not parse.
     """
     var pair = track_edge().activity(
         PythonObject(server),

@@ -1,11 +1,10 @@
-# `vinci` and `vinci chat` in Mojo: the conversation with the chat model (src/Chat/ChatCommand.cs
-# and src/Chat/Conversation.cs). The model is llama-server's OpenAI-compatible
+# `vinci` and `vinci chat`: the conversation with the chat model. The model is llama-server's OpenAI-compatible
 # /v1/chat/completions. The tools are in chat_tools.mojo. The citation check is in chat_cite.mojo.
 #
 # A turn: the model either asks for a tool, whose result it reads next, or it answers. The
 # answer's citations are checked against this turn's tool results, and each exchange is written
 # to the journal as an `exchange` line. An answer is kept only when it cites evidence the tools
-# returned, and every document passage it cites has a source. Neo4j is not involved.
+# returned, and every document passage it cites has a source.
 #
 # The summarize step of the plan is not here: the sweep showed the chat model reads 2.5k tokens.
 

@@ -1,6 +1,7 @@
-# The text helpers of src/App.cs (class Text), plus the decimal digits that
-# Num and the JSON writer both need. Strings here are UTF-8, as Mojo keeps them.
-# C# counts UTF-16 units; where that matters, the code below counts the same.
+# Text helpers for command output, plus the decimal digits that num and the JSON writer
+# both need. Strings here are UTF-8, as Mojo keeps them. Column widths and cuts count
+# UTF-16 units, the unit the existing output was laid out in, and the code below counts
+# the same way where that matters.
 
 from timeutil import (
     Instant,
@@ -64,7 +65,7 @@ def utf16_units(cp: Int) -> Int:
 
 
 def utf16_length(s: String) raises -> Int:
-    """The length C# reports for the same text (string.Length)."""
+    """The length of the text in UTF-16 units."""
     var total = 0
     for cp in utf8_code_points(s):
         total += utf16_units(cp)
@@ -96,8 +97,7 @@ def code_points_to_string(cps: List[Int]) -> String:
 
 
 def pad_right(s: String, width: Int) raises -> String:
-    """Left-aligned like C#'s {x,-n}: spaces after, never cut. Width counts UTF-16 units.
-    """
+    """Left-aligned: spaces after, never cut. Width counts UTF-16 units."""
     var out = s
     for _ in range(width - utf16_length(s)):
         out += " "
@@ -107,9 +107,9 @@ def pad_right(s: String, width: Int) raises -> String:
 def span(ticks: Int) -> String:
     """Text.Span: days and hours, hours and minutes, or whole minutes.
 
-    Each unit is truncated toward zero, as (int)TotalDays and friends do. Only
+    Each unit is truncated toward zero. Only
     a span of at least a day or an hour gets the bigger form, so a negative
-    span always prints in minutes, as it does in C#.
+    span always prints in minutes.
     """
     if ticks >= TICKS_PER_DAY:
         var days = ticks // TICKS_PER_DAY
@@ -123,8 +123,7 @@ def span(ticks: Int) -> String:
 
 
 def truncate_div(a: Int, b: Int) -> Int:
-    """Integer division rounding toward zero, which is what C# casts do. Mojo's // floors.
-    """
+    """Integer division rounding toward zero. Mojo's // floors."""
     var q = a // b
     if q < 0 and q * b != a:
         q += 1
@@ -132,11 +131,11 @@ def truncate_div(a: Int, b: Int) -> Int:
 
 
 def clip(s: String, max: Int) raises -> String:
-    """Text.Clip: at most max UTF-16 units, the last one replaced by "…".
+    """At most max UTF-16 units, the last one replaced by "…".
 
-    C# cuts at a UTF-16 index. A cut that falls between the two halves of a
-    surrogate pair leaves a lone surrogate, which the console writes as U+FFFD,
-    so this does the same. For ASCII the result is exactly C#'s.
+    The cut is at a UTF-16 index. A cut that falls between the two halves of a
+    surrogate pair leaves a lone surrogate, which prints as U+FFFD, so this does
+    the same.
     """
     var cps = utf8_code_points(s)
     var total = 0
@@ -176,10 +175,10 @@ def day(at: Instant) -> String:
 
 
 def decimal_digits(v: Float64) raises -> Digits:
-    """The shortest digits that round-trip to v, as .NET's "R" gives them.
+    """The shortest digits that round-trip to v.
 
-    Mojo's String(Float64) is shortest round-trip too (the same digits as .NET
-    Core 3.0 and later), so this reads its digits and its exponent back out.
+    Mojo's String(Float64) is shortest round-trip, so this reads its digits and its
+    exponent back out.
     """
     if v != v or v > Float64.MAX or v < -Float64.MAX:
         raise Error("decimal: value is not finite")
@@ -315,10 +314,10 @@ def ascii_tail(s: String, start: Int) -> String:
 
 
 def num(v: Float64) raises -> String:
-    """Num: .NET's ToString("0.##") in invariant culture.
+    """A number with at most two decimals, like "0.##" in an invariant culture.
 
-    .NET formats a double from its 15 most significant digits, then rounds half
-    up at two decimals, then drops trailing zeros. Negative values keep their
+    The double is taken at its 15 most significant digits, rounded half up at two
+    decimals, and trailing zeros are dropped. Negative values keep their
     sign even when they round to zero, so -0.001 is "-0".
     """
     if v != v:

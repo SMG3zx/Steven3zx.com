@@ -1,9 +1,8 @@
-# HTML text for the portal page: WebUtility.HtmlEncode and HtmlDecode as .NET 10 has them, and
-# the title Portal.TitleOf reads from a page. Output goes into a byte buffer, so a page is
-# built in one pass.
+# HTML text for the portal page: encoding and decoding of entities, and the title read from
+# a page. Output goes into a byte buffer, so a page is built in one pass.
 #
-# The entity names come from portal_entities.mojo (generated from .NET). Numeric references
-# follow the grammar checked against .NET: decimal allows white space and a sign around the
+# The entity names come from portal_entities.mojo. Numeric references
+# follow this grammar: decimal allows white space and a sign around the
 # digits, hex allows neither, and a reference must end with a semicolon and name a code
 # point that is not a surrogate and not above U+10FFFF. Anything else stays as typed.
 
@@ -136,7 +135,7 @@ def numeric_ref(cps: List[Int], start: Int) -> NumericRef:
 
 
 def html_decode(text: String) raises -> String:
-    """WebUtility.HtmlDecode: named references from the .NET table, numeric references by the
+    """Named references from the entity table, numeric references by the
     grammar above. A reference that does not match stays as typed."""
     var cps = utf8_code_points(text)
     var n = len(cps)
@@ -202,7 +201,7 @@ def matches_ignore_case(b: List[UInt8], at: Int, word: String) -> Bool:
 
 
 def title_of(html: String) raises -> Optional[String]:
-    """Portal.TitleOf: the first <title ...>...</title> with no tag inside it, its entities
+    """The first <title ...>...</title> with no tag inside it, its entities
     decoded and its white space collapsed. None when there is no such title or it is empty.
     """
     var b = List[UInt8]()

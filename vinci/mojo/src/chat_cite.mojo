@@ -1,4 +1,4 @@
-# The citation check (Conversation.cs: Citation, and the unsourced check) for the Mojo chat.
+# The citation check for the chat: every cited id must come from this turn's tool results.
 # A citation is a bracketed token of the answer that is either an id as journal recall prints
 # it, a letter, digits, and for a read passage a slash and more digits ([i1], [m12], [L142],
 # [d1/2]), or any token that appears bracketed in this turn's tool results (an id of another
@@ -111,7 +111,7 @@ def cited_ids_with_evidence(
 
 def unseen_cites(cited: List[String], evidence: String) raises -> List[String]:
     """The cited ids whose "[id]" does not appear in the evidence (the tool results of this
-    turn). Conversation.cs: unsourced."""
+    turn)."""
     var out = List[String]()
     for id in cited:
         if evidence.find("[" + id + "]") < 0:

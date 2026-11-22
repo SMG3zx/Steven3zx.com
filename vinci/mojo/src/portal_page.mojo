@@ -1,6 +1,5 @@
-# The portal page: Portal.Page in src/Portal.cs, byte for byte. The text between the markup
-# pieces is the C# text with its line breaks; the stylesheet, script and placeholder come
-# from portal_assets.mojo, generated from the C# literals.
+# The portal page. The text between the markup pieces keeps its line breaks, and the
+# stylesheet, script and placeholder come from portal_assets.mojo.
 
 from portal_assets import portal_css, portal_script
 from portal_html import html_encode_into, put
@@ -42,7 +41,7 @@ def tags_in_order(links: List[Link]) -> List[String]:
                     break
             if not seen:
                 distinct.append(tag)
-    # Insertion sort is stable, as LINQ's OrderBy is.
+    # Insertion sort is stable: equal tags keep their order.
     for i in range(1, len(distinct)):
         var j = i
         while j > 0 and key_less(
@@ -66,8 +65,7 @@ def join_tags(tags: List[String], sep: String) -> String:
 
 
 def page(links: List[Link]) raises -> String:
-    """Portal.Page: the whole HTML document for the links, in the order given.
-    """
+    """The whole HTML document for the links, in the order given."""
     var out = List[UInt8]()
     var count = String(len(links))
     put(out, "<!doctype html>\n")

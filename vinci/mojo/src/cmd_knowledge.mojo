@@ -1,15 +1,15 @@
-# The knowledge group (App.cs "Knowledge", "Inquiry", "Measurement"). Owns these
+# The knowledge, inquiry and measurement commands. Owns these
 # `case` labels of Dispatch: bookmark, unbookmark, bookmarks, source, note, link, notes,
 # tags, sources, show, predict, result, predictions, log, spec, stats.
 #
 # show is the dispatcher for every id: an idea id goes to show_idea in cmd_ideas,
 # and the other ids (note, source, issue, prediction) are written here.
 #
-# `args` is the list after the command name (C#'s `a`). Return True when the command
+# `args` is the list after the command name. Return True when the command
 # was handled, False to let the next group try it.
 #
-# Known gaps: ToLowerInvariant and OrdinalIgnoreCase are ASCII-only here, so a
-# non-ASCII tag or a non-ASCII search term is not folded the way .NET folds it.
+# Known gap: case folding of tags and search terms is ASCII-only, so a non-ASCII
+# tag or search term is not folded.
 
 from journal import Event
 from jsonline import ascii_lower
@@ -30,7 +30,7 @@ struct TagCount(Copyable, Movable):
 
 
 def tail(a: List[String], start: Int) -> List[String]:
-    """a[start..] as C# slices it: empty when start is past the end."""
+    """The items from start on: empty when start is past the end."""
     var out = List[String]()
     for i in range(start, len(a)):
         out.append(a[i])
@@ -47,7 +47,7 @@ def colon_index(s: String) -> Int:
 
 
 def is_web_address(url: String) -> Bool:
-    """Portal.IsWebAddress: an absolute http or https address with something after
+    """An absolute http or https address with something after
     the scheme."""
     var lower = ascii_lower(url)
     var rest: String

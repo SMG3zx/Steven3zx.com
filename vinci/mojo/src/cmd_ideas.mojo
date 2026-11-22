@@ -1,16 +1,16 @@
-# The ideas group (App.cs "ideas: inception to grown"). Owns these `case` labels of
+# The ideas group, from inception to grown. Owns these `case` labels of
 # Dispatch: idea, for, goal, req, cut, advance, adopt, home, watch, unwatch, watches,
 # spent, ship, used, tend, retire, ideas, pipeline, next, and the idea part of show
 # (show_idea, which cmd_knowledge's show calls).
 #
-# `args` is the list after the command name (C#'s `a`). Return True when the command
+# `args` is the list after the command name. Return True when the command
 # was handled, False to let the next group try it.
 #
 # The review parts (pipeline's slowest stage line and next) call review.mojo.
 #
-# Inputs that make C# throw after it has appended an event (oracle-bugs/): a span of
-# minutes past the TimeSpan range, a day count past the DateTime range. Here each one
-# is a user error, raised before anything is recorded.
+# Inputs that would break the journal after an event is appended: a span of minutes past
+# the duration range, a day count past the date range. Each one is a user error, raised
+# before anything is recorded.
 
 from std.python import Python, PythonObject
 
@@ -235,8 +235,8 @@ def goal_status(mut s: Session, idx: Int) raises -> String:
 
 
 def percent_one_decimal(ratio: Float64) raises -> String:
-    """ToString("0.0%") in invariant culture: the ratio times 100, one decimal,
-    rounded half up from the 15 significant digits .NET formats with."""
+    """A percentage with one decimal: the ratio times 100,
+    rounded half up from the 15 significant digits of the float."""
     var d = decimal_digits(ratio * 100.0)
     var fifteen = round_half_up(d.digits, d.point, 15)
     var one = round_half_up(fifteen.digits, fifteen.point, fifteen.point + 1)
@@ -269,9 +269,8 @@ def issue_line(x: Issue) raises -> String:
 
 
 def folder_arg(folder: String) raises -> String:
-    """FolderArg: the full path of an existing folder. A relative path is taken
-    from the working directory, as Path.GetFullPath does. There is no tilde
-    expansion, so "~" is a folder name, as it is in C#."""
+    """The full path of an existing folder. A relative path is taken from the
+    working directory. There is no tilde expansion, so "~" is a folder name."""
     var os = Python.import_module("os")
     var path = String(os.path.abspath(PythonObject(folder)))
     if path.startswith("//"):
@@ -291,8 +290,8 @@ def home_owner(mut s: Session, path: String) -> Int:
 
 
 def check_days_in_range(mut s: Session, days: Float64) raises:
-    """AddDays throws past the DateTime range, after C# has already appended
-    the event. Refuse first, so nothing is recorded."""
+    """A day count that takes the date past the range vinci keeps is refused
+    before the event is appended, so nothing is recorded."""
     var target = Float64(s.now.local_ticks()) + days * Float64(TICKS_PER_DAY)
     if target < 0.0 or target > DATE_TICKS_MAX_F:
         raise user_error("days takes the date out of the range vinci keeps")

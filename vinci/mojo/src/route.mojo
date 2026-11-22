@@ -1,7 +1,6 @@
-# Query routing, ported from Retrieval.RouteQuery, ClassifyQueryComplexity and Plan
-# in src/Memory/Retrieval.cs. The C# regular expressions match whole words; here a
-# word is a run of [a-z0-9_] bytes in the lowercased query, and a phrase is a run of
-# words. Non-ASCII letters separate words (the C# \b would keep them), a known gap.
+# Query routing: which routes a question uses, and how complex it is. A word is a run of
+# [a-z0-9_] bytes in the lowercased query, and a phrase is a run of words. Non-ASCII
+# letters separate words, a known gap.
 
 comptime TEMPORAL_WORDS = (
     "when|current|currently|before|after|last|previous|recent|latest|used to"
@@ -91,8 +90,8 @@ def route_query(query: String) raises -> String:
 
 
 struct Plan(Copyable, Movable):
-    """Retrieval.Plan, without the graph and rerank limits (no graph route, no
-    reranker in this port)."""
+    """How many candidates to fetch for a question of this complexity. There is no graph
+    route and no reranker."""
 
     var complexity: String
     var candidate_multiplier: Int

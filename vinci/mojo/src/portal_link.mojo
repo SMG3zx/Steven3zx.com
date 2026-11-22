@@ -1,5 +1,5 @@
-# One card on the portal page: what Portal.cs calls Link, with its screenshot name.
-# A saved link is named by its title (Portal.Slug); a discovered one by its port, because
+# One card on the portal page: a Link, with its screenshot name.
+# A saved link is named by the slug of its title; a discovered one by its port, because
 # the title of a page is whatever the page calls itself.
 
 from portal_io import lower_invariant
@@ -20,7 +20,7 @@ def is_slug_char(c: Int) -> Bool:
 
 
 def slug(title: String) raises -> String:
-    """Portal.Slug: lowercase, every run of other characters becomes one dash, and the
+    """Lowercase, every run of other characters becomes one dash, and the
     dashes at both ends go. "Qwik Docs" becomes "qwik-docs"."""
     var lowered = lower_invariant(title)
     var out = List[UInt8]()

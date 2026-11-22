@@ -1,6 +1,6 @@
-# Instants and durations as .NET sees them. An Instant is UTC ticks since
-# 0001-01-01 plus the offset it was written in, which is all the journal keeps
-# (DateTimeOffset). A duration is a tick count (TimeSpan). One tick is 100 ns.
+# Instants and durations as the journal keeps them. An Instant is UTC ticks since
+# 0001-01-01 plus the offset it was written in, which is all the journal keeps.
+# A duration is a tick count. One tick is 100 ns.
 
 comptime TICKS_PER_SECOND = 10000000
 comptime TICKS_PER_MINUTE = 600000000
@@ -32,10 +32,10 @@ struct Instant(Copyable, Movable):
         return Instant(self.utc + ticks, self.offset)
 
     def add_days(self, days: Float64) -> Instant:
-        """DateTimeOffset.AddDays: whole days as a Float64, cut to whole ticks.
+        """Add days (a Float64), cut to whole ticks.
 
-        Probed on .NET 10: AddDays(1e-7) is 86400 ticks and AddDays(1.5e-8) is
-        14999 ticks, so the product is truncated, not rounded.
+        1e-7 days is 86400 ticks and 1.5e-8 days is 14999 ticks, so the product is
+        truncated, not rounded.
         """
         return self.add_ticks(Int(days * Float64(TICKS_PER_DAY)))
 
@@ -191,7 +191,7 @@ def trimmed_length(digits: String) -> Int:
 
 
 def format_instant(at: Instant) -> String:
-    """Format the way System.Text.Json writes a DateTimeOffset.
+    """Format an instant as the journal writes it.
 
     yyyy-MM-ddTHH:mm:ss, then .fffffff with trailing zeros removed (the dot too
     when the fraction is zero), then +hh:mm or -hh:mm. Offset zero is +00:00.
@@ -228,10 +228,9 @@ def format_instant(at: Instant) -> String:
 
 
 def minutes_to_ticks(minutes: Float64) -> Int:
-    """TimeSpan.FromMinutes: the product is cut to whole ticks toward zero.
+    """Minutes as ticks: the product is cut to whole ticks toward zero.
 
-    Probed on .NET 10 against 2015 values (docs/mojo-gotchas.md): the cut is
-    truncation, not the round-to-nearest that .NET Framework and the earlier
-    calibration assumed. For example 1440.00000001 gives 864000000005 ticks.
+    Checked against 2015 values (docs/mojo-gotchas.md): the cut is truncation, not
+    round-to-nearest. For example 1440.00000001 gives 864000000005 ticks.
     """
     return Int(minutes * Float64(TICKS_PER_MINUTE))

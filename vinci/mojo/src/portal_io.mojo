@@ -41,7 +41,7 @@ def edge() raises -> PythonObject:
 
 
 def lower_invariant(text: String) raises -> String:
-    """String.ToLowerInvariant (the edge holds the .NET differences)."""
+    """The text lowercased with invariant (culture-free) rules."""
     return String(edge().lower_invariant(PythonObject(text)))
 
 
