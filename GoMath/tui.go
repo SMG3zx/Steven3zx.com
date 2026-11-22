@@ -419,6 +419,24 @@ func (m model) viewPick(sb *strings.Builder) {
 	sb.WriteString("\nup/down choose   enter run   esc back   dim: does not accept this input\n")
 }
 
+// formsBlock lists each labelled form, with the labels aligned in a column and
+// the block centred on the screen.
+func (m model) formsBlock(width int) string {
+	labelWidth := 0
+	for _, f := range m.report.Forms {
+		if w := lipgloss.Width(f.Label + ":"); w > labelWidth {
+			labelWidth = w
+		}
+	}
+	var lines []string
+	for _, f := range m.report.Forms {
+		label := dimStyle.Render(f.Label + ":")
+		pad := strings.Repeat(" ", labelWidth+2-lipgloss.Width(f.Label+":"))
+		lines = append(lines, label+pad+boldStyle.Render(f.Text))
+	}
+	return lipgloss.PlaceHorizontal(width, lipgloss.Center, strings.Join(lines, "\n")) + "\n"
+}
+
 // viewSteps shows one stage at a time: a centred box holding the decoding
 // result, a caption for the step, a progress bar, and the help line.
 func (m model) viewSteps(sb *strings.Builder) {
@@ -457,9 +475,7 @@ func (m model) viewSteps(sb *strings.Builder) {
 
 	if m.step == len(m.report.Steps)-1 && !m.animating() {
 		if len(m.report.Forms) > 0 {
-			for _, f := range m.report.Forms {
-				sb.WriteString(center(boldStyle.Render(f)))
-			}
+			sb.WriteString(m.formsBlock(width))
 		} else {
 			sb.WriteString(center(boldStyle.Render("result: " + m.report.Result)))
 		}

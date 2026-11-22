@@ -517,8 +517,8 @@ func TestLineFormsGivesEveryForm(t *testing.T) {
 		if rep.Err != nil {
 			t.Fatalf("%s: %v", c.input, rep.Err)
 		}
-		if strings.Join(rep.Forms, "|") != strings.Join(c.want, "|") {
-			t.Errorf("%s: forms %q, want %q", c.input, rep.Forms, c.want)
+		if got := formTexts(rep.Forms); strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: forms %q, want %q", c.input, got, c.want)
 		}
 	}
 }
@@ -541,8 +541,8 @@ func TestLineFormsFromAnEquation(t *testing.T) {
 		if rep.Err != nil {
 			t.Fatalf("%s: %v", c.input, rep.Err)
 		}
-		if strings.Join(rep.Forms, "|") != strings.Join(c.want, "|") {
-			t.Errorf("%s: forms %q, want %q", c.input, rep.Forms, c.want)
+		if got := formTexts(rep.Forms); strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: forms %q, want %q", c.input, got, c.want)
 		}
 	}
 }
@@ -554,4 +554,33 @@ func TestPointSlopeAndSlopeInterceptConvert(t *testing.T) {
 	if got := Solve("y = 3x - 8", OpPointSlope).Result; got != "y + 8 = 3(x - 0)" {
 		t.Errorf("point-slope of slope-intercept: %q, want y + 8 = 3(x - 0)", got)
 	}
+}
+
+// formTexts gives the equation of each form, without its label.
+func formTexts(forms []Form) []string {
+	var out []string
+	for _, f := range forms {
+		out = append(out, f.Text)
+	}
+	return out
+}
+
+func TestLineFormsAreLabelled(t *testing.T) {
+	rep := Solve("parallel to y = 3x through (2,-2)", OpLineForms)
+	want := []Form{
+		{"Point-slope form", "y + 2 = 3(x - 2)"},
+		{"Slope-intercept form", "y = 3x - 8"},
+		{"Standard form", "3x - y = 8"},
+	}
+	if strings.Join(formLabels(rep.Forms), "|") != strings.Join(formLabels(want), "|") || strings.Join(formTexts(rep.Forms), "|") != strings.Join(formTexts(want), "|") {
+		t.Errorf("forms %v, want %v", rep.Forms, want)
+	}
+}
+
+func formLabels(forms []Form) []string {
+	var out []string
+	for _, f := range forms {
+		out = append(out, f.Label)
+	}
+	return out
 }

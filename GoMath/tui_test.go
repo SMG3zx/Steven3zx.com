@@ -375,7 +375,7 @@ func TestTUIAllLineFormsShowsEveryForm(t *testing.T) {
 		got = m.(model)
 	}
 	view := m.View()
-	for _, want := range []string{"y + 2 = 3(x - 2)", "y = 3x - 8", "3x - y = 8"} {
+	for _, want := range []string{"Point-slope form:", "y + 2 = 3(x - 2)", "Slope-intercept form:", "y = 3x - 8", "Standard form:", "3x - y = 8"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("result view is missing %q:\n%s", want, view)
 		}

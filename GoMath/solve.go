@@ -117,11 +117,17 @@ type Report struct {
 	Steps  []Step
 	Result string
 	// Forms lists every form of the answer, one per line, when the operation has more than one.
-	Forms  []string
+	Forms  []Form
 	Degree int
 	Err    error
 	// Scenes holds the parser's state for each Parse step, keyed by step index.
 	Scenes map[int]ParseEvent
+}
+
+// Form is one labelled form of an answer, such as the point-slope form of a line.
+type Form struct {
+	Label string
+	Text  string
 }
 
 // Solve runs the whole pipeline on input with no variable values.

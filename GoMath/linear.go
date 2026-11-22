@@ -665,21 +665,24 @@ func solveLineForms(ascii string, steps *[]Step) (rep Report) {
 	}
 	if vertical {
 		rep.Result = "x = " + formatValue(l.x1)
-		rep.Forms = []string{rep.Result}
+		rep.Forms = []Form{{"Vertical line", rep.Result}}
 		*steps = append(*steps, Step{"Result", "Vertical line", rep.Result})
 		return rep
 	}
-	forms := []string{pointSlopeForm(l), slopeInterceptForm(l)}
-	labels := []string{"Point-slope form", "Slope-intercept form"}
-	if std := standardForm(l); std != "" {
-		forms = append(forms, std)
-		labels = append(labels, "Standard form")
+	forms := []Form{
+		{"Point-slope form", pointSlopeForm(l)},
+		{"Slope-intercept form", slopeInterceptForm(l)},
 	}
-	for i, f := range forms {
-		*steps = append(*steps, Step{"Compute", labels[i], f})
+	if std := standardForm(l); std != "" {
+		forms = append(forms, Form{"Standard form", std})
+	}
+	texts := make([]string, 0, len(forms))
+	for _, f := range forms {
+		*steps = append(*steps, Step{"Compute", f.Label, f.Text})
+		texts = append(texts, f.Text)
 	}
 	rep.Forms = forms
-	rep.Result = strings.Join(forms, "; ")
+	rep.Result = strings.Join(texts, "; ")
 	*steps = append(*steps, Step{"Result", "All forms", "Each form is listed below"})
 	return rep
 }
