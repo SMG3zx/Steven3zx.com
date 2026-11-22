@@ -251,6 +251,7 @@ var Worksheet = []WorksheetEntry{
 	{"variation_2.png", "y varies directly as x and inversely as z^2; y = 32 when x = 64 and z = 4; find y when x = 3 and z = 12", OpVariation, "1/6", 0, nil},
 	{"system_1.png", "(2,-5); y = 6x - 17; 7x + 3y = -1", OpCheckPoint, "Yes", 0, nil},
 	{"system_2.png", "x + y = 6; y = -4x", OpSystem, "{(-2, 8)}", 0, nil},
+	{"system_3.png", "2x + 3y = -4; -2x - 8y = 14", OpSystem, "{(1, -2)}", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
