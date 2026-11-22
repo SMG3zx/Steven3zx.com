@@ -246,6 +246,7 @@ var Worksheet = []WorksheetEntry{
 	{"line_2.png", "parallel to y = 5x through (-4,3)", OpPointSlope, "y - 3 = 5(x + 4)", 0, nil},
 	{"line_2.png", "parallel to y = 5x through (-4,3)", OpSlopeIntercept, "y = 5x + 23", 0, nil},
 	{"solve_11.png", "4x^4 = 500x", OpSolve, "{0, 5}", 0, nil},
+	{"variation_1.png", "y varies directly as x; y = 98 when x = 7; find y when x = 17", OpVariation, "238", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
