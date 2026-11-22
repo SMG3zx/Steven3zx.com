@@ -94,9 +94,9 @@ func formatSet(set []root) string {
 	return "{" + strings.Join(texts, ", ") + "}"
 }
 
-// solvePoly finds the roots of diff = 0 for degrees up to 2. special is set
-// instead of the roots for "all real numbers", "no solution", and
-// "no real solution".
+// solvePoly finds the roots of diff = 0. Degrees up to 2 are solved exactly;
+// higher degrees are handled by solveByRationalRoots. special is set instead
+// of the roots for "all real numbers", "no solution", and "no real solution".
 func solvePoly(diff Poly, steps *[]Step) (set []root, special string, err error) {
 	name, coeffs, err := diff.univariate()
 	if err != nil {
@@ -140,7 +140,7 @@ func solvePoly(diff Poly, steps *[]Step) (set []root, special string, err error)
 		*steps = append(*steps, Step{"Compute", "Quadratic formula", fmt.Sprintf("%s = (-b ± sqrt(%d)) / 2a", name, disc)})
 		return set, "", nil
 	}
-	return nil, "", fmt.Errorf("solve handles degree 2 and below, got degree %d", len(coeffs)-1)
+	return solveByRationalRoots(name, coeffs, steps)
 }
 
 // fraction writes num/den in lowest terms, as a whole number when it divides.

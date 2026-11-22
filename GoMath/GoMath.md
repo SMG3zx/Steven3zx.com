@@ -57,10 +57,14 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Excluded numbers | ctrl+d | Lists the numbers a rational expression must exclude from its domain, which are the roots of its denominators. Answers `all real numbers` when no denominator can reach 0. | `4/(x + 6)` gives `{-6}`. `1/(x^2 + 4)` gives `all real numbers`. |
 | Inequality | none yet | Solves a linear or compound inequality and writes interval notation. | `2x + 4 > 10` gives `(3, ∞)`. `3 < 2x + 1 <= 9` gives `(1, 4]`. |
 | Slope | none yet | Gives the slope through two points and whether the line rises, falls, is horizontal, or is vertical. | `(6,2) and (7,6)` gives `4 (rises)`. |
-| Point-slope / slope-intercept | none yet | Writes the line through two points, or through a point with a given slope. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. |
+| Point-slope / slope-intercept | none yet | Writes the line through two points, through a point with a given slope, or through a point parallel or perpendicular to `y = px/q`. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. `perpendicular to y = 2x through (2,4)` gives `y - 4 = (-1/2)(x - 2)`. |
 | Graph | ctrl+e | Lists the points of `y = expression` and draws them on axes. Without `; x = a, b, c` it uses x from -3 to 3. | `y = x - 2` gives `(-3, -5), ... (3, 1)` and a plot. |
 | Table of values | none yet | Gives y for each listed x. | `y = x - 2; x = -3, -2, -1` gives `-5, -4, -3`. |
 | Solve for a variable | none yet | Isolates one variable of a formula that is linear in it. | `r = ba for b` gives `b = r/a`. |
+| Variation | none yet | Finds a value in a direct, inverse, or joint variation. Input has three parts, `relation; known values; find unknown when values`. Words are `directly`, `inversely`, and `jointly`, and `z^2` writes the square. | `y varies directly as x; y = 84 when x = 7; find y when x = 18` gives `216`. |
+| System of equations | none yet | Solves two linear equations in two variables by Cramer's rule. Gives `no solution` or `infinitely many solutions` when the lines do not cross once. | `x + y = 5; x - y = -15` gives `{(-5, 10)}`. |
+| Check a solution | none yet | Says whether an ordered pair satisfies every equation after `;`. | `(2,-6); y = 4x - 14; 2x + 4y = -20` gives `Yes`. |
+| Elimination multiplier | none yet | Answers the blank in the addition method. The input fixes one equation's multiplier and gives the other's, so the chosen variable cancels. | `x + 5y = 2; 5x + 4y = -11; eliminate x; multiply second by 1` gives `-5`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.
@@ -81,6 +85,8 @@ Techniques that `Technique` can name:
 - Division by anything that is not a number in polynomial operations, such as `1/x` or `x/y`. `Eval` and `Diff` do handle `1/x`.
 - Variable or non-whole exponents in polynomial operations, such as `x^y`, `x^(1/2)`, or `x^-1`. `Diff` requires the exponent to be constant.
 - Functions, roots of anything other than a whole number or single term (see Radicals), absolute values, and inequalities. Equations are only solved through Solve.
+- Polynomial equations of degree 3 or more whose roots are not rational, such as `x^3 = 2`. Solve finds rational roots only.
+- Systems with more than two equations or three variables, and nonlinear systems.
 - Factoring when more than one variable remains after the common monomial is removed. `x^2 + y` is rejected.
 - Splitting a leftover polynomial of degree 2 or more into quadratic factors when it has no rational roots. Factoring stops there, so `(x^2+1)(x^2+2)` is reported as one irreducible factor.
 
@@ -98,9 +104,13 @@ Solve also takes an equation with one radical: `sqrt(x + 4) = 8` gives `{60}`. I
 
 Solve takes one more shape, `v^(p/q) = K` for a whole number `K`: `x^(5/2) = 243` gives `{9}`. It raises both sides to the power `q`, finds the whole-number roots of `v^p = K^q`, and checks each in the original equation, so `x^(3/2) = -8` gives `no solution`. An answer that is not a whole number is not supported.
 
+Solve handles a polynomial of degree 3 or more when it has rational roots. It finds them one at a time with the rational root theorem and divides each out, so `2x^3 + 3x^2 = 8x + 12` gives `{-2, -3/2, 2}`.
+
 ## Worksheet bank
 
 `bank.go` holds the problems from the screenshots in `equations/`, in file order. Each entry has the ASCII input, the operation, and the worksheet answer. `TestWorksheetBank` solves every entry and checks the result against that answer. The degree is checked where the worksheet asks for it. Factored answers are compared in canonical form, so the order of factors does not matter.
+
+Problems 16, 17, and 25 are multiple choice. Each stores the system of the correct choice and checks its solution, not the letter.
 
 The TUI's bank view (ctrl+b) lists the same entries. Running one shows whether GoMath's answer matches the worksheet.
 

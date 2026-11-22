@@ -214,6 +214,9 @@ type line struct {
 // readLine reads "(6,2) and (7,6)" or "slope 3 through (3,2)". For two points
 // it reports vertical when they share an x-value, with no slope.
 func readLine(ascii string, steps *[]Step) (l line, vertical bool, err error) {
+	if compact := strings.Join(strings.Fields(ascii), ""); relativePattern.MatchString(compact) {
+		return readRelativeLine(compact, steps)
+	}
 	pts := pointPattern.FindAllStringSubmatch(ascii, -1)
 	num := func(s string) float64 { v, _ := strconv.ParseFloat(s, 64); return v }
 	switch {
@@ -238,6 +241,43 @@ func readLine(ascii string, steps *[]Step) (l line, vertical bool, err error) {
 		return line{m, num(pts[0][1]), num(pts[0][2]), formatValue(m)}, false, nil
 	}
 	return l, false, fmt.Errorf(`expected two points like "(6,2) and (7,6)" or "slope 3 through (3,2)", got %q`, ascii)
+}
+
+// relativePattern reads a line parallel or perpendicular to y = px/q, with the
+// spaces removed: "parallel to y = 3x through (2,-2)" becomes "paralleltoy=3x...".
+var relativePattern = regexp.MustCompile(`(parallel|perpendicular)toy=(-?\d+(?:/\d+)?)x`)
+
+// readRelativeLine reads a line through a point, parallel or perpendicular to
+// the line y = px/q. A parallel line has the same slope. A perpendicular line
+// has the negative reciprocal slope, -q/p, and a horizontal reference line gives
+// a vertical line.
+func readRelativeLine(compact string, steps *[]Step) (l line, vertical bool, err error) {
+	m := relativePattern.FindStringSubmatch(compact)
+	pt := pointPattern.FindStringSubmatch(compact)
+	if pt == nil {
+		return l, false, fmt.Errorf(`expected a point like "(2,-2)" after the reference line, got %q`, compact)
+	}
+	x1, _ := strconv.ParseFloat(pt[1], 64)
+	y1, _ := strconv.ParseFloat(pt[2], 64)
+
+	p, q := 0, 1
+	if n, d, ok := strings.Cut(m[2], "/"); ok {
+		p, _ = strconv.Atoi(n)
+		q, _ = strconv.Atoi(d)
+	} else {
+		p, _ = strconv.Atoi(m[2])
+	}
+	if m[1] == "parallel" {
+		*steps = append(*steps, Step{"Compute", "Parallel lines have the same slope", fraction(p, q)})
+		return line{float64(p) / float64(q), x1, y1, fraction(p, q)}, false, nil
+	}
+	if p == 0 {
+		*steps = append(*steps, Step{"Compute", "Perpendicular to a horizontal line", "the line is vertical"})
+		return line{x1: x1, y1: y1}, true, nil
+	}
+	num, den := -q, p
+	*steps = append(*steps, Step{"Compute", "Perpendicular slopes multiply to -1", fraction(num, den)})
+	return line{float64(num) / float64(den), x1, y1, fraction(num, den)}, false, nil
 }
 
 // solveSlope answers "the slope is _" and says whether the line rises, falls,

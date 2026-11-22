@@ -44,6 +44,14 @@ const (
 	OpSolveFor
 	// OpGraph lists the points of y = expression and draws them.
 	OpGraph
+	// OpVariation finds a value in a direct, inverse, or joint variation.
+	OpVariation
+	// OpSystem solves two linear equations in two variables.
+	OpSystem
+	// OpCheckPoint says whether an ordered pair solves every equation given.
+	OpCheckPoint
+	// OpEliminate gives the multiplier that makes a variable cancel by addition.
+	OpEliminate
 )
 
 func (o Operation) String() string {
@@ -80,6 +88,14 @@ func (o Operation) String() string {
 		return "solve for a variable"
 	case OpGraph:
 		return "graph"
+	case OpVariation:
+		return "variation"
+	case OpSystem:
+		return "system of equations"
+	case OpCheckPoint:
+		return "check a solution"
+	case OpEliminate:
+		return "elimination multiplier"
 	}
 	return "unknown"
 }
@@ -142,6 +158,17 @@ func SolveAt(input string, op Operation, env map[string]float64) (rep Report) {
 
 	if op == OpDomain {
 		return solveDomain(ascii, &steps)
+	}
+
+	switch op {
+	case OpVariation:
+		return solveVariation(ascii, &steps)
+	case OpSystem:
+		return solveSystem(ascii, &steps)
+	case OpCheckPoint:
+		return solveCheckPoint(ascii, &steps)
+	case OpEliminate:
+		return solveEliminate(ascii, &steps)
 	}
 
 	switch op {

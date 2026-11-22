@@ -316,6 +316,8 @@ func TestSolveEquation(t *testing.T) {
 		{"x^2 + 2x + 1 = 0", "{-1}"},
 		{"x^2 + 1 = 0", "no real solution"},
 		{"6x^2 - 5x = -1", "{1/3, 1/2}"},
+		{"x^3 = 8", "{2}"},
+		{"x^3 - 2x^2 - 5x + 6 = 0", "{-2, 1, 3}"},
 	}
 	for _, c := range cases {
 		rep := Solve(c.in, OpSolve)
@@ -326,7 +328,7 @@ func TestSolveEquation(t *testing.T) {
 			t.Errorf("%q: Result = %q, want %q", c.in, rep.Result, c.want)
 		}
 	}
-	for _, in := range []string{"x^2 = 2", "x^3 = 8", "x + y = 1", "x + 1", "x = 1 = 2"} {
+	for _, in := range []string{"x^2 = 2", "x^3 = 2", "x + y = 1", "x + 1", "x = 1 = 2"} {
 		if rep := Solve(in, OpSolve); rep.Err == nil {
 			t.Errorf("%q: expected an error, got %q", in, rep.Result)
 		}
