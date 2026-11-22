@@ -239,6 +239,7 @@ var Worksheet = []WorksheetEntry{
 	// expression_1.png is a word problem: the bank holds the expression for the monthly cost.
 	{"expression_1.png", "4 + 0.18x", OpSimplify, "0.18x + 4", 0, nil},
 	{"table_1.png", "y = x + 1; x = -3, -2, -1, 0, 1, 2, 3", OpTable, "-2, -1, 0, 1, 2, 3, 4", 0, nil},
+	{"inequality_2.png", "-6x >= 48", OpInequality, "(-∞, -8]", 0, nil},
 }
 
 // Check solves the entry and compares the result with the worksheet answer.
