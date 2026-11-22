@@ -247,3 +247,110 @@ func TestTUIBankEntryIsCheckedAgainstWorksheet(t *testing.T) {
 		t.Errorf("step view does not show the worksheet check:\n%s", view)
 	}
 }
+
+func TestTUISolvesTypedEquation(t *testing.T) {
+	var m tea.Model = newModel()
+	m = send(m, typed("5x^4 = 135x"))
+	if !m.(model).avail[OpSolve] {
+		t.Fatalf("solve is not lit for an equation: avail=%v", m.(model).avail)
+	}
+	m = send(m, key(tea.KeyCtrlS))
+
+	got := m.(model)
+	if got.mode != modeSteps || got.op != OpSolve {
+		t.Fatalf("ctrl+s gave mode %v op %v, want modeSteps and solve", got.mode, got.op)
+	}
+	if got.report.Result != "{0, 3}" {
+		t.Errorf("Result = %q, want %q", got.report.Result, "{0, 3}")
+	}
+	last := len(got.report.Steps) - 1
+	for i := 0; i < last; i++ {
+		m = settle(t, m)
+		m = send(m, key(tea.KeyRight))
+	}
+	m = settle(t, m)
+	if view := m.View(); !strings.Contains(view, "result: {0, 3}") {
+		t.Errorf("final step does not show the solution:\n%s", view)
+	}
+}
+
+func TestTUIFooterLightsKeysAsInputIsAnalysed(t *testing.T) {
+	var m tea.Model = newModel()
+	if got := m.(model).avail; len(got) != 0 {
+		t.Fatalf("empty input should light nothing, got %v", got)
+	}
+
+	m = send(m, typed("5x^4 = 135x"))
+	avail := m.(model).avail
+	if !avail[OpSolve] || avail[OpFactor] || avail[OpSimplify] {
+		t.Errorf("equation: solve=%v factor=%v simplify=%v, want true, false, false",
+			avail[OpSolve], avail[OpFactor], avail[OpSimplify])
+	}
+
+	for range "5x^4 = 135x" {
+		m = send(m, key(tea.KeyBackspace))
+	}
+	m = send(m, typed("x^2 - 5x + 6"))
+	avail = m.(model).avail
+	if !avail[OpFactor] || !avail[OpSimplify] || avail[OpSolve] {
+		t.Errorf("polynomial: factor=%v simplify=%v solve=%v, want true, true, false",
+			avail[OpFactor], avail[OpSimplify], avail[OpSolve])
+	}
+	view := m.View()
+	for _, want := range []string{"ctrl+f factor", "ctrl+s solve", "ctrl+o more operations"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("footer is missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestTUIPickRunsOperationWithoutKey(t *testing.T) {
+	var m tea.Model = newModel()
+	m = send(m, typed("2x + 4 > 10"))
+	m = send(m, key(tea.KeyCtrlO))
+	if got := m.(model).mode; got != modePick {
+		t.Fatalf("ctrl+o gave mode %v, want modePick", got)
+	}
+	if view := m.View(); !strings.Contains(view, "inequality") {
+		t.Errorf("picker does not list inequality:\n%s", view)
+	}
+
+	for i, op := range allOps {
+		if op == OpInequality {
+			for j := 0; j < i; j++ {
+				m = send(m, key(tea.KeyDown))
+			}
+			break
+		}
+	}
+	m = send(m, key(tea.KeyEnter))
+
+	got := m.(model)
+	if got.mode != modeSteps || got.op != OpInequality {
+		t.Fatalf("enter gave mode %v op %v, want modeSteps and inequality", got.mode, got.op)
+	}
+	if got.report.Result != "(3, ∞)" {
+		t.Errorf("Result = %q, want %q", got.report.Result, "(3, ∞)")
+	}
+}
+
+func TestTUIPickEscReturnsToInput(t *testing.T) {
+	var m tea.Model = newModel()
+	m = send(m, typed("x+1"))
+	m = send(m, key(tea.KeyCtrlO))
+	m = send(m, key(tea.KeyEsc))
+	if got := m.(model); got.mode != modeInput || got.input != "x+1" {
+		t.Errorf("esc from pick gave mode %v input %q, want modeInput and x+1", got.mode, got.input)
+	}
+}
+
+func TestEveryOperationHasAPickerEntry(t *testing.T) {
+	if len(allOps) != int(OpEliminate)+1 {
+		t.Fatalf("picker has %d operations, want %d", len(allOps), int(OpEliminate)+1)
+	}
+	for _, k := range inputKeys {
+		if keyFor(k.op) != k.key {
+			t.Errorf("keyFor(%v) = %q, want %q", k.op, keyFor(k.op), k.key)
+		}
+	}
+}

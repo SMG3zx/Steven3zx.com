@@ -15,7 +15,61 @@ const (
 	modeInput mode = iota
 	modeSteps
 	modeBank
+	modePick
 )
+
+// keyedOp is an operation with a key of its own in the input footer.
+type keyedOp struct {
+	key string
+	op  Operation
+	typ tea.KeyType
+}
+
+// inputKeys are the operations that have a key in the input footer, in footer order.
+var inputKeys = []keyedOp{
+	{"enter", OpSimplify, tea.KeyEnter},
+	{"ctrl+f", OpFactor, tea.KeyCtrlF},
+	{"ctrl+t", OpTechnique, tea.KeyCtrlT},
+	{"ctrl+p", OpPrime, tea.KeyCtrlP},
+	{"ctrl+r", OpRoot, tea.KeyCtrlR},
+	{"ctrl+g", OpRadicalForm, tea.KeyCtrlG},
+	{"ctrl+s", OpSolve, tea.KeyCtrlS},
+	{"ctrl+d", OpDomain, tea.KeyCtrlD},
+	{"ctrl+e", OpGraph, tea.KeyCtrlE},
+}
+
+// allOps lists every operation in declaration order, for the ctrl+o picker.
+var allOps = func() []Operation {
+	var ops []Operation
+	for op := OpSimplify; op <= OpEliminate; op++ {
+		ops = append(ops, op)
+	}
+	return ops
+}()
+
+// keyFor is the footer key for op, or "" when op has no key of its own.
+func keyFor(op Operation) string {
+	for _, k := range inputKeys {
+		if k.op == op {
+			return k.key
+		}
+	}
+	return ""
+}
+
+// availableOps reports which operations accept input. An operation is available
+// when it runs without an error, so the footer can turn its key on as the input
+// is analysed. Input that is still being typed is usually unavailable.
+func availableOps(input string) map[Operation]bool {
+	avail := make(map[Operation]bool, len(allOps))
+	if strings.TrimSpace(input) == "" {
+		return avail
+	}
+	for _, op := range allOps {
+		avail[op] = Solve(input, op).Err == nil
+	}
+	return avail
+}
 
 const (
 	// frameInterval paces the decode animation. A key press still moves one
@@ -69,10 +123,15 @@ type model struct {
 	checked     bool
 	checkOK     bool
 	checkDetail string
+
+	// avail says which operations accept the current input. It is refreshed
+	// each time the input changes, and drives which footer keys are lit.
+	avail   map[Operation]bool
+	pickIdx int
 }
 
 func newModel() model {
-	return model{mode: modeInput, op: OpSimplify}
+	return model{mode: modeInput, op: OpSimplify, avail: map[Operation]bool{}}
 }
 
 func (m model) Init() tea.Cmd {
@@ -166,38 +225,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch m.mode {
 		case modeInput:
-			return m.updateInput(msg)
+			updated, cmd := m.updateInput(msg)
+			// The input may have changed, so the footer's lit keys must follow it.
+			um := updated.(model)
+			if um.mode == modeInput {
+				um.avail = availableOps(um.input)
+			}
+			return um, cmd
 		case modeSteps:
 			return m.updateSteps(msg)
 		case modeBank:
 			return m.updateBank(msg)
+		case modePick:
+			return m.updatePick(msg)
 		}
 	}
 	return m, nil
 }
 
 func (m model) updateInput(km tea.KeyMsg) (tea.Model, tea.Cmd) {
+	for _, k := range inputKeys {
+		if km.Type == k.typ {
+			return m.run(k.op, m.input)
+		}
+	}
 	switch km.Type {
-	case tea.KeyEnter:
-		return m.run(OpSimplify, m.input)
-	case tea.KeyCtrlF:
-		return m.run(OpFactor, m.input)
-	case tea.KeyCtrlT:
-		return m.run(OpTechnique, m.input)
-	case tea.KeyCtrlP:
-		return m.run(OpPrime, m.input)
-	case tea.KeyCtrlR:
-		return m.run(OpRoot, m.input)
-	case tea.KeyCtrlS:
-		return m.run(OpSolve, m.input)
-	case tea.KeyCtrlG:
-		return m.run(OpRadicalForm, m.input)
-	case tea.KeyCtrlD:
-		return m.run(OpDomain, m.input)
-	case tea.KeyCtrlE:
-		return m.run(OpGraph, m.input)
 	case tea.KeyCtrlB:
 		m.mode = modeBank
+	case tea.KeyCtrlO:
+		m.mode = modePick
+		m.pickIdx = 0
 	case tea.KeyEsc:
 		return m, tea.Quit
 	case tea.KeyBackspace:
@@ -208,6 +265,25 @@ func (m model) updateInput(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input += " "
 	case tea.KeyRunes:
 		m.input += string(km.Runes)
+	}
+	return m, nil
+}
+
+// updatePick chooses any operation, including those without a footer key.
+func (m model) updatePick(km tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch km.Type {
+	case tea.KeyUp:
+		if m.pickIdx > 0 {
+			m.pickIdx--
+		}
+	case tea.KeyDown:
+		if m.pickIdx < len(allOps)-1 {
+			m.pickIdx++
+		}
+	case tea.KeyEnter:
+		return m.run(allOps[m.pickIdx], m.input)
+	case tea.KeyEsc:
+		m.mode = modeInput
 	}
 	return m, nil
 }
@@ -271,14 +347,75 @@ func (m model) View() string {
 	case modeInput:
 		sb.WriteString("GoMath: type ASCII (x^2 + 1) or TeX (\\frac{x}{2})\n\n")
 		fmt.Fprintf(&sb, "> %s_\n\n", m.input)
-		sb.WriteString("enter simplify   ctrl+f factor   ctrl+t technique   ctrl+p prime check   ctrl+r root blank   ctrl+g radical form   ctrl+s solve   ctrl+d excluded numbers   ctrl+e graph\n")
-		sb.WriteString("ctrl+b worksheet bank   esc quit\n")
+		sb.WriteString(m.inputFooter())
 	case modeSteps:
 		m.viewSteps(&sb)
 	case modeBank:
 		m.viewBank(&sb)
+	case modePick:
+		m.viewPick(&sb)
 	}
 	return sb.String()
+}
+
+// inputFooter lists the keys for the input. A key is bright when its operation
+// accepts the current input and dimmed when it does not.
+func (m model) inputFooter() string {
+	var items []string
+	for _, k := range inputKeys {
+		item := k.key + " " + k.op.String()
+		if !m.avail[k.op] {
+			item = dimStyle.Render(item)
+		}
+		items = append(items, item)
+	}
+	items = append(items, "ctrl+o more operations", "ctrl+b worksheet bank", "esc quit")
+	return wrapItems(items, m.screenWidth()) + "\n"
+}
+
+// wrapItems joins items with gaps, starting a new line when the next item would
+// pass width. Widths are measured on the rendered text, so styled items fit.
+func wrapItems(items []string, width int) string {
+	const gap = "   "
+	var lines []string
+	line := ""
+	for _, it := range items {
+		if line == "" {
+			line = it
+			continue
+		}
+		if lipgloss.Width(line)+len(gap)+lipgloss.Width(it) > width {
+			lines = append(lines, line)
+			line = it
+			continue
+		}
+		line += gap + it
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// viewPick lists every operation. Those that do not accept the input are dimmed.
+func (m model) viewPick(sb *strings.Builder) {
+	fmt.Fprintf(sb, "Operations on %q\n\n", m.input)
+	for i, op := range allOps {
+		cursor := "  "
+		if i == m.pickIdx {
+			cursor = "> "
+		}
+		key := keyFor(op)
+		if key == "" {
+			key = "-"
+		}
+		line := fmt.Sprintf("%s%-24s %s", cursor, op, key)
+		if !m.avail[op] {
+			line = dimStyle.Render(line)
+		}
+		sb.WriteString(line + "\n")
+	}
+	sb.WriteString("\nup/down choose   enter run   esc back   dim: does not accept this input\n")
 }
 
 // viewSteps shows one stage at a time: a centred box holding the decoding

@@ -55,17 +55,19 @@ Other TeX commands such as `\sin`, `\pi`, subscripts, and `\begin{...}` are not 
 | Radical form | ctrl+g | Rewrites `a^(m/n)` as a radical without evaluating it. Also accepts `169^{\frac{1}{2}}`. | `169^(1/2)` gives `sqrt(169)`. `8^(2/3)` gives `sqrt[3](8^2)`. |
 | Solve | ctrl+s | Solves an equation in one variable and writes the solution set. Handles linear equations and quadratics with rational roots. | `7x - 8 = 55` gives `{9}`. `x^2 - 5x + 6 = 0` gives `{2, 3}`. |
 | Excluded numbers | ctrl+d | Lists the numbers a rational expression must exclude from its domain, which are the roots of its denominators. Answers `all real numbers` when no denominator can reach 0. | `4/(x + 6)` gives `{-6}`. `1/(x^2 + 4)` gives `all real numbers`. |
-| Inequality | none yet | Solves a linear or compound inequality and writes interval notation. | `2x + 4 > 10` gives `(3, ∞)`. `3 < 2x + 1 <= 9` gives `(1, 4]`. |
-| Slope | none yet | Gives the slope through two points and whether the line rises, falls, is horizontal, or is vertical. | `(6,2) and (7,6)` gives `4 (rises)`. |
-| Point-slope / slope-intercept | none yet | Writes the line through two points, through a point with a given slope, or through a point parallel or perpendicular to `y = px/q`. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. `perpendicular to y = 2x through (2,4)` gives `y - 4 = (-1/2)(x - 2)`. |
+| Inequality | ctrl+o | Solves a linear or compound inequality and writes interval notation. | `2x + 4 > 10` gives `(3, ∞)`. `3 < 2x + 1 <= 9` gives `(1, 4]`. |
+| Slope | ctrl+o | Gives the slope through two points and whether the line rises, falls, is horizontal, or is vertical. | `(6,2) and (7,6)` gives `4 (rises)`. |
+| Point-slope / slope-intercept | ctrl+o | Writes the line through two points, through a point with a given slope, or through a point parallel or perpendicular to `y = px/q`. | `slope 3 through (3,2)` gives `y - 2 = 3(x - 3)` and `y = 3x - 7`. `perpendicular to y = 2x through (2,4)` gives `y - 4 = (-1/2)(x - 2)`. |
 | Graph | ctrl+e | Lists the points of `y = expression` and draws them on axes. Without `; x = a, b, c` it uses x from -3 to 3. | `y = x - 2` gives `(-3, -5), ... (3, 1)` and a plot. |
-| Table of values | none yet | Gives y for each listed x. | `y = x - 2; x = -3, -2, -1` gives `-5, -4, -3`. |
-| Solve for a variable | none yet | Isolates one variable of a formula that is linear in it. | `r = ba for b` gives `b = r/a`. |
-| Variation | none yet | Finds a value in a direct, inverse, or joint variation. Input has three parts, `relation; known values; find unknown when values`. Words are `directly`, `inversely`, and `jointly`, and `z^2` writes the square. | `y varies directly as x; y = 84 when x = 7; find y when x = 18` gives `216`. |
-| System of equations | none yet | Solves two linear equations in two variables by Cramer's rule. Gives `no solution` or `infinitely many solutions` when the lines do not cross once. | `x + y = 5; x - y = -15` gives `{(-5, 10)}`. |
-| Check a solution | none yet | Says whether an ordered pair satisfies every equation after `;`. | `(2,-6); y = 4x - 14; 2x + 4y = -20` gives `Yes`. |
-| Elimination multiplier | none yet | Answers the blank in the addition method. The input fixes one equation's multiplier and gives the other's, so the chosen variable cancels. | `x + 5y = 2; 5x + 4y = -11; eliminate x; multiply second by 1` gives `-5`. |
+| Table of values | ctrl+o | Gives y for each listed x. | `y = x - 2; x = -3, -2, -1` gives `-5, -4, -3`. |
+| Solve for a variable | ctrl+o | Isolates one variable of a formula that is linear in it. | `r = ba for b` gives `b = r/a`. |
+| Variation | ctrl+o | Finds a value in a direct, inverse, or joint variation. Input has three parts, `relation; known values; find unknown when values`. Words are `directly`, `inversely`, and `jointly`, and `z^2` writes the square. | `y varies directly as x; y = 84 when x = 7; find y when x = 18` gives `216`. |
+| System of equations | ctrl+o | Solves two linear equations in two variables by Cramer's rule. Gives `no solution` or `infinitely many solutions` when the lines do not cross once. | `x + y = 5; x - y = -15` gives `{(-5, 10)}`. |
+| Check a solution | ctrl+o | Says whether an ordered pair satisfies every equation after `;`. | `(2,-6); y = 4x - 14; 2x + 4y = -20` gives `Yes`. |
+| Elimination multiplier | ctrl+o | Answers the blank in the addition method. The input fixes one equation's multiplier and gives the other's, so the chosen variable cancels. | `x + 5y = 2; 5x + 4y = -11; eliminate x; multiply second by 1` gives `-5`. |
 | Root blank | ctrl+r | Fills the blank in "root(n) = r because ___ = n" with `r^k`, where `k` is the index. `n` must be a perfect power. Accepts `sqrt(169)`, `sqrt[5](-3125)`, or TeX such as `\sqrt[5]{-3125}`. | `sqrt(169)` gives `13^2`. `sqrt[5](-3125)` gives `(-5)^5`. |
+
+Keys with `ctrl+o` have no footer key. Press ctrl+o in the input for the full list of operations. The footer keys are bright when their operation accepts the input, and dim when it does not. Pressing a dim key still runs it and shows why it fails.
 
 The library also has `Eval` (a number from variable values) and `Diff` (a derivative with respect to one variable). `Diff` returns an unsimplified tree.
 
@@ -94,7 +96,7 @@ Techniques that `Technique` can name:
 
 Simplify accepts `sqrt(n)` and `\sqrt{n}` where the radicand is a single term, such as `175`, `6x`, or `12y^2`. Square factors come out (`sqrt(8)` is `2sqrt(2)`), perfect squares become numbers, and like radicals combine: `7sqrt(2) + 11sqrt(2)` gives `18sqrt(2)`. Roots of any index work with `sqrt[k](n)` or `\sqrt[k]{n}`: `sqrt[3](72)` gives `2sqrt[3](9)`. The product and quotient rules below join radicals of the same index, so `sqrt[3](49) * sqrt[3](14)` gives `7sqrt[3](2)`. The product rule joins neighbours first: `sqrt(6x) * sqrt(30x)` gives `6xsqrt(5)`. Variables are taken as nonnegative, so `sqrt(x^2)` is `x`. `•`, `\cdot`, and `*` all mean multiply. Each distinct radical is swapped for a stand-in letter, so the input should not rely on that letter being a variable. The quotient rule also joins `sqrt(A)/sqrt(B)` when `B` divides `A` exactly: `sqrt(147x^3) / sqrt(3x)` gives `7x`. It handles a root of a whole-number fraction too: `sqrt(1/144)` gives `1/12` and `sqrt(20/9)` gives `2sqrt(5)/3`. A radical left in the denominator would need rationalizing, which is not supported. Radicals are not supported with factor, technique, or prime check.
 
-Evaluate also takes fractional exponents, so `169^(1/2)` gives `13`, and roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no TUI key. The TUI runs it from the bank only.
+Evaluate also takes fractional exponents, so `169^(1/2)` gives `13`, and roots: `sqrt(100 - 36)` gives `8`, and `sqrt(36 - 100)` gives `not a real number`, matching worksheets that ask you to evaluate or say the expression is not real. Evaluate has no footer key. The ctrl+o list runs it on an input with no variables, and the bank runs it too.
 
 ## Fractional exponents
 
