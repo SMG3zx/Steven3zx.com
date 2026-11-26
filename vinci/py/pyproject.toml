@@ -16,7 +16,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 110
-extend-exclude = ["difftest", "eval", "vinci_tui", "build"]
+extend-exclude = ["eval", "vinci_tui", "build"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

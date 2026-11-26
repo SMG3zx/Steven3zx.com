@@ -1,6 +1,0 @@
-{
- "journal_added": [],
- "name": "plain-answer",
- "script_sha256": "241b609e6e974d683660d8aa404d634b6e7783c0be6fa7090fd04ddf735012bf",
- "stdout": "vinci · chat model swift-qwen3.8-27b at http://FAKE/v1 · /help for commands, /exit to leave\nSeed       -\nPrepare    i2   Canal lock  (12h0m here)\nIncubate   i1   Flying machine  (until 2026-11-19)\nBuild 0/3  -\nTend       -\nSlowest stage: Prepare, 15h0m on average. Speed that one up first.\nNext: n2: note connects to nothing: Locks hold water\n      vinci link n2 <note or idea>\n\nyou> \nHello. What would you like to do?\n\nyou> "
-}

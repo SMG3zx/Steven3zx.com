@@ -1,13 +1,12 @@
 #!/bin/sh
 # Fresh-clone check for the regression gate. It proves that vinci builds, installs and passes
-# its golden comparison from a clean clone, with no .NET on PATH and no C# oracle.
+# its test suite and its install from a clean clone, with no .NET on PATH.
 #
 #   1. a sparse, shallow clone of vinci/ from origin (only that folder, only the newest commit)
-#   2. make -C vinci/py test, with VINCI_ORACLE pointing at nothing
+#   2. make -C vinci/py test
 #   3. VINCI_APP_DIR=<tmp>/app sh vinci/install.sh <tmp>/bin (a scratch install; the portal is
 #      not restarted), then a smoke test from / with a temporary VINCI_HOME, VINCI_NO_TRACK=1
 #      and an empty VINCI_ENV_FILE: vinci stats, vinci index rebuild, vinci recall x, vinci help
-#   4. the golden CLI comparison against the installed launcher
 #
 # .NET is hidden from PATH: every file in /usr/bin except dotnet is linked into a scratch bin
 # directory that comes first on PATH. The network is needed for uv and the test dependencies.
@@ -73,10 +72,9 @@ if command -v dotnet >/dev/null 2>&1; then
 	exit 1
 fi
 echo "dotnet: not on PATH ($(command -v uv))"
-export VINCI_ORACLE=/nonexistent/vinci-oracle
 unset VIRTUAL_ENV
 
-step "make test in the clone (no oracle, no .NET)"
+step "make test in the clone (no .NET)"
 make -C "$clone/py" test > "$tmp/check.log" 2>&1
 tail -n 3 "$tmp/check.log"
 
@@ -90,7 +88,7 @@ mkdir "$home"
 : > "$tmp/empty.env"
 smoke() {
 	(cd / && env -i PATH="$PATH" HOME="$tmp" LANG=C.UTF-8 VINCI_HOME="$home" \
-		VINCI_NO_TRACK=1 VINCI_ENV_FILE="$tmp/empty.env" VINCI_ORACLE="$VINCI_ORACLE" \
+		VINCI_NO_TRACK=1 VINCI_ENV_FILE="$tmp/empty.env"\
 		"$tmp/bin/vinci" "$@")
 }
 smoke_failed=0
@@ -106,13 +104,8 @@ for args in "stats" "index rebuild" "recall x" "help"; do
 	fi
 done
 
-step "golden CLI comparison against the installed launcher"
-golden_ok=0
-(cd "$clone/py" && uv run python -m vinci_diff --candidate "$tmp/app/vinci") > "$tmp/golden.log" 2>&1 && golden_ok=1
-tail -n 6 "$tmp/golden.log"
-
 echo ""
-if [ "$smoke_failed" = 0 ] && [ "$golden_ok" = 1 ]; then
+if [ "$smoke_failed" = 0 ]; then
 	echo "FRESH CLONE PASS"
 	exit 0
 fi

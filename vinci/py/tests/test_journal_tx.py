@@ -1,6 +1,6 @@
 """The journal's transactions (journal.py JournalTx): the lock is taken and released, queued lines
 are written in order by one flush, abort drops them, and a read inside a transaction sees what it
-has queued. The lock itself is tested across processes by py/vinci_diff/append_race.py."""
+has queued. The lock itself is tested across processes by scripts/append_race.py."""
 
 from pathlib import Path
 

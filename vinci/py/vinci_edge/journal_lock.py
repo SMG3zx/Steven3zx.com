@@ -12,7 +12,7 @@ Mojo calls each function once per request and gets a status pair back, never an 
 the depth, so the same writer can take it again without waiting for itself.
 
 VINCI_TEST_NO_JOURNAL_LOCK=1 turns the lock off. It exists only so the append race test can
-show that the unlocked code loses ids (mojo/py/vinci_diff/append_race.py). Nothing else sets it.
+show that the unlocked code loses ids (scripts/append_race.py). Nothing else sets it.
 """
 
 from __future__ import annotations

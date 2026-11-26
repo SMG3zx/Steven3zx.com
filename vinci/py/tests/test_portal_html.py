@@ -1,5 +1,5 @@
 """Unit tests for portal_html.py. Expected values are WebUtility and TitleOf results from .NET 10
-(py/vinci_diff/portal_truth/), checked before they were written here."""
+(recorded from .NET 10), checked before they were written here."""
 
 import pytest
 

@@ -1,5 +1,5 @@
 """Unit tests for portal_url.py. The expected values are System.Uri results from .NET 10
-(py/vinci_diff/portal_truth/), and the path cases were checked the same way."""
+(recorded from .NET 10), and the path cases were checked the same way."""
 
 import pytest
 

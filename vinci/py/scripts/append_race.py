@@ -9,10 +9,10 @@ appends would mint the same id. The test then checks the journal:
 - every idea id is unique;
 - `vinci verify` on the same home passes.
 
-Usage (from py, with the binary built by the caller):
+Usage (from py, with the launcher or another build):
 
-    uv run python -m vinci_diff.append_race --binary /abs/path/vinci [--workers 4] [--lines 100]
-    uv run python -m vinci_diff.append_race --binary /abs/path/vinci --unlocked
+    python scripts/append_race.py --binary /abs/path/vinci [--workers 4] [--lines 100]
+    python scripts/append_race.py --binary /abs/path/vinci --unlocked
 
 --unlocked sets VINCI_TEST_NO_JOURNAL_LOCK=1 in the binary's environment. That switch turns the
 journal lock off. It exists only for this test, so the test can show that the lock is what

@@ -1,7 +1,7 @@
 """The HTML named character references that decoding knows: name to code point.
 
-Generated from mojo/py/vinci_diff/portal_truth/html_entities.tsv (the HTML 4.01 set), so
-each entry is the table the Mojo build compiled in. Port of mojo/src/portal_entities.mojo.
+Generated from the HTML 4.01 named-entity list, so each entry is one of the 253
+names decoding knows. Port of mojo/src/portal_entities.mojo.
 """
 
 from __future__ import annotations

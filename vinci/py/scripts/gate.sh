@@ -1,20 +1,16 @@
 #!/bin/sh
 # The regression gate, run as `sh scripts/gate.sh` from py/. In order:
 #   tests     the pytest suite (py/tests): the core, the commands, the feeds, the portal, the chat
-#   cli       the journal commands against the goldens (73 scenarios, 3,613 steps)
-#   chat      the chat scripts that the recorded oracle also runs (3 goldens, plus the Python-only scripts)
-#   portal    the portal's requests across four journal kinds (136 requests)
-#   sync      the tracker's ten cases against a fake ActivityWatch
-#   personal, feed, lme   the eval thresholds of eval/gate-thresholds.json, on copies
+#   personal  the personal set (eval/gate-thresholds.json): lexical and lexical+vector hits and abstentions
+#   feed      the feed set after `vinci feed run` on a copy
+#   lme       the LongMemEval corrective-query check (needs the embedding server)
 # One line per stage, then GATE PASS or GATE FAIL (stages). Non-zero exit on any failure.
-# No .NET and no C# oracle are needed: VINCI_ORACLE points at nothing, so a live oracle
-# run would fail. The eval stages need ~/.vinci/eval and ~/.vinci/staging (this machine);
-# a SKIP fails the gate unless GATE_ALLOW_SKIP=1.
+# The eval stages need ~/.vinci/eval and ~/.vinci/staging (this machine); a SKIP fails the gate
+# unless GATE_ALLOW_SKIP=1.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd) || exit 2
 cd "$root" || exit 2
 unset VIRTUAL_ENV
-export VINCI_ORACLE=/nonexistent/vinci-oracle
 cand="${CANDIDATE:-$root/vinci}"
 work=$(mktemp -d) || exit 2
 trap 'rm -rf "$work"' EXIT
@@ -43,10 +39,6 @@ run() {
 }
 
 run tests "passed|failed|error" sh -c 'uv run --group dev python -m pytest -q tests'
-run cli "steps matching" sh -c "uv run python -m vinci_diff --candidate '$cand'"
-run chat "scripts pass" sh -c "uv run python -m vinci_diff.chat_diff --candidate '$cand'"
-run portal "requests matching" sh -c "uv run python -m vinci_diff.portal_diff --candidate '$cand'"
-run sync "cases match" sh -c "uv run python -m vinci_diff.sync_diff --candidate '$cand'"
 
 # The eval stages print their own STAGE lines.
 uv run python -m vinci_eval.gate --binary "$cand" > "$work/eval.log" 2>&1

@@ -9,8 +9,8 @@ test:
 	$(UV) --group dev python -m pytest -q tests
 
 lint:
-	$(UV) --group dev ruff check vinci_core vinci_cli vinci_edge vinci_infer tests vinci_diff vinci_eval
+	$(UV) --group dev ruff check vinci_core vinci_cli vinci_edge vinci_infer tests vinci_eval
 
-# The regression gate: the tests, then the golden comparisons against ./vinci. See scripts/gate.sh.
+# The regression gate: the tests, then the eval thresholds. See scripts/gate.sh.
 gate:
 	sh scripts/gate.sh
