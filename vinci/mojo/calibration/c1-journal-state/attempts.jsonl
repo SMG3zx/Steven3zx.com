@@ -1,2 +1,0 @@
-{"at":"2026-11-17T03:10:17Z","n":1,"pass":false,"seconds":2.30,"first_error":"/home/steven3zx/Steven3zx.com/vinci/mojo/calibration/c1-journal-state/test_state.mojo:153:31: error: value of type 'Idea' cannot be implicitly copied, it does not conform to 'ImplicitlyCopyable'"}
-{"at":"2026-11-17T03:10:26Z","n":2,"pass":true,"seconds":2.57,"first_error":""}
