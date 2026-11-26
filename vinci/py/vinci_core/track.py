@@ -229,6 +229,11 @@ def utc_o(at: Instant) -> str:
     )
 
 
+def split_byte(text: str, sep: int) -> list[str]:
+    """String.Split on one ASCII byte, keeping the empty pieces."""
+    return text.split(chr(sep))
+
+
 def round_minutes(minutes: float) -> float:
     """Minutes rounded to two decimals: the scaled value rounds to even on a half."""
     scaled = minutes * 100.0
