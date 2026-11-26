@@ -15,17 +15,20 @@ import sys
 import time
 from pathlib import Path
 
+from vinci_core.backup import backup_command
 from vinci_core.cmd_ideas import dispatch_ideas
+from vinci_core.cmd_index import index_command, open_command, recall_command
 from vinci_core.cmd_knowledge import dispatch_knowledge
 from vinci_core.cmd_ops import dispatch_ops
 from vinci_core.command_kinds import command_writes_journal, find_command
 from vinci_core.journal import JournalTx
 from vinci_core.session import Session, UserError, user_error
 from vinci_core.timeutil import DAYS_0001_TO_1970, TICKS_PER_DAY, Instant, parse_instant
+from vinci_core.verify import verify_command
 
 # Commands routed before the journal is read. Each is ported in its own module; until it is,
 # it fails with a clear message rather than running a partial version.
-UNPORTED_ROUTES = ("chat", "serve", "index", "feed", "recall", "open", "backup", "verify")
+UNPORTED_ROUTES = ("chat", "serve", "feed")
 
 
 def join_path(directory: str, name: str) -> str:
@@ -90,7 +93,8 @@ def journal_path() -> str:
     return join_path(vinci_home(), "journal.jsonl")
 
 
-def run(args: list[str]) -> None:
+def run(args: list[str]) -> int:
+    """Runs one command. Returns the exit code for commands that set their own (verify)."""
     env_file = os.environ.get("VINCI_ENV_FILE")
     if env_file is not None:
         load_env_file(env_file)
@@ -109,6 +113,22 @@ def run(args: list[str]) -> None:
     if args[0] == "memory":
         # Mark 2 removed the memory service. Notes from that system are now in the journal.
         raise user_error("memory was removed in mark 2. Its notes are in the journal; see docs/memory.md.")
+    # The index and recall read the journal and write only their own index file.
+    if args[0] == "index":
+        index_command(args[1:], vinci_home(), journal_path())
+        return 0
+    if args[0] == "recall":
+        recall_command(args[1:], vinci_home())
+        return 0
+    if args[0] == "open":
+        open_command(args[1:], vinci_home())
+        return 0
+    # Backup and verify read the journal under its lock and never run the tracker.
+    if args[0] == "backup":
+        backup_command(args[1:], vinci_home(), journal_path(), now)
+        return 0
+    if args[0] == "verify":
+        return verify_command(args[1:], vinci_home(), journal_path(), now)
 
     cmd = args[0]
     rest = list(args[1:])
@@ -144,12 +164,13 @@ def run(args: list[str]) -> None:
     except BaseException:
         session.abort()
         raise
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     try:
-        run(args)
+        return run(args)
     except UserError as err:
         print("vinci: " + str(err), file=sys.stderr)
         return 1
@@ -159,4 +180,3 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as err:  # a bug or a broken journal
         print("vinci: " + str(err), file=sys.stderr)
         return 3
-    return 0
