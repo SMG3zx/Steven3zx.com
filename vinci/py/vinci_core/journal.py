@@ -1,243 +1,338 @@
-"""
-Journal - Append-only JSON Lines storage for vinci facts.
+"""The append-only journal: one JSON object per line.
 
-The journal is the single source of truth. Every fact is written once with its time,
-to an append-only file. Nothing is edited or deleted.
+Everything vinci knows is a fold over these events.
+
+Port of mojo/src/journal.mojo. The Mojo version reached the lock and the durable append
+through a Python edge; here they are imported directly.
 """
 
-import json
-import threading
-import time
-from pathlib import Path
-from typing import Optional, List, Any
-from dataclasses import dataclass, field
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, replace
+
+from vinci_edge import journal_lock
+
+from .jsonline import (
+    Cursor,
+    ascii_lower,
+    format_json_double,
+    json_instant,
+    json_string,
+)
+from .timeutil import Instant, parse_instant
 
 
 @dataclass
 class Event:
-    """A journal event: the time, kind, id, text, and optional fields."""
-    at: float  # Unix timestamp (seconds)
+    """One fact. Fields are written in this order.
+
+    At and Kind are always present. The rest are optional, and an absent field is left out
+    of the line.
+    """
+
+    at: Instant
     kind: str
-    id: Optional[str] = None
-    text: Optional[str] = None
-    value: Optional[float] = None
-    hi: Optional[float] = None
-    refs: Optional[List[str]] = None
-    who: Optional[str] = None
-    why: Optional[str] = None
-    url: Optional[str] = None
-    tags: Optional[List[str]] = None
-    use: Optional[bool] = None
-    big: Optional[bool] = None
-    where_: Optional[str] = None
+    id: str | None = None
+    text: str | None = None
+    refs: list[str] | None = None
+    value: float | None = None
+    hi: float | None = None
+    who: str | None = None
+    why: str | None = None
+    url: str | None = None
+    metric: str | None = None
+    tags: list[str] | None = None
+    where_: str | None = None
+
+    def copy(self) -> Event:
+        return replace(
+            self,
+            refs=None if self.refs is None else list(self.refs),
+            tags=None if self.tags is None else list(self.tags),
+        )
 
 
-class Journal:
+def _optional_string_field(buf: list[str], name: str, value: str | None) -> None:
+    if value is not None:
+        buf.append("," + json_string(name) + ":" + json_string(value))
+
+
+def _optional_list_field(buf: list[str], name: str, value: list[str] | None) -> None:
+    if value is not None:
+        buf.append("," + json_string(name) + ":[")
+        buf.append(",".join(json_string(item) for item in value))
+        buf.append("]")
+
+
+def _optional_number_field(buf: list[str], name: str, value: float | None) -> None:
+    if value is not None:
+        buf.append("," + json_string(name) + ":" + format_json_double(value))
+
+
+def serialize_event(e: Event) -> str:
+    """One line of JSON, without the newline. Keys in declaration order, no spaces."""
+    buf = ["{" + json_string("at") + ":" + json_instant(e.at)]
+    buf.append("," + json_string("kind") + ":" + json_string(e.kind))
+    _optional_string_field(buf, "id", e.id)
+    _optional_string_field(buf, "text", e.text)
+    _optional_list_field(buf, "refs", e.refs)
+    _optional_number_field(buf, "value", e.value)
+    _optional_number_field(buf, "hi", e.hi)
+    _optional_string_field(buf, "who", e.who)
+    _optional_string_field(buf, "why", e.why)
+    _optional_string_field(buf, "url", e.url)
+    _optional_string_field(buf, "metric", e.metric)
+    _optional_list_field(buf, "tags", e.tags)
+    _optional_string_field(buf, "where", e.where_)
+    buf.append("}")
+    return "".join(buf)
+
+
+def _string_or_null(c: Cursor) -> str | None:
+    if c.at_null():
+        c.skip_null()
+        return None
+    return c.read_string()
+
+
+def _number_or_null(c: Cursor) -> float | None:
+    if c.at_null():
+        c.skip_null()
+        return None
+    return c.read_number()
+
+
+def _list_or_null(c: Cursor) -> list[str] | None:
+    if c.at_null():
+        c.skip_null()
+        return None
+    return c.read_string_array()
+
+
+def parse_event(line: str) -> Event:
+    """Parse one line. Field names match case-insensitively.
+
+    Unknown fields are skipped whatever their value. A null is the same as an absent field.
+    A missing or null at is an error, because DateTimeOffset cannot be null.
     """
-    Append-only JSON Lines journal.
-    
-    Every fact is written once with its time. Nothing is edited or deleted.
-    The journal file is plain text so it can be inspected with jq, grep, etc.
+    c = Cursor(line)
+    at: Instant | None = None
+    kind = ""
+    fields: dict[str, object] = {}
+    c.skip_space()
+    c.expect(123)  # {
+    c.skip_space()
+    if c.peek() == 125:  # }
+        c.take()
+    else:
+        while True:
+            c.skip_space()
+            key = ascii_lower(c.read_string())
+            c.skip_space()
+            c.expect(58)  # :
+            c.skip_space()
+            if key == "at":
+                if c.at_null():
+                    c.skip_null()
+                    at = None
+                else:
+                    at = parse_instant(c.read_string())
+            elif key == "kind":
+                k = _string_or_null(c)
+                kind = k if k is not None else ""
+            elif key == "id":
+                fields["id"] = _string_or_null(c)
+            elif key == "text":
+                fields["text"] = _string_or_null(c)
+            elif key == "refs":
+                fields["refs"] = _list_or_null(c)
+            elif key == "value":
+                fields["value"] = _number_or_null(c)
+            elif key == "hi":
+                fields["hi"] = _number_or_null(c)
+            elif key == "who":
+                fields["who"] = _string_or_null(c)
+            elif key == "why":
+                fields["why"] = _string_or_null(c)
+            elif key == "url":
+                fields["url"] = _string_or_null(c)
+            elif key == "metric":
+                fields["metric"] = _string_or_null(c)
+            elif key == "tags":
+                fields["tags"] = _list_or_null(c)
+            elif key == "where":
+                fields["where_"] = _string_or_null(c)
+            else:
+                c.skip_value()
+            c.skip_space()
+            sep = c.take()
+            if sep == 125:  # }
+                break
+            if sep != 44:  # ,
+                raise ValueError("journal: expected , or } after a field")
+    c.skip_space()
+    if not c.at_end():
+        raise ValueError("journal: text after the closing brace")
+    if at is None:
+        raise ValueError("journal: event has no at")
+    return Event(at, kind, **fields)  # type: ignore[arg-type]
+
+
+def directory_of(path: str) -> str:
+    """The part of a path before its last slash, or "" when there is none."""
+    cut = path.rfind("/")
+    if cut <= 0:
+        return "/" if cut == 0 else ""
+    return path[:cut]
+
+
+def _edge_status(pair: tuple[str, str], what: str) -> None:
+    """Raises when the edge's status pair is not ok. The message is the edge's own text."""
+    if pair[0] != "ok":
+        raise ValueError(what + pair[1])
+
+
+def next_id_of(events: list[Event], letter: str) -> str:
+    """The next free id with a prefix letter (k1, e7 ...), from the ids in events.
+
+    Callers mint under the lock: take the events from a JournalTx that has begun, and append
+    the new line to the same transaction before it commits.
     """
-    
-    def __init__(self, path: str):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-    
-    def exists(self) -> bool:
-        return self.path.exists()
-    
-    def read_events(self) -> List[Event]:
-        """Read all events from the journal in order."""
-        events = []
-        if not self.path.exists():
-            return events
-        
-        with self._lock:
+    best = 0
+    for e in events:
+        if e.id is None:
+            continue
+        ident = e.id
+        if ident.startswith(letter) and len(ident) > 1:
             try:
-                with open(self.path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            data = json.loads(line)
-                            event = Event(
-                                at=float(data['at']),
-                                kind=data.get('kind', ''),
-                                id=data.get('id'),
-                                text=data.get('text'),
-                                value=float(data['value']) if data.get('value') is not None else None,
-                                hi=float(data['hi']) if data.get('hi') is not None else None,
-                                refs=data.get('refs'),
-                                who=data.get('who'),
-                                why=data.get('why'),
-                                url=data.get('url'),
-                                tags=data.get('tags'),
-                                use=data.get('use'),
-                                big=data.get('big'),
-                                where_=data.get('where_'),
-                            )
-                            events.append(event)
-                        except json.JSONDecodeError:
-                            # Skip corrupted lines
-                            continue
-            except Exception as e:
-                print(f"Error reading journal: {e}")
-        
-        return events
-    
-    def append(self, event: Event) -> None:
-        """Append an event to the journal."""
-        with self._lock:
-            # Read existing events
-            existing = self.read_events()
-            
-            # Append new event
-            events = existing + [event]
-            
-            # Write back
-            with open(self.path, 'w', encoding='utf-8') as f:
-                for e in events:
-                    data = {
-                        'at': e.at,
-                        'kind': e.kind,
-                    }
-                    if e.id:
-                        data['id'] = e.id
-                    if e.text:
-                        data['text'] = e.text
-                    if e.value is not None:
-                        data['value'] = e.value
-                    if e.hi is not None:
-                        data['hi'] = e.hi
-                    if e.refs:
-                        data['refs'] = e.refs
-                    if e.who:
-                        data['who'] = e.who
-                    if e.why:
-                        data['why'] = e.why
-                    if e.url:
-                        data['url'] = e.url
-                    if e.tags:
-                        data['tags'] = e.tags
-                    if e.use is not None:
-                        data['use'] = e.use
-                    if e.big is not None:
-                        data['big'] = e.big
-                    if e.where_:
-                        data['where_'] = e.where_
-                    
-                    f.write(json.dumps(data, ensure_ascii=False) + '\n')
-    
-    def count(self) -> int:
-        """Return the number of events in the journal."""
-        return len(self.read_events())
-    
-    def get_events_since(self, since: float) -> List[Event]:
-        """Get events since a given timestamp."""
-        events = self.read_events()
-        return [e for e in events if e.at > since]
+                n = int(ident[1:])
+                if n > best:
+                    best = n
+            except ValueError:
+                pass
+    return letter + str(best + 1)
 
 
 class JournalTx:
+    """One read-then-write transaction on the journal, under its append lock.
+
+    begin() takes the lock; read() gives the journal's events plus what this transaction has
+    not written yet; append() queues a line; flush() writes the queued lines with one fsync
+    and keeps the lock; commit() flushes and releases; abort() drops the queue and releases.
+    The lock is re-entrant in-process, so a read inside a transaction (and a nested
+    transaction on the same file) does not wait for itself. Every raise between begin() and
+    commit() should be followed by abort(); a process that exits drops the lock anyway.
     """
-    Transaction for journal writes.
-    
-    Provides a transactional interface where begin() starts a transaction
-    and commit() writes all events atomically.
-    """
-    
-    def __init__(self, journal: Journal):
-        self.journal = journal
-        self.events: List[Event] = []
-    
+
+    def __init__(self, path: str) -> None:
+        self.path: str = path
+        self.pending: list[Event] = []
+        self.held: bool = False
+
     def begin(self) -> None:
-        """Begin a new transaction."""
-        self.events = []
-    
-    def append(self, event: Event) -> None:
-        """Add an event to the transaction."""
-        self.events.append(event)
-    
-    def commit(self) -> None:
-        """Commit the transaction, writing all events atomically."""
-        if not self.events:
+        """Takes the lock. The journal's folder is created if it is missing."""
+        if self.held:
             return
-        
-        # Read existing events
-        existing = self.journal.read_events()
-        
-        # Append new events
-        new_events = existing + self.events
-        
-        # Write back atomically using temp file
-        temp_path = self.journal.path.with_suffix('.tmp')
-        try:
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                for e in new_events:
-                    data = {
-                        'at': e.at,
-                        'kind': e.kind,
-                    }
-                    if e.id:
-                        data['id'] = e.id
-                    if e.text:
-                        data['text'] = e.text
-                    if e.value is not None:
-                        data['value'] = e.value
-                    if e.hi is not None:
-                        data['hi'] = e.hi
-                    if e.refs:
-                        data['refs'] = e.refs
-                    if e.who:
-                        data['who'] = e.who
-                    if e.why:
-                        data['why'] = e.why
-                    if e.url:
-                        data['url'] = e.url
-                    if e.tags:
-                        data['tags'] = e.tags
-                    if e.use is not None:
-                        data['use'] = e.use
-                    if e.big is not None:
-                        data['big'] = e.big
-                    if e.where_:
-                        data['where_'] = e.where_
-                    
-                    f.write(json.dumps(data, ensure_ascii=False) + '\n')
-            
-            # Atomic rename
-            temp_path.rename(self.journal.path)
-        except Exception:
-            # Clean up temp file on failure
-            try:
-                temp_path.unlink()
-            except:
-                pass
-            raise
-    
+        _edge_status(journal_lock.acquire(self.path), "")
+        self.held = True
+
+    def read(self) -> list[Event]:
+        """The journal's events in file order, then the queued lines.
+
+        Readers take no lock (Journal.read), so a read inside a transaction is the same as
+        one outside it.
+        """
+        events = Journal(self.path).read()
+        events.extend(e.copy() for e in self.pending)
+        return events
+
+    def append(self, e: Event) -> None:
+        """Queues one line. Nothing is written until flush or commit."""
+        if not self.held:
+            raise ValueError("journal: a line was queued outside a transaction")
+        self.pending.append(e)
+
+    def flush(self) -> None:
+        """Writes the queued lines, in order, with one fsync. The lock stays held."""
+        if len(self.pending) == 0:
+            return
+        if not self.held:
+            raise ValueError("journal: lines were written outside a transaction")
+        text = "".join(serialize_event(e) + "\n" for e in self.pending)
+        _edge_status(journal_lock.append_durable(self.path, text), "")
+        self.pending = []
+
+    def commit(self) -> None:
+        """Flushes and releases the lock."""
+        self.flush()
+        self.release()
+
     def abort(self) -> None:
-        """Abort the transaction, discarding all changes."""
-        self.events = []
+        """Drops the queued lines and releases the lock. Safe to call twice."""
+        self.pending = []
+        self.release()
+
+    def release(self) -> None:
+        if not self.held:
+            return
+        self.held = False
+        _edge_status(journal_lock.release(self.path), "")
 
 
-def event_from_dict(data: dict) -> Event:
-    """Create an Event from a dictionary."""
-    return Event(
-        at=float(data['at']),
-        kind=data.get('kind', ''),
-        id=data.get('id'),
-        text=data.get('text'),
-        value=float(data['value']) if data.get('value') is not None else None,
-        hi=float(data['hi']) if data.get('hi') is not None else None,
-        refs=data.get('refs'),
-        who=data.get('who'),
-        why=data.get('why'),
-        url=data.get('url'),
-        tags=data.get('tags'),
-        use=data.get('use'),
-        big=data.get('big'),
-        where_=data.get('where_'),
-    )
+class Journal:
+    """The journal file at a path. Reads whole, appends one line at a time."""
+
+    def __init__(self, path: str) -> None:
+        self.path: str = path
+
+    def read(self) -> list[Event]:
+        """Every event, in file order.
+
+        A missing file is an empty journal, and nothing is created. Readers take no lock: a
+        writer appends whole lines, so the only line a reader can see half written is the
+        last one, which has no newline yet. It is left out here and read by the next call.
+        A complete line that does not parse is still an error.
+        """
+        events: list[Event] = []
+        if not os.path.exists(self.path):
+            return events
+        with open(self.path, "rb") as fh:
+            data = fh.read()
+        last = data.rfind(b"\n")
+        kept = data[: last + 1]
+        text = kept.decode("utf-8")
+        for raw in text.split("\n"):
+            line = raw
+            if line.endswith("\r"):
+                line = line[:-1]
+            if len(line) == 0:
+                continue
+            events.append(parse_event(line))
+        return events
+
+    def append(self, e: Event) -> None:
+        """Append one line under the lock, with an fsync.
+
+        For a read-then-append, use a JournalTx instead, so the id is minted under the same
+        lock.
+        """
+        tx = JournalTx(self.path)
+        tx.begin()
+        try:
+            tx.append(e)
+            tx.commit()
+        except BaseException:
+            tx.abort()
+            raise
+
+
+__all__ = [
+    "Event",
+    "Journal",
+    "JournalTx",
+    "directory_of",
+    "next_id_of",
+    "parse_event",
+    "serialize_event",
+]

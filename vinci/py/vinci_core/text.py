@@ -1,188 +1,234 @@
+"""Text helpers for command output, plus the decimal digits that num and the JSON writer need.
+
+Column widths and cuts count UTF-16 units, the unit the existing output was laid out in,
+and the code below counts the same way where that matters.
+
+Port of mojo/src/text.mojo.
 """
-Text utilities for vinci.
-"""
 
-import re
-from datetime import datetime, timedelta
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .timeutil import (
+    DAYS_0001_TO_1970,
+    TICKS_PER_DAY,
+    TICKS_PER_HOUR,
+    TICKS_PER_MINUTE,
+    Instant,
+    ascii_prefix,
+    civil_from_days,
+    trimmed_length,
+    zero_pad,
+)
 
 
-def ascii_tail(s: str, n: int) -> str:
-    """Substring from index n to end."""
-    return s[n:] if n >= 0 else s
+@dataclass(frozen=True)
+class Digits:
+    """A decimal value: 0.digits times 10 to the power point. Zero has no digits."""
+
+    negative: bool
+    digits: str
+    point: int
+
+
+def utf16_units(cp: int) -> int:
+    """How many UTF-16 units a code point takes: 2 for a surrogate pair."""
+    return 2 if cp >= 0x10000 else 1
+
+
+def utf8_code_points(s: str) -> list[int]:
+    """The code points of a string. Python strings are always valid, so nothing is refused."""
+    return [ord(ch) for ch in s]
+
+
+def utf16_length(s: str) -> int:
+    """The length of the text in UTF-16 units."""
+    return sum(utf16_units(cp) for cp in utf8_code_points(s))
+
+
+def code_points_to_string(cps: list[int]) -> str:
+    return "".join(chr(cp) for cp in cps)
+
+
+def pad_right(s: str, width: int) -> str:
+    """Left-aligned: spaces after, never cut. Width counts UTF-16 units."""
+    return s + " " * (width - utf16_length(s))
 
 
 def truncate_div(a: int, b: int) -> int:
-    """Integer division truncating toward zero."""
-    return int(a / b)
-
-
-def num(value: float) -> str:
-    """Format a number with decimal digits."""
-    if value == int(value):
-        return str(int(value))
-    return f"{value:.1f}"
+    """Integer division rounding toward zero. Python's // floors."""
+    q = a // b
+    if q < 0 and q * b != a:
+        q += 1
+    return q
 
 
 def span(ticks: int) -> str:
-    """Format ticks as human-readable span."""
-    from .timeutil import TICKS_PER_MINUTE, TICKS_PER_HOUR, TICKS_PER_DAY
-    
-    if ticks < 0:
-        return "-"
-    
+    """Text.Span: days and hours, hours and minutes, or whole minutes.
+
+    Each unit is truncated toward zero. Only a span of at least a day or an hour gets the
+    bigger form, so a negative span always prints in minutes.
+    """
     if ticks >= TICKS_PER_DAY:
         days = ticks // TICKS_PER_DAY
-        remainder = ticks % TICKS_PER_DAY
-        if remainder == 0:
-            return f"{days}d"
-        return f"{days}d{remainder // TICKS_PER_HOUR}h"
-    
+        hours = (ticks // TICKS_PER_HOUR) % 24
+        return f"{days}d{hours}h"
     if ticks >= TICKS_PER_HOUR:
         hours = ticks // TICKS_PER_HOUR
-        remainder = ticks % TICKS_PER_HOUR
-        if remainder == 0:
-            return f"{hours}h"
-        return f"{hours}h{remainder // TICKS_PER_MINUTE}m"
-    
-    if ticks >= TICKS_PER_MINUTE:
-        minutes = ticks // TICKS_PER_MINUTE
-        remainder = ticks % TICKS_PER_MINUTE
-        if remainder == 0:
-            return f"{minutes}m"
-        return f"{minutes}m{remainder}s"
-    
-    return f"{ticks}s"
+        minutes = (ticks // TICKS_PER_MINUTE) % 60
+        return f"{hours}h{minutes}m"
+    return f"{truncate_div(ticks, TICKS_PER_MINUTE)}m"
 
 
-def decimal_digits(value: float) -> tuple:
-    """Get decimal digits of a float: (sign, digits, point)."""
-    negative = value < 0
-    if negative:
-        value = -value
-    
-    # Split into integer and decimal parts
-    int_part = int(value)
-    dec_part = value - int_part
-    
-    # Convert to string and split
-    s = f"{int_part}.{dec_part:.15f}".rstrip('0')
-    if '.' in s:
-        int_str, dec_str = s.split('.')
-    else:
-        int_str, dec_str = s, ""
-    
-    # Handle zero case
-    if int_str == "0" and not dec_str:
-        int_str, dec_str = "0", "0"
-    
-    digits = int_str + dec_str
-    point = len(int_str)
-    
-    return (negative, digits, point)
+def clip(s: str, max_units: int) -> str:
+    """At most max UTF-16 units, the last one replaced by an ellipsis.
+
+    The cut is at a UTF-16 index. A cut that falls between the two halves of a surrogate
+    pair leaves a lone surrogate, which prints as U+FFFD, so this does the same.
+    """
+    cps = utf8_code_points(s)
+    total = sum(utf16_units(cp) for cp in cps)
+    if total <= max_units:
+        return s
+    if max_units < 1:
+        raise ValueError("clip: max must be at least 1")
+    keep = max_units - 1
+    kept: list[int] = []
+    used = 0
+    for cp in cps:
+        units = utf16_units(cp)
+        if used + units <= keep:
+            kept.append(cp)
+            used += units
+        else:
+            if used < keep:
+                kept.append(0xFFFD)
+            break
+    kept.append(0x2026)
+    return code_points_to_string(kept)
 
 
-def round_half_up(value: float, point: int, digits: int) -> float:
-    """Round to specified decimal place using round half up."""
-    multiplier = 10 ** (digits - point)
-    return round(value * multiplier) / multiplier
+def day(at: Instant) -> str:
+    """Text.Day: the calendar date in the instant's own offset, yyyy-MM-dd."""
+    days = at.local_ticks() // TICKS_PER_DAY
+    date = civil_from_days(days - DAYS_0001_TO_1970)
+    return f"{zero_pad(date.year, 4)}-{zero_pad(date.month, 2)}-{zero_pad(date.day, 2)}"
 
 
-def fixed_text(value: float) -> str:
-    """Format a value with fixed decimal places."""
-    if value == int(value):
-        return str(int(value))
-    return f"{value:.1f}"
+def decimal_digits(v: float) -> Digits:
+    """The shortest digits that round-trip to v.
+
+    Python's repr(float) is shortest round-trip, so this reads its digits and exponent back out.
+    """
+    if v != v or v in (float("inf"), float("-inf")):
+        raise ValueError("decimal: value is not finite")
+    text = repr(v)
+    negative = False
+    i = 0
+    if text and text[0] == "-":
+        negative = True
+        i = 1
+    all_digits: list[str] = []
+    int_count = 0
+    seen_point = False
+    exp = 0
+    while i < len(text):
+        c = text[i]
+        if "0" <= c <= "9":
+            all_digits.append(c)
+            if not seen_point:
+                int_count += 1
+        elif c == ".":
+            seen_point = True
+        elif c in "eE":
+            j = i + 1
+            exp_negative = False
+            if j < len(text) and text[j] in "+-":
+                exp_negative = text[j] == "-"
+                j += 1
+            if j >= len(text):
+                raise ValueError("decimal: bad exponent")
+            value = 0
+            while j < len(text):
+                d = text[j]
+                if not ("0" <= d <= "9"):
+                    raise ValueError("decimal: bad exponent")
+                value = value * 10 + (ord(d) - 48)
+                j += 1
+            exp = -value if exp_negative else value
+            break
+        else:
+            raise ValueError("decimal: unexpected character")
+        i += 1
+    point = int_count + exp
+    # Drop leading zeros: each one moves the point left by one place.
+    start = 0
+    while start < len(all_digits) and all_digits[start] == "0":
+        start += 1
+        point -= 1
+    body = "".join(all_digits[start:])
+    digits = ascii_prefix(body, trimmed_length(body))
+    if len(digits) == 0:
+        point = 0
+    return Digits(negative, digits, point)
 
 
-def pad_right(s: str, n: int) -> str:
-    """Pad string to width n on the right."""
-    return s.rjust(n)
+def round_half_up(digits: str, point: int, keep: int) -> Digits:
+    """Keep the first keep digits, rounding half up on the next digit.
+
+    keep counts from the first digit, so keep = point + 2 keeps two decimals.
+    """
+    if keep >= len(digits):
+        return Digits(False, digits, point)
+    if keep < 0:
+        return Digits(False, "", 0)
+    round_up = digits[keep] >= "5"
+    kept = list(digits[:keep])
+    if not round_up:
+        body = "".join(kept)
+        return Digits(False, ascii_prefix(body, trimmed_length(body)), point)
+    # Add one to the last kept digit, carrying leftwards.
+    k = len(kept) - 1
+    while k >= 0 and kept[k] == "9":
+        kept[k] = "0"
+        k -= 1
+    if k < 0:
+        # All nines (or nothing kept): the result is a single 1 one place higher.
+        return Digits(False, "1", point + 1)
+    kept[k] = chr(ord(kept[k]) + 1)
+    body = "".join(kept)
+    return Digits(False, ascii_prefix(body, trimmed_length(body)), point)
 
 
-def ascii_lower(s: str) -> str:
-    """Convert to lowercase (ASCII only)."""
-    return s.lower()
+def fixed_text(d: Digits) -> str:
+    """Plain decimal notation with no exponent, from digits and point."""
+    out = "-" if d.negative else ""
+    if len(d.digits) == 0:
+        return out + "0"
+    n = len(d.digits)
+    if d.point <= 0:
+        return out + "0." + "0" * (-d.point) + d.digits
+    if d.point >= n:
+        return out + d.digits + "0" * (d.point - n)
+    return out + d.digits[: d.point] + "." + d.digits[d.point :]
 
 
-def day(instant: float) -> str:
-    """Format an instant as a day string."""
-    dt = datetime.fromtimestamp(instant)
-    return dt.strftime("%Y-%m-%d")
+def num(v: float) -> str:
+    """A number with at most two decimals, like "0.##" in an invariant culture.
 
-
-def minutes_to_ticks(minutes: float) -> int:
-    """Convert minutes to ticks (100ns units)."""
-    from .timeutil import TICKS_PER_MINUTE
-    return int(minutes * TICKS_PER_MINUTE)
-
-
-def add_days(instant: float, days: float) -> float:
-    """Add days to an instant timestamp."""
-    dt = datetime.fromtimestamp(instant)
-    new_dt = dt + timedelta(days=days)
-    return new_dt.timestamp()
-
-
-def parse_instant(text: str) -> tuple:
-    """Parse an ISO 8601 instant string."""
-    try:
-        dt = datetime.fromisoformat(text.replace('Z', '+00:00'))
-        return (dt.timestamp(), dt.utcoffset().total_seconds() / 60)
-    except ValueError:
-        raise ValueError(f"Invalid instant: {text}")
-
-
-def local_now() -> tuple:
-    """Get current local time as instant."""
-    import time
-    import os
-    
-    unix_ticks = int(time.time_ns()) // 100
-    offset_minutes = int(os.environ.get('TZ', '0') or time.tzname[0])
-    
-    # Simplified: use wall clock offset
-    try:
-        gmtoff = os.popen('date +%s%z').read().strip()
-        if len(gmtoff) >= 3:
-            sign = 1 if gmtoff[0] in '+-' else -1 if gmtoff[0] == '-' else 1
-            offset_seconds = int(gmtoff.replace(':', '')) * sign
-            offset_minutes = offset_seconds // 60
-    except:
-        offset_minutes = 0
-    
-    return (unix_ticks + 3155378975999999999, offset_minutes)  # Approximation
-
-
-def required_value(value: float) -> float:
-    """A field the event must carry."""
-    if value is None:
-        raise ValueError("event is missing its value")
-    return value
-
-
-def format_duration(ticks: int) -> str:
-    """Format a duration as human-readable."""
-    from .timeutil import TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE
-    
-    if ticks < 0:
-        return "-"
-    
-    days = ticks // TICKS_PER_DAY
-    hours = (ticks % TICKS_PER_DAY) // TICKS_PER_HOUR
-    minutes = (ticks % TICKS_PER_HOUR) // TICKS_PER_MINUTE
-    seconds = ticks % TICKS_PER_MINUTE
-    
-    parts = []
-    if days > 0:
-        parts.append(f"{days}d")
-    if hours > 0:
-        parts.append(f"{hours}h")
-    if minutes > 0:
-        parts.append(f"{minutes}m")
-    if seconds > 0 and not parts:
-        parts.append(f"{seconds}s")
-    
-    if not parts:
-        return "0s"
-    
-    return "".join(parts)
+    The double is taken at its 15 most significant digits, rounded half up at two decimals,
+    and trailing zeros are dropped. Negative values keep their sign even when they round to
+    zero, so -0.001 is "-0".
+    """
+    if v != v:
+        return "NaN"
+    if v == float("inf"):
+        return "Infinity"
+    if v == float("-inf"):
+        return "-Infinity"
+    d = decimal_digits(v)
+    fifteen = round_half_up(d.digits, d.point, 15)
+    two = round_half_up(fifteen.digits, fifteen.point, fifteen.point + 2)
+    two = Digits(d.negative, two.digits, two.point)
+    return fixed_text(two)

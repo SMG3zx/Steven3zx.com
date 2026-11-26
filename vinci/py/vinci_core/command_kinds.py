@@ -1,216 +1,84 @@
+"""Every command the vinci binary dispatches, classified as writing the journal or not.
+
+This table is the one place that says what a command may do to the journal. The chat's
+`journal` tool reads it twice: a command that is not a journal command (route is True, or the
+word is unknown) is refused without running, and a command that writes is gated by the
+person's yes once untrusted text is in the conversation (chat_gate.py).
+
+Port of mojo/src/command_kinds.mojo.
 """
-Command kinds for routing and analysis.
-"""
 
-from typing import Dict, List, Optional
-from enum import Enum
+from __future__ import annotations
 
-
-class CommandKind(str, Enum):
-    """Categories of commands."""
-    IDEA = "idea"
-    KNOWLEDGE = "knowledge"
-    OPS = "ops"
-    INDEX = "index"
-    FEED = "feed"
-    PORTAL = "portal"
-    
-    # Specific commands
-    CHAT = "chat"
-    SERVE = "serve"
-    
-    # Idea commands
-    IDEA_CREATE = "idea"
-    FOR = "for"
-    GOAL = "goal"
-    REQ = "req"
-    CUT = "cut"
-    ADVANCE = "advance"
-    ADOPT = "adopt"
-    HOME = "home"
-    WATCH = "watch"
-    UNWATCH = "unwatch"
-    WATCHES = "watches"
-    SPENT = "spent"
-    SHIP = "ship"
-    USED = "used"
-    TEND = "tend"
-    RETIRE = "retire"
-    IDEAS = "ideas"
-    PIPELINE = "pipeline"
-    NEXT = "next"
-    SHOW = "show"
-    
-    # Knowledge commands
-    NOTE = "note"
-    SOURCE = "source"
-    LINK = "link"
-    LOG = "log"
-    SPEC = "spec"
-    ISSUE = "issue"
-    DIAGNOSE = "diagnose"
-    PRINCIPLE = "principle"
-    PREDICT = "predict"
-    RESULT = "result"
-    COMMITMENT = "commit"
-    KEPT = "kept"
-    MISSED = "missed"
-    REVIEW = "review"
-    SHOW_IDEA = "show_idea"
-    
-    # Ops commands
-    BACKUP = "backup"
-    VERIFY = "verify"
-    MEMORY = "memory"
-    
-    # Index commands
-    INDEX_BUILD = "index"
-    OPEN = "open"
-    RECALL = "recall"
-    
-    # Feed commands
-    FEED_RUN = "feed"
-    FEED_ACTIVITY = "activity"
-    
-    # Portal commands
-    PORTAL_BOOKMARK = "bookmark"
-    PORTAL_UNBOOKMARK = "unbookmark"
+from dataclasses import dataclass
 
 
-# Map all commands to their categories
-COMMAND_TO_KIND: Dict[str, CommandKind] = {
-    # Chat and routing
-    "chat": CommandKind.CHAT,
-    "serve": CommandKind.SERVE,
-    
-    # Idea commands
-    "idea": CommandKind.IDEA_CREATE,
-    "for": CommandKind.FOR,
-    "goal": CommandKind.GOAL,
-    "req": CommandKind.REQ,
-    "cut": CommandKind.CUT,
-    "advance": CommandKind.ADVANCE,
-    "adopt": CommandKind.ADOPT,
-    "home": CommandKind.HOME,
-    "watch": CommandKind.WATCH,
-    "unwatch": CommandKind.UNWATCH,
-    "watches": CommandKind.WATCHES,
-    "spent": CommandKind.SPENT,
-    "ship": CommandKind.SHIP,
-    "used": CommandKind.USED,
-    "tend": CommandKind.TEND,
-    "retire": CommandKind.RETIRE,
-    "ideas": CommandKind.IDEAS,
-    "pipeline": CommandKind.PIPELINE,
-    "next": CommandKind.NEXT,
-    "show": CommandKind.SHOW,
-    "show_idea": CommandKind.SHOW_IDEA,
-    
-    # Knowledge commands
-    "note": CommandKind.NOTE,
-    "source": CommandKind.SOURCE,
-    "link": CommandKind.LINK,
-    "log": CommandKind.LOG,
-    "spec": CommandKind.SPEC,
-    "issue": CommandKind.ISSUE,
-    "diagnose": CommandKind.DIAGNOSE,
-    "principle": CommandKind.PRINCIPLE,
-    "predict": CommandKind.PREDICT,
-    "result": CommandKind.RESULT,
-    "commit": CommandKind.COMMITMENT,
-    "kept": CommandKind.KEPT,
-    "missed": CommandKind.MISSED,
-    "review": CommandKind.REVIEW,
-    
-    # Ops commands
-    "backup": CommandKind.BACKUP,
-    "verify": CommandKind.VERIFY,
-    "memory": CommandKind.MEMORY,
-    
-    # Index commands
-    "index": CommandKind.INDEX_BUILD,
-    "open": CommandKind.OPEN,
-    "recall": CommandKind.RECALL,
-    
-    # Feed commands
-    "feed": CommandKind.FEED_RUN,
-    
-    # Portal commands
-    "bookmark": CommandKind.PORTAL_BOOKMARK,
-    "unbookmark": CommandKind.PORTAL_UNBOOKMARK,
-}
+@dataclass(frozen=True)
+class CommandKind:
+    """One command word, whether it writes the journal, and whether it is routed."""
+
+    name: str
+    writes: bool
+    route: bool
 
 
-def find_command(cmd: str) -> int:
-    """
-    Find if a command is recognized.
-    
-    Returns:
-        Index into COMMAND_TO_KIND if found, -1 otherwise.
-    """
-    return COMMAND_TO_KIND.get(cmd, -1)
+def command_table() -> list[CommandKind]:
+    """The table. A journal command is dispatched by dispatch_ideas, dispatch_knowledge or
+    dispatch_ops (vinci.py runs them in that order); a route is handled before the journal."""
+
+    def c(name: str, writes: bool, route: bool = False) -> CommandKind:
+        return CommandKind(name, writes, route)
+
+    return [
+        # cmd_ideas.py: dispatch_ideas
+        c("idea", True), c("for", True), c("goal", True), c("req", True), c("cut", True),
+        c("advance", True), c("adopt", True), c("home", True), c("watch", True),
+        c("unwatch", True), c("watches", False), c("spent", True), c("ship", True),
+        c("used", True), c("tend", True), c("retire", True), c("ideas", False),
+        c("pipeline", False), c("next", False),
+        # cmd_knowledge.py: dispatch_knowledge
+        c("bookmark", True), c("unbookmark", True), c("bookmarks", False), c("source", True),
+        c("note", True), c("link", True), c("notes", False), c("tags", False),
+        c("sources", False), c("show", False), c("predict", True), c("result", True),
+        c("predictions", False), c("log", True), c("spec", True), c("stats", False),
+        # cmd_ops.py: dispatch_ops
+        c("help", False), c("--help", False), c("-h", False), c("path", False),
+        c("sync", True), c("issue", True), c("diagnose", True), c("principle", True),
+        c("issues", False), c("principles", False), c("commit", True), c("kept", True),
+        c("missed", True), c("review", True),
+        # vinci.py: routed before the journal is read
+        c("chat", True, True), c("serve", False, True), c("index", False, True),
+        c("feed", False, True), c("recall", False, True), c("open", False, True),
+        c("memory", False, True), c("backup", False, True), c("verify", False, True),
+    ]
 
 
-def command_writes_journal(cmd: str) -> bool:
-    """
-    Check if a command writes to the journal.
-    
-    Commands that write to the journal:
-    - idea, for, goal, req, cut, advance, adopt, home, watch, unwatch,
-      spent, ship, used, tend, retire, note, source, link, log, spec,
-      issue, diagnose, principle, predict, result, commit, kept, missed
-    """
-    writers = {
-        "idea", "for", "goal", "req", "cut", "advance", "adopt", "home",
-        "watch", "unwatch", "spent", "ship", "used", "tend", "retire",
-        "note", "source", "link", "log", "spec", "issue", "diagnose",
-        "principle", "predict", "result", "commit", "kept", "missed",
-        "bookmark", "unbookmark",
-    }
-    return cmd in writers
+def find_command(name: str) -> int:
+    """The index of name in command_table(), or -1 when it is not a command."""
+    for i, k in enumerate(command_table()):
+        if k.name == name:
+            return i
+    return -1
 
 
-def is_idea_command(cmd: str) -> bool:
-    """Check if command is an idea-related command."""
-    return cmd in {
-        "idea", "for", "goal", "req", "cut", "advance", "adopt", "home",
-        "watch", "unwatch", "watches", "spent", "ship", "used", "tend",
-        "retire", "ideas", "pipeline", "next", "show"
-    }
+def command_writes_journal(name: str) -> bool:
+    """True when the command appends journal lines. An unknown word counts as a write, so
+    the chat asks before it can do anything."""
+    i = find_command(name)
+    if i < 0:
+        return True
+    return command_table()[i].writes
 
 
-def is_knowledge_command(cmd: str) -> bool:
-    """Check if command is a knowledge-related command."""
-    return cmd in {
-        "note", "source", "link", "log", "spec", "issue", "diagnose",
-        "principle", "predict", "result", "commit", "kept", "missed",
-        "review", "show_idea"
-    }
+def chat_runs(name: str) -> bool:
+    """True when the chat's journal tool may run this word: a journal command in the table.
+    Anything else (a route, or a word the table does not know) is refused without running."""
+    i = find_command(name)
+    if i < 0:
+        return False
+    return not command_table()[i].route
 
 
-def is_ops_command(cmd: str) -> bool:
-    """Check if command is an operations command."""
-    return cmd in {
-        "backup", "verify", "memory",
-    }
-
-
-def is_index_command(cmd: str) -> bool:
-    """Check if command is an index command."""
-    return cmd in {
-        "index", "open", "recall",
-    }
-
-
-def is_feed_command(cmd: str) -> bool:
-    """Check if command is a feed command."""
-    return cmd in {
-        "feed",
-    }
-
-
-def is_portal_command(cmd: str) -> bool:
-    """Check if command is a portal command."""
-    return cmd in {
-        "bookmark", "unbookmark",
-    }
+def journal_command_words() -> list[str]:
+    """The words the journal dispatch handles, in table order."""
+    return [k.name for k in command_table() if not k.route]

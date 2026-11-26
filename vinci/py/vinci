@@ -1,0 +1,5 @@
+#!/bin/sh
+# The Python build of vinci, for the golden harnesses (mojo/difftest) and local runs.
+# Runs py/ from wherever it is installed or checked out; no uv needed.
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m vinci_cli "$@"
