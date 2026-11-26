@@ -1,0 +1,14 @@
+[Unit]
+Description=vinci inference service (chat on GPU, embeddings on CPU, one front door on 8080)
+After=network-online.target
+
+[Service]
+# Starts llama-server for the chat model (all layers on the GPU, 16k context) and the
+# embedding model (CPU), and serves both on 127.0.0.1:8080/v1. Settings: py/vinci_infer/config.py.
+WorkingDirectory=%h/Steven3zx.com/vinci/py
+ExecStart=/usr/bin/python3 -m vinci_infer serve
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
