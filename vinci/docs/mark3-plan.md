@@ -210,7 +210,7 @@ From the audit and this review, in order of safety:
 - **Delete now:** `tune_results/scratch/memory.env.bak` (holds the Neo4j password keys; now git-ignored, deletion pending approval); the untracked `.gitea/workflows/portal-ci.yml` (points at a folder that is gone); `not_ported` and its exit-code branch; the stale `deploy/memory.service` header line in `~/.config/vinci/memory.env`.
 - **Delete after K0:** the C# oracle and `portal_truth/` with the generated entity tables (about 600 lines, replaced by golden files); `mojo/calibration/` (tag first; keep `attempt.sh` and the attempts-log format, because agent pass rate is a measure we still use).
 - **Delete from the plan:** the web queue, mail before evidence, activity text in default search, a reranker, an embedding fine-tune, Mojo GPU kernels, the summarize step.
-- **Stays, though it looks deletable:** `mojo/py/vinci_diff/` until goldens exist; `docs/mojo-gotchas.md`; the eval question files; the write gate; `Swift-Qwen3.8-27B_GGUF.py` (the 12 GB tuner, needed again by K3); the `memory` removed-command stub.
+- **Stays, though it looks deletable:** `py/vinci_diff/` until goldens exist; `docs/mojo-gotchas.md`; the eval question files; the write gate; `Swift-Qwen3.8-27B_GGUF.py` (the 12 GB tuner, needed again by K3); the `memory` removed-command stub.
 
 ## 7. What would change this plan
 

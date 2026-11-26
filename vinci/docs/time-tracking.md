@@ -47,7 +47,7 @@ Every time vinci runs, it first asks ActivityWatch which windows had the focus s
 
 ## How the port counts (M5 step b)
 
-The code is `mojo/src/track.mojo`, a port of `src/Tracker.cs`. Its reads from outside (the ActivityWatch query, `git log`, the machine's UTC offset, the case folding) are in `mojo/py/vinci_edge/track_edge.py`. Program.cs runs the tracker before any command that App.Run dispatches, so `vinci sync` and every other journal command write the same facts. The Mojo-only commands (`index`, `recall`, `open`, `feed`) and `serve` do not sync, since the C# had no such commands and `serve` returned before the tracker.
+The code is `py/vinci_core/track.py`, a port of `src/Tracker.cs`. Its reads from outside (the ActivityWatch query, `git log`, the machine's UTC offset, the case folding) are in `py/vinci_edge/track_edge.py`. Program.cs runs the tracker before any command that App.Run dispatches, so `vinci sync` and every other journal command write the same facts. The Mojo-only commands (`index`, `recall`, `open`, `feed`) and `serve` do not sync, since the C# had no such commands and `serve` returned before the tracker.
 
 The query is the C#'s own: window events intersected with the not-afk periods, and the afk record for the end of the period. The period starts at the last sync, or at the first watch or home when there has never been one.
 
@@ -66,10 +66,10 @@ These were measured with a fake ActivityWatch on a free port. Mojo matches each 
 
 ### Checks
 
-`mojo/py/vinci_diff/sync_diff.py` runs ten cases on the oracle and on Mojo, with the same clock, a fake ActivityWatch in-process (`fake_activitywatch.py`) or a closed port, and git repositories built with fixed dates. After every step it compares the exit code, stdout, stderr, the journal's bytes and the queries the server received:
+`py/vinci_diff/sync_diff.py` runs ten cases on the oracle and on Mojo, with the same clock, a fake ActivityWatch in-process (`fake_activitywatch.py`) or a closed port, and git repositories built with fixed dates. After every step it compares the exit code, stdout, stderr, the journal's bytes and the queries the server received:
 
 ```sh
-cd mojo/py && uv run python -m vinci_diff.sync_diff --candidate ../build/vinci
+cd py && uv run python -m vinci_diff.sync_diff --candidate ../vinci
 uv run python -m vinci_diff.sync_diff --list          # the cases
 ```
 

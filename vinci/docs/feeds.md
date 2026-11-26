@@ -11,7 +11,7 @@ vinci feed rebuild <journal|git|vaults|activity>    # drop the feed's records an
 
 `vinci help` does not list these yet, because its text is compared with the archived C# binary. Feeds write only the index. None of them writes the journal, and nothing runs them on a timer yet (M6).
 
-Code: `mojo/src/feed.mojo` (the feeds, their settings and one run), `feed_store.mojo` (the record contract and the store), `feed_git.mojo`, `feed_vaults.mojo`, `feed_activity.mojo` (the activity feed), `feed_edge.mojo` and `cmd_feed.mojo` (the command). The reads outside Mojo are in `mojo/py/vinci_edge/feed_edge.py` (and the ActivityWatch query in `track_edge.py`, shared with the tracker). Tests: `mojo/tests/test_feed_store.mojo`, `test_feed_git.mojo`, `test_feed_vaults.mojo`, `test_feed_run.mojo`, `test_feed_activity.mojo`.
+Code: `py/vinci_core/feed.py` (the feeds, their settings and one run), `feed_store.mojo` (the record contract and the store), `feed_git.mojo`, `feed_vaults.mojo`, `feed_activity.mojo` (the activity feed), `feed_edge.mojo` and `cmd_feed.mojo` (the command). The reads outside Mojo are in `py/vinci_edge/feed_edge.py` (and the ActivityWatch query in `track_edge.py`, shared with the tracker). Tests: `py/tests/test_feed_store.py`, `test_feed_git.mojo`, `test_feed_vaults.mojo`, `test_feed_run.mojo`, `test_feed_activity.mojo`.
 
 ## The contract
 
@@ -233,7 +233,7 @@ Personal set (60 questions, the journal's own):
 
 The default equals the journal-only run question by question. `all` is worse than the journal on this set: vault and commit text shares ordinary words with the personal questions, and feed scores in the merged list can outrank journal lines.
 
-Feed set (`mojo/eval/feed-questions.json`, 15 answerable questions, eight about commits and seven about notes; each expected string was checked by hand against its commit or file):
+Feed set (`py/eval/feed-questions.json`, 15 answerable questions, eight about commits and seven about notes; each expected string was checked by hand against its commit or file):
 
 | Sources | Hit (15) | Tokens mean |
 | --- | --- | --- |

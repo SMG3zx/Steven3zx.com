@@ -2,7 +2,7 @@
 
 vinci is a general-purpose knowledge partner. It helps you learn, remember and act on what you know. Every fact it keeps has a date and a source, and every answer points to the evidence it used. It also records your predictions and how they turned out, and it helps turn ideas into shipped work when you want that.
 
-Written in Mojo, with small Python edges for the model, the network and the HTTP server. The journal commands need nothing else and keep all their data in one file. There is no database: the search index is a SQLite file rebuilt from the journal. Chat needs a llama-server model (see [docs/chat.md](docs/chat.md)).
+Written in Python, with small edges for the model, the network and the HTTP server. The journal commands need nothing else and keep all their data in one file. There is no database: the search index is a SQLite file rebuilt from the journal. Chat needs a llama-server model (see [docs/chat.md](docs/chat.md)).
 
 ## Install
 

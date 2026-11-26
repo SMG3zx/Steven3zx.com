@@ -4,7 +4,7 @@ Every path that writes the journal, the index or a file under `$VINCI_HOME`, the
 
 Gate terms: **none** (runs without asking); **y/N** (the chat asks once a write is requested after untrusted text entered the conversation; anything but y or yes is no, and end of input is no); **human only** (a command the person types, with no model between).
 
-The journal command classes are in one table, `mojo/src/command_kinds.mojo`. A unit test (`mojo/tests/test_command_kinds.mojo`) fails when a command the dispatch sources compare with is missing from it, or the table names one they do not.
+The journal command classes are in one table, `py/vinci_core/command_kinds.py`. A unit test (`py/tests/test_command_kinds.py`) fails when a command the dispatch sources compare with is missing from it, or the table names one they do not.
 
 ## The table
 
@@ -29,7 +29,7 @@ The journal command classes are in one table, `mojo/src/command_kinds.mojo`. A u
 
 ## The read tool's boundary (changed in K0b)
 
-Before K0b, `read` accepted any `.md` or `.txt` on disk and any `http` or `https` address, including loopback services such as the model server and the portal. Now (`mojo/py/vinci_edge/read_guard.py`):
+Before K0b, `read` accepted any `.md` or `.txt` on disk and any `http` or `https` address, including loopback services such as the model server and the portal. Now (`py/vinci_edge/read_guard.py`):
 
 - **Files** must be under the account's home folder (from the password database, not `$HOME`), with `..` and symbolic links resolved first, and not under `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config`, `~/.local/share/keyrings`, `~/.claude`, or `$VINCI_HOME/backups`.
 - **Web addresses** must be `http` or `https`. Every address the name resolves to must be public: loopback, link-local, private (RFC 1918 and unique-local), unspecified, multicast and non-global addresses are refused, and an IPv4-mapped IPv6 address is judged by its IPv4 part.

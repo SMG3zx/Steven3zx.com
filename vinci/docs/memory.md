@@ -19,7 +19,7 @@ The gate for mark 2's memory work. Both sets were run on 2026-11-16, with the me
 Two sets. Recall is scored, not answers: a question passes when the right evidence comes back, not when a model writes a good answer.
 
 - **Personal set.** `~/.vinci/eval/journal-questions-v2.json`: 60 questions written from the journal alone. No service was queried while writing them. The mix is 26 single, 12 temporal, 10 multihop and 12 abstain. It keeps the old 26 questions unchanged, which the baseline calls `v1-26`. sha256 `51e7735024eabc38d32f2994f1fe0c3b4dbe5d3d92ad9a6b5e55592fd1bb2f95` (old 26-question set `fe970c1b8e16095e726fbeb75bf09dc517b6976cf80d1276e2cc4d3774edb702`). It holds personal data, so it stays outside the repo. A hit means every expected string appears in the top 10 results. Abstention is right when the abstain flag matches.
-- **LongMemEval subset.** 100 questions from `longmemeval_s_cleaned.json` (Hugging Face `xiaowu0162/longmemeval-cleaned`, 277,383,467 bytes, sha256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`), drawn with seed 20261117. The mix is 30 temporal-reasoning, 30 multi-session, 15 knowledge-update, 5 each of the three single-session types, and 10 abstention. The ids are in `mojo/eval/longmemeval-subset.json` (sha256 `75dce89e49ae16c8d26ef26fc2fbc6b0f76be36c50108a7a441500fe090449a7`). `cd mojo/py && uv run python -m vinci_eval.lme_subset --check` regenerates the subset and compares it.
+- **LongMemEval subset.** 100 questions from `longmemeval_s_cleaned.json` (Hugging Face `xiaowu0162/longmemeval-cleaned`, 277,383,467 bytes, sha256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`), drawn with seed 20261117. The mix is 30 temporal-reasoning, 30 multi-session, 15 knowledge-update, 5 each of the three single-session types, and 10 abstention. The ids are in `py/eval/longmemeval-subset.json` (sha256 `75dce89e49ae16c8d26ef26fc2fbc6b0f76be36c50108a7a441500fe090449a7`). `cd py && uv run python -m vinci_eval.lme_subset --check` regenerates the subset and compares it.
 
 Tokens are counted with the chat model's tokenizer (llama-server `/tokenize`).
 
@@ -50,7 +50,7 @@ For the answerable types, the abstention column counts questions the system answ
 
 ### LongMemEval, reference retriever
 
-Today's system was not run on LongMemEval. That would write about 50,000 turns into the live Neo4j store. Instead, the reference retriever (`mojo/py/vinci_eval/lme_baseline.py`) runs SQLite FTS5 BM25 over each question's own haystack, one row per turn. Sessions rank by their best turn. The vector baseline comes in M3, when the new index pays the embedding cost once.
+Today's system was not run on LongMemEval. That would write about 50,000 turns into the live Neo4j store. Instead, the reference retriever (`py/vinci_eval/lme_baseline.py`) runs SQLite FTS5 BM25 over each question's own haystack, one row per turn. Sessions rank by their best turn. The vector baseline comes in M3, when the new index pays the embedding cost once.
 
 Recall columns use the 90 answerable questions. The 10 abstention questions appear only in the last count column. Tokens cover the 10 returned turns for every question in the row, abstention questions included.
 
@@ -78,8 +78,8 @@ What the baseline shows:
 
 ### How to rerun (the personal baseline needs the removed memory service)
 
-- **LongMemEval reference baseline.** `cd mojo/py && uv run python -m vinci_eval.lme_baseline`. It takes minutes. It needs no service except llama-server for token counts. Without llama-server, the token counts fall back to length divided by 4, and the output records that.
-- **Personal baseline.** Start the memory service with `systemctl --user start memory.service`. The journal sync runs when `vinci chat` starts, so run `timeout 180 vinci chat < /dev/null` first to sync the journal. Then `cd mojo/py && uv run python -m vinci_eval.personal_baseline`. The script takes no options. Stop the service afterwards with `systemctl --user stop memory.service`.
+- **LongMemEval reference baseline.** `cd py && uv run python -m vinci_eval.lme_baseline`. It takes minutes. It needs no service except llama-server for token counts. Without llama-server, the token counts fall back to length divided by 4, and the output records that.
+- **Personal baseline.** Start the memory service with `systemctl --user start memory.service`. The journal sync runs when `vinci chat` starts, so run `timeout 180 vinci chat < /dev/null` first to sync the journal. Then `cd py && uv run python -m vinci_eval.personal_baseline`. The script takes no options. Stop the service afterwards with `systemctl --user stop memory.service`.
 - **Audit log.** `AUDIT_FILE` now points at `~/.vinci/memory-audit.jsonl`, out of `/tmp`, so the audit trail survives a reboot.
 
 ## Journal kinds for memory (mark 2)
@@ -125,7 +125,7 @@ Phase 1 of [the one-journal plan](history/plan-one-journal-one-index.md) (M3 ste
 
 ### The import
 
-`vinci memory import <snapshot.json>` in the Mojo binary (`mojo/src/memory_import.mojo`, run once; the command and the module were removed in M4e). The snapshot comes from `vinci memory backup`, which only reads Neo4j. Writing goes through the journal serializer. Each record is keyed by its `where`. A record whose `where` is already in the journal is skipped, so a second run appends nothing. Refs are written only when the id they name is in the journal now, which drops a copy's reference to an id from an older journal (one case in the snapshot).
+`vinci memory import <snapshot.json>` in the Mojo binary (`py/vinci_core/memory_import.py`, run once; the command and the module were removed in M4e). The snapshot comes from `vinci memory backup`, which only reads Neo4j. Writing goes through the journal serializer. Each record is keyed by its `where`. A record whose `where` is already in the journal is skipped, so a second run appends nothing. Refs are written only when the id they name is in the journal now, which drops a copy's reference to an id from an older journal (one case in the snapshot).
 
 Counts for the snapshot `personal-memory-2026-11-17T04-27-18-882Z.json` (1,512 nodes, 1,175 relationships), on a copy of the journal in staging:
 
@@ -155,7 +155,7 @@ vinci index embed [--label L] [--base-url U] [--cache PATH]   # vectors for fact
 vinci recall [--json] [--limit N] [--routes lexical,vector] [--index P] [--label L] [--base-url U] [--cache PATH] <query...>
 ```
 
-The index is `$VINCI_HOME/index.sqlite`, or `--index PATH`. None of these commands writes the journal. Code: `mojo/src/index_store.mojo` (schema, versioning), `index_build.mojo` (the mapping, the incremental build, the loader), `recall.mojo` (tokens, FTS5 query, routes), `cmd_index.mojo` (the commands). Tests: `mojo/tests/test_index_store.mojo`, `test_index_build.mojo`, `test_index_recall.mojo`.
+The index is `$VINCI_HOME/index.sqlite`, or `--index PATH`. None of these commands writes the journal. Code: `py/vinci_core/index_store.py` (schema, versioning), `index_build.mojo` (the mapping, the incremental build, the loader), `recall.mojo` (tokens, FTS5 query, routes), `cmd_index.mojo` (the commands). Tests: `py/tests/test_index_store.py`, `test_index_build.mojo`, `test_index_recall.mojo`.
 
 ### Schema (version 1)
 
@@ -305,7 +305,7 @@ vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]
 vinci recall --budget N [--whole N] [--tokenizer-url URL] [--json] <query...>
 ```
 
-Code: `mojo/src/handles.mojo` (ids, the handles table, the lookup), `open_view.mojo` (what `open` prints), `pack.mojo` (the packed context and the counters), `cmd_index.mojo` (the commands). Tests: `mojo/tests/test_open.mojo`, `test_pack.mojo`. The exact counter is `mojo/py/vinci_edge/llama_count.py`.
+Code: `py/vinci_core/handles.py` (ids, the handles table, the lookup), `open_view.mojo` (what `open` prints), `pack.mojo` (the packed context and the counters), `cmd_index.mojo` (the commands). Tests: `py/tests/test_open.py`, `test_pack.mojo`. The exact counter is `py/vinci_edge/llama_count.py`.
 
 ### Ids
 
@@ -344,7 +344,7 @@ Code: `mojo/src/handles.mojo` (ids, the handles table, the lookup), `open_view.m
 
 ### Measured: recall at budget (personal set, v2, 60 questions)
 
-`cd mojo/py && uv run python -m vinci_eval.index_eval --budget 100,150,250,500,1000,2000,3000,5000`. Routes lexical+vector, staging journal (342 lines), the estimator for tokens. The hit rate is over the 48 answerable questions, with the same test as the route runs: every expected string must be in the text that would be read. Written to `~/.vinci/eval/results/index-budget-2026-11-17.json`.
+`cd py && uv run python -m vinci_eval.index_eval --budget 100,150,250,500,1000,2000,3000,5000`. Routes lexical+vector, staging journal (342 lines), the estimator for tokens. The hit rate is over the 48 answerable questions, with the same test as the route runs: every expected string must be in the text that would be read. Written to `~/.vinci/eval/results/index-budget-2026-11-17.json`.
 
 | Read as | Hit | Hit % | Tokens mean | median | Whole | Pointers | Omitted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -379,7 +379,7 @@ Exact counts were checked on four questions at budgets 40, 100 and 180: llama-se
 Step 3b of [the one-journal plan](history/plan-one-journal-one-index.md), phase 3, item 3: does budgeted recall keep **answer** accuracy while spending fewer tokens? Recall numbers (3a) do not answer that. The sweep sends each packed context and the question to the chat model, and judges the reply. This section is the method; the results are in [m3-results.md](history/m3-results.md).
 
 ```sh
-cd mojo/py
+cd py
 uv run python -m vinci_eval.budget_sweep --limit-questions 3 --out SCRATCH.jsonl   # smoke test
 uv run python -m vinci_eval.budget_sweep --set both                                # full run, resumable
 uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/budget-sweep-<date>.jsonl
@@ -395,7 +395,7 @@ uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/b
 
 ## Chat (mark 2, M4a)
 
-`vinci` and `vinci chat` run in Mojo (`mojo/src/chat*.mojo`). The chat model is llama-server's `/v1/chat/completions` (`CHAT_BASE_URL`, default `http://127.0.0.1:8080/v1`; `CHAT_MODEL`, `CHAT_THINK=1`, `CHAT_HISTORY_CHARS`). Neo4j is not contacted: the journal and the index replace the memory service.
+`vinci` and `vinci chat` run in Mojo (`py/vinci_core/chat*.mojo`). The chat model is llama-server's `/v1/chat/completions` (`CHAT_BASE_URL`, default `http://127.0.0.1:8080/v1`; `CHAT_MODEL`, `CHAT_THINK=1`, `CHAT_HISTORY_CHARS`). Neo4j is not contacted: the journal and the index replace the memory service.
 
 ### Tools
 
@@ -406,7 +406,7 @@ uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/b
 | (up front) | before the first model call of each turn, `recall` runs on the person's own message, verbatim and packed the same way. Its result goes into the context as a recall call the model made, so its ids are evidence for the citation check. It prints nothing (see the M4 step d section) |
 | `open` | one id, with `lines=A-B` or `grep=word`. The whole output of one call is capped at 4,000 bytes, and a cut ends with a notice that says how many bytes were not shown and what to open next (`open <id> grep=<word>`, or `lines=` for one fact) |
 | `remember` | a `remember` line (`k<n>`, category as its tag), then an index update |
-| `read` | a text file (`.txt`, `.md`, `.markdown`) or a web page: passages go to `docs/<sha256>.md`, a `read` line (`d<n>`) points at it, then an index update. Web fetches and HTML-to-text are in `mojo/py/vinci_edge/reading_edge.py` |
+| `read` | a text file (`.txt`, `.md`, `.markdown`) or a web page: passages go to `docs/<sha256>.md`, a `read` line (`d<n>`) points at it, then an index update. Web fetches and HTML-to-text are in `py/vinci_edge/reading_edge.py` |
 
 Each exchange is written as an `exchange` line: the person's message always, the answer only when it is kept (below). Each write is followed by `vinci index update`, so the next recall sees it. A chat start runs the same update, which is what replaced `JournalSync`.
 
@@ -438,15 +438,15 @@ Once untrusted text has entered the conversation (the `read` tool ran, or a reca
 
 ### Tests
 
-- Unit: `mojo/tests/test_chat_cite.mojo` (citation scanning and the unseen check), `test_chat_gate.mojo` (writes, the gate, yes and no), `test_chat_open.mojo` (the cap, notice, multi-fact cut, grep), `test_chat_args.mojo` (action parsing, accessors, summary).
-- Differential: `cd mojo/py && uv run python -m vinci_diff.chat_diff` runs each script in `mojo/difftest/chat/*.json` against the C# oracle (`mojo/build/oracle/vinci chat`) and the Mojo chat. A fake llama-server (`vinci_diff/fake_llm.py`) replays the script's replies and records what the model was shown. The C# side is compared on stdout and on the journal lines it adds, with the Neo4j notices, the answer-not-saved line and the memory kinds (`exchange`, `remember`, `read`) left out, since those are by design. The Mojo side is checked against each script's expectations. `--show <name>` prints one Mojo transcript.
+- Unit: `py/tests/test_chat_cite.py` (citation scanning and the unseen check), `test_chat_gate.mojo` (writes, the gate, yes and no), `test_chat_open.mojo` (the cap, notice, multi-fact cut, grep), `test_chat_args.mojo` (action parsing, accessors, summary).
+- Differential: `cd py && uv run python -m vinci_diff.chat_diff` runs each script in `py/difftest/chat/*.json` against the C# oracle (`mojo/build/oracle/vinci chat`) and the Mojo chat. A fake llama-server (`vinci_diff/fake_llm.py`) replays the script's replies and records what the model was shown. The C# side is compared on stdout and on the journal lines it adds, with the Neo4j notices, the answer-not-saved line and the memory kinds (`exchange`, `remember`, `read`) left out, since those are by design. The Mojo side is checked against each script's expectations. `--show <name>` prints one Mojo transcript.
 
 ### Chat-loop evaluation (M4 step c)
 
 The M3 sweep answered from packed recall with no tools. This step measures the real chat loop (`vinci chat`, with recall, open and the rest) on the same questions, judged the same way, so the two can be compared. The full results are not in yet; the smoke run (3 questions per set, both configurations) is clean, see below.
 
 ```sh
-cd mojo/py
+cd py
 uv run python -m vinci_eval.chat_eval --limit-questions 3 --out SCRATCH.jsonl --transcripts DIR   # smoke
 uv run python -m vinci_eval.chat_eval --set both                                                  # full run, resumable
 uv run python -m vinci_eval.chat_eval --summary --out ~/.vinci/eval/results/chat-eval-<date>.jsonl
@@ -504,7 +504,7 @@ The first full evaluation (`chat-eval-2026-11-18.jsonl`) found three faults. Eac
 
 Question vectors: 30 gpu cache hits, 10 cpu-cached, 4 cpu-live, 0 lexical fallbacks over 20 conversations. The up-front recall is why the tool columns fell: most answers come from the packed recall alone. Ten questions per set is too few to read accuracy; the full run is the measurement.
 
-Gates: `make -C mojo check` passes; `chat_diff` 10 of 10; `vinci_diff` (`--generated 50 --seed 1`) 74 scenarios, 3633 of 3633 steps matching, 0 diverged (the M3 note's "683 of 683" was a smaller scenario set). `portal_diff` reports 22 diverged requests, all the same page: the portal's "links" count is 40 on the candidate and 39 on the oracle, because the portal scans local ports and one more local server now serves a page. The portal binary and portal code are unchanged, so this is the environment, not this change.
+Gates: `make -C py check` passes; `chat_diff` 10 of 10; `vinci_diff` (`--generated 50 --seed 1`) 74 scenarios, 3633 of 3633 steps matching, 0 diverged (the M3 note's "683 of 683" was a smaller scenario set). `portal_diff` reports 22 diverged requests, all the same page: the portal's "links" count is 40 on the candidate and 39 on the oracle, because the portal scans local ports and one more local server now serves a page. The portal binary and portal code are unchanged, so this is the environment, not this change.
 
 
 ## Fusion weights (M5 step d)
@@ -581,4 +581,4 @@ The default is `0.25:1, k=60` under scope=semantic. Its row is bold. The first t
 
 **Selection rule and what it touched.** The rule was written down before the grid was run: among settings that match or beat equal-weight RRF on LongMemEval (all@10 at least 94.4, any@10 at least 98.9) and on the feed set (at least 13/15 with 15/15 abstentions), choose the flat-region centre, then check personal (hit at least 36/48, abstention at least 49/60). The rule was applied to the first grid (scope=all) and found it passes on LongMemEval and the feed set, but not on personal, so no scope=all setting is the winner. Scope=semantic was added after the j-38 loss was seen, so the personal set was not a clean holdout for that variant. Its row was chosen by the same LongMemEval rule, and the personal set confirmed it. The gain is small, so treat it as a tie that leans one way, not as a large effect.
 
-Gates on the final default: `make -C mojo check` exit 0 (188 test lines ok, 0 errors, ruff and pyright clean; the fusion tests are 17 of 17). `vinci_diff --generated 50 --seed 1`: 3633 of 3633 steps, 0 diverged. `chat_diff` 10 of 10. `portal_diff` 136 of 136 requests, 0 diverged (the 22 divergences in the portal note above did not recur on this run). `sync_diff` 10 of 10.
+Gates on the final default: `make -C py check` exit 0 (188 test lines ok, 0 errors, ruff and pyright clean; the fusion tests are 17 of 17). `vinci_diff --generated 50 --seed 1`: 3633 of 3633 steps, 0 diverged. `chat_diff` 10 of 10. `portal_diff` 136 of 136 requests, 0 diverged (the 22 divergences in the portal note above did not recur on this run). `sync_diff` 10 of 10.
