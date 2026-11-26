@@ -1,0 +1,69 @@
+"""The portal's stylesheet, script and placeholder image, as text.
+
+Port of mojo/src/portal_assets.mojo. The text is the same bytes the Mojo build served.
+"""
+
+from __future__ import annotations
+
+
+
+def portal_css() -> str:
+    return """:root { --bg: #f6f7f9; --surface: #ffffff; --text: #1c1f24; --muted: #646b76; --border: #d9dde3; --accent: #2563eb; --accent-soft: #e6eefc; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --surface: #181b21; --text: #e6e8ec; --muted: #9aa3b0; --border: #2a2f38; --accent: #7aa7ff; --accent-soft: #1c2740; } }
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; line-height: 1.5; }
+.portal { max-width: 760px; margin: 0 auto; padding: 2rem 16px 4rem; }
+.portal header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.portal h1 { margin: 0; font-size: 1.75rem; }
+.count, .host, .description, .empty { color: var(--muted); }
+.count { margin: 0; font-size: 0.9rem; }
+.search { width: 100%; margin-top: 1.25rem; padding: 0.7rem 0.9rem; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0 1.5rem; }
+.tag { padding: 0.25rem 0.7rem; font: inherit; font-size: 0.85rem; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; }
+.tag.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.links { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.card { padding: 1rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.card a { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; color: var(--accent); text-decoration: none; font-weight: 600; }
+.card a:hover .title { text-decoration: underline; }
+.host { font-size: 0.85rem; font-weight: normal; }
+.preview { display: block; width: 100%; height: auto; margin-top: 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
+.description { margin: 0.35rem 0 0; font-size: 0.92rem; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0; padding: 0; list-style: none; }
+.card-tags li { font-size: 0.75rem; padding: 0.1rem 0.5rem; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; }"""
+
+
+def portal_script() -> str:
+    return """const cards = [...document.querySelectorAll('.card')], buttons = [...document.querySelectorAll('.tag')];
+const search = document.getElementById('search');
+let tag = '';
+function filter() {
+  const q = search.value.trim().toLowerCase();
+  let shown = 0;
+  for (const card of cards) {
+    const show = (!tag || card.dataset.tags.split('\\n').includes(tag)) && (!q || card.dataset.text.includes(q));
+    card.hidden = !show;
+    if (show) shown++;
+  }
+  document.getElementById('shown').textContent = shown;
+  document.getElementById('empty').hidden = shown > 0;
+}
+search.addEventListener('input', filter);
+for (const button of buttons) button.addEventListener('click', () => {
+  tag = tag === button.dataset.tag ? '' : button.dataset.tag;
+  for (const b of buttons) b.classList.toggle('active', b.dataset.tag === tag);
+  filter();
+});"""
+
+
+def portal_placeholder() -> str:
+    return """<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"750\" viewBox=\"0 0 1200 750\">
+  <rect width=\"1200\" height=\"750\" fill=\"#e6e9ee\"/>
+  <g fill=\"none\" stroke=\"#9aa3b0\" stroke-width=\"10\" stroke-linecap=\"round\" stroke-linejoin=\"round\" transform=\"translate(540 255) scale(5)\">
+    <rect x=\"2\" y=\"3\" width=\"20\" height=\"18\" rx=\"2\"/>
+    <path d=\"M2 8h20\"/>
+    <path d=\"M7 3v5M17 3v5\"/>
+  </g>
+  <text x=\"600\" y=\"520\" text-anchor=\"middle\" font-family=\"system-ui, -apple-system, Segoe UI, Roboto, sans-serif\" font-size=\"40\" fill=\"#646b76\">Preview coming soon</text>
+</svg>"""
