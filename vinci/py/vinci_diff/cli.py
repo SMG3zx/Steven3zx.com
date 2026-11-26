@@ -1,8 +1,8 @@
 """Command line: pick scenarios, run them in parallel, print the report, set the exit code.
 
-    uv run python -m vinci_diff --candidate ../build/vinci                 # against the goldens
-    uv run python -m vinci_diff --oracle --candidate ../build/vinci         # against the live oracle
-    uv run python -m vinci_diff --record --candidate ../build/vinci         # regenerate the goldens
+    uv run python -m vinci_diff --candidate ../py/vinci                 # against the goldens
+    uv run python -m vinci_diff --oracle --candidate ../py/vinci         # against the live oracle
+    uv run python -m vinci_diff --record --candidate ../py/vinci         # regenerate the goldens
 
 The default needs no .NET and no oracle directory: it replays the recorded steps against the
 candidate and compares each step with the recorded outcome. --record runs the oracle, checks
@@ -61,8 +61,8 @@ from .scenario import (
     load_scenario,
 )
 
-MOJO_DIR = SCENARIO_DIR.parents[1]
-DEFAULT_CANDIDATE = MOJO_DIR / "build" / "vinci"
+PY_ROOT = SCENARIO_DIR.parents[1]
+DEFAULT_CANDIDATE = PY_ROOT / "vinci"
 APP_CS = ORACLE_SOURCE / "src" / "App.cs"
 GENERATED_LENGTH = (30, 80)
 GENERATED_COUNT: Final = 50

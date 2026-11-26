@@ -16,7 +16,7 @@ Configurations (names as they appear in the results and the summary):
 
 Question sets:
 
-- lme: the fixed 100 LongMemEval questions (mojo/eval/longmemeval-subset.json). Each question
+- lme: the fixed 100 LongMemEval questions (py/eval/longmemeval-subset.json). Each question
   has its own index in ~/.vinci/eval/lme-index/, built by lme_index_eval.py with cached
   embeddings. Recall uses the same label, cache and corrective-query fallback as
   lme_index_eval's scored runs, with closed base URLs. A recall that needs an uncached embedding
@@ -34,7 +34,7 @@ machine, so these are reconstructed from the published evaluation and are not ve
 personal questions, the "correct answer" is the list of expectedContains strings, which the
 response must state in any wording.
 
-Usage, from mojo/py:
+Usage, from py:
     uv run python -m vinci_eval.budget_sweep --limit-questions 3 --out SCRATCH.jsonl
     uv run python -m vinci_eval.budget_sweep --set both
     uv run python -m vinci_eval.budget_sweep --configs baseline,b250w10 --set personal

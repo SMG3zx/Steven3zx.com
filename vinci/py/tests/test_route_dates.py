@@ -1,7 +1,6 @@
 """Query routing, the retrieval plan and the date windows, against a fixed today. Today is
 2026-11-16, a Monday, so "last week" is 2026-11-09 to 2026-11-16 (exclusive)."""
 
-import pytest
 
 from vinci_core.dates import MODE_AFTER, MODE_BEFORE, MODE_IN, date_boost, parse_query_dates, window_matches
 from vinci_core.fusion import DATE_BOOST

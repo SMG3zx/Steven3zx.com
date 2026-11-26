@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from vinci_edge import chat_edge
 
-from .chat_action import Action, parse_action, summary_of, trim_bytes
+from .chat_action import parse_action, summary_of, trim_bytes
 from .chat_cite import cited_ids_with_evidence, document_base, is_document_cite, unseen_cites
 from .chat_gate import read_line
 from .chat_tools import CHAT_INSTRUCTIONS, ChatTools, chat_index_path, upfront_enabled

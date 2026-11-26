@@ -10,11 +10,11 @@ JSON). The first difference fails the case.
 The C# runs with VINCI_NO_TRACK unset here, so its tracker is on. The CLI diff (vinci_diff)
 keeps VINCI_NO_TRACK=1; this one is the only harness where the tracker runs.
 
-    uv run python -m vinci_diff.sync_diff --candidate ../build/vinci           # the goldens
-    uv run python -m vinci_diff.sync_diff --oracle --candidate ../build/vinci   # the live oracle
-    uv run python -m vinci_diff.sync_diff --record --candidate ../build/vinci   # regenerate
+    uv run python -m vinci_diff.sync_diff --candidate ../py/vinci           # the goldens
+    uv run python -m vinci_diff.sync_diff --oracle --candidate ../py/vinci   # the live oracle
+    uv run python -m vinci_diff.sync_diff --record --candidate ../py/vinci   # regenerate
 
-The goldens (mojo/difftest/golden/sync/) hold each step's exit code, standard output, standard
+The goldens (py/difftest/golden/sync/) hold each step's exit code, standard output, standard
 error, journal and fake-server queries. The case's folder is written as <ROOT> and a closed
 port as <PORT>, so a golden holds no path of this machine.
 """
@@ -53,7 +53,7 @@ from .sync_model import Scenario, Step
 from .sync_scenarios import scenarios
 
 PY_DIR: Final = Path(__file__).resolve().parents[1]
-DEFAULT_CANDIDATE: Final = PY_DIR.parent / "build" / "vinci"
+DEFAULT_CANDIDATE: Final = PY_DIR / "vinci"
 GOLDEN_SYNC: Final = GOLDEN_DIR / "sync"
 LOOPBACK_PORT: Final = re.compile(r"127\.0\.0\.1:\d+")
 TIMEOUT_S: Final = 30.0

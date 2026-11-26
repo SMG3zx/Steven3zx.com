@@ -1,0 +1,6 @@
+# Vinci TUI dependencies
+rich>=13.0.0
+click>=8.0.0
+
+# Vinci core (if installed separately)
+# vinci-mojo>=0.1.0

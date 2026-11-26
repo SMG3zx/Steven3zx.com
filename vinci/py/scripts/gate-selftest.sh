@@ -7,7 +7,7 @@
 #      does not check out)
 #   3. with the C# oracle present (VINCI_ORACLE, or ~/.local/share/vinci-csharp-oracle), each
 #      harness run live (--oracle) and against the goldens reports no divergence
-# Run from mojo/: sh scripts/gate-selftest.sh     Exit 0 when every check behaves as expected.
+# Run from py/: sh scripts/gate-selftest.sh     Exit 0 when every check behaves as expected.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd) || exit 2
 cd "$root" || exit 2

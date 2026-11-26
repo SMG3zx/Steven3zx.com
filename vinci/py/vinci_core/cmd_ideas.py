@@ -25,7 +25,6 @@ from .state import (
     RETIRED,
     SEED,
     TEND,
-    Idea,
     Issue,
     equals_ignore_case,
     file_name,

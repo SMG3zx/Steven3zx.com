@@ -10,7 +10,7 @@ Compared for every request: status, headers (all but Date, Server and Connection
 body byte for byte. Compared after each run: the journal file and the previews folder.
 
 Ground truth that the Mojo side is held to lives in portal_truth/ (.NET 10 results for the
-WebUtility, Uri and JSON details). Run from mojo/py:
+WebUtility, Uri and JSON details). Run from py:
 
     uv run python -m vinci_diff.portal_diff --candidate /abs/path/mojo/build/vinci
 """
@@ -48,14 +48,14 @@ from .golden import (
 )
 from .oracle import ORACLE
 
-MOJO_DIR = Path(__file__).resolve().parents[2]
+PY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ORACLE = ORACLE
-DEFAULT_CANDIDATE = MOJO_DIR / "build" / "vinci"
+DEFAULT_CANDIDATE = PY_ROOT / "vinci"
 DEFAULT_JOURNAL = Path.home() / ".vinci" / "staging" / "journal.jsonl"
 # The goldens use this committed fixture as the staging journal: the real one is personal.
-FIXTURE_JOURNAL: Final = MOJO_DIR / "difftest" / "fixtures" / "mid-project.jsonl"
+FIXTURE_JOURNAL: Final = PY_ROOT / "difftest" / "fixtures" / "mid-project.jsonl"
 GOLDEN_PORTAL: Final = GOLDEN_DIR / "portal"
-MOJO_PY = MOJO_DIR / "py"
+MOJO_PY = PY_ROOT
 NOW = "2026-11-18T10:00:00+00:00"
 TIMEOUT_SECONDS = 20.0
 READY_SECONDS = 20.0

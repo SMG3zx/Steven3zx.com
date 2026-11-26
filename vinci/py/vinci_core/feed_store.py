@@ -13,7 +13,7 @@ Port of mojo/src/feed_store.mojo.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .index_store import Fact, IndexStore, sha256_hex

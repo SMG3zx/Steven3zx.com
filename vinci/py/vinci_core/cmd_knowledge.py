@@ -22,7 +22,6 @@ from .session import Session, note_line, number, prediction_line, user_error
 from .state import FINDINGS_METRIC, RETIRED, Note, stage_name
 from .stats import control_limits, mean
 from .text import day, num, pad_right
-from .timeutil import Instant
 
 
 def tail(a: list[str], start: int) -> list[str]:

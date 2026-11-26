@@ -45,7 +45,7 @@ model reply that is a tool call is kept whole, and cross-checked against the not
 Results: one JSON line per conversation in a resumable file (default
 ~/.vinci/eval/results/chat-eval-<date>.jsonl). Rows with an error run again on resume.
 
-Usage, from mojo/py:
+Usage, from py:
     uv run python -m vinci_eval.chat_eval --limit-questions 3 --out SCRATCH.jsonl --transcripts DIR
     uv run python -m vinci_eval.chat_eval --set both
     uv run python -m vinci_eval.chat_eval --summary --out RESULTS.jsonl

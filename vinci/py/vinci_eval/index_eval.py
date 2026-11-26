@@ -18,7 +18,7 @@ string is in the text that would be read: the packed text, or the top 10's JSON 
 unbudgeted row, as the route runs score it. Tokens are the estimator, ceil(bytes / 4), for
 both, so the rows compare. The binary's own packed_tokens must agree with it.
 
-Usage, from mojo/py:
+Usage, from py:
     uv run python -m vinci_eval.index_eval
     uv run python -m vinci_eval.index_eval --routes lexical,vector,lexical+vector
     uv run python -m vinci_eval.index_eval --budget 1000,2000,3000,5000
@@ -53,8 +53,8 @@ from .personal_baseline import (
     tokenizer_reachable,
 )
 
-MOJO_DIR: Final = Path(__file__).resolve().parents[2]
-DEFAULT_BINARY: Final = MOJO_DIR / "build" / "vinci"
+PY_ROOT: Final = Path(__file__).resolve().parents[1]
+DEFAULT_BINARY: Final = PY_ROOT / "vinci"
 DEFAULT_HOME: Final = Path("~/.vinci/staging").expanduser()
 QUESTIONS: Final = EVAL_DIR / "journal-questions-v2.json"
 M1_RESULTS: Final = RESULTS_DIR / "personal-baseline-2026-11-16.json"

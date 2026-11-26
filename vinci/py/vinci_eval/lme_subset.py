@@ -40,7 +40,7 @@ QUOTAS: Final[tuple[tuple[str, int], ...]] = (
 
 DATA_DIR: Final = Path.home() / ".vinci" / "eval" / "longmemeval"
 DEFAULT_DATASET: Final = DATA_DIR / DATASET_NAME
-DEFAULT_SUBSET: Final = Path(__file__).resolve().parents[2] / "eval" / "longmemeval-subset.json"
+DEFAULT_SUBSET: Final = Path(__file__).resolve().parents[1] / "eval" / "longmemeval-subset.json"
 
 
 @dataclass(frozen=True)

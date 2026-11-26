@@ -9,7 +9,7 @@ appends would mint the same id. The test then checks the journal:
 - every idea id is unique;
 - `vinci verify` on the same home passes.
 
-Usage (from mojo/py, with the binary built by the caller):
+Usage (from py, with the binary built by the caller):
 
     uv run python -m vinci_diff.append_race --binary /abs/path/vinci [--workers 4] [--lines 100]
     uv run python -m vinci_diff.append_race --binary /abs/path/vinci --unlocked

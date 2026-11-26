@@ -27,7 +27,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .jsonline import json_string

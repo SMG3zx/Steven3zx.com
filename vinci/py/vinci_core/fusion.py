@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, replace
-from typing import Optional
 
 from .route import ROUTE_GRAPH, ROUTE_PROCEDURAL, ROUTE_SEMANTIC, ROUTE_TEMPORAL
-from .session import UserError, user_error
+from .session import user_error
 from .timeutil import TICKS_PER_DAY, parse_instant
 
 RRF_K = 60

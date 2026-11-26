@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, cast
 
-MOJO_DIR: Final = Path(__file__).resolve().parents[2]
+PY_ROOT: Final = Path(__file__).resolve().parents[1]
 VINCI_DIR: Final = Path.home() / ".vinci"
 STAGING: Final = VINCI_DIR / "staging"
 EVAL_DIR: Final = VINCI_DIR / "eval"
@@ -42,8 +42,8 @@ EMBED_CACHE: Final = VINCI_DIR / "index" / "embed-cache.sqlite"
 GPU_CACHE: Final = EVAL_DIR / "cache" / "lme-embed-gpu.sqlite"
 LME_INDEX: Final = EVAL_DIR / "lme-index"
 PERSONAL_QUESTIONS: Final = EVAL_DIR / "journal-questions-v2.json"
-FEED_QUESTIONS: Final = MOJO_DIR / "eval" / "feed-questions.json"
-LME_SUBSET: Final = MOJO_DIR / "eval" / "longmemeval-subset.json"
+FEED_QUESTIONS: Final = PY_ROOT / "eval" / "feed-questions.json"
+LME_SUBSET: Final = PY_ROOT / "eval" / "longmemeval-subset.json"
 CPU_HEALTH: Final = "http://127.0.0.1:8081/health"
 CLOSED_URL: Final = "http://127.0.0.1:9/v1"
 LABEL: Final = "qwen3-embedding:4b"
@@ -102,7 +102,7 @@ def _vinci_env(home: Path, scratch: Path) -> dict[str, str]:
             "VINCI_HOME": str(home),
             "VINCI_ENV_FILE": str(empty),
             "VINCI_NO_TRACK": "1",
-            "VINCI_MOJO_PY": str(MOJO_DIR / "py"),
+            "VINCI_MOJO_PY": str(PY_ROOT),
             "LANG": "C.UTF-8",
         }
     )
@@ -158,7 +158,7 @@ def _index_eval(
     ]
     if sources is not None:
         argv += ["--sources", sources]
-    done = _run(argv, _vinci_env(home, scratch), MOJO_DIR / "py")
+    done = _run(argv, _vinci_env(home, scratch), PY_ROOT)
     if done.returncode != 0:
         return "index_eval failed: " + done.stderr.strip()[-400:]
     return _json(out)
@@ -318,7 +318,7 @@ def lme(binary: Path, work: Path, th: dict[str, object]) -> Stage:
             str(out),
         ],
         env,
-        MOJO_DIR / "py",
+        PY_ROOT,
     )
     if done.returncode != 0 or not out.is_file():
         stage.detail = "lme_index_eval failed: " + (done.stdout + done.stderr).strip()[-400:]
@@ -349,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m vinci_eval.gate")
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument(
-        "--thresholds", type=Path, default=MOJO_DIR / "eval" / "gate-thresholds.json"
+        "--thresholds", type=Path, default=PY_ROOT / "eval" / "gate-thresholds.json"
     )
     parser.add_argument("--only", default="personal,feed,lme", help="stages to run")
     args = parser.parse_args(argv)

@@ -8,7 +8,7 @@ Port of mojo/src/portal_link.mojo.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .portal_url import local_port_of

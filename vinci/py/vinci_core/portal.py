@@ -33,7 +33,7 @@ from .portal_link import Link, preview_of, slug
 from .portal_page import page
 from .portal_url import byte_range, is_web_address, local_port_of, request_path
 from .jsonline import ascii_lower
-from .session import UserError, is_space, user_error
+from .session import is_space, user_error
 from .state import RETIRED, state_from
 
 SCAN_EVERY = 30.0

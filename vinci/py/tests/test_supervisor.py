@@ -6,7 +6,6 @@ Run from the py/ folder:  python -m unittest tests.test_supervisor -v
 
 from __future__ import annotations
 
-import os
 import socket
 import stat
 import sys

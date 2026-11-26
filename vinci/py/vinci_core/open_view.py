@@ -11,7 +11,7 @@ Port of mojo/src/open_view.mojo.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .handles import Stored, date_of
 from .jsonline import ascii_lower, json_string

@@ -3,14 +3,14 @@
 # its golden comparison from a clean clone, with no .NET on PATH and no C# oracle.
 #
 #   1. a sparse, shallow clone of vinci/ from origin (only that folder, only the newest commit)
-#   2. make -C vinci/mojo check, with VINCI_ORACLE pointing at nothing
+#   2. make -C vinci/py test, with VINCI_ORACLE pointing at nothing
 #   3. VINCI_APP_DIR=<tmp>/app sh vinci/install.sh <tmp>/bin (a scratch install; the portal is
 #      not restarted), then a smoke test from / with a temporary VINCI_HOME, VINCI_NO_TRACK=1
 #      and an empty VINCI_ENV_FILE: vinci stats, vinci index rebuild, vinci recall x, vinci help
 #   4. the golden CLI comparison against the installed launcher
 #
 # .NET is hidden from PATH: every file in /usr/bin except dotnet is linked into a scratch bin
-# directory that comes first on PATH. The network is needed for uv and the pinned mojo wheel.
+# directory that comes first on PATH. The network is needed for uv and the test dependencies.
 #
 #   sh scripts/fresh-clone-check.sh                     clone origin as it is
 #   sh scripts/fresh-clone-check.sh --overlay-worktree  also copy this checkout's uncommitted
@@ -76,8 +76,8 @@ echo "dotnet: not on PATH ($(command -v uv))"
 export VINCI_ORACLE=/nonexistent/vinci-oracle
 unset VIRTUAL_ENV
 
-step "make check in the clone (no oracle, no .NET)"
-make -C "$clone/mojo" check > "$tmp/check.log" 2>&1
+step "make test in the clone (no oracle, no .NET)"
+make -C "$clone/py" test > "$tmp/check.log" 2>&1
 tail -n 3 "$tmp/check.log"
 
 step "scratch install (VINCI_APP_DIR=$tmp/app, the portal is not restarted)"
@@ -108,7 +108,7 @@ done
 
 step "golden CLI comparison against the installed launcher"
 golden_ok=0
-(cd "$clone/mojo/py" && uv run python -m vinci_diff --candidate "$tmp/app/vinci") > "$tmp/golden.log" 2>&1 && golden_ok=1
+(cd "$clone/py" && uv run python -m vinci_diff --candidate "$tmp/app/vinci") > "$tmp/golden.log" 2>&1 && golden_ok=1
 tail -n 6 "$tmp/golden.log"
 
 echo ""

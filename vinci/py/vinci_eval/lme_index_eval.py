@@ -1,6 +1,6 @@
 """LongMemEval subset, scored on the Mojo index (M3 step 2b).
 
-For each question of mojo/eval/longmemeval-subset.json:
+For each question of py/eval/longmemeval-subset.json:
 
 1. Its haystack becomes records, one per turn: source = session id, id = session id
    and turn index, at = the session date (as ISO with a +00:00 offset), kind "turn",
@@ -72,8 +72,8 @@ from .lme_subset import (
     sha256_file,
 )
 
-MOJO_DIR: Final = Path(__file__).resolve().parents[2]
-DEFAULT_BINARY: Final = MOJO_DIR / "build" / "vinci"
+PY_ROOT: Final = Path(__file__).resolve().parents[1]
+DEFAULT_BINARY: Final = PY_ROOT / "vinci"
 EVAL_DIR: Final = Path.home() / ".vinci" / "eval"
 INDEX_DIR: Final = EVAL_DIR / "lme-index"
 RESULTS_DIR: Final = EVAL_DIR / "results"

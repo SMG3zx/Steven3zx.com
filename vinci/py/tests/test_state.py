@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from vinci_core.journal import Event, parse_event
+from vinci_core.journal import parse_event
 from vinci_core.state import (
     BUILD,
     PREPARE,

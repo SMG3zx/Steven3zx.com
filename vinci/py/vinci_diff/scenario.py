@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
-DIFFTEST_DIR = Path(__file__).resolve().parents[2] / "difftest"
+DIFFTEST_DIR = Path(__file__).resolve().parents[1] / "difftest"
 SCENARIO_DIR = DIFFTEST_DIR / "scenarios"
 DEFAULT_FOLDERS = ("glider", "canal")
 

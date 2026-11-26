@@ -1,6 +1,6 @@
 """Differential test for `vinci chat`: the C# oracle and the Mojo chat on the same scripted talks.
 
-Each script (mojo/difftest/chat/*.json) is a list of standard-input lines and the model's
+Each script (py/difftest/chat/*.json) is a list of standard-input lines and the model's
 replies, in order, served by fake_llm.FakeLlm. Each side runs in its own temporary copy of the
 fixture journal, with VINCI_HOME, HOME and the embedding and memory URLs pointed away from the
 real ~/.vinci. Then:
@@ -12,12 +12,12 @@ real ~/.vinci. Then:
 - Every script's expectations are checked against the Mojo run: its output, the journal kinds
   it added, and text the model was shown.
 
-By default the C# side comes from the goldens (mojo/difftest/golden/chat/, see golden.py): the
+By default the C# side comes from the goldens (py/difftest/golden/chat/, see golden.py): the
 recorded standard output and journal lines of each oracle script. --oracle runs the C# binary
 live. --record runs it, checks the candidate against the result, and writes the goldens only if
 they agree.
 
-Run from mojo/py:  uv run python -m vinci_diff.chat_diff [--oracle | --record] [SCRIPT]
+Run from py:  uv run python -m vinci_diff.chat_diff [--oracle | --record] [SCRIPT]
 """
 
 from __future__ import annotations
@@ -46,11 +46,11 @@ from .golden import (
 )
 from .oracle import ORACLE
 
-MOJO_DIR: Final = Path(__file__).resolve().parents[2]
-SCRIPT_DIR: Final = MOJO_DIR / "difftest" / "chat"
+PY_ROOT: Final = Path(__file__).resolve().parents[1]
+SCRIPT_DIR: Final = PY_ROOT / "difftest" / "chat"
 FILES_DIR: Final = SCRIPT_DIR / "files"
-FIXTURE: Final = MOJO_DIR / "difftest" / "fixtures" / "mid-project.jsonl"
-DEFAULT_CANDIDATE: Final = MOJO_DIR / "build" / "vinci"
+FIXTURE: Final = PY_ROOT / "difftest" / "fixtures" / "mid-project.jsonl"
+DEFAULT_CANDIDATE: Final = PY_ROOT / "vinci"
 FIXED_NOW: Final = "2026-11-18T10:00:00-05:00"
 TIMEOUT_S: Final = 180
 # Lines the C# chat prints because it talks to Neo4j, which the Mojo chat does not use.
@@ -134,7 +134,7 @@ def _child_env(home: Path, vinci_home: Path, base_url: str, env_file: Path) -> d
             "VINCI_ENV_FILE": str(env_file),
             "VINCI_NOW": FIXED_NOW,
             # The Python edge (vinci_edge) is found from here, wherever the binary is.
-            "VINCI_MOJO_PY": str(MOJO_DIR / "py"),
+            "VINCI_MOJO_PY": str(PY_ROOT),
             "VINCI_NO_TRACK": "1",
             "CHAT_BASE_URL": base_url,
             # Nothing listens on port 9: the memory service and the embedding server are down.
@@ -148,11 +148,11 @@ def _child_env(home: Path, vinci_home: Path, base_url: str, env_file: Path) -> d
 
 def _scrub(text: str, side_dir: Path) -> str:
     """Replaces this run's folder, the fixture folder and the repository by tokens, so a golden
-    holds no path of this machine or checkout. FILES_DIR comes before MOJO_DIR, which contains it."""
+    holds no path of this machine or checkout. FILES_DIR comes before PY_ROOT, which contains it."""
     for needle, token in (
         (str(side_dir), "<SIDE>"),
         (str(FILES_DIR), "<FILES>"),
-        (str(MOJO_DIR), "<MOJO>"),
+        (str(PY_ROOT), "<MOJO>"),
     ):
         text = text.replace(needle, token)
     return text

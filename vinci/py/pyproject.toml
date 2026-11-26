@@ -1,0 +1,23 @@
+[project]
+name = "vinci"
+version = "0.2.0"
+description = "vinci: ideas, notes, predictions and time in one append-only journal"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+extend-exclude = ["difftest", "eval", "vinci_tui", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

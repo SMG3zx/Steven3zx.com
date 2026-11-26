@@ -1,6 +1,6 @@
 # Mojo gotchas
 
-Agents read this first. Each line is a mistake an agent made, or would make, twice. Mojo is pinned at 1.2.0 (`vinci/mojo/pyproject.toml`). Check the snippet against the pin before trusting older examples.
+Agents read this first. Each line is a mistake an agent made, or would make, twice. Mojo is pinned at 1.2.0 (`vinci/py/pyproject.toml`). Check the snippet against the pin before trusting older examples.
 
 The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler is the reference: write the name, then read the first error.
 
@@ -290,7 +290,7 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
     · open {"id":"i1"}      # not: · open i1
   ```
 
-- **A .NET HTTP client sends a chunked body, with no Content-Length.** A fake server that reads only Content-Length gets an empty body, returns a 500, and the C# chat then prints its error and exits. Read `Transfer-Encoding: chunked` as well (`mojo/py/vinci_diff/fake_llm.py`).
+- **A .NET HTTP client sends a chunked body, with no Content-Length.** A fake server that reads only Content-Length gets an empty body, returns a 500, and the C# chat then prints its error and exits. Read `Transfer-Encoding: chunked` as well (`py/vinci_diff/fake_llm.py`).
 
 - **Python edges return a status word instead of raising into Mojo.** The chat's Python calls return `("ok", text)` or `("error", message)`, and `("line", text)` or `("eof", "")` for standard input, so Mojo reads `String(pair[0]) == "ok"` and never parses a Python exception text. Raising across the boundary gave a message that the Mojo side could not match.
   ```mojo
@@ -366,7 +366,7 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
       raise TypeError(f"[{name}] must be a table")
   ```
 
-- **Check the harness's arguments before a run.** `vinci_diff.chat_diff` takes a script filter as its first argument, so `--candidate` was read as a filter and nothing ran ("no scripts match"). It uses `mojo/build/vinci` with no arguments.
+- **Check the harness's arguments before a run.** `vinci_diff.chat_diff` takes a script filter as its first argument, so `--candidate` was read as a filter and nothing ran ("no scripts match"). It uses `py/vinci` with no arguments.
 
 - **A binary outside `mojo/build` cannot find the Python edges.** `vinci` looks for `../py` beside itself, so a copy in a scratch directory fails with "No module named 'vinci_edge'". Set `VINCI_MOJO_PY=<checkout>/mojo/py` in the same command.
   ```sh
@@ -385,7 +385,7 @@ The stdlib ships only as a compiled `std.mojoc`, with no sources. The compiler i
 
 ## Found in M5b (the tracker and the activity feed, twice-hit)
 
-- **A harness that changes directory must resolve its binary paths first.** `--candidate ../build/vinci` passed to `vinci_diff` and to `sync_diff` failed with `FileNotFoundError` at the first step, because each case runs with its own working directory. Resolve the paths in `main` before the first case.
+- **A harness that changes directory must resolve its binary paths first.** `--candidate ../vinci` passed to `vinci_diff` and to `sync_diff` failed with `FileNotFoundError` at the first step, because each case runs with its own working directory. Resolve the paths in `main` before the first case.
   ```python
   args.candidate = args.candidate.resolve()
   ```

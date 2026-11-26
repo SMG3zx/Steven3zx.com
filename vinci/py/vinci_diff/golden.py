@@ -1,6 +1,6 @@
 """Golden files: what the C# oracle printed, saved so the harnesses run without .NET.
 
-mojo/difftest/golden/<harness>/ holds one JSON file per scenario or case and a _meta.json:
+py/difftest/golden/<harness>/ holds one JSON file per scenario or case and a _meta.json:
 the sha256 of the oracle binary and of its vinci.dll, the date, the repository commit, and
 the number of files. Each harness writes its set with --record and reads it by default.
 
@@ -24,9 +24,9 @@ import sys
 from pathlib import Path
 from typing import Final, cast
 
-MOJO_DIR: Final = Path(__file__).resolve().parents[2]
+PY_ROOT: Final = Path(__file__).resolve().parents[1]
 # VINCI_GOLDEN_DIR points the harnesses at another set (the selftest uses a tampered copy).
-GOLDEN_DIR: Final = Path(os.environ.get("VINCI_GOLDEN_DIR") or MOJO_DIR / "difftest" / "golden")
+GOLDEN_DIR: Final = Path(os.environ.get("VINCI_GOLDEN_DIR") or PY_ROOT / "difftest" / "golden")
 META: Final = "_meta.json"
 
 
@@ -49,7 +49,7 @@ def sha256_file(path: Path) -> str:
 def repo_commit() -> str:
     try:
         done = subprocess.run(
-            ["git", "-C", str(MOJO_DIR), "rev-parse", "HEAD"],
+            ["git", "-C", str(PY_ROOT), "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
             check=True,
