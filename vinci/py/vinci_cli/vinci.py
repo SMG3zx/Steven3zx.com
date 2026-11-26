@@ -17,6 +17,7 @@ from pathlib import Path
 
 from vinci_core.backup import backup_command
 from vinci_core.cmd_ideas import dispatch_ideas
+from vinci_core.cmd_feed import feed_command
 from vinci_core.cmd_index import index_command, open_command, recall_command
 from vinci_core.cmd_knowledge import dispatch_knowledge
 from vinci_core.cmd_ops import dispatch_ops
@@ -28,7 +29,7 @@ from vinci_core.verify import verify_command
 
 # Commands routed before the journal is read. Each is ported in its own module; until it is,
 # it fails with a clear message rather than running a partial version.
-UNPORTED_ROUTES = ("chat", "serve", "feed")
+UNPORTED_ROUTES = ("chat", "serve")
 
 
 def join_path(directory: str, name: str) -> str:
@@ -116,6 +117,10 @@ def run(args: list[str]) -> int:
     # The index and recall read the journal and write only their own index file.
     if args[0] == "index":
         index_command(args[1:], vinci_home(), journal_path())
+        return 0
+    # The feeds read outside sources into the index, and write only the index file.
+    if args[0] == "feed":
+        feed_command(args[1:], vinci_home(), journal_path(), now)
         return 0
     if args[0] == "recall":
         recall_command(args[1:], vinci_home())
