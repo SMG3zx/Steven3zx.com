@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from vinci_core.backup import backup_command
+from vinci_core.chat import run_chat
 from vinci_core.cmd_ideas import dispatch_ideas
 from vinci_core.cmd_feed import feed_command
 from vinci_core.cmd_index import index_command, open_command, recall_command
@@ -30,7 +31,7 @@ from vinci_core.verify import verify_command
 
 # Commands routed before the journal is read. Each is ported in its own module; until it is,
 # it fails with a clear message rather than running a partial version.
-UNPORTED_ROUTES = ("chat",)
+UNPORTED_ROUTES: tuple[str, ...] = ()
 
 
 def join_path(directory: str, name: str) -> str:
@@ -95,6 +96,15 @@ def journal_path() -> str:
     return join_path(vinci_home(), "journal.jsonl")
 
 
+def self_path() -> str:
+    """The launcher the chat runs for each journal command: VINCI_SELF, else the py/vinci launcher
+    beside this package."""
+    own = os.environ.get("VINCI_SELF")
+    if own:
+        return own
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "vinci"))
+
+
 def run(args: list[str]) -> int:
     """Runs one command. Returns the exit code for commands that set their own (verify)."""
     env_file = os.environ.get("VINCI_ENV_FILE")
@@ -109,7 +119,8 @@ def run(args: list[str]) -> int:
     # Routed before any journal is read. `vinci` with no command is chat, whatever the journal
     # holds.
     if len(args) == 0 or args[0] == "chat":
-        raise NotImplementedError("the chat is not ported to Python yet")
+        run_chat(vinci_home(), journal_path(), now, self_path())
+        return 0
     if args[0] in UNPORTED_ROUTES:
         raise NotImplementedError(args[0] + " is not ported to Python yet")
     if args[0] == "memory":
