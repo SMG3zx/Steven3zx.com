@@ -322,7 +322,7 @@ def run_review(s: Session) -> None:
 
 
 def dispatch_ops(s: Session, cmd: str, args: list[str]) -> bool:
-    if cmd in ("help", "--help", "-h"):
+    if cmd == "help":
         print(HELP, end="")
         return True
     if cmd == "path":

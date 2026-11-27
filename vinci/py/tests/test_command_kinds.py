@@ -75,7 +75,7 @@ def test_chat_fence_and_gate() -> None:
     assert command_writes_journal("idea")
     assert command_writes_journal("sync")
     assert command_writes_journal("review")
-    for w in ["chat", "serve", "index", "feed", "recall", "open", "memory", "backup", "verify"]:
+    for w in ["chat", "serve", "index", "feed", "recall", "open", "backup", "verify"]:
         assert not chat_runs(w), "the chat must refuse '" + w + "'"
     assert not chat_runs("nosuch")
     assert command_writes_journal("nosuch"), "an unknown word is a write"
@@ -85,7 +85,7 @@ def test_chat_fence_and_gate() -> None:
 
 @pytest.mark.parametrize(
     "word",
-    ["help", "--help", "-h", "ideas", "pipeline", "next", "show", "notes", "tags", "sources",
+    ["help", "ideas", "pipeline", "next", "show", "notes", "tags", "sources",
      "predictions", "stats", "issues", "principles", "bookmarks", "watches", "path"],
 )
 def test_writes_match_the_old_chat_list(word: str) -> None:

@@ -123,9 +123,6 @@ def run(args: list[str]) -> int:
         return 0
     if args[0] in UNPORTED_ROUTES:
         raise NotImplementedError(args[0] + " is not ported to Python yet")
-    if args[0] == "memory":
-        # Mark 2 removed the memory service. Notes from that system are now in the journal.
-        raise user_error("memory was removed in mark 2. Its notes are in the journal; see docs/memory.md.")
     # The index and recall read the journal and write only their own index file.
     if args[0] == "index":
         index_command(args[1:], vinci_home(), journal_path())
