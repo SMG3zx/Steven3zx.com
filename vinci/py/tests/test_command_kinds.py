@@ -9,6 +9,7 @@ import pytest
 
 from vinci_core.chat_gate import is_write_call
 from vinci_core.command_kinds import (
+    chat_words,
     chat_runs,
     command_table,
     command_writes_journal,
@@ -77,10 +78,8 @@ def test_chat_fence_and_gate() -> None:
     assert command_writes_journal("idea")
     assert command_writes_journal("sync")
     assert command_writes_journal("review")
-    for w in ["chat", "serve", "index", "feed", "backup", "verify"]:
+    for w in ["chat", "serve", "index", "feed", "recall", "open", "backup", "verify"]:
         assert not chat_runs(w), "the chat must refuse '" + w + "'"
-    # recall and open are read-only journal words now, so the journal tool runs them.
-    assert chat_runs("recall") and chat_runs("open")
     assert not chat_runs("nosuch")
     assert command_writes_journal("nosuch"), "an unknown word is a write"
     assert not is_write_call("journal", ["ideas"])
@@ -96,3 +95,13 @@ def test_writes_match_the_old_chat_list(word: str) -> None:
     """The read-only words the chat allowed before the table existed. They must all still be
     read-only, so the gate does not start asking about them."""
     assert not command_writes_journal(word), "'" + word + "' must only read"
+
+
+def test_chat_prompt_lists_exactly_the_words_the_journal_tool_runs() -> None:
+    """The prompt is built from chat_words(), so the model is told the words the tool accepts."""
+    from vinci_core.chat_tools import CHAT_INSTRUCTIONS
+
+    listed = CHAT_INSTRUCTIONS.split("The command words are: ")[1].split(".")[0].split(", ")
+    assert listed == chat_words()
+    assert "{COMMAND_WORDS}" not in CHAT_INSTRUCTIONS
+    assert "recall" not in listed and "open" not in listed

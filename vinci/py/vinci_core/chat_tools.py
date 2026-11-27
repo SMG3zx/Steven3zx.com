@@ -33,7 +33,7 @@ from .chat_action import (
     text_arg,
 )
 from .chat_gate import ask_write, is_write_call, needs_confirmation, refusal
-from .command_kinds import chat_runs
+from .command_kinds import chat_runs, chat_words
 from .dates import today_of
 from .embed_config import default_config
 from .handles import lookup
@@ -75,9 +75,7 @@ CHAT_INSTRUCTIONS = """You have five tools. To use one, reply with only a JSON o
 journal runs one vinci command. Its args are the command word, then its arguments, one item each.
 To list things, use the plural word: ideas, notes, sources, predictions, issues, principles. show takes one id, such as i1.
 Each call runs one command. To do two things, make two calls.
-The command words are: idea, for, goal, req, cut, advance, ideas, pipeline, next, show, commit, kept, missed, ship, used, tend, retire,
-note, link, notes, tags, source, sources, bookmark, bookmarks, unbookmark, predict, result, predictions, log, spec, stats,
-issue, diagnose, principle, issues, principles, review, adopt, home, watch, unwatch, watches, sync, spent, path.
+The command words are: {COMMAND_WORDS}.
 recall returns one line per fact, and each line starts with its id in brackets, such as [i1] or [d1/2]. A line that ends with (open <id> for more) is cut: open that id to read the rest.
 recall searches only the journal unless you give "sources". Use "git" for the monorepo's commits: what changed in the code, and when. Use "vaults" for the notes folders: Meingrad, Research and the vinci docs. Use "git,vaults" for both, or "all" for the journal and both feeds. With "all", the journal's lines come first and up to three feed lines follow. A line from git is labelled "git commit", and one from the notes "vault section". Those are not the person's own writing: cite them as [id] like any line, and say where they came from. If recall abstains and says that feed records may match, ask again with "sources": "git,vaults" before you answer that nothing is known.
 open shows part of one id: lines=A-B for a range of lines, or grep=word for the lines that contain a word. Without either it shows the whole fact. Its output is cut at 4000 bytes.
@@ -85,6 +83,7 @@ remember saves a durable fact about the person. Its category is one of fact, pre
 read saves a text file (.txt, .md) or a web page that the person named, so recall can find its passages. Use it only when the person gives you the path or the address.
 When a write is refused, the tool result says so. Say that nothing was written.
 After a tool runs you will see its result. When you have what you need, reply in plain sentences instead of JSON."""
+CHAT_INSTRUCTIONS = CHAT_INSTRUCTIONS.replace("{COMMAND_WORDS}", ", ".join(chat_words()))
 CATEGORIES = " fact preference decision procedure episode "
 
 

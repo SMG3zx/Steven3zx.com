@@ -70,13 +70,26 @@ def command_writes_journal(name: str) -> bool:
     return command_table()[i].writes
 
 
+# The chat has its own tools for these two lookups, so its journal tool does not run them.
+CHAT_OWN_TOOLS: tuple[str, ...] = ("recall", "open")
+
+
 def chat_runs(name: str) -> bool:
-    """True when the chat's journal tool may run this word: a journal command in the table.
-    Anything else (a route, or a word the table does not know) is refused without running."""
+    """True when the chat's journal tool may run this word: a journal command in the table that
+    the chat has no tool for. Anything else (a route, a chat tool's word, or a word the table
+    does not know) is refused without running."""
+    if name in CHAT_OWN_TOOLS:
+        return False
     i = find_command(name)
     if i < 0:
         return False
     return not command_table()[i].route
+
+
+def chat_words() -> list[str]:
+    """Every word the chat's journal tool runs, in table order. The chat prompt is built from
+    this list, so it cannot drift from what the tool accepts."""
+    return [k.name for k in command_table() if chat_runs(k.name)]
 
 
 def journal_command_words() -> list[str]:
