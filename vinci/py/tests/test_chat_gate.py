@@ -1,6 +1,7 @@
 """The write confirmation's decisions: which tool calls write, when a write needs a yes, and what
 counts as a yes. The prompt itself reads standard input, so only the decisions are tested."""
 
+from vinci_core.command_kinds import chat_runs
 from vinci_core.chat_gate import (
     is_read_only_command,
     is_write_call,
@@ -16,7 +17,7 @@ def test_journal_writes() -> None:
     assert not is_write_call("journal", [])
     assert is_write_call("journal", ["idea"])
     assert is_write_call("journal", ["review"])
-    assert is_write_call("journal", ["sync"])
+    assert not chat_runs("sync"), "sync is not a command: the tracker runs in every command"
     assert is_write_call("journal", ["note"])
     assert is_read_only_command("pipeline")
     assert not is_read_only_command("pipelines")

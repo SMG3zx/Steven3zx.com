@@ -43,7 +43,7 @@ def command_table() -> list[CommandKind]:
         c("predictions", False), c("log", True), c("spec", True), c("stats", False),
         # cmd_ops.py: dispatch_ops
         c("help", False), c("path", False),
-        c("sync", True), c("issue", True), c("diagnose", True), c("principle", True),
+        c("issue", True), c("diagnose", True), c("principle", True),
         c("issues", False), c("principles", False), c("commit", True), c("kept", True),
         c("missed", True), c("review", True),
         # vinci.py: routed before the journal is read

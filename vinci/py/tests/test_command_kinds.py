@@ -76,7 +76,6 @@ def test_chat_fence_and_gate() -> None:
     assert not command_writes_journal("ideas")
     assert not command_writes_journal("show")
     assert command_writes_journal("idea")
-    assert command_writes_journal("sync")
     assert command_writes_journal("review")
     for w in ["chat", "serve", "index", "feed", "recall", "open", "backup", "verify"]:
         assert not chat_runs(w), "the chat must refuse '" + w + "'"

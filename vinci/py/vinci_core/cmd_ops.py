@@ -1,6 +1,6 @@
 """The ops group: help, path, and the improvement commands (issue, diagnose, principle,
-issues, principles, commit, kept, missed, review). sync prints the lines the window and git
-tracker wrote before this command.
+issues, principles, commit, kept, missed, review). The tracker runs before every command, so
+there is no sync command: its lines are written to the journal and the chat reports them.
 
 Return True when the command was handled, False to let the next group try it.
 
@@ -250,11 +250,6 @@ def dispatch_ops(s: Session, cmd: str, args: list[str]) -> bool:
         return True
     if cmd == "path":
         print(s.journal.path)
-        return True
-    if cmd == "sync":
-        # The tracker already ran (vinci.py): print what it wrote.
-        for line in s.tracked:
-            print(line)
         return True
     if cmd == "issue":
         text = s.arg(args, 0, "what went wrong")
