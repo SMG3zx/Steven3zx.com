@@ -15,7 +15,7 @@ def test_one_issue_without_a_root_cause() -> None:
     assert found[0].rank == 5
     assert found[0].subject == "x1"
     assert found[0].problem == "no root cause yet: tests slip"
-    assert found[0].fix == 'vinci diagnose x1 "root cause"'
+    assert found[0].fix == 'vinci journal diagnose x1 "root cause"'
     assert next_step(state, later).what == "x1: no root cause yet: tests slip"
 
 

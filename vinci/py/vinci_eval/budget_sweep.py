@@ -475,7 +475,7 @@ def recall(
     )
     if item.now_iso is not None:
         env["VINCI_NOW"] = item.now_iso
-    args = ["recall", "--json", "--limit", str(TOP_K), "--routes", ROUTES]
+    args = ["journal", "recall", "--json", "--limit", str(TOP_K), "--routes", ROUTES]
     if item.set_name == "lme":
         args += [
             "--index",

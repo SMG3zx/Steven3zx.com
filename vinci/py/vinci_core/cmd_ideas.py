@@ -246,7 +246,7 @@ def seed_idea(s: Session, title: str) -> None:
     """NewIdea: capture an idea as a Seed."""
     ident = s.next_id("i")
     s.record(Event(s.now, "idea", id=ident, text=title))
-    print(ident + " seeded. Next: vinci for " + ident + ' "who will use it", then vinci goal ' + ident + " ...")
+    print(ident + " seeded. Next: vinci journal for " + ident + ' "who will use it", then vinci journal goal ' + ident + " ...")
 
 
 def set_for(s: Session, idx: int, who: str) -> None:
@@ -280,7 +280,7 @@ def set_goal(s: Session, idx: int, a: list[str]) -> None:
         raise user_error("'" + kind + "' is not at-least, at-most or between: " + GOAL_USAGE)
     ident = s.state.ideas[idx].id
     s.record(Event(s.now, "goal", id=ident, text=text, value=min_v, hi=max_v, metric=metric))
-    print(ident + " goal set. Record progress with: vinci log " + metric + " <value>")
+    print(ident + " goal set. Record progress with: vinci journal log " + metric + " <value>")
 
 
 def add_req(s: Session, idx: int, text: str, who: str, why: str) -> None:
@@ -288,7 +288,7 @@ def add_req(s: Session, idx: int, text: str, who: str, why: str) -> None:
     ident = s.next_id("r")
     idea_id = s.state.ideas[idx].id
     s.record(Event(s.now, "req", id=ident, text=text, refs=[idea_id], who=who, why=why))
-    print(ident + " added to " + idea_id + ". Can it be deleted? vinci cut " + ident + ' "why"')
+    print(ident + " added to " + idea_id + ". Can it be deleted? vinci journal cut " + ident + ' "why"')
 
 
 def cut_req(s: Session, ident: str, why: str) -> None:
@@ -325,13 +325,13 @@ def advance(s: Session, idx: int, days: float) -> None:
     ident = idea.id
     if idea.stage == SEED:
         if idea.for_ is None:
-            advise(ident + " is for nobody yet. Name who will use it: vinci for " + ident + ' "..."')
+            advise(ident + " is for nobody yet. Name who will use it: vinci journal for " + ident + ' "..."')
         if idea.goal is None:
-            advise(ident + " has no goal. Set one with a number: vinci goal " + ident + ' "..." <metric> at-least <n>')
+            advise(ident + " has no goal. Set one with a number: vinci journal goal " + ident + ' "..." <metric> at-least <n>')
         move_to(s, idx, PREPARE)
         print(
-            'Next: gather notes (vinci note "..." ' + ident + "), question every requirement "
-            "(vinci req), and say what you expect (vinci predict)."
+            'Next: gather notes (vinci journal note "..." ' + ident + "), question every requirement "
+            "(vinci journal req), and say what you expect (vinci journal predict)."
         )
 
     elif idea.stage == PREPARE:
@@ -339,20 +339,20 @@ def advance(s: Session, idx: int, days: float) -> None:
             advise(
                 ident
                 + " has no notes. Preparation is gathering what is known:"
-                + ' vinci note "..." <source> '
+                + ' vinci journal note "..." <source> '
                 + ident
             )
         if not has_live_requirement(s, ident):
             advise(
                 ident
-                + " has no requirements. State what it must do, who says so, and why: vinci req "
+                + " has no requirements. State what it must do, who says so, and why: vinci journal req "
                 + ident
                 + ' "..." "name" "why"'
             )
         if not has_prediction(s, ident):
             advise(
                 ident
-                + " has no prediction. Write down what you expect before you test it: vinci predict "
+                + " has no prediction. Write down what you expect before you test it: vinci journal predict "
                 + '"..." <percent> '
                 + ident
             )
@@ -383,12 +383,12 @@ def advance(s: Session, idx: int, days: float) -> None:
         if s.state.watched(idx):
             print("Next: ship the smallest thing that works.")
         else:
-            print("Next: vinci home " + ident + " <folder>, then ship the smallest thing that works.")
+            print("Next: vinci journal home " + ident + " <folder>, then ship the smallest thing that works.")
 
     elif idea.stage == BUILD:
-        raise user_error("Build ends by shipping: vinci ship " + ident + ' "what shipped"')
+        raise user_error("Build ends by shipping: vinci journal ship " + ident + ' "what shipped"')
     elif idea.stage == TEND:
-        raise user_error(ident + " is grown. It is tended, not finished: vinci ship or vinci tend")
+        raise user_error(ident + " is grown. It is tended, not finished: vinci journal ship or vinci journal tend")
     else:
         raise user_error(ident + " is retired: " + (idea.retired_why or ""))
 
@@ -402,7 +402,7 @@ def ship(s: Session, idx: int, what: str) -> None:
             ident
             + " is in "
             + stage_name(idea.stage)
-            + ". It ships from Build or Tend: vinci advance "
+            + ". It ships from Build or Tend: vinci journal advance "
             + ident
         )
     first = len(idea.ships) == 0
@@ -429,7 +429,7 @@ def ship(s: Session, idx: int, what: str) -> None:
     if len(open_ids) > 0:
         print("Predictions to settle: " + join_items(open_ids, ", "))
     if first:
-        print(ident + " is now in Tend. Use it yourself: vinci used " + ident)
+        print(ident + " is now in Tend. Use it yourself: vinci journal used " + ident)
         remind(s, TEND)
 
 
@@ -446,7 +446,7 @@ def used(s: Session, idx: int, how: Optional[str]) -> None:
         ident
         + " used "
         + str(len(idea.uses) + 1)
-        + ' times. Anything wrong with it? vinci issue "..." '
+        + ' times. Anything wrong with it? vinci journal issue "..." '
         + ident
     )
 
@@ -474,7 +474,7 @@ def retire(s: Session, idx: int, why: str) -> None:
 def ideas_list(s: Session) -> None:
     """Every idea, with its stage, touch time, age and flow."""
     if len(s.state.ideas) == 0:
-        print('No ideas yet. vinci idea "title"')
+        print('No ideas yet. vinci journal idea "title"')
         return
     for idx, i in enumerate(s.state.ideas):
         age = s.now.utc - i.born.utc

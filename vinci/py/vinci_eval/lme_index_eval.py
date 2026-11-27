@@ -262,6 +262,7 @@ def recall(
     completed = run_vinci(
         binary,
         [
+            "journal",
             "recall",
             "--json",
             "--limit",

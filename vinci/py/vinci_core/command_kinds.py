@@ -48,7 +48,7 @@ def command_table() -> list[CommandKind]:
         c("missed", True), c("review", True),
         # vinci.py: routed before the journal is read
         c("chat", True, True), c("serve", False, True), c("index", False, True),
-        c("feed", False, True), c("recall", False, True), c("open", False, True),
+        c("feed", False, True), c("recall", False), c("open", False),
         c("backup", False, True), c("verify", False, True),
     ]
 

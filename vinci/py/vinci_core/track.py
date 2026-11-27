@@ -1,7 +1,7 @@
 """The window and git tracker. It runs before every journal command (not serve, and not the
 index, recall, open or feed commands). It credits the window time since the last sync as
 "spent" facts dated when that time ended, at most one "used" fact a day for what was shipped,
-and commits under an idea's home as "work" facts, then writes one "sync" fact. `vinci sync`
+and commits under an idea's home as "work" facts, then writes one "sync" fact. `vinci journal sync`
 prints the lines it wrote.
 
 The reads from outside (ActivityWatch's query, git, the machine's UTC offset, the case folding)
@@ -38,7 +38,7 @@ from .timeutil import (
 
 # Shown by sync and by watches when nothing is watched.
 NOTHING_WATCHED = (
-    "Nothing is watched. vinci home <idea> <folder>, or vinci watch <idea>"
+    "Nothing is watched. vinci journal home <idea> <folder>, or vinci journal watch <idea>"
     ' "text in its window titles"'
 )
 NO_ANSWER = (

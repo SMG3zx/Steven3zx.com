@@ -1,4 +1,4 @@
-"""What `vinci open` prints for one stored text: the header, and part of its lines.
+"""What `vinci journal open` prints for one stored text: the header, and part of its lines.
 
 Lines are 1-based. `lines=A-B` takes the lines A to B (B is clipped to the last line). `grep=word`
 takes each line that contains word, ignoring ASCII case, with one line of context on each side.

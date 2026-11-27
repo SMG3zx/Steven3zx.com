@@ -99,7 +99,7 @@ def stderr_line(text: str) -> None:
 
 
 def pipeline(journal_path: str, now: Instant) -> None:
-    """`vinci pipeline`, run in this process: it prints to standard output."""
+    """`vinci journal pipeline`, run in this process: it prints to standard output."""
     # pipeline only reads, so it takes no lock.
     s = Session(JournalTx(journal_path), now)
     try:

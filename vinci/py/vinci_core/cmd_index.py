@@ -1,7 +1,7 @@
 """The index and recall commands: `vinci index rebuild|update|stats|load|embed`,
-`vinci recall [--json] [--limit N] [--routes lexical,vector] [--index PATH] [--label L]
+`vinci journal recall [--json] [--limit N] [--routes lexical,vector] [--index PATH] [--label L]
 [--base-url U] [--cache PATH] [--budget N [--whole N] [--tokenizer-url U]] <query...>`, and
-`vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]`. None of them changes the
+`vinci journal open <id> [lines=A-B] [grep=word] [--index PATH] [--json]`. None of them changes the
 journal. Index files live beside it, or at --index PATH.
 
 Port of mojo/src/cmd_index.mojo.
@@ -328,11 +328,11 @@ def weights_from_env() -> str:
 
 
 def recall_command(args: list[str], home: str) -> None:
-    """vinci recall: the best current versions for a question, as text or JSON."""
+    """vinci journal recall: the best current versions for a question, as text or JSON."""
     opts = parse_options(args)
     if len(opts.rest) == 0:
         raise user_error(
-            "usage: vinci recall [--json] [--limit N] [--routes lexical]"
+            "usage: vinci journal recall [--json] [--limit N] [--routes lexical]"
             " [--index PATH] [--weights lexical=W,vector=W[,k=K]] <query...>"
         )
     query = " ".join(opts.rest)
@@ -375,7 +375,7 @@ def recall_command(args: list[str], home: str) -> None:
 
 
 def open_command(args: list[str], home: str) -> None:
-    """vinci open: part of the fact or handle an id names, as text or JSON.
+    """vinci journal open: part of the fact or handle an id names, as text or JSON.
 
     The id is the first argument that is not lines= or grep=. An id can name more than one
     fact (an idea and its work lines), and each is opened in turn.
@@ -397,7 +397,7 @@ def open_command(args: list[str], home: str) -> None:
         else:
             raise user_error("open takes one id, got " + ident + " and " + a)
     if len(ident) == 0:
-        raise user_error("usage: vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]")
+        raise user_error("usage: vinci journal open <id> [lines=A-B] [grep=word] [--index PATH] [--json]")
     if req.has_lines and req.has_grep:
         raise user_error("give lines= or grep=, not both")
     path = index_path_of(opts, home)

@@ -1,4 +1,4 @@
-"""The open tool's output for the chat. What `vinci open` prints for each fact of an id, joined,
+"""The open tool's output for the chat. What `vinci journal open` prints for each fact of an id, joined,
 then cut to OPEN_TOTAL_BYTES. The cut goes at a line boundary when there is one, and the notice says
 how many bytes were not shown and what to open next. The notice is counted in the cap.
 
@@ -49,7 +49,7 @@ def cap_output(text: str, ident: str, multi: bool) -> str:
 
 
 def open_text(items: list[Stored], ident: str, req: Request) -> str:
-    """The views of every fact an id names, each rendered as `vinci open` renders it, joined with
+    """The views of every fact an id names, each rendered as `vinci journal open` renders it, joined with
     a blank line, then capped. Raises as build_view does (a lines= range past the end)."""
     out = ""
     for i, item in enumerate(items):

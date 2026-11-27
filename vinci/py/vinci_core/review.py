@@ -88,7 +88,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     + day(state.commitments[open_index].at)
                     + " is due: "
                     + clip(state.commitments[open_index].text, 50),
-                    'vinci kept, or vinci missed "why"',
+                    'vinci journal kept, or vinci journal missed "why"',
                 )
             )
     else:
@@ -99,7 +99,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     1,
                     "week",
                     "no commitment for this week",
-                    'vinci commit "the one thing I will get done" [idea]',
+                    'vinci journal commit "the one thing I will get done" [idea]',
                 )
             )
 
@@ -113,7 +113,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
         if stage == INCUBATE:
             if idea.incubate_until is not None:
                 if now.utc >= idea.incubate_until.utc:
-                    found.append(Finding(3, ident, "incubation is over: " + title, "vinci advance " + ident))
+                    found.append(Finding(3, ident, "incubation is over: " + title, "vinci journal advance " + ident))
             continue
 
         if stage == TEND and len(idea.uses) == 0:
@@ -126,7 +126,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                         4,
                         ident,
                         "shipped " + span(since) + " ago and never used: " + title,
-                        "use it and vinci used " + ident + ", or vinci retire " + ident + ' "why"',
+                        "use it and vinci journal used " + ident + ", or vinci journal retire " + ident + ' "why"',
                     )
                 )
 
@@ -136,7 +136,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     3,
                     ident,
                     "has no home, so its time is not counted: " + title,
-                    "vinci home " + ident + " <folder>, or vinci watch " + ident + ' "text in its window titles"',
+                    "vinci journal home " + ident + " <folder>, or vinci journal watch " + ident + ' "text in its window titles"',
                 )
             )
 
@@ -148,7 +148,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     6,
                     ident,
                     "untouched for " + span(idle) + ": " + title,
-                    "work on it, vinci tend " + ident + ' "...", or vinci retire ' + ident + ' "why"',
+                    "work on it, vinci journal tend " + ident + ' "...", or vinci journal retire ' + ident + ' "why"',
                 )
             )
 
@@ -161,14 +161,14 @@ def findings(state: State, now: Instant) -> list[Finding]:
         ident = x.id
         text = clip(x.text, 50)
         if x.root_cause is None:
-            found.append(Finding(rank, ident, size + "no root cause yet: " + text, "vinci diagnose " + ident + ' "root cause"'))
+            found.append(Finding(rank, ident, size + "no root cause yet: " + text, "vinci journal diagnose " + ident + ' "root cause"'))
         else:
             found.append(
                 Finding(
                     rank,
                     ident,
                     size + "diagnosed but nothing changed: " + text,
-                    'vinci principle "what I do from now on" ' + ident,
+                    'vinci journal principle "what I do from now on" ' + ident,
                 )
             )
 
@@ -194,7 +194,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     8,
                     h.id,
                     "predicted " + span(age) + " ago and never tested: " + clip(h.text, 50),
-                    "run the test, then vinci result " + h.id + ' right|wrong "what happened"',
+                    "run the test, then vinci journal result " + h.id + ' right|wrong "what happened"',
                 )
             )
 
@@ -217,7 +217,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     + num(limits.lower)
                     + ".."
                     + num(limits.upper),
-                    'find the special cause, then vinci issue "..."',
+                    'find the special cause, then vinci journal issue "..."',
                 )
             )
 
@@ -231,7 +231,7 @@ def findings(state: State, now: Instant) -> list[Finding]:
                     10,
                     n.id,
                     "note connects to nothing: " + clip(n.text, 50),
-                    "vinci link " + n.id + " <note or idea>",
+                    "vinci journal link " + n.id + " <note or idea>",
                 )
             )
 
@@ -253,12 +253,12 @@ def next_step(state: State, now: Instant) -> NextStep:
     for k in order:
         if state.ideas[k].stage == BUILD:
             ident = state.ideas[k].id
-            return NextStep("build " + ident + ": " + state.ideas[k].title, 'vinci ship ' + ident + ' "what shipped"')
+            return NextStep("build " + ident + ": " + state.ideas[k].title, 'vinci journal ship ' + ident + ' "what shipped"')
     for k in order:
         stage = state.ideas[k].stage
         if stage in (PREPARE, SEED):
             ident = state.ideas[k].id
-            return NextStep("move " + ident + " forward: " + state.ideas[k].title, "vinci advance " + ident)
+            return NextStep("move " + ident + " forward: " + state.ideas[k].title, "vinci journal advance " + ident)
     for k in order:
         if state.ideas[k].stage == TEND:
             met = state.goal_met(k)
@@ -267,9 +267,9 @@ def next_step(state: State, now: Instant) -> NextStep:
                 metric = state.ideas[k].goal_metric or ""
                 return NextStep(
                     ident + " has not met its goal: " + state.ideas[k].title,
-                    "vinci log " + metric + " <value>",
+                    "vinci journal log " + metric + " <value>",
                 )
-    return NextStep("nothing is waiting on you", 'vinci idea "title"')
+    return NextStep("nothing is waiting on you", 'vinci journal idea "title"')
 
 
 def slowest_stage(state: State, now: Instant) -> Optional[SlowestStage]:

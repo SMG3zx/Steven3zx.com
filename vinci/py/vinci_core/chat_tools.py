@@ -89,7 +89,7 @@ CATEGORIES = " fact preference decision procedure episode "
 
 
 def routes() -> list[str]:
-    """The routes a recall runs: lexical and vector, as the default of `vinci recall`."""
+    """The routes a recall runs: lexical and vector, as the default of `vinci journal recall`."""
     return ["lexical", "vector"]
 
 
@@ -198,7 +198,7 @@ class ChatTools:
             return "error: vinci: unknown command '" + command + "'. Run 'vinci help'."
         if not self.allowed("journal", action):
             return refusal()
-        json_args = "[" + ",".join(json_string(a) for a in args) + "]"
+        json_args = "[" + ",".join(json_string(a) for a in ["journal", *args]) + "]"
         # A read-only command runs without the tracker: the tracker writes spent, work and used
         # lines, and only a command the person allowed may write (command_kinds.py).
         code, text = chat_edge.run_vinci(self.exe, json_args, not is_write_call("journal", args))

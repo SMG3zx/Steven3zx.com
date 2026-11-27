@@ -126,12 +126,6 @@ def run(args: list[str]) -> int:
     if args[0] == "feed":
         feed_command(args[1:], vinci_home(), journal_path(), now)
         return 0
-    if args[0] == "recall":
-        recall_command(args[1:], vinci_home())
-        return 0
-    if args[0] == "open":
-        open_command(args[1:], vinci_home())
-        return 0
     # Backup and verify read the journal under its lock and never run the tracker.
     if args[0] == "backup":
         backup_command(args[1:], vinci_home(), journal_path(), now)
@@ -140,7 +134,28 @@ def run(args: list[str]) -> int:
         return verify_command(args[1:], vinci_home(), journal_path(), now)
 
     cmd = args[0]
-    rest = list(args[1:])
+    if cmd == "journal":
+        # Every journal command, and the two lookups, run under this word. The chat runs the
+        # same words through it.
+        if len(args) < 2:
+            raise user_error("usage: vinci journal <command> [arguments]. Run 'vinci help'.")
+        sub = args[1]
+        if sub == "recall":
+            recall_command(args[2:], vinci_home())
+            return 0
+        if sub == "open":
+            open_command(args[2:], vinci_home())
+            return 0
+        return run_journal_command(sub, list(args[2:]), now)
+    if cmd in ("path", "help"):
+        return run_journal_command(cmd, list(args[1:]), now)
+    if find_command(cmd) >= 0:
+        raise user_error("'" + cmd + "' is a journal command. Run it as 'vinci journal " + cmd + "'.")
+    raise user_error("unknown command '" + cmd + "'. Run 'vinci help'.")
+
+
+def run_journal_command(cmd: str, rest: list[str], now: Instant) -> int:
+    """One journal command (command_kinds.py): tracked, locked when it writes, committed once."""
     # An unknown word is refused before anything is read or written.
     if find_command(cmd) < 0:
         raise user_error("unknown command '" + cmd + "'. Run 'vinci help'.")

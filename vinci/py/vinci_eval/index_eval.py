@@ -95,6 +95,7 @@ def run_recall(
     completed = subprocess.run(
         [
             str(binary),
+            "journal",
             "recall",
             "--json",
             "--limit",

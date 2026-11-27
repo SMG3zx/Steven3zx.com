@@ -93,7 +93,7 @@ smoke() {
 }
 smoke_failed=0
 # A new home has no index yet, so the index is built first.
-for args in "stats" "index rebuild" "recall x" "help"; do
+for args in "journal stats" "index rebuild" "journal recall x" "help"; do
 	# shellcheck disable=SC2086
 	if smoke $args > "$tmp/smoke.out" 2>&1; then
 		echo "vinci $args: exit 0, $(wc -l < "$tmp/smoke.out") lines"

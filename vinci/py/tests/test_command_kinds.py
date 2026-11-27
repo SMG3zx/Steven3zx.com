@@ -18,7 +18,7 @@ from vinci_core.command_kinds import (
 
 CORE = Path(__file__).resolve().parents[1] / "vinci_core"
 CLI = Path(__file__).resolve().parents[1] / "vinci_cli" / "vinci.py"
-JOURNAL_SOURCES = [CORE / "cmd_ideas.py", CORE / "cmd_knowledge.py", CORE / "cmd_ops.py"]
+JOURNAL_SOURCES = [CORE / "cmd_ideas.py", CORE / "cmd_knowledge.py", CORE / "cmd_ops.py", CLI]
 QUOTED = re.compile(r'"([^"]*)"')
 
 
@@ -27,7 +27,7 @@ def dispatch_words() -> list[str]:
     words: list[str] = []
     for path in JOURNAL_SOURCES:
         for line in path.read_text(encoding="utf-8").splitlines():
-            if "cmd ==" in line or "cmd in (" in line:
+            if "cmd ==" in line or "cmd in (" in line or "sub ==" in line:
                 for word in QUOTED.findall(line):
                     if word and word not in words:
                         words.append(word)
@@ -49,6 +49,8 @@ def test_every_dispatched_word_is_classified() -> None:
     seen = dispatch_words()
     assert len(seen) > 40, "the dispatch sources yielded too few words"
     for w in seen:
+        if w == "journal":  # the word that wraps every journal command, not a command itself
+            continue
         assert find_command(w) >= 0, "dispatch word '" + w + "' is not in command_kinds"
     for w in route_words():
         assert find_command(w) >= 0, "routed word '" + w + "' is not in command_kinds"
@@ -75,8 +77,10 @@ def test_chat_fence_and_gate() -> None:
     assert command_writes_journal("idea")
     assert command_writes_journal("sync")
     assert command_writes_journal("review")
-    for w in ["chat", "serve", "index", "feed", "recall", "open", "backup", "verify"]:
+    for w in ["chat", "serve", "index", "feed", "backup", "verify"]:
         assert not chat_runs(w), "the chat must refuse '" + w + "'"
+    # recall and open are read-only journal words now, so the journal tool runs them.
+    assert chat_runs("recall") and chat_runs("open")
     assert not chat_runs("nosuch")
     assert command_writes_journal("nosuch"), "an unknown word is a write"
     assert not is_write_call("journal", ["ideas"])

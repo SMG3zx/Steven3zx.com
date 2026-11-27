@@ -102,7 +102,7 @@ def unbookmark(s: Session, ident: str) -> None:
 def bookmarks(s: Session) -> None:
     """Every saved link, one per line."""
     if len(s.state.bookmarks) == 0:
-        print('No bookmarks yet. vinci bookmark "title" <url> ["what it is for"] [+tag...]')
+        print('No bookmarks yet. vinci journal bookmark "title" <url> ["what it is for"] [+tag...]')
         return
     for b in s.state.bookmarks:
         line = pad_right(b.id, 4) + " " + b.title + "  " + b.url
@@ -117,7 +117,7 @@ def new_source(s: Session, citation: str, url: Optional[str]) -> None:
     """A place knowledge came from. Notes cite it by id."""
     ident = s.state.next_id("s")
     s.record(Event(s.now, "source", id=ident, text=citation, url=url))
-    print(ident + ' recorded. Cite it with the place: vinci note "one idea, in your own' + ' words" ' + ident + ":p.12")
+    print(ident + ' recorded. Cite it with the place: vinci journal note "one idea, in your own' + ' words" ' + ident + ":p.12")
 
 
 def colon_index(text: str) -> int:
@@ -213,7 +213,7 @@ def tags(s: Session) -> None:
         for t in note.tags:
             counts[t] = counts.get(t, 0) + 1
     if len(counts) == 0:
-        print('No tags yet. Add one to a note: vinci note "..." +subject')
+        print('No tags yet. Add one to a note: vinci journal note "..." +subject')
         return
     # Count descending, then name ordinal. Names are unique.
     for name, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
@@ -223,7 +223,7 @@ def tags(s: Session) -> None:
 def sources(s: Session) -> None:
     """Every source with its url and how many notes cite it."""
     if len(s.state.sources) == 0:
-        print('No sources yet. vinci source "citation" [url]')
+        print('No sources yet. vinci journal source "citation" [url]')
         return
     for src in s.state.sources:
         line = pad_right(src.id, 4) + " " + src.citation
@@ -348,7 +348,7 @@ def predict(s: Session, text: str, percent: float, idea_id: Optional[str]) -> No
         ident
         + " predicted at "
         + num(percent)
-        + '%. Test it, then: vinci result '
+        + '%. Test it, then: vinci journal result '
         + ident
         + ' right|wrong "what happened"'
     )
@@ -365,13 +365,13 @@ def result(s: Session, ident: str, verdict: str, outcome: str) -> None:
         raise user_error("say right or wrong, not '" + verdict + "'")
     value = 1.0 if verdict == "right" else 0.0
     s.record(Event(s.now, "result", id=ident, text=outcome, value=value))
-    print(ident + " was " + verdict + '. Keep what you learned: vinci note "..." ' + ident)
+    print(ident + " was " + verdict + '. Keep what you learned: vinci journal note "..." ' + ident)
 
 
 def predictions(s: Session) -> None:
     """Every prediction, then your calibration once some are settled."""
     if len(s.state.predictions) == 0:
-        print('No predictions yet. vinci predict "what you expect" <percent> [idea]')
+        print('No predictions yet. vinci journal predict "what you expect" <percent> [idea]')
         return
     for h in s.state.predictions:
         print(prediction_line(h))
@@ -445,7 +445,7 @@ def spec(s: Session, metric: str, lo: float, hi: float) -> None:
 def metrics(s: Session) -> None:
     """Stats with no name: one line per measured metric."""
     if len(s.state.metrics) == 0:
-        print("Nothing measured yet. vinci log <metric> <value>")
+        print("Nothing measured yet. vinci journal log <metric> <value>")
         return
     for m in s.state.metrics:
         count = len(m.points)
@@ -521,7 +521,7 @@ def metric_detail(s: Session, name: str) -> None:
         defects = sum(1 for v in values if v < lo or v > hi)
         print("spec     " + num(lo) + " .. " + num(hi) + ": " + str(defects) + " of " + str(count) + " outside")
     else:
-        print("spec     none. Say what good looks like: vinci spec " + name + " <low> <high>")
+        print("spec     none. Say what good looks like: vinci journal spec " + name + " <low> <high>")
 
 
 def dispatch_knowledge(s: Session, cmd: str, args: list[str]) -> bool:

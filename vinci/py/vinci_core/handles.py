@@ -1,4 +1,4 @@
-"""Handles and the ids that `vinci open` reads.
+"""Handles and the ids that `vinci journal open` reads.
 
 A handle is text too long to put into a context whole. It is saved under an id with a short
 digest, and `open` reads part of it later. Handle ids are "t" ids (t1, t2 ...). No journal id

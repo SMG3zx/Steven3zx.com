@@ -93,7 +93,7 @@ def worker(binary: Path, home: Path, unlocked: bool, worker_id: int, lines: int)
     for n in range(lines):
         title = f"race worker {worker_id} line {n}"
         done = subprocess.run(
-            [str(binary), "idea", title],
+            [str(binary), "journal", "idea", title],
             env=env,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
@@ -165,7 +165,7 @@ def reader(binary: Path, home: Path, rounds: int) -> list[str]:
     for n in range(rounds):
         for word in ("ideas", "stats"):
             done = subprocess.run(
-                [str(binary), word],
+                [str(binary), "journal", word],
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
