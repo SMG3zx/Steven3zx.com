@@ -107,6 +107,8 @@ class IndexStore:
     def __init__(self, path: str) -> None:
         """Open or create the index at path, and check its schema version."""
         self.path: str = path
+        if path != ":memory:":
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         self.conn: sqlite3.Connection = sqlite3.connect(path)
         # The schema is one transaction: each separate statement would fsync on its own.
         self.conn.execute("BEGIN IMMEDIATE")
