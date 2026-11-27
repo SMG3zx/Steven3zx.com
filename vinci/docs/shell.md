@@ -23,4 +23,4 @@ Errors go to standard error and the exit code is 1.
 
 ## Top-level commands
 
-`vinci`, `vinci chat`, `vinci serve`, `vinci index`, `vinci feed`, `vinci backup`, `vinci verify`, `vinci path` and `vinci help`.
+`vinci`, `vinci chat`, `vinci brief`, `vinci serve`, `vinci index`, `vinci feed`, `vinci backup`, `vinci verify`, `vinci path` and `vinci help`.

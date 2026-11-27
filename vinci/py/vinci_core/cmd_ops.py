@@ -16,6 +16,7 @@ from .review import COMMITMENT_LENGTH, findings
 from .session import Session, user_error
 from .state import FINDINGS_METRIC, stage_name
 from .cmd_ideas import issue_line
+from .brief import brief
 from .text import day, num, pad_right, tail
 
 HELP = """vinci: one journal for ideas, knowledge, time and measurements.
@@ -30,6 +31,7 @@ time and goals in the journal and does the work through its tools.
   vinci feed [...]         read the feeds into the index
   vinci backup [...]       copy the journal to a backup folder
   vinci verify [...]       check the journal against its backups
+  vinci brief              the daily brief: commitments, review, this week, time per idea
   vinci path               print where the journal is
   vinci help               this text
 """
@@ -247,6 +249,9 @@ def run_review(s: Session) -> None:
 def dispatch_ops(s: Session, cmd: str, args: list[str]) -> bool:
     if cmd == "help":
         print(HELP, end="")
+        return True
+    if cmd == "brief":
+        print(brief(s.journal.read(), s.state, s.now), end="")
         return True
     if cmd == "path":
         print(s.journal.path)

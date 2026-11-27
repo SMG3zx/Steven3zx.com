@@ -141,7 +141,7 @@ def run(args: list[str]) -> int:
             open_command(args[2:], vinci_home())
             return 0
         return run_journal_command(sub, list(args[2:]), now)
-    if cmd in ("path", "help"):
+    if cmd in ("path", "help", "brief"):
         return run_journal_command(cmd, list(args[1:]), now)
     if find_command(cmd) >= 0:
         raise user_error("'" + cmd + "' is a journal command. Run it as 'vinci journal " + cmd + "'.")
