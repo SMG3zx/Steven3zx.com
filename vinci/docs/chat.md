@@ -1,6 +1,6 @@
 # Talking to vinci
 
-`vinci` with no command opens the chat. It is the way to do everything: the chat model (Swift-Qwen3.8-27B, IQ3_XXS, served by llama-server) is in the conversation, and the journal, the index (recall) and `open` are its tools. `vinci chat` does the same. `vinci pipeline` prints the stages on their own.
+`vinci` with no command opens the chat. It is the way to do everything: the chat model (Swift-Qwen3.8-27B, IQ3_XXS, served by llama-server) is in the conversation, and the journal, the index (recall) and `open` are its tools. `vinci chat` does the same. `vinci journal pipeline` prints the stages on their own.
 
 ```text
 you> Make an idea called Flying machine for one pilot.

@@ -5,9 +5,9 @@
 - **Bookmarks** are facts in the journal:
 
   ```sh
-  vinci bookmark "Qwik Docs" https://qwik.dev/ "Official documentation" +docs +qwik
-  vinci bookmarks
-  vinci unbookmark b1
+  vinci journal bookmark "Qwik Docs" https://qwik.dev/ "Official documentation" +docs +qwik
+  vinci journal bookmarks
+  vinci journal unbookmark b1
   ```
 
 - **Project links.** A project lists its own links in a `portal.json` at its root, an array of `{ "title", "url", "description"?, "tags"? }`. vinci reads every tracked `portal.json` in each repository an idea lives in, so a new project's links appear once the file is committed. Entries without a title or an http address are skipped, and `cold-storage/` folders are never read.

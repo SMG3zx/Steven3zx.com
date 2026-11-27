@@ -25,7 +25,7 @@ The LongMemEval stage reproduces the M3 record with the old equal fusion weights
 
 ## Fresh clone
 
-`sh py/scripts/fresh-clone-check.sh` proves that the repository works from a clean clone. It makes a sparse, shallow clone of `vinci/` from origin, runs `make test` with no `dotnet` on `PATH`, does a scratch install (`VINCI_APP_DIR` set, so the portal is not restarted), and runs `vinci stats`, `vinci index rebuild`, `vinci recall x` and `vinci help` from `/` with a temporary `VINCI_HOME`.
+`sh py/scripts/fresh-clone-check.sh` proves that the repository works from a clean clone. It makes a sparse, shallow clone of `vinci/` from origin, runs `make test` with no `dotnet` on `PATH`, does a scratch install (`VINCI_APP_DIR` set, so the portal is not restarted), and runs `vinci journal stats`, `vinci index rebuild`, `vinci journal recall x` and `vinci help` from `/` with a temporary `VINCI_HOME`.
 
 The toolchain is pinned in `py/pyproject.toml` (Python 3.13 or later, with pytest and ruff as dev tools) and run through `uv`. Nothing else is needed: no .NET and no database. `unset VIRTUAL_ENV` before `uv run` if another project's environment is active; the Makefile does this for its own commands.
 

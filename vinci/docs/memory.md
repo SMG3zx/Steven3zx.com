@@ -152,7 +152,7 @@ vinci index update                        # add the journal lines after the stor
 vinci index stats                        # facts per kind, file size, last build
 vinci index load records.jsonl --index P  # external records (one JSON object per line)
 vinci index embed [--label L] [--base-url U] [--cache PATH]   # vectors for facts without one (step 2b)
-vinci recall [--json] [--limit N] [--routes lexical,vector] [--index P] [--label L] [--base-url U] [--cache PATH] <query...>
+vinci journal recall [--json] [--limit N] [--routes lexical,vector] [--index P] [--label L] [--base-url U] [--cache PATH] <query...>
 ```
 
 The index is `$VINCI_HOME/index.sqlite`, or `--index PATH`. None of these commands writes the journal. Code: `py/vinci_core/index_store.py` (schema, versioning), `index_build.mojo` (the mapping, the incremental build, the loader), `recall.mojo` (tokens, FTS5 query, routes), `cmd_index.mojo` (the commands). Tests: `py/tests/test_index_store.py`, `test_index_build.mojo`, `test_index_recall.mojo`.
@@ -259,7 +259,7 @@ Abstention, the corrective query, date ranges, the vector route and fusion are b
 
 Step 2b of [the one-journal plan](history/plan-one-journal-one-index.md), phase 2: vectors, fusion, abstention, the corrective query and date boosts. Status: **both sets are measured.** Verdict below: phase 2's done-when is met on both sets. Tokens per answer are higher than M1 on the personal set, and phase 3 is where they get cut.
 
-**Personal set** (v2, 60 questions, staging journal of 342 lines, 281 facts, `vinci recall --limit 10`, tokens from llama-server `/tokenize`):
+**Personal set** (v2, 60 questions, staging journal of 342 lines, 281 facts, `vinci journal recall --limit 10`, tokens from llama-server `/tokenize`):
 
 | Route mix | v2 hit | v2 abstention | v2 tokens mean / median |
 | --- | --- | --- | --- |
@@ -301,8 +301,8 @@ The index abstained on 2 of the 10 abstention questions in every route mix. The 
 Items 1 and 2 of phase 3 of [the one-journal plan](history/plan-one-journal-one-index.md), with the packing from item 2. Items 3 to 5 are the budget sweep for answers, the summarize step and the write confirmation. The sweep, the summarize step and the confirmation are not built.
 
 ```sh
-vinci open <id> [lines=A-B] [grep=word] [--index PATH] [--json]
-vinci recall --budget N [--whole N] [--tokenizer-url URL] [--json] <query...>
+vinci journal open <id> [lines=A-B] [grep=word] [--index PATH] [--json]
+vinci journal recall --budget N [--whole N] [--tokenizer-url URL] [--json] <query...>
 ```
 
 Code: `py/vinci_core/handles.py` (ids, the handles table, the lookup), `open_view.mojo` (what `open` prints), `pack.mojo` (the packed context and the counters), `cmd_index.mojo` (the commands). Tests: `py/tests/test_open.py`, `test_pack.mojo`. The exact counter is `py/vinci_edge/llama_count.py`.
@@ -327,7 +327,7 @@ Code: `py/vinci_core/handles.py` (ids, the handles table, the lookup), `open_vie
 
 ### Packed recall
 
-`vinci recall --budget N` packs the results instead of listing them. Results are best first, and the packer takes them in that order.
+`vinci journal recall --budget N` packs the results instead of listing them. Results are best first, and the packer takes them in that order.
 
 ```
 [e1] 2026-11-15 exchange: What do I know about the embedding model the project uses?
@@ -385,8 +385,8 @@ uv run python -m vinci_eval.budget_sweep --set both                             
 uv run python -m vinci_eval.budget_sweep --summary --out ~/.vinci/eval/results/budget-sweep-<date>.jsonl
 ```
 
-- **Sets.** `lme`: the fixed 100 LongMemEval questions, configurations `baseline`, `b500w2`, `b1000w2`, `b1000w10`, `b2000w10`, `b3000w10`, `b5000w10` (`b<N>w<W>` is `vinci recall --budget N --whole W`; with `--whole 10` the packer fills whole records until the budget and turns the rest into pointers). Each question's index is `~/.vinci/eval/lme-index/<qid>.sqlite` (built by `lme_index_eval`, embeddings from the cache). `personal`: the 60 v2 questions on a temporary copy of the staging journal, index and docs, configurations `baseline`, `b100w2`, `b150w2`, `b250w2`, `b250w10`, `b500w10`. The staging home is only read.
-- **Configurations.** `baseline` is the unbudgeted top 10 with every record whole (`--budget 10000000 --whole 10`). A budget row is `vinci recall --budget N --whole W`. All use `--limit 10`. Context tokens are `ceil(bytes / 4)` for the baseline, and the binary's `packed_tokens` for a budget, which must match that estimator.
+- **Sets.** `lme`: the fixed 100 LongMemEval questions, configurations `baseline`, `b500w2`, `b1000w2`, `b1000w10`, `b2000w10`, `b3000w10`, `b5000w10` (`b<N>w<W>` is `vinci journal recall --budget N --whole W`; with `--whole 10` the packer fills whole records until the budget and turns the rest into pointers). Each question's index is `~/.vinci/eval/lme-index/<qid>.sqlite` (built by `lme_index_eval`, embeddings from the cache). `personal`: the 60 v2 questions on a temporary copy of the staging journal, index and docs, configurations `baseline`, `b100w2`, `b150w2`, `b250w2`, `b250w10`, `b500w10`. The staging home is only read.
+- **Configurations.** `baseline` is the unbudgeted top 10 with every record whole (`--budget 10000000 --whole 10`). A budget row is `vinci journal recall --budget N --whole W`. All use `--limit 10`. Context tokens are `ceil(bytes / 4)` for the baseline, and the binary's `packed_tokens` for a budget, which must match that estimator.
 - **Embeddings.** No embedding is computed. The base URL is closed, the LME runs use the same GPU label, cache and CPU corrective-query fallback as `lme_index_eval`, and the personal runs use the cache at `~/.vinci/index/embed-cache.sqlite`. A recall that needs an uncached vector exits non-zero, and that question is written as an error row.
 - **Answer.** The chat model on `127.0.0.1:8080` (the id comes from `/v1/models`), temperature 0, `max_tokens` 256, thinking off with `chat_template_kwargs`, and any `<think>` block stripped. The prompt is a short system prompt, the packed excerpts, the question date (LME only) and the question.
 - **Judge.** The same model, with LongMemEval's `evaluate_qa` prompts by question type, and the abstention prompt for ids ending in `_abs`. The prompts are reconstructed, since the LongMemEval repository is not on this machine. For personal questions the reference is the list of `expectedContains` strings, which the reply must state in any wording. Judging by the answering model is self-judging, so the summary says so.
@@ -513,11 +513,11 @@ Status: **measured on all three sets, default changed for route semantic.** The 
 
 **Why.** Equal weights were worse than vector alone on LongMemEval (all@10 94.4 against 98.9) and on the feed set (13 of 15 against 15, the misses f-01 and f-15, both temporal route). A lexical-only candidate at rank 1 weighs as much as a vector-only one at rank 1, so lexical noise displaces vector hits. On the personal set fusion already beats vector alone (36 of 48 against 34).
 
-**Eval-only override** (`vinci recall`, not chat):
+**Eval-only override** (`vinci journal recall`, not chat):
 
 ```sh
-vinci recall --weights lexical=0.25,vector=1[,k=60][,scope=semantic|all] <query...>
-VINCI_RECALL_WEIGHTS=lexical=0.25,vector=1 vinci recall <query...>     # the flag wins
+vinci journal recall --weights lexical=0.25,vector=1[,k=60][,scope=semantic|all] <query...>
+VINCI_RECALL_WEIGHTS=lexical=0.25,vector=1 vinci journal recall <query...>     # the flag wins
 ```
 
 - `lexical` and `vector` are both needed, neither negative, the sum above zero. Only the ratio orders results, since route scores divide by the peak. `k` is the RRF constant.

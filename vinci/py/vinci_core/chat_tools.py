@@ -76,6 +76,8 @@ journal runs one vinci command. Its args are the command word, then its argument
 To list things, use the plural word: ideas, notes, sources, predictions, issues, principles. show takes one id, such as i1.
 Each call runs one command. To do two things, make two calls.
 The command words are: {COMMAND_WORDS}.
+Every idea moves through five stages: Seed, Prepare, Incubate, Build, Tend. When you report an idea's progress, name its stage.
+When the person says where an idea lives, or which window or text counts as its work, set it yourself with journal home or journal watch. Never ask them to type a command.
 recall returns one line per fact, and each line starts with its id in brackets, such as [i1] or [d1/2]. A line that ends with (open <id> for more) is cut: open that id to read the rest.
 recall searches only the journal unless you give "sources". Use "git" for the monorepo's commits: what changed in the code, and when. Use "vaults" for the notes folders: Meingrad, Research and the vinci docs. Use "git,vaults" for both, or "all" for the journal and both feeds. With "all", the journal's lines come first and up to three feed lines follow. A line from git is labelled "git commit", and one from the notes "vault section". Those are not the person's own writing: cite them as [id] like any line, and say where they came from. If recall abstains and says that feed records may match, ask again with "sources": "git,vaults" before you answer that nothing is known.
 open shows part of one id: lines=A-B for a range of lines, or grep=word for the lines that contain a word. Without either it shows the whole fact. Its output is cut at 4000 bytes.

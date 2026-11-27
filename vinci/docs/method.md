@@ -29,7 +29,7 @@ Sources:
 
 ## How it improves itself
 
-`vinci review` counts what is wrong and records the count as the metric `vinci.findings`. `vinci stats vinci.findings` then shows whether the system is getting healthier, using the same control chart as any other measurement.
+`vinci journal review` counts what is wrong and records the count as the metric `vinci.findings`. `vinci journal stats vinci.findings` then shows whether the system is getting healthier, using the same control chart as any other measurement.
 
 The software does not rewrite itself. Improvement is a loop you run: a finding becomes an issue, an issue gets a root cause, a root cause becomes a principle or a change to this code. Track vinci as an idea inside vinci and log its problems there.
 
@@ -44,4 +44,4 @@ The software does not rewrite itself. Improvement is a loop you run: a finding b
 - **A database for the journal.** One file does the job. The journal is plain text. Neo4j was used for memory until mark 2, and was removed.
 - **Editing and deleting facts.** Correct a fact by recording a new one.
 - **A timer.** `start` and `stop` were removed: a timer you have to remember is a timer left running. Window time is counted instead.
-- **Importers for calendars, health apps and so on.** "Track everything" is `vinci log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.
+- **Importers for calendars, health apps and so on.** "Track everything" is `vinci journal log`, by hand or from a script through a pipe. Automate a source only after you know you look at its numbers. Window time and commits are the two sources that earned it.

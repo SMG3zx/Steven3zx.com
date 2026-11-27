@@ -82,7 +82,7 @@ com.microsoft.VSCode: Journal.cs - vinci - Visual Studio Code
 
 **Denied windows.** A window whose app or title contains one of these terms, without regard to case, is dropped before anything is counted: `1Password`, `Bitwarden`, `KeePass`, `Keychain Access`, `Password Manager`, `Private Browsing`, `Private Window`, `InPrivate`, `Incognito`. The `deny` key in `[activity]` adds terms to that list, and the built-in list always applies, so the config cannot switch the guard off. A denied window is not in the index, and its time is in no total.
 
-**Where it lives.** Its own search table, `fts_activity`, and citation prefix `w`. Not in `fts_feeds`: bm25 counts every row of its table, so activity rows there would move the scores of git and vault answers. `vinci recall --sources activity` searches it. `activity` is in neither the default sources nor `all`.
+**Where it lives.** Its own search table, `fts_activity`, and citation prefix `w`. Not in `fts_feeds`: bm25 counts every row of its table, so activity rows there would move the scores of git and vault answers. `vinci journal recall --sources activity` searches it. `activity` is in neither the default sources nor `all`.
 
 `vinci feed run` with no names runs activity only when it is enabled, and otherwise prints `activity: off in feeds.toml`. `feed status` shows its cursor as the number of window buckets it holds.
 
@@ -100,18 +100,18 @@ The journal's own prefixes are `i r n s x p h b` (and `k m d e t`, as the memory
 
 The number is given once, when the record is first stored, and every later version keeps it. A number is never reused: a retracted record keeps its number, and the next new record takes the next one. A feed rebuild starts the numbers again, since it deletes the feed's facts first.
 
-`vinci open` takes either form: `open g220`, or the record id `open <sha10>` for a commit and `open <path>.md#<slug>` for a section. `open` shows the stored text (the snapshot), not the file again. The reasons are below.
+`vinci journal open` takes either form: `open g220`, or the record id `open <sha10>` for a commit and `open <path>.md#<slug>` for a section. `open` shows the stored text (the snapshot), not the file again. The reasons are below.
 
 ## Recall and the chat
 
-Recall searches the journal only, unless it is asked for more. That is the default of `vinci recall`, of the chat's own recall on the person's words, and of the chat's `recall` tool when it gets no `sources`. So loading feeds does not change any answer about the journal.
+Recall searches the journal only, unless it is asked for more. That is the default of `vinci journal recall`, of the chat's own recall on the person's words, and of the chat's `recall` tool when it gets no `sources`. So loading feeds does not change any answer about the journal.
 
 ```sh
-vinci recall --sources git "when did the index change"     # git only
-vinci recall --sources git,vaults "..."                    # the two feeds
-vinci recall --sources all "..."                           # journal, git and vaults
-vinci recall --sources activity "..."                      # the window time (not in all, nor by default)
-vinci recall --sources journal "..."                       # the default, named
+vinci journal recall --sources git "when did the index change"     # git only
+vinci journal recall --sources git,vaults "..."                    # the two feeds
+vinci journal recall --sources all "..."                           # journal, git and vaults
+vinci journal recall --sources activity "..."                      # the window time (not in all, nor by default)
+vinci journal recall --sources journal "..."                       # the default, named
 ```
 
 An unknown name is an error (`journal`, `git`, `vaults`, `activity`, or `all`). `all` is the three that were always searched together: `activity` has to be named. The chat's `recall` tool takes the same `sources` argument. The tool instructions tell the model when to use each one: `git` for what changed in the code and when, `vaults` for the notes folders. A line from a feed is labelled with its source in the packed text, `[g220] 2026-11-15 git commit: ...` or `[v1839] ... vault section: ...`, so a commit is not taken for a journal line.
