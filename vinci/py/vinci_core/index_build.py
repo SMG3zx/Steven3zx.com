@@ -19,6 +19,7 @@ from typing import Optional
 
 from vinci_edge import feed_edge
 
+from .paths import join_path
 from .feed_store import delete_source_rows
 from .index_store import Fact, IndexStore, sha256_hex
 from .journal import Event, parse_event
@@ -164,12 +165,6 @@ def chunk_body(body: str) -> list[str]:
     if len(cur.strip()) > 0:
         chunks.append(cur)
     return chunks
-
-
-def join_path(directory: str, name: str) -> str:
-    if directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
 
 
 def index_event(store: IndexStore, e: Event, line: int, line_hash: str, home: str, report: BuildReport) -> None:

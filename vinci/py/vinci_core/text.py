@@ -232,3 +232,8 @@ def num(v: float) -> str:
     two = round_half_up(fifteen.digits, fifteen.point, fifteen.point + 2)
     two = Digits(d.negative, two.digits, two.point)
     return fixed_text(two)
+
+
+def tail(args: list[str], start: int) -> list[str]:
+    """The arguments from start on, as a new list. Empty when start is past the end."""
+    return list(args[start:])

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from .portal_assets import portal_css, portal_script
 from .portal_html import html_encode
-from .portal_io import lower_invariant
+from vinci_edge.portal_edge import lower_invariant
 from .portal_link import Link, preview_of
 from .portal_url import host_of
 

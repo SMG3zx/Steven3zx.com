@@ -8,10 +8,9 @@ C# side and lme_embed.py use, keyed by label and exact text.
 
 import json
 import os
-import struct
 from pathlib import Path
 
-from vinci_edge.embed import DEFAULT_CACHE, EmbedCache, Embedder, cache_key
+from vinci_edge.embed import DEFAULT_CACHE, EmbedCache, Embedder, cache_key, pack_vector
 
 LIVE_CACHE_ENV = "VINCI_EVAL_LIVE_CACHE"
 QUERY_LOG_ENV = "VINCI_EVAL_QUERY_LOG"
@@ -31,10 +30,6 @@ def _embedder(
     return embedder, cache_store
 
 
-def _pack(vec: list[float]) -> bytes:
-    return struct.pack(f"<{len(vec)}f", *vec)
-
-
 def documents(
     base_url: str,
     model: str,
@@ -49,7 +44,7 @@ def documents(
         vectors = embedder.documents(texts)
     finally:
         cache_store.close()
-    return [_pack(vec) for vec in vectors]
+    return [pack_vector(vec) for vec in vectors]
 
 
 def query(
@@ -66,7 +61,7 @@ def query(
         vector = embedder.query(question)
     finally:
         cache_store.close()
-    return _pack(vector)
+    return pack_vector(vector)
 
 
 def query_with_fallback(
@@ -104,18 +99,18 @@ def query_with_fallback(
         found = cache_store.get_many([key])
         if key in found:
             source = "gpu"
-            return _pack(found[key])
+            return pack_vector(found[key])
         fallback_key = cache_key(fallback_label, query_text)
         found = cache_store.get_many([fallback_key])
         if fallback_key in found:
             source = "cpu-cached"
-            return _pack(found[fallback_key])
+            return pack_vector(found[fallback_key])
         writer = cache_store
         if live_store is not None:
             found = live_store.get_many([fallback_key])
             if fallback_key in found:
                 source = "cpu-live"
-                return _pack(found[fallback_key])
+                return pack_vector(found[fallback_key])
             writer = live_store
         fallback = Embedder(
             fallback_url,
@@ -126,7 +121,7 @@ def query_with_fallback(
         )
         vector = fallback.query(question)
         source = "cpu-live"
-        return _pack(vector)
+        return pack_vector(vector)
     finally:
         cache_store.close()
         if live_store is not None:

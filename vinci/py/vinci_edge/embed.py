@@ -65,7 +65,7 @@ def read_query_instruction(path: Path = MEMORY_ENV) -> str:
     return DEFAULT_INSTRUCTION
 
 
-def _pack(vec: Sequence[float]) -> bytes:
+def pack_vector(vec: Sequence[float]) -> bytes:
     return struct.pack(f"<{len(vec)}f", *vec)
 
 
@@ -105,7 +105,7 @@ class EmbedCache:
     def put_many(self, label: str, rows: Sequence[tuple[str, Sequence[float]]]) -> None:
         self._db.executemany(
             "INSERT OR IGNORE INTO vectors (key, model, dims, vec) VALUES (?, ?, ?, ?)",
-            [(key, label, len(vec), _pack(vec)) for key, vec in rows],
+            [(key, label, len(vec), pack_vector(vec)) for key, vec in rows],
         )
         self._db.commit()
 
@@ -200,7 +200,7 @@ class Embedder:
             self.cache.put_many(self.label, rows)
             for key, vec in rows:
                 # Use the float32 value that the cache returns, so fresh and cached vectors agree.
-                known[key] = _unpack(_pack(vec), len(vec))
+                known[key] = _unpack(pack_vector(vec), len(vec))
         return [known[key] for key in keys]
 
     def _request(self, inputs: Sequence[str]) -> list[list[float]]:

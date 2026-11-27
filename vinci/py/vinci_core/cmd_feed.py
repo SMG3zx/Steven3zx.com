@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .paths import join_path
 from .feed import (
     ACTIVITY_FEED,
     CONFIG_FILE,
@@ -36,12 +37,6 @@ USAGE = (
 )
 FEED_NAMES = "(journal, git, vaults, activity)"
 SHORT_CURSOR_BYTES = 24
-
-
-def join_path(directory: str, name: str) -> str:
-    if directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
 
 
 def short(text: str) -> str:

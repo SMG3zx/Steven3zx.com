@@ -15,10 +15,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from .paths import join_path
 from .journal import Journal, directory_of
 from .portal_assets import portal_placeholder
 from .portal_html import title_of
-from .portal_io import (
+from vinci_edge.portal_edge import (
     absolute_path,
     clock,
     git_portal_files,
@@ -74,15 +75,6 @@ class Context:
 
 def split_nul(text: str) -> list[str]:
     return [piece for piece in text.split("\x00") if piece != ""]
-
-
-def join_path(directory: str, name: str) -> str:
-    """Path.Combine for a relative name."""
-    if directory == "":
-        return name
-    if directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
 
 
 def parent_directory(folder: str) -> Optional[str]:

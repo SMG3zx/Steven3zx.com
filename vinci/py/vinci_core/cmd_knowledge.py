@@ -21,12 +21,7 @@ from .jsonline import ascii_lower
 from .session import Session, note_line, number, prediction_line, user_error
 from .state import FINDINGS_METRIC, RETIRED, Note, stage_name
 from .stats import control_limits, mean
-from .text import day, num, pad_right
-
-
-def tail(a: list[str], start: int) -> list[str]:
-    """The items from start on: empty when start is past the end."""
-    return list(a[start:])
+from .text import day, num, pad_right, tail
 
 
 def is_web_address(url: str) -> bool:

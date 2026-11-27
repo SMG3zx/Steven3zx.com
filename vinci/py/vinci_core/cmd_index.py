@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from .paths import join_path
 from .dates import clock_now, today_of
 from .embed_config import EmbedConfig, default_config
 from .fusion import Candidate, Weights, parse_weights
@@ -58,12 +59,6 @@ class Options:
     tokenizer_url: Optional[str] = None
     sources: list[str] = field(default_factory=list)
     weights: Optional[Weights] = None
-
-
-def join_path(directory: str, name: str) -> str:
-    if directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
 
 
 def parse_options(args: list[str]) -> Options:

@@ -14,8 +14,9 @@ from typing import Optional
 from .journal import Event
 from .review import COMMITMENT_LENGTH, findings
 from .session import Session, user_error
-from .state import FINDINGS_METRIC, Issue, stage_name
-from .text import day, num, pad_right
+from .state import FINDINGS_METRIC, stage_name
+from .cmd_ideas import issue_line
+from .text import day, num, pad_right, tail
 
 HELP = """vinci: one journal for ideas, knowledge, time and measurements.
 Run it with no command, or as "vinci chat", to talk to the chat model, which does
@@ -93,23 +94,6 @@ In a pipe
 Data lives in $VINCI_HOME/journal.jsonl (default ~/.vinci).
 Window time comes from ActivityWatch at $VINCI_ACTIVITYWATCH (default http://127.0.0.1:5600).
 """
-
-
-def tail(args: list[str], start: int) -> list[str]:
-    """The arguments from start on, as a new list."""
-    return list(args[start:])
-
-
-def issue_line(x: Issue) -> str:
-    """IssueLine: id, closed, diagnosed or open, BIG when big, then the text."""
-    if x.principle_id is not None:
-        status = "closed   "
-    elif x.root_cause is not None:
-        status = "diagnosed"
-    else:
-        status = "open     "
-    big = "BIG " if x.big else ""
-    return pad_right(x.id, 4) + " " + status + " " + big + x.text
 
 
 def commitment_record(s: Session, kept: int, missed: int) -> str:

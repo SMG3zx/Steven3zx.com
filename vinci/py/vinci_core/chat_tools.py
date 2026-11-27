@@ -22,6 +22,7 @@ from typing import Optional
 
 from vinci_edge import chat_edge, reading_edge
 
+from .paths import join_path
 from .chat_action import (
     Action,
     compact_json,
@@ -85,12 +86,6 @@ read saves a text file (.txt, .md) or a web page that the person named, so recal
 When a write is refused, the tool result says so. Say that nothing was written.
 After a tool runs you will see its result. When you have what you need, reply in plain sentences instead of JSON."""
 CATEGORIES = " fact preference decision procedure episode "
-
-
-def join_path(directory: str, name: str) -> str:
-    if directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
 
 
 def routes() -> list[str]:

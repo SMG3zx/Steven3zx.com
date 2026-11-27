@@ -15,6 +15,7 @@ import sys
 import time
 from pathlib import Path
 
+from vinci_core.paths import join_path
 from vinci_core.backup import backup_command
 from vinci_core.chat import run_chat
 from vinci_core.cmd_ideas import dispatch_ideas
@@ -32,15 +33,6 @@ from vinci_core.verify import verify_command
 # Commands routed before the journal is read. Each is ported in its own module; until it is,
 # it fails with a clear message rather than running a partial version.
 UNPORTED_ROUTES: tuple[str, ...] = ()
-
-
-def join_path(directory: str, name: str) -> str:
-    """Path.Combine for two parts on Linux."""
-    if len(directory) == 0:
-        return name
-    if directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
 
 
 def user_profile() -> str:

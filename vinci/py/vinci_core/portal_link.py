@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .portal_url import local_port_of
-from .portal_io import lower_invariant
+from vinci_edge.portal_edge import lower_invariant
 
 
 @dataclass
