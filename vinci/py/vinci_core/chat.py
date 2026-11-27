@@ -13,15 +13,18 @@ Port of mojo/src/chat.mojo.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 
 from vinci_edge import chat_edge
 
-from .chat_action import parse_action, plain_summary, trim_bytes
-from .chat_cite import cited_ids_with_evidence, document_base, is_document_cite, unseen_cites
-from .chat_gate import read_line
+from .chat_action import Action, has_arg, list_arg, parse_action, plain_summary, trim_bytes
+from .chat_cite import cited_ids_with_evidence, document_base, is_cite_id, is_document_cite, unseen_cites
+from .chat_gate import is_write_call, read_line
 from .chat_tools import CHAT_INSTRUCTIONS, ChatTools, chat_index_path, upfront_enabled
 from .cmd_ideas import dispatch_ideas
 from .dates import today_of
@@ -49,7 +52,8 @@ SYSTEM_RULES = """How to work:
 - If recall finds nothing relevant, say you do not know. Do not fill the gap.
 - When the person asks for a suggestion, a recommendation or advice, base it on what the journal says they like, prefer, have done or have said about the subject. Tailor the answer to those facts, cite them, and say which ones you used. A stated preference is an answer to such a question, even when no list of options is stored.
 - When the person states a durable fact or preference, save it with remember.
-- When asked to record or change something, do it with the journal, then say in one line what you recorded.
+- When asked to record or change something, call the journal tool at once. Do not ask first, and do not print the call as text.
+- Never say that you created, changed or saved something unless a tool result in this conversation says it was done. If the tool did not run, say so.
 - Be brief. Plain sentences. No headings unless asked.
 """
 
@@ -60,9 +64,67 @@ class Message:
     content: str
 
 
-def system_prompt(today: str) -> str:
-    """The system prompt, with the tool instructions. Today's date is the local date."""
-    return SYSTEM_HEAD + "\n" + tool_instructions() + "\n\n" + SYSTEM_RULES + "\nToday is " + today + "."
+def system_prompt(today: str, ideas: str = "") -> str:
+    """The system prompt, with the tool instructions, the ideas the journal holds now, and the rules.
+    Today's date is the local date."""
+    block = ""
+    if ideas != "":
+        block = (
+            "\nThe ideas in the journal now. Use this list for questions about them, and cite an id as [id]:\n"
+            + ideas
+            + "\n"
+        )
+    return (
+        SYSTEM_HEAD + "\n" + tool_instructions() + block + "\n" + SYSTEM_RULES + "\nToday is " + today + "."
+    )
+
+
+WRITE_CLAIM = re.compile(
+    r"\bI(?:'ve|'d| have| had)?\s+(?:\w+\s+){0,2}?(?:created|added|recorded|saved|moved|updated|retired|seeded|noted|set)\b"
+    r"|\bhas been (?:created|added|recorded|saved|moved|updated|retired)\b",
+    re.IGNORECASE,
+)
+
+
+def claims_a_write(answer: str) -> bool:
+    """True when an answer says the person's journal was changed ("I've added", "I have created")."""
+    return WRITE_CLAIM.search(answer) is not None
+
+
+def writes(action: Action) -> bool:
+    """True when the tool call is a journal write (or remember or read) under the chat's rules."""
+    try:
+        args = list_arg(action, "args") if action.name == "journal" and has_arg(action, "args") else []
+    except ValueError:
+        return False
+    return is_write_call(action.name, args)
+
+
+def bracket_ideas(listing: str) -> str:
+    """The journal's ideas listing with each id in brackets ("i1   Seed ..." becomes "[i1] Seed ..."),
+    so that an answer citing [i1] matches a line of this turn's evidence."""
+    out: list[str] = []
+    for line in listing.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2 and is_cite_id(parts[0]):
+            out.append("[" + parts[0] + "] " + parts[1])
+        elif line.strip() != "":
+            out.append(line.rstrip())
+    return "\n".join(out)
+
+
+def ideas_for_prompt(journal_path: str, now: Instant) -> str:
+    """The ideas as `vinci journal ideas` lists them, run in this process. Read only."""
+    s = Session(JournalTx(journal_path), now)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            dispatch_ideas(s, "ideas", [])
+        s.commit()
+    except BaseException:
+        s.abort()
+        raise
+    return bracket_ideas(buf.getvalue())
 
 
 def tool_instructions() -> str:
@@ -175,6 +237,8 @@ class Chat:
     journal_path: str
     index_path: str
     history: list[Message] = field(default_factory=list)
+    # The ideas as they stand at the start of this turn (see ideas_for_prompt).
+    ideas: str = ""
 
     def recent(self) -> list[Message]:
         """The newest messages that fit the history budget, starting on a user message."""
@@ -197,7 +261,15 @@ class Chat:
         """One model call with the system prompt and the recent history. Raises with the
         CHAT_MODEL_ERROR marker when the model cannot be reached or refuses."""
         today = today_of(self.now)
-        body = messages_json(system_prompt(today), self.recent())
+        recent = self.recent()
+        if self.ideas != "" and len(recent) > 0 and recent[-1].role == "user":
+            # The list sits with the question it is for: a small model reads the latest message best.
+            last = recent[-1]
+            recent[-1] = Message(
+                last.role,
+                last.content + "\n\nThe ideas in the journal now (cite an id as [id]):\n" + self.ideas,
+            )
+        body = messages_json(system_prompt(today), recent)
         status, text = chat_edge.complete(self.base_url, self.model, body, self.think)
         if status != "ok":
             raise ValueError(CHAT_MODEL_ERROR + text)
@@ -215,9 +287,13 @@ class Chat:
 
     def _turn(self, user_text: str) -> str:
         self.history.append(Message("user", user_text))
-        evidence = ""
+        # The ideas are read fresh each turn, so a change made last turn is seen this turn. They are
+        # evidence too: an answer may cite them.
+        self.ideas = ideas_for_prompt(self.journal_path, self.now)
+        evidence = self.ideas + "\n" if self.ideas != "" else ""
         answer = ""
         answered = False
+        wrote = False
         rounds = 0
         if upfront_enabled():
             # Recall on the person's own words first, in the context as a recall call the model
@@ -240,6 +316,8 @@ class Chat:
                 break
             self.history.append(Message("assistant", reply))
             result = self.tools.run(action)
+            if writes(action) and not result.startswith("refused"):
+                wrote = True
             evidence += result + "\n"
             print(paint("  · " + action.name + " " + plain_summary(action), DIM))
             self.history.append(Message("user", "Result of " + action.name + ":\n" + result))
@@ -269,7 +347,16 @@ class Chat:
             answer += "\n\nSources:"
             for source_text in sources:
                 answer += "\n- " + source_text
-        keep = len(cited) > 0 and len(unsourced) == 0 and len(unattributed) == 0
+        # An answer that says a change was made, when no write ran this turn, is false: say so and keep it out.
+        false_claim = claims_a_write(answer) and not wrote
+        if false_claim:
+            print(
+                paint(
+                    "  ! the answer says something was changed, but no write ran this turn. Nothing was written.",
+                    YELLOW,
+                )
+            )
+        keep = len(cited) > 0 and len(unsourced) == 0 and len(unattributed) == 0 and not false_claim
         self.record("user", user_text, "user_message")
         if keep:
             self.record("assistant", answer, "agent_message")

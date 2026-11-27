@@ -103,20 +103,36 @@ def parse_members(c: Cursor, values: list[ArgValue]) -> None:
 
 
 def parse_action(reply: str) -> Optional[Action]:
-    """The action a reply asks for, or None when the reply is the answer. A reply that starts
-    with { but is not one JSON object, or has no string "tool", is an answer."""
+    """The action a reply asks for, or None when the reply is the answer.
+
+    A reply that is one JSON object is the call. A reply with words around a call (the model often
+    says what it will do, then prints the call) still makes the call: the first object with a string
+    "tool" is run, and the words are dropped. A reply that starts with { but is not one JSON object is
+    an answer, as before."""
     text = strip_fence(reply)
-    if not text.startswith("{"):
-        return None
+    if text.startswith("{"):
+        return _action_in(text, whole=True)
+    start = text.find("{")
+    while start >= 0:
+        found = _action_in(text[start:], whole=False)
+        if found is not None:
+            return found
+        start = text.find("{", start + 1)
+    return None
+
+
+def _action_in(text: str, whole: bool) -> Optional[Action]:
+    """The action of the JSON object that begins text. whole: the object must be all of text."""
     values: list[ArgValue] = []
     try:
         c = Cursor(text)
         c.skip_space()
         c.expect(OPEN_BRACE)
         parse_members(c, values)
-        c.skip_space()
-        if not c.at_end():
-            return None
+        if whole:
+            c.skip_space()
+            if not c.at_end():
+                return None
     except ValueError:
         return None
     name_at = -1
