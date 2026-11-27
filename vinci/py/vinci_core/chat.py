@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from vinci_edge import chat_edge
 
-from .chat_action import parse_action, summary_of, trim_bytes
+from .chat_action import parse_action, plain_summary, trim_bytes
 from .chat_cite import cited_ids_with_evidence, document_base, is_document_cite, unseen_cites
 from .chat_gate import read_line
 from .chat_tools import CHAT_INSTRUCTIONS, ChatTools, chat_index_path, upfront_enabled
@@ -98,6 +98,39 @@ def stderr_line(text: str) -> None:
         pass
 
 
+DIM = "2"
+YELLOW = "33"
+HELP = """Ask in plain words, or tell it what to do. It searches the journal, the index and your documents,
+and cites what it used as [id].
+
+  /pipeline   show the idea stages
+  /help       show this
+  /exit       leave (Ctrl+D or Ctrl+C at the prompt also leave)
+
+· lines are tool calls. ! lines are warnings; an answer with a warning may not be saved."""
+
+
+def paint(text: str, code: str) -> str:
+    """The text in an ANSI style when standard output is a terminal and NO_COLOR is not set."""
+    if os.environ.get("NO_COLOR", "") != "" or not sys.stdout.isatty():
+        return text
+    return "\033[" + code + "m" + text + "\033[0m"
+
+
+def while_thinking(call):
+    """Runs call, and while it runs shows 'thinking' on standard error when that is a terminal. The
+    note is cleared when call returns or raises."""
+    if not sys.stderr.isatty():
+        return call()
+    sys.stderr.write(paint("  thinking…", DIM))
+    sys.stderr.flush()
+    try:
+        return call()
+    finally:
+        sys.stderr.write("\r\033[K")
+        sys.stderr.flush()
+
+
 def pipeline(journal_path: str, now: Instant) -> None:
     """`vinci journal pipeline`, run in this process: it prints to standard output."""
     # pipeline only reads, so it takes no lock.
@@ -171,7 +204,16 @@ class Chat:
         return trim_bytes(text, False)
 
     def turn(self, user_text: str) -> str:
-        """One user message and the answer to it, after any tool calls."""
+        """One user message and the answer to it. If the turn fails (the model is down, or the person
+        cancels it), the history goes back to how it was, so the next question starts clean."""
+        mark = len(self.history)
+        try:
+            return self._turn(user_text)
+        except BaseException:
+            del self.history[mark:]
+            raise
+
+    def _turn(self, user_text: str) -> str:
         self.history.append(Message("user", user_text))
         evidence = ""
         answer = ""
@@ -183,11 +225,13 @@ class Chat:
             found = self.tools.upfront_recall(user_text)
             if len(found) > 0:
                 evidence += found + "\n"
-                self.history.append(Message("assistant", '{"tool": "recall", "query": ' + json_string(user_text) + "}"))
+                self.history.append(
+                    Message("assistant", '{"tool": "recall", "query": ' + json_string(user_text) + "}")
+                )
                 self.history.append(Message("user", "Result of recall:\n" + found))
         while rounds < MAX_ROUNDS and not answered:
             rounds += 1
-            reply = self.ask()
+            reply = while_thinking(self.ask)
             action = parse_action(reply)
             if action is None:
                 answer = reply
@@ -197,7 +241,7 @@ class Chat:
             self.history.append(Message("assistant", reply))
             result = self.tools.run(action)
             evidence += result + "\n"
-            print("  · " + action.name + " " + summary_of(action))
+            print(paint("  · " + action.name + " " + plain_summary(action), DIM))
             self.history.append(Message("user", "Result of " + action.name + ":\n" + result))
         if not answered:
             answer = NOT_ANSWERED
@@ -205,7 +249,7 @@ class Chat:
         cited = cited_ids_with_evidence(answer, evidence)
         unsourced = unseen_cites(cited, evidence)
         for c in unsourced:
-            print("  ! cites [" + c + "], which recall did not return this turn")
+            print(paint("  ! cites [" + c + "], which recall did not return this turn", YELLOW))
         sources: list[str] = []
         unattributed: list[str] = []
         store_needed = any(is_document_cite(c) for c in cited)
@@ -220,7 +264,7 @@ class Chat:
                 elif source_text not in sources:
                     sources.append(source_text)
         for c in unattributed:
-            print("  ! cites [" + c + "], a passage with no source. The answer is not saved.")
+            print(paint("  ! cites [" + c + "], a passage with no source. The answer is not saved.", YELLOW))
         if len(sources) > 0:
             answer += "\n\nSources:"
             for source_text in sources:
@@ -229,8 +273,16 @@ class Chat:
         self.record("user", user_text, "user_message")
         if keep:
             self.record("assistant", answer, "agent_message")
-        else:
-            print("  · answer not saved: it cites no recalled evidence")
+        elif len(cited) == 0:
+            # Not a fault: a general answer with no journal evidence is kept out of the journal.
+            print(
+                paint(
+                    "  · answer not saved: it cites nothing recall returned. Ask it more narrowly, or add the fact.",
+                    DIM,
+                )
+            )
+        elif len(unsourced) > 0 or len(unattributed) > 0:
+            print(paint("  ! answer not saved: a citation above was not checked.", YELLOW))
         return answer
 
     def record(self, who: str, text: str, kind: str) -> None:
@@ -269,38 +321,50 @@ def run_chat(home: str, journal_path: str, now: Instant, exe: str) -> None:
     )
     # The index follows the journal before the first question (JournalSync's place).
     chat.tools.index_update()
-    print("vinci · chat model " + model + " at " + base_url + " · /help for commands, /exit to leave")
+    print(
+        paint(
+            "vinci · chat model " + model + " at " + base_url + " · /help for commands, /exit to leave", DIM
+        )
+    )
     pipeline(journal_path, now)
     print("")
-    while True:
-        print("you> ", end="")
-        raw = read_line()
-        if raw is None:
-            break
-        line = trim_bytes(raw, False)
-        if line == "/exit" or line == "/quit":
-            break
-        if line == "":
-            continue
-        if line == "/help":
-            print("Ask anything, or tell it what to do. It uses the journal, the index and the model's own answers.")
-            print("/pipeline  show the stages      /exit  leave")
-            continue
-        if line == "/pipeline":
-            pipeline(journal_path, now)
-            continue
-        try:
-            answer = chat.turn(line)
+    try:
+        while True:
+            print("you> ", end="", flush=True)
+            raw = read_line()
+            if raw is None:
+                break
+            line = trim_bytes(raw, False)
+            if line == "/exit" or line == "/quit":
+                break
+            if line == "":
+                continue
+            if line == "/help":
+                print(HELP)
+                continue
+            if line == "/pipeline":
+                pipeline(journal_path, now)
+                continue
+            try:
+                answer = chat.turn(line)
+            except KeyboardInterrupt:
+                print("\n" + paint("  cancelled. Nothing was saved. Ask again, or /exit.", DIM))
+                continue
+            except Exception as err:
+                message = str(err)
+                if not message.startswith(CHAT_MODEL_ERROR):
+                    raise
+                # The session stays open. Nothing was recorded for this question, so it is asked again by typing it.
+                stderr_line("vinci: " + message[len(CHAT_MODEL_ERROR) :])
+                stderr_line(
+                    "The chat model is at "
+                    + base_url
+                    + ". Start it with: systemctl --user start vinci-infer, or set CHAT_BASE_URL."
+                    + " Your question was not answered; ask it again once the model is up."
+                )
+                continue
             print("")
             print(answer)
             print("")
-        except Exception as err:
-            message = str(err)
-            if message.startswith(CHAT_MODEL_ERROR):
-                stderr_line("vinci: " + message[len(CHAT_MODEL_ERROR) :])
-                stderr_line(
-                    "The chat model is at " + base_url
-                    + ". Start it with: systemctl --user start llama-chat, or set CHAT_BASE_URL."
-                )
-                raise SystemExit(1)
-            raise
+    except KeyboardInterrupt:
+        print("")

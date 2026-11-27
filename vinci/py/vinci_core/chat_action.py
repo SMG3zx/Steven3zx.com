@@ -195,6 +195,21 @@ def compact_json(a: Action) -> str:
     return out + "}"
 
 
+def plain_summary(a: Action) -> str:
+    """The arguments as a person reads them: the first value bare, the others as key=value, lists as
+    their items space-separated, cut to SUMMARY_CHARS. recall "gliders" reads as: recall gliders."""
+    parts: list[str] = []
+    for i, v in enumerate(a.values):
+        text = " ".join(v.items) if v.kind == VALUE_LIST else v.text
+        if text == "":
+            continue
+        parts.append(text if i == 0 else v.key + "=" + text)
+    out = " ".join(parts)
+    if len(out.encode("utf-8")) <= SUMMARY_CHARS:
+        return out
+    return out.encode("utf-8")[: SUMMARY_CHARS - 1].decode("utf-8", errors="ignore") + "…"
+
+
 def summary_of(a: Action) -> str:
     """The arguments as JSON, cut to 90 characters with an ellipsis."""
     text = compact_json(a)
