@@ -30,10 +30,6 @@ from vinci_core.session import Session, UserError, user_error
 from vinci_core.timeutil import DAYS_0001_TO_1970, TICKS_PER_DAY, Instant, parse_instant
 from vinci_core.verify import verify_command
 
-# Commands routed before the journal is read. Each is ported in its own module; until it is,
-# it fails with a clear message rather than running a partial version.
-UNPORTED_ROUTES: tuple[str, ...] = ()
-
 
 def user_profile() -> str:
     """Environment.GetFolderPath(UserProfile): $HOME on Linux."""
@@ -113,8 +109,6 @@ def run(args: list[str]) -> int:
     if len(args) == 0 or args[0] == "chat":
         run_chat(vinci_home(), journal_path(), now, self_path())
         return 0
-    if args[0] in UNPORTED_ROUTES:
-        raise NotImplementedError(args[0] + " is not ported to Python yet")
     # The index and recall read the journal and write only their own index file.
     if args[0] == "index":
         index_command(args[1:], vinci_home(), journal_path())
@@ -198,9 +192,6 @@ def main(argv: list[str] | None = None) -> int:
     except UserError as err:
         print("vinci: " + str(err), file=sys.stderr)
         return 1
-    except NotImplementedError as err:
-        print("vinci: " + str(err), file=sys.stderr)
-        return 3
     except Exception as err:  # a bug or a broken journal
         print("vinci: " + str(err), file=sys.stderr)
         return 3
